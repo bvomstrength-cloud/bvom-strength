@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - .import/COMPLETE
+      - BVOM_Strength_v2.8.3_MAINTENANCE_CANDIDATE_FINAL.zip
 
 permissions:
   contents: write
@@ -17,14 +17,14 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Reconstruct, verify and extract approved archive
+      - name: Verify approved archive
         shell: bash
         run: |
           set -euo pipefail
-          ZIP="/tmp/BVOM_Strength_v2.8.3_MAINTENANCE_CANDIDATE_FINAL.zip"
+          ZIP="BVOM_Strength_v2.8.3_MAINTENANCE_CANDIDATE_FINAL.zip"
           EXPECTED_ZIP_SHA="8354302d31a4b1573e519cf0e3f2323f369aba3d4599eca984745a592b92286f"
 
-          cat .import/zip.b64.* | base64 --decode > "$ZIP"
+          test -f "$ZIP"
           ACTUAL_ZIP_SHA="$(sha256sum "$ZIP" | awk '{print $1}')"
           test "$ACTUAL_ZIP_SHA" = "$EXPECTED_ZIP_SHA"
 
@@ -62,7 +62,7 @@ EOF
           set -euo pipefail
 
           cp -a .baseline-import/. .
-          rm -rf .baseline-import .import
+          rm -rf .baseline-import BVOM_Strength_v2.8.3_MAINTENANCE_CANDIDATE_FINAL.zip
 
           cat > README.md <<'EOF'
 # BVOM Strength
@@ -72,12 +72,16 @@ Private production source repository for BVOM Strength.
 ## Production baseline
 
 - Version: **v2.8.3**
-- Imported from the independently verified production package
+- Source imported from the exact independently verified production package
 - Approved package SHA-256: `8354302d31a4b1573e519cf0e3f2323f369aba3d4599eca984745a592b92286f`
 - Regression baseline: **v15.2 maintenance**
 - Production baseline established: **2 October 2026**
 
-Future development should be made on branches and merged into `main` only after the relevant regression gate passes.
+The deployment files in this repository match the approved v2.8.3 package byte-for-byte.
+
+## Development rule
+
+Future changes should be made on branches, reviewed as diffs, and merged into `main` only after the relevant regression gate passes.
 EOF
 
           git config user.name "BVOM baseline importer"
