@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="3200" viewBox="0 0 1440 3200">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ccecf9"/>
+    <stop offset=".48" stop-color="#e3f6fb"/>
+    <stop offset=".74" stop-color="#eef9f8"/>
+    <stop offset="1" stop-color="#ead6a6"/>
+  </linearGradient>
+  <linearGradient id="deep" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#066d98"/>
+    <stop offset=".5" stop-color="#0c8ab8"/>
+    <stop offset="1" stop-color="#39abd2"/>
+  </linearGradient>
+  <linearGradient id="mid" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#32a8cf"/>
+    <stop offset="1" stop-color="#7dd0e7"/>
+  </linearGradient>
+</defs>
+<rect width="1440" height="3200" fill="url(#bg)"/>
+
+<!-- top wave scene -->
+<g opacity=".82">
+  <path d="M-120 470
+           C40 300 205 210 365 240
+           C455 258 535 315 605 390
+           C675 465 770 478 860 420
+           C955 357 1028 250 1055 145
+           C1105 235 1198 310 1315 335
+           C1400 352 1470 350 1540 330
+           L1540 650
+           C1360 590 1185 595 1015 670
+           C835 748 655 755 475 688
+           C280 616 100 610 -120 705 Z"
+        fill="url(#deep)"/>
+
+  <path d="M-80 560
+           C130 430 300 420 455 520
+           C585 604 720 620 860 535
+           C995 452 1135 452 1530 600
+           L1530 790
+           C1260 690 1035 705 820 820
+           C620 925 420 905 200 805
+           C75 748 -10 730 -80 748 Z"
+        fill="url(#mid)" opacity=".86"/>
+
+  <!-- large curling crests -->
+  <path d="M860 360 C920 265 1005 225 1095 252
+           C1035 266 985 310 955 370
+           C1015 332 1080 336 1140 377
+           C1070 360 1010 375 958 425 Z"
+        fill="#ecfcff"/>
+  <path d="M225 318 C300 235 395 220 475 264
+           C405 276 350 320 320 385
+           C374 344 438 347 492 382
+           C430 370 372 385 322 432 Z"
+        fill="#ecfcff"/>
+
+  <!-- secondary curls -->
+  <path d="M1000 440 C1040 385 1105 360 1160 382
+           C1118 390 1080 415 1055 452
+           C1094 428 1134 432 1172 452"
+        fill="none" stroke="#bcebf6" stroke-width="20" stroke-linecap="round"/>
+</g>
+
+<!-- mid-screen layered waves -->
+<g opacity=".46">
+  <path d="M-120 1320
+           C130 1188 370 1182 580 1310
+           C760 1420 940 1428 1125 1322
+           C1270 1238 1400 1232 1540 1298
+           L1540 1500
+           C1310 1432 1120 1450 945 1530
+           C770 1612 580 1615 390 1550
+           C210 1490 50 1488 -120 1558 Z"
+        fill="#43b3d5"/>
+  <path d="M20 1260 C105 1184 210 1168 305 1210
+           C230 1225 177 1268 150 1330
+           C210 1285 282 1292 342 1330
+           C275 1315 210 1330 160 1378 Z"
+        fill="#ecfbff"/>
+</g>
+
+<!-- lower layered surf -->
+<g opacity=".34">
+  <path d="M-120 2360
+           C180 2200 460 2215 700 2355
+           C910 2475 1105 2475 1325 2345
+           C1410 2294 1480 2278 1540 2290
+           L1540 2535
+           C1270 2460 1040 2470 820 2585
+           C610 2690 380 2680 160 2570
+           C40 2510 -40 2495 -120 2515 Z"
+        fill="#5dbedb"/>
+</g>
+
+<!-- thin foam ribbons -->
+<g fill="none" stroke-linecap="round" opacity=".34">
+  <path d="M-60 970 C300 800 585 825 845 955 C1070 1068 1290 1060 1510 945"
+        stroke="#6ac5df" stroke-width="24"/>
+  <path d="M-80 2140 C260 1985 555 1995 830 2140 C1080 2270 1300 2260 1510 2140"
+        stroke="#72cae1" stroke-width="22"/>
+</g>
+</svg>
