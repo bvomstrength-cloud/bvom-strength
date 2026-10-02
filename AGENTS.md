@@ -5,13 +5,21 @@ This file is the first source of truth for AI-assisted development in this repos
 ## Repository status
 
 - Application: **BVOM Strength**
-- Current approved production baseline: **v2.8.3**
 - Production branch: `main`
-- Approved v2.8.3 commit: `872270f1f4752e8920ec58aa6aa3eb33c7048f90`
-- Approved deployment ZIP SHA-256: `8354302d31a4b1573e519cf0e3f2323f369aba3d4599eca984745a592b92286f`
-- Regression baseline: **v15.2 maintenance**
+- The current approved production version and baseline are recorded in `README.md`.
+- Confirm the live `main` commit in Git before starting development.
 
 Treat `main` as the known-good production baseline.
+
+### Migration baseline
+
+The repository was established from the approved BVOM Strength **v2.8.3** production baseline:
+
+- Approved v2.8.3 commit: `872270f1f4752e8920ec58aa6aa3eb33c7048f90`
+- Approved deployment ZIP SHA-256: `8354302d31a4b1573e519cf0e3f2323f369aba3d4599eca984745a592b92286f`
+- Regression baseline at migration: **v15.2 maintenance**
+
+These values are historical migration evidence, not a permanent statement of the current production version.
 
 ## Core development rule
 
