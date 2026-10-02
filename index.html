@@ -2558,6 +2558,7 @@ async function bvomCloudSaveNow(){
 async function bvomCloudRestore(){
  if(bvomCloud.offlineLocalAccess){bvomCloud.syncReady=false;bvomCloud.message=hlmTxt('Sign in again before restoring from BVOM Cloud. Local training remains available.','BVOM Cloudから復元する前に再度サインインしてください。端末上のトレーニングは引き続き利用できます。');bvomCloud.error=false;if(document.querySelector('#settings'))renderSettings();return}
  const c=bvomCloudClient(),u=bvomCloud.user;if(!c||!u)return;
+ if(bvomCloudWorkoutActive()){bvomCloud.message=hlmTxt('Finish the current workout before restoring from BVOM Cloud. Unfinished workouts stay on this device.','BVOM Cloudから復元する前に現在のワークアウトを終了してください。未完了のワークアウトはこの端末に残ります。');bvomCloud.error=false;if(document.querySelector('#settings'))renderSettings();return}
  if(bvomCloud.accountSwitchDeferred){bvomCloud.message=hlmTxt('Finish or exit the current workout, then reload BVOM before restoring cloud data.','現在のワークアウトを終了または中止してからBVOMを再読み込みし、クラウドデータを復元してください。');bvomCloud.error=false;renderSettings();return}
  bvomCloud.busy=true;bvomCloud.message=hlmTxt('Checking BVOM Cloud…','BVOM Cloudを確認しています…');bvomCloud.error=false;renderSettings();
  try{
