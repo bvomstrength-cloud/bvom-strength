@@ -76,13 +76,24 @@ The repository should be treated as the durable project memory. Prefer verified 
 
 ## Important user workflow
 
-The owner is learning GitHub and wants the process handled **one step at a time**.
+The owner is learning GitHub but does not want routine maintenance slowed down by repeated confirmation prompts.
 
-Do not automatically perform an entire branch → edit → test → PR → merge sequence in one action unless explicitly asked.
+Use two explicit working modes:
 
-“Go for it” or “GFI” means: **continue with the next agreed step**.
+- **“Go for it” / “GFI”** means: continue with the **next agreed step only**.
+- **“Fix it” / “handle it” / equivalent explicit instruction** means: carry the normal maintenance workflow through without asking for GFI between routine steps — reproduce, branch, add/adjust regression coverage, make the smallest fix, run focused tests, run the full gate, inspect the diff, open the PR, and check the required PR gate.
 
-It does not mean “perform every remaining step”.
+Even in full-maintenance mode, stop for a genuinely consequential decision unless it has already been explicitly authorized. Examples include:
+
+- merging into protected `main`
+- production deployment or release
+- changing an agreed behavioural/specification rule
+- material scope expansion
+- choosing between competing solutions with meaningfully different product consequences
+
+If the owner is already at one of those stated checkpoints and explicitly says “Fix it”, that instruction authorizes the described checkpoint and the routine verification immediately around it.
+
+Keep the owner informed in plain English, but do not turn every safe mechanical step into another permission request.
 
 ## Production safety
 
