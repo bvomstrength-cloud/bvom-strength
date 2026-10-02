@@ -35,7 +35,7 @@ Real-device smoke evidence on the Netlify test site:
 - the expected unfinished-workout protection message was shown
 - the active workout remained running and the recorded set remained intact after the blocked restore
 
-**Production deployment has not yet occurred. It remains a separate explicit release checkpoint.**
+**Production deployment completed and was smoke-verified on 2 October 2026.** The production app loaded as v2.8.4 and normal user data remained available.
 
 ## Historical approved package
 
