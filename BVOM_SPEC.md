@@ -852,19 +852,13 @@ Cloud assessment/upload/restore actions are restricted while an unfinished worko
 
 Cloud restore validates the cloud object before replacing local data and stores a one-step pre-cloud local copy before replacement.
 
-### 17.5 Known implementation discrepancy — active-workout cloud restore
+### 17.5 Active-workout cloud restore — regression-protected
 
-The intended rule in §17.3 is stricter than the current v2.8.3 implementation.
+`bvomCloudRestore()` enforces the same unfinished-workout safety rule as the other cloud actions. If an unfinished workout is active, restore is refused before remote data can replace local state.
 
-Current production behaviour already blocks cloud assessment and manual/automatic upload while an unfinished workout is active, but `bvomCloudRestore()` does not currently perform the same active-workout guard before offering/replacing local data from the cloud.
+The permanent regression contract `F44-ACTIVE-WORKOUT-CLOUD-RESTORE-GUARD` proves that the recorded local workout remains active and unchanged and that no restore-triggered reload occurs.
 
-This is a known production-safety defect, not an intended exception to §17.3.
-
-Before this documentation branch is merged, BVOM should:
-
-1. add an executable regression contract proving cloud restore is refused while an unfinished workout is active,
-2. make the smallest production change that applies the existing active-workout safety rule to cloud restore,
-3. run the focused contract and the full BVOM Lab gate.
+This contract was reproduced red against the pre-fix v2.8.3 behaviour, then passed after the minimal production guard was added. The focused F44 check and the full BVOM Lab gate both passed before the fix was merged into `main`.
 
 ## 18. Account switching
 
