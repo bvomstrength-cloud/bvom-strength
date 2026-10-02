@@ -61,7 +61,7 @@ Browser / installed PWA
         |       +-- accessories
         |       +-- GPP / conditioning
         |
-        +-- optional Supabase account/cloud layer
+        +-- Supabase account / entitlement / cloud layer
         |       |
         |       +-- authentication
         |       +-- entitlement RPCs
@@ -73,7 +73,7 @@ Browser / installed PWA
         +-- service worker / cache
 ```
 
-The core training application remains usable from local state. Cloud features are an additional account/sync layer, not the primary live-workout storage mechanism.
+Training state remains local-first, but normal online access is gated by account authentication and entitlement. A previously verified eligible account may continue training from local state while offline under the app's offline-access rules. Cloud backup/sync is a separate layer around that local data and is not the primary live-workout storage mechanism.
 
 ## 3. Source-order layering in `index.html`
 
@@ -288,17 +288,15 @@ Because unit conversion reaches deeply into active and rollback state, changes h
 
 Warm-ups are guidance/preparation and do not count as work progression.
 
-The application supports the general warm-up engine plus Bodybuilding-specific warm-up classification.
+The application has a general structured-program warm-up engine plus Bodybuilding-specific warm-up classification.
 
-Protected concepts include:
+The structured strength programs generate ramp sets through the general warm-up path (including `getWarmupPlan()`). Bodybuilding separately classifies its exercise slots as:
 
 - Full
 - Feeder
 - None
-- practical load rounding
-- bar/equipment floors where relevant
-- active units
-- no progression/calibration effect from warm-up completion
+
+Across the warm-up systems, protected concepts include practical load rounding, bar/equipment floors where relevant, active units, and the rule that warm-up work does not drive training progression or On-Ramp calibration.
 
 Bodybuilding warm-up plans are generated from the selected exercise/equipment and its current working/calibration load.
 
@@ -316,7 +314,9 @@ Deleting a history record is intentionally separate from current progression sta
 
 ## 11. Account, entitlement, and cloud boundary
 
-BVOM uses Supabase JS in the browser for the optional account/cloud layer.
+BVOM uses Supabase JS in the browser for its account, entitlement, and cloud layer.
+
+Normal online startup passes through authentication and entitlement checks before the main training/setup surfaces are opened. If the service or network is unavailable, local training is available only through the verified offline-owner/entitlement path.
 
 The repository contains the browser-side Supabase project URL and publishable client key. These are client configuration, not server credentials.
 
@@ -345,6 +345,8 @@ The server implementations and database security policies are **not present in t
 The cloud layer deliberately pauses or refuses operations around active workouts, account switching, offline-local access, or detected remote/local divergence.
 
 Cloud comparison normalises harmless transient/default state so startup defaults do not create false conflicts.
+
+The cloud payload deliberately strips live-workout/transient state such as active session sets, GPP session state, processed/rollback snapshots, warm-up state, timers, and active-workout settings. The cloud copy is therefore not a live-workout mirror; unfinished workout state stays on the device until the workout transaction is safely closed.
 
 The browser must not upload blindly when the remote copy changed independently.
 
@@ -424,6 +426,14 @@ The automated suite intentionally runs BVOM's real inline application code insid
 GitHub Actions workflow:
 
 `.github/workflows/bvom-lab.yml`
+
+The current workflow triggers on:
+
+- pushes to `main`
+- pushes to branches matching `dev/**`
+- pull requests targeting `main`
+
+A branch outside `dev/**` (for example a `docs/**` branch) does not get a push-triggered Lab run; its required run occurs when a pull request targeting `main` is opened or updated.
 
 For the full gate it creates a temporary candidate directory containing only the shipped application files, then runs:
 
