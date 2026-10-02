@@ -1,6 +1,6 @@
 # BVOM Strength
 
-Private production source repository for BVOM Strength.
+Production source repository for BVOM Strength.
 
 ## Production baseline
 
