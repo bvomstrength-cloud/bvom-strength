@@ -1,5 +1,21 @@
 # BVOM DEV Regression Suite v15.2 — v2.8.3 maintenance verification
 
+## Current maintenance status — F44
+
+The current suite extends the v15.2 maintenance baseline with **F44-ACTIVE-WORKOUT-CLOUD-RESTORE-GUARD**.
+
+F44 was added after the project-reference cold review exposed a production-safety gap: Cloud Restore could replace local data while an unfinished workout was active. The contract was first proven red against the unfixed v2.8.3 source, then the smallest production guard was added to `bvomCloudRestore()`.
+
+Current gate after F44:
+
+- Static: **23/23 pass**
+- Behaviour: **78/78 pass** = 21 CONTROL + 8 NEGATIVE + 49 DEFECT
+- Sequence/invariants: **14/14 pass**
+- Mutation: **62/62 killed**
+- v2.8.0 reference: **47/47 applicable DEFECT contracts fail**; F23/F25 remain explicit later-regression provenance N/A
+- Verdict: **GO**
+
+The protected GitHub job name remains `v15.2 full regression gate`; that exact status context is required by `main` branch protection.
 
 ## v15 pre-fix additions (F40–F43)
 
@@ -50,9 +66,9 @@ Not simulated: real browser layout, service-worker/HTTP caching, iOS PWA lifecyc
 
 - **CONTROL** — established behaviour that must keep working (includes the live LP/RPT rescue control).
 - **NEGATIVE** — access that must remain blocked (F12 negative controls).
-- **DEFECT** — the F1–F37 defect contracts accumulated across production audits. Most fail on untouched v2.8.0; F23 and F25 are later-regression contracts introduced by subsequent hardening and are therefore explicitly N/A for the v2.8.0 provenance check. Do not weaken a real contract merely to force an older reference build red.
+- **DEFECT** — the F1–F44 defect contracts accumulated across production audits. Most fail on untouched v2.8.0; F23 and F25 are later-regression contracts introduced by subsequent hardening and are therefore explicitly N/A for the v2.8.0 provenance check. Do not weaken a real contract merely to force an older reference build red.
 
-## Current v13 FINAL baseline
+## Historical v13 FINAL baseline
 
 Against the final v13-hardened v2.8.2 working tree and again against a fresh extraction of the packaged candidate:
 
