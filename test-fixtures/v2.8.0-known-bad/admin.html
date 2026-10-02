@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <title>BVOM Admin</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root{color-scheme:dark;--bg:#111315;--card:#1b1f22;--text:#f4f4f4;--muted:#aeb6bc;--accent:#f0b323;--border:#343a40;--danger:#ff6b6b;--ok:#7bd88f}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    main{max-width:620px;margin:0 auto;padding:28px 18px 60px}
+    h1{margin:0 0 6px;font-size:30px}
+    .tag{color:var(--accent);font-weight:800;letter-spacing:.08em;font-size:12px;margin-bottom:24px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;margin:14px 0}
+    .small{font-size:14px;color:var(--muted);line-height:1.45}
+    label{display:block;font-weight:700;margin:12px 0 7px}
+    input{width:100%;padding:14px;border-radius:10px;border:1px solid var(--border);background:#0f1113;color:var(--text);font-size:16px}
+    button{width:100%;padding:14px;border:0;border-radius:10px;font-size:15px;font-weight:850;cursor:pointer;margin-top:12px}
+    .primary{background:var(--accent);color:#151515}
+    .secondary{background:#30363b;color:var(--text)}
+    button:disabled{opacity:.55;cursor:not-allowed}
+    #result{white-space:pre-wrap;overflow-wrap:anywhere}
+    .ok{color:var(--ok)} .bad{color:var(--danger)}
+  </style>
+</head>
+<body>
+<main>
+  <h1>BVOM Admin</h1>
+  <div class="tag">BEST VERSION OF MYSELF</div>
+
+  <section class="card">
+    <b>Admin session</b>
+    <p id="session" class="small">Checking your BVOM sign-in…</p>
+    <button id="back" class="secondary" type="button" onclick="location.href='./'">OPEN BVOM</button>
+  </section>
+
+  <section class="card">
+    <b>Grant complimentary access</b>
+    <p class="small">Enter the email address used for the person's BVOM account.</p>
+    <label for="email">BVOM account email</label>
+    <input id="email" type="email" inputmode="email" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="person@example.com">
+    <button id="grant" class="primary" type="button" disabled>GRANT COMPLIMENTARY ACCESS</button>
+    <p class="small">Paid subscribers are protected by the server and will be blocked rather than changed to complimentary.</p>
+  </section>
+
+  <section id="resultCard" class="card" hidden>
+    <b>Result</b>
+    <p id="result" class="small"></p>
+  </section>
+</main>
+
+<script>
+const BVOM_SUPABASE_URL='https://hkteienxwdsjncchuvnz.supabase.co';
+const BVOM_SUPABASE_KEY='sb_publishable_73S6bOHFrxOx8guc1kq4gg_xyMdjdW7';
+
+const client=window.supabase.createClient(
+  BVOM_SUPABASE_URL,
+  BVOM_SUPABASE_KEY,
+  {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}
+);
+
+const sessionEl=document.getElementById('session');
+const emailEl=document.getElementById('email');
+const grantEl=document.getElementById('grant');
+const resultCard=document.getElementById('resultCard');
+const resultEl=document.getElementById('result');
+
+function showResult(text,ok=false){
+  resultCard.hidden=false;
+  resultEl.className='small '+(ok?'ok':'bad');
+  resultEl.textContent=text;
+}
+
+async function init(){
+  try{
+    const {data,error}=await client.auth.getSession();
+    if(error) throw error;
+    const user=data?.session?.user;
+    if(!user){
+      sessionEl.textContent='Not signed in. Open BVOM, sign in with your admin account, then return to this page.';
+      grantEl.disabled=true;
+      return;
+    }
+    sessionEl.textContent='Signed in as '+(user.email||'BVOM user')+'.';
+    grantEl.disabled=false;
+  }catch(e){
+    sessionEl.textContent='Could not confirm your BVOM sign-in.';
+    showResult(e?.message||String(e));
+  }
+}
+
+grantEl.addEventListener('click',async()=>{
+  const email=emailEl.value.trim().toLowerCase();
+  if(!/^\S+@\S+\.\S+$/.test(email)){
+    showResult('Enter a valid BVOM account email address.');
+    return;
+  }
+
+  if(!confirm('Grant complimentary BVOM access to '+email+'?')) return;
+
+  grantEl.disabled=true;
+  grantEl.textContent='CHECKING…';
+  resultCard.hidden=true;
+
+  try{
+    const {data,error}=await client.functions.invoke('bvom-admin',{body:{email}});
+    if(error){
+      let detail='';
+      try{
+        if(error.context && typeof error.context.json==='function'){
+          const body=await error.context.json();
+          detail=body?.error||body?.message||'';
+        }
+      }catch(_){}
+      throw new Error(detail||error.message||'BVOM Admin request failed.');
+    }
+
+    if(data?.blocked){
+      showResult(data.error||'This user is currently a paid subscriber. Let their subscription finish first, then grant complimentary access.');
+    }else if(data?.alreadyComplimentary){
+      showResult((data.email||email)+' already has complimentary BVOM access.',true);
+    }else if(data?.ok){
+      showResult((data.email||email)+' now has complimentary BVOM access.',true);
+      emailEl.value='';
+    }else{
+      showResult(data?.error||data?.message||'BVOM Admin returned an unexpected response.');
+    }
+  }catch(e){
+    showResult(e?.message||String(e));
+  }finally{
+    grantEl.disabled=false;
+    grantEl.textContent='GRANT COMPLIMENTARY ACCESS';
+  }
+});
+
+init();
+</script>
+</body>
+</html>
