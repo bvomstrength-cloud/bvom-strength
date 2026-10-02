@@ -115,7 +115,19 @@ Current practical progression increment choices include:
 
 Exercise/equipment-specific loadability rules may further constrain the result.
 
-### 3.2 No-training round trips are reversible
+### 3.2 Per-lift loadability settings govern progression
+
+Per-lift plate/loadability settings are behavioural inputs, not display preferences.
+
+If a lift is configured to use microplates, its progression must use the resulting smaller practical increment. The protected regression example is:
+
+`Press 40 kg -> 41 kg -> 42 kg`
+
+with a 1 kg practical progression increment.
+
+A Settings save must preserve the selected per-lift loadability mode and subsequent progression must continue to honour it.
+
+### 3.3 No-training round trips are reversible
 
 If a legitimate value is changed only by:
 
@@ -137,13 +149,21 @@ Protected state includes:
 - Bodybuilding progression/reference values
 - Bodybuilding On-Ramp load/increment state
 
-### 3.3 Actual recorded loads remain actual
+### 3.4 Actual recorded loads remain actual
 
 A load the user actually records is not merely a display suggestion.
 
 A unit round trip must not alter the physical value of an already-recorded actual load.
 
 For Bodybuilding, an off-grid actual load entered through the real set-entry UI must round-trip exactly when no intervening training/edit invalidates the origin.
+
+### 3.5 Completed-set displays remain historical
+
+Once a set has been completed, its displayed load must continue to represent the load actually performed.
+
+Progressing the lift may change the future prescription, but it must not relabel the completed set as though the new future weight had been lifted.
+
+The protected LP/RPT regression example completes work at the old load while the next prescription becomes 102.5; the completed-set labels must continue showing the load actually lifted.
 
 ## 4. LP / RPT
 
@@ -548,7 +568,7 @@ After an intentional/recovery reduction, the first exposure at the reduced load 
 
 Bodybuilding accessory work can be recorded with the workout.
 
-The regression contract protects this work as progression-neutral relative to the Bodybuilding engine unless that accessory has an explicitly defined progression system.
+The regression contract protects Bodybuilding accessory recording as progression-neutral: recording those accessory sets must not apply Bodybuilding or accessory auto-progression.
 
 Bodybuilding history/share output must remain identified as Bodybuilding.
 
@@ -830,7 +850,21 @@ Cloud assessment/upload/restore actions are restricted while an unfinished worko
 
 ### 17.4 Restore protection
 
-Cloud restore validates the cloud object before replacing local data and keeps a pre-cloud local copy for recovery.
+Cloud restore validates the cloud object before replacing local data and stores a one-step pre-cloud local copy before replacement.
+
+### 17.5 Known implementation discrepancy — active-workout cloud restore
+
+The intended rule in §17.3 is stricter than the current v2.8.3 implementation.
+
+Current production behaviour already blocks cloud assessment and manual/automatic upload while an unfinished workout is active, but `bvomCloudRestore()` does not currently perform the same active-workout guard before offering/replacing local data from the cloud.
+
+This is a known production-safety defect, not an intended exception to §17.3.
+
+Before this documentation branch is merged, BVOM should:
+
+1. add an executable regression contract proving cloud restore is refused while an unfinished workout is active,
+2. make the smallest production change that applies the existing active-workout safety rule to cloud restore,
+3. run the focused contract and the full BVOM Lab gate.
 
 ## 18. Account switching
 
