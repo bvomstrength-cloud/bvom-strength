@@ -1,0 +1,50 @@
+name: BVOM v2.8.4 Release Verification
+
+on:
+  push:
+    branches:
+      - release/v2.8.4
+
+permissions:
+  contents: read
+
+jobs:
+  full-regression-gate:
+    name: v15.2 full regression gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Stage production candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .bvom-candidate
+          mkdir -p .bvom-candidate/i18n
+
+          cp index.html .bvom-candidate/
+          cp admin.html .bvom-candidate/
+          cp sw.js .bvom-candidate/
+          cp manifest.json .bvom-candidate/
+          cp icon-192.png .bvom-candidate/
+          cp icon-512.png .bvom-candidate/
+          cp og-image.png .bvom-candidate/
+          cp theme-bee-v23c.svg .bvom-candidate/
+          cp theme-cherry-v23f.svg .bvom-candidate/
+          cp theme-coastal-v23f.svg .bvom-candidate/
+          cp i18n/en.js .bvom-candidate/i18n/
+          cp i18n/ja.js .bvom-candidate/i18n/
+
+      - name: Run BVOM Lab v15.2 gate
+        run: |
+          node tests/bvom-lab/gate.js \
+            .bvom-candidate \
+            test-fixtures/v2.8.0-known-bad
