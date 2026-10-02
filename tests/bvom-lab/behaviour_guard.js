@@ -689,6 +689,24 @@ test('F43-LP-CLOSE-MISS-DECISION-PERSISTS','DEFECT','Reloading while an LP/RPT c
   return ok(repeatGood&&progressGood,`REPEAT before="${repeat.before.shown}" reload="${repeat.after.reopened}" pending=${JSON.stringify(repeat.after.pending)} -> ${repeat.resolved.weight}/${repeat.resolved.attempts} reload2="${repeat.reloadResolved.reopened}" | PROGRESS reload="${progress.after.reopened}" pending=${JSON.stringify(progress.after.pending)} -> ${progress.resolved.weight}/${progress.resolved.attempts} reload2="${progress.reloadResolved.reopened}"`);
 });
 
+test('F44-ACTIVE-WORKOUT-CLOUD-RESTORE-GUARD','DEFECT','Cloud restore is refused while an unfinished workout is active; persisted local workout remains untouched',async()=>{
+  const ls=H.memStore(),net={online:true},sup=H.mockSupabase({net,entitlement:[{status:'subscriber',user_id:'user-1'}],session:true});
+  const h=await H.launch(build,{ls,net,supabase:sup});H.configureLP(h);
+  await h.ctx.bvomCloudSaveNow();
+
+  h.reps.push(5);h.ctx.tapSet('Squat',0);
+  const beforeRaw=ls.getItem('bvom_data'),before=JSON.parse(beforeRaw||'{}');
+  h.choices.push('R');
+  await h.ctx.bvomCloudRestore();
+
+  const afterRaw=ls.getItem('bvom_data'),after=JSON.parse(afterRaw||'{}');
+  const reloads=h.log.filter(x=>x[0]==='reload').length;
+  const activeBefore=before?.session?.Squat?.['0']?.reps===5&&!!before.workoutStartedAt;
+  const activeAfter=after?.session?.Squat?.['0']?.reps===5&&!!after.workoutStartedAt;
+  return ok(activeBefore&&activeAfter&&afterRaw===beforeRaw&&reloads===0,
+    `beforeActive=${activeBefore} afterActive=${activeAfter} unchanged=${afterRaw===beforeRaw} reloads=${reloads}`);
+});
+
 /* ======================= runner ======================= */
 (async()=>{
   const sel=only.length?T.filter(t=>only.includes(t.id)):T;const results=[];
