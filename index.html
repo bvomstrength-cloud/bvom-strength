@@ -1259,42 +1259,6 @@ function bvomWorkoutVolume(){
  }
  return Math.round(total*100)/100;
 }
-const BVOM_STRAVA_OAUTH_SCOPE='activity:write';
-function bvomStravaOAuthStartRequest(returnPath){
- const p=String(returnPath||'/').trim();
- if(!p.startsWith('/')||p.startsWith('//')||p.includes('\\')||/[\r\n]/.test(p))return null;
- return {action:'strava_oauth_start',returnPath:p};
-}
-function bvomStravaOAuthStatusRequest(){return {action:'strava_status'}}
-function bvomStravaOAuthDisconnectRequest(){return {action:'strava_disconnect'}}
-function bvomValidateStravaAuthorizeUrl(raw){
- if(typeof raw!=='string'||!raw)return null;let u;try{u=new URL(raw)}catch(e){return null}
- if(u.protocol!=='https:'||u.hostname!=='www.strava.com'||u.pathname!=='/oauth/authorize')return null;
- for(const k of ['client_secret','access_token','refresh_token','code'])if(u.searchParams.has(k))return null;
- if(!/^\d+$/.test(u.searchParams.get('client_id')||'')||u.searchParams.get('response_type')!=='code')return null;
- const stateValue=u.searchParams.get('state')||'';if(stateValue.length<16)return null;
- const scope=(u.searchParams.get('scope')||'').split(/[\s,]+/).filter(Boolean);if(scope.length!==1||scope[0]!==BVOM_STRAVA_OAUTH_SCOPE)return null;
- let r;try{r=new URL(u.searchParams.get('redirect_uri')||'')}catch(e){return null}if(r.protocol!=='https:')return null;
- return raw;
-}
-function bvomStravaPayloadHasSecrets(v,depth=0){
- if(depth>8||v==null||typeof v!=='object')return false;
- for(const [k,x] of Object.entries(v)){const n=String(k).toLowerCase();if(['access_token','refresh_token','client_secret','code','state','authorization_code'].includes(n))return true;if(bvomStravaPayloadHasSecrets(x,depth+1))return true}
- return false;
-}
-function bvomSanitizeStravaConnectionStatus(raw){
- if(!raw||typeof raw!=='object'||Array.isArray(raw)||bvomStravaPayloadHasSecrets(raw))return null;
- if(raw.connected===false)return {connected:false};if(raw.connected!==true)return null;
- const scope=Array.isArray(raw.scope)?raw.scope.map(String):String(raw.scope||'').split(/[\s,]+/).filter(Boolean);
- if(scope.length!==1||scope[0]!==BVOM_STRAVA_OAUTH_SCOPE)return null;
- return {connected:true,scope:[BVOM_STRAVA_OAUTH_SCOPE]};
-}
-function bvomParseStravaReturn(search){
- let p;try{p=new URLSearchParams(String(search||'').replace(/^\?/,''))}catch(e){return null}
- for(const k of ['code','state','access_token','refresh_token','client_secret'])if(p.has(k))return null;
- const status=p.get('strava');if(!['connected','denied','error'].includes(status))return null;
- const out={status};if(status==='error'){const reason=String(p.get('reason')||'').trim();if(reason)out.reason=reason.slice(0,80)}return out;
-}
 function saveWorkoutRecord(incomplete,note,duration,volume){
  state.history.push({date:new Date().toISOString(),unit:unitLabel(),day:state.day,incomplete:!!incomplete,weights:{...state.weights},accessoryNames:Object.fromEntries((state.accessoryList||[]).map(a=>[a.id,a.name])),session:JSON.parse(JSON.stringify(state.session)),note:note||'',duration:duration||bvomDuration(),volume:Number.isFinite(volume)?volume:bvomWorkoutVolume()});
 }
@@ -2788,6 +2752,42 @@ function bvomBuildStravaUploadV1(x){
  if(!sets.length)return null;
  const externalId='bvom-'+x.workoutId;
  return {provider:'strava',schemaVersion:1,requiredScope:'activity:write',request:{method:'POST',path:'/uploads',fields:{sport_type:'WeightTraining',name:'BVOM Strength Workout',description:typeof x.note==='string'?x.note:'',trainer:0,commute:0,data_type:'json',external_id:externalId}},fileName:externalId+'.json',file:{version:'1.0',start_time:x.startedAt,utc_offset:Math.round(x.utcOffsetMinutes*60),elapsed_time:x.elapsedSeconds,creator:{name:'BVOM Strength'},sets},warnings,omitted};
+}
+const BVOM_STRAVA_OAUTH_SCOPE='activity:write';
+function bvomStravaOAuthStartRequest(returnPath){
+ const p=String(returnPath||'/').trim();
+ if(!p.startsWith('/')||p.startsWith('//')||p.includes('\\')||/[\r\n]/.test(p))return null;
+ return {action:'strava_oauth_start',returnPath:p};
+}
+function bvomStravaOAuthStatusRequest(){return {action:'strava_status'}}
+function bvomStravaOAuthDisconnectRequest(){return {action:'strava_disconnect'}}
+function bvomValidateStravaAuthorizeUrl(raw){
+ if(typeof raw!=='string'||!raw)return null;let u;try{u=new URL(raw)}catch(e){return null}
+ if(u.protocol!=='https:'||u.hostname!=='www.strava.com'||u.pathname!=='/oauth/authorize')return null;
+ for(const k of ['client_secret','access_token','refresh_token','code'])if(u.searchParams.has(k))return null;
+ if(!/^\d+$/.test(u.searchParams.get('client_id')||'')||u.searchParams.get('response_type')!=='code')return null;
+ const stateValue=u.searchParams.get('state')||'';if(stateValue.length<16)return null;
+ const scope=(u.searchParams.get('scope')||'').split(/[\s,]+/).filter(Boolean);if(scope.length!==1||scope[0]!==BVOM_STRAVA_OAUTH_SCOPE)return null;
+ let r,b;try{r=new URL(u.searchParams.get('redirect_uri')||'');b=new URL(BVOM_SUPABASE_URL)}catch(e){return null}if(r.protocol!=='https:'||r.origin!==b.origin||r.pathname!=='/functions/v1/super-api/strava/callback')return null;
+ return raw;
+}
+function bvomStravaPayloadHasSecrets(v,depth=0){
+ if(depth>8||v==null||typeof v!=='object')return false;
+ for(const [k,x] of Object.entries(v)){const n=String(k).toLowerCase();if(['access_token','refresh_token','client_secret','code','state','authorization_code'].includes(n))return true;if(bvomStravaPayloadHasSecrets(x,depth+1))return true}
+ return false;
+}
+function bvomSanitizeStravaConnectionStatus(raw){
+ if(!raw||typeof raw!=='object'||Array.isArray(raw)||bvomStravaPayloadHasSecrets(raw))return null;
+ if(raw.connected===false)return {connected:false};if(raw.connected!==true)return null;
+ const scope=Array.isArray(raw.scope)?raw.scope.map(String):String(raw.scope||'').split(/[\s,]+/).filter(Boolean);
+ if(scope.length!==1||scope[0]!==BVOM_STRAVA_OAUTH_SCOPE)return null;
+ return {connected:true,scope:[BVOM_STRAVA_OAUTH_SCOPE]};
+}
+function bvomParseStravaReturn(search){
+ let p;try{p=new URLSearchParams(String(search||'').replace(/^\?/,''))}catch(e){return null}
+ for(const k of ['code','state','access_token','refresh_token','client_secret'])if(p.has(k))return null;
+ const status=p.get('strava');if(!['connected','denied','error'].includes(status))return null;
+ const out={status};if(status==='error'){const reason=String(p.get('reason')||'').trim();if(reason)out.reason=reason.slice(0,80)}return out;
 }
 function saveWorkoutRecord(incomplete,note,duration,volume){
  {const gppOnly=!bvomStrengthSessionHasActivity(state)&&bvomGppSessionHasActivity(state),historyDuration=duration||bvomDuration(),historySession=JSON.parse(JSON.stringify(state.session));state.history.push({date:new Date().toISOString(),...bvomHistoryExportMeta(historySession,historyDuration),unit:unitLabel(),program:bvomWorkoutProgramTag(),day:state.day,gppOnly,incomplete:!!incomplete,weights:{...state.weights},accessoryNames:Object.fromEntries((state.accessoryList||[]).map(a=>[a.id,a.name])),session:historySession,gpp:bvomGppResultSnapshot(),note:note||'',duration:historyDuration,volume:gppOnly?null:(Number.isFinite(volume)?volume:bvomWorkoutVolume())});}
