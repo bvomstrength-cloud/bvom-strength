@@ -160,6 +160,43 @@ test('EXPORT-V1-TRANSLATOR','CONTROL','Export v1 translates only actual complete
   if(JSON.stringify(a)!==JSON.stringify(b))issues.push('non-deterministic');if(JSON.stringify(history)!==before)issues.push('mutated history');
   return ok(!issues.length,issues.join('; ')||`exercises=${a.exercises.length} conditioning=${a.conditioning.length}`);
 });
+test('STRAVA-ADAPTER-V1','CONTROL','Strava adapter builds a JSON strength-upload descriptor without network/auth and never guesses unsupported mappings or dumbbell load semantics',()=>{
+  const h=H.boot(build),x={
+    schemaVersion:1,workoutId:'11111111-2222-4333-8444-555555555555',sourceApp:'BVOM Strength',sourceAppVersion:'2.8.7',
+    startedAt:'2026-10-04T10:30:00.000Z',finishedAt:'2026-10-04T11:30:00.000Z',elapsedSeconds:3600,utcOffsetMinutes:600,originalUnit:'kg',workoutType:'strength',program:'bodybuilding',incomplete:false,note:'Good session',
+    exercises:[
+      {exerciseId:'core.squat',name:'Squat',equipment:'barbell',loadSemantics:'total',sets:[{setNumber:1,reps:5,load:100,unit:'kg'}]},
+      {exerciseId:'bb.machine_chest_press',name:'Machine Chest Press',equipment:'machine',loadSemantics:'total',sets:[{setNumber:1,reps:8,load:60,unit:'kg'}]},
+      {exerciseId:'bb.dumbbell_bench_press',name:'Dumbbell Bench Press',equipment:'dumbbell',loadSemantics:'perImplement',sets:[{setNumber:1,reps:10,load:25,unit:'kg'}]},
+      {exerciseId:'bb.pull_up',name:'Pull-Up',equipment:'bodyweight',loadSemantics:'bodyweight',sets:[{setNumber:1,reps:8}]},
+      {exerciseId:'accessory.custom123',name:'Mystery Curl',equipment:'dumbbell',loadSemantics:'perImplement',sets:[{setNumber:1,reps:12,load:10,unit:'kg'}]}
+    ],conditioning:[{activityId:'gpp.sled1',name:'Sled Push',elapsedSeconds:90}]
+  };
+  const before=JSON.stringify(x),a=h.ctx.bvomBuildStravaUploadV1(x),b=h.ctx.bvomBuildStravaUploadV1(x),issues=[];
+  if(!a)issues.push('missing adapter output');else{
+    if(a.provider!=='strava'||a.schemaVersion!==1||a.requiredScope!=='activity:write')issues.push('adapter identity/scope');
+    if(a.request?.method!=='POST'||a.request?.path!=='/uploads'||a.request?.fields?.data_type!=='json'||a.request?.fields?.sport_type!=='WeightTraining')issues.push('upload request');
+    if(a.request?.fields?.external_id!=='bvom-'+x.workoutId||a.request?.fields?.name!=='BVOM Strength Workout'||a.request?.fields?.description!=='Good session')issues.push('upload fields');
+    if(a.file?.version!=='1.0'||a.file?.start_time!==x.startedAt||a.file?.utc_offset!==36000||a.file?.elapsed_time!==3600||a.file?.creator?.name!=='BVOM Strength')issues.push('file header');
+    const sets=a.file?.sets||[];
+    if(sets.length!==4)issues.push('set count '+sets.length);
+    if(sets[0]?.exercise_type!=='BARBELL_BACK_SQUAT'||sets[0]?.repetitions!==5||sets[0]?.weight!==100)issues.push('squat mapping');
+    if(sets[1]?.exercise_type!=='MACHINE_CHEST_PRESS'||sets[1]?.repetitions!==8||sets[1]?.weight!==60)issues.push('machine mapping');
+    if(sets[2]?.exercise_type!=='DUMBBELL_BENCH_PRESS'||sets[2]?.repetitions!==10||'weight' in (sets[2]||{}))issues.push('dumbbell semantics');
+    if(sets[3]?.exercise_type!=='PULL_UP_GENERIC'||sets[3]?.repetitions!==8||'weight' in (sets[3]||{}))issues.push('bodyweight mapping');
+    if(!a.omitted?.some(o=>o.exerciseId==='accessory.custom123'&&o.reason==='unmapped_exercise'))issues.push('unknown exercise not flagged');
+    if(!a.omitted?.some(o=>o.activityId==='gpp.sled1'&&o.reason==='conditioning_not_mapped_v1'))issues.push('conditioning omission not flagged');
+    if(!a.warnings?.some(w=>w.exerciseId==='bb.dumbbell_bench_press'&&w.reason==='ambiguous_per_implement_weight'))issues.push('dumbbell warning missing');
+    if('accessToken' in a||'refreshToken' in a||'clientSecret' in a)issues.push('auth leaked');
+  }
+  const bbIds=h.ev('Object.keys(BVOM_BB_EXERCISES)'),stravaMap=h.ev('BVOM_STRAVA_EXERCISE_MAP');if(bbIds.some(id=>!stravaMap['bb.'+id]))issues.push('bodybuilding mapping gap');
+  const lb=h.ctx.bvomBuildStravaUploadV1({...x,conditioning:[],originalUnit:'lb',exercises:[{exerciseId:'core.deadlift',name:'Deadlift',equipment:'barbell',loadSemantics:'total',sets:[{setNumber:1,reps:5,load:220,unit:'lb'}]}]});
+  if(Math.abs((lb?.file?.sets?.[0]?.weight??0)-99.79)>.01)issues.push('lb to kg conversion');
+  const onlyUnknown=h.ctx.bvomBuildStravaUploadV1({...x,exercises:[{exerciseId:'accessory.x',name:'Odd Thing',equipment:'machine',loadSemantics:'total',sets:[{setNumber:1,reps:10,load:20,unit:'kg'}]}]});
+  if(onlyUnknown!==null)issues.push('unsupported workout accepted');
+  if(JSON.stringify(a)!==JSON.stringify(b))issues.push('non-deterministic');if(JSON.stringify(x)!==before)issues.push('mutated export');
+  return ok(!issues.length,issues.join('; ')||`sets=${a.file.sets.length} omitted=${a.omitted.length} warnings=${a.warnings.length}`);
+});
 test('BB-INCOMPLETE-NOT-CONSUMED','CONTROL','Incomplete BB workout is saved but does not consume one of the 24',()=>{
   const h=H.boot(build);bbStart(h);const id=H.bbDayIds(h)[0];bbSet(h,id,0,{reps:7});finish(h);
   const S=h.S();return ok(S.bodybuilding.completedSessions===0&&S.history.length===1&&S.history[0].incomplete===true&&S.day==='A',`completed=${S.bodybuilding.completedSessions} history=${S.history.length}`);

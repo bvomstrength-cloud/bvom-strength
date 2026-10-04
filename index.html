@@ -2713,6 +2713,46 @@ function bvomBuildExportV1(h){
  if(Number.isFinite(h.volume))out.volume=h.volume;
  return out;
 }
+const BVOM_STRAVA_EXERCISE_MAP=Object.freeze({
+ 'core.squat':'BARBELL_BACK_SQUAT','core.bench_press':'BARBELL_BENCH_PRESS','core.prone_row':'BENT_OVER_BARBELL_ROW','core.supine_row':'ROW_GENERIC','core.overhead_press':'OVERHEAD_BARBELL_PRESS','core.deadlift':'BARBELL_DEADLIFT',
+ 'bb.machine_chest_press':'MACHINE_CHEST_PRESS','bb.smith_bench_press':'BENCH_PRESS_GENERIC','bb.dumbbell_bench_press':'DUMBBELL_BENCH_PRESS','bb.barbell_bench_press':'BARBELL_BENCH_PRESS',
+ 'bb.hack_squat':'MACHINE_HACK_SQUAT','bb.leg_press':'MACHINE_LEG_PRESS','bb.smith_squat':'SMITH_MACHINE_SQUAT','bb.high_bar_squat':'BARBELL_BACK_SQUAT','bb.heel_elevated_barbell_squat':'BARBELL_SQUAT',
+ 'bb.chest_supported_row':'MACHINE_CHEST_SUPPORTED_ROW','bb.seated_cable_row':'SEATED_CABLE_ROW','bb.machine_row':'ROW_GENERIC','bb.landmine_row':'LANDMINE_ROW','bb.barbell_row':'BENT_OVER_BARBELL_ROW','bb.chest_supported_dumbbell_row':'ROW_GENERIC',
+ 'bb.seated_leg_curl':'MACHINE_LEG_CURL_SEATED','bb.lying_leg_curl':'LEG_CURL_GENERIC','bb.slider_leg_curl':'SLIDING_LEG_CURL','bb.band_leg_curl':'BANDED_HAMSTRING_CURL','bb.nordic_curl':'NORDIC_CURL',
+ 'bb.cable_lateral_raise':'CABLE_LATERAL_RAISE','bb.machine_lateral_raise':'LATERAL_RAISE_GENERIC','bb.dumbbell_lateral_raise':'LATERAL_RAISE_GENERIC','bb.band_lateral_raise':'LATERAL_RAISE_GENERIC',
+ 'bb.cable_pushdown':'CABLE_TRICEPS_PUSHDOWN','bb.cable_overhead_extension':'CABLE_OVERHEAD_TRICEPS_EXTENSION','bb.lying_barbell_triceps_extension':'SKULL_CRUSHER','bb.lying_dumbbell_triceps_extension':'DUMBBELL_SKULLCRUSHER','bb.band_pushdown':'TRICEPS_EXTENSION_GENERIC',
+ 'bb.lat_pulldown':'LAT_PULLDOWN','bb.machine_vertical_pull':'PULL_UP_GENERIC','bb.chin_up':'PULL_UP_GENERIC','bb.pull_up':'PULL_UP_GENERIC',
+ 'bb.romanian_deadlift':'BARBELL_ROMANIAN_DEADLIFT','bb.machine_hip_hinge':'DEADLIFT_GENERIC','bb.good_morning':'GOOD_MORNING','bb.back_extension_45':'BACK_EXTENSION',
+ 'bb.incline_dumbbell_press':'INCLINE_DUMBBELL_BENCH_PRESS','bb.incline_machine_press':'MACHINE_INCLINE_CHEST_PRESS','bb.incline_smith_press':'SMITH_MACHINE_INCLINE_BENCH_PRESS','bb.incline_barbell_press':'INCLINE_BARBELL_BENCH_PRESS',
+ 'bb.leg_extension':'MACHINE_LEG_EXTENSION','bb.bulgarian_split_squat':'DUMBBELL_BULGARIAN_SPLIT_SQUATS','bb.split_squat':'LUNGE_GENERIC',
+ 'bb.reverse_pec_deck':'MACHINE_REAR_DELT_REVERSE_FLY','bb.cable_rear_delt_fly':'CABLE_REAR_DELT_FLY','bb.dumbbell_rear_delt_raise':'FLYE_GENERIC','bb.band_rear_delt_fly':'FLYE_GENERIC','bb.rear_delt_row':'ROW_GENERIC',
+ 'bb.cable_curl':'CABLE_CURL','bb.preacher_machine_curl':'PREACHER_CURL_MACHINE','bb.dumbbell_curl':'CURL_GENERIC','bb.barbell_curl':'BARBELL_BICEPS_CURL'
+});
+function bvomStravaKg(load,unit){const n=Number(load);if(!Number.isFinite(n)||n<=0)return null;const kg=unit==='lb'?n*0.45359237:n;return Math.round(kg*1000)/1000}
+function bvomBuildStravaUploadV1(x){
+ if(!x||typeof x!=='object'||x.schemaVersion!==1||typeof x.workoutId!=='string'||!x.workoutId||typeof x.startedAt!=='string'||Number.isNaN(Date.parse(x.startedAt))||!Number.isInteger(x.elapsedSeconds)||x.elapsedSeconds<0||!Number.isFinite(x.utcOffsetMinutes))return null;
+ const sets=[],warnings=[],omitted=[];
+ for(const ex of (Array.isArray(x.exercises)?x.exercises:[])){
+  if(!ex||typeof ex.exerciseId!=='string'||!ex.exerciseId)continue;
+  const exerciseType=BVOM_STRAVA_EXERCISE_MAP[ex.exerciseId];
+  if(!exerciseType){omitted.push({exerciseId:ex.exerciseId,name:String(ex.name||ex.exerciseId),reason:'unmapped_exercise'});continue}
+  let warnedPerImplement=false;
+  for(const rec of (Array.isArray(ex.sets)?ex.sets:[])){
+   if(!rec||typeof rec!=='object')continue;const reps=Number(rec.reps);if(!Number.isFinite(reps)||reps<0)continue;
+   const out={exercise_type:exerciseType,repetitions:Math.round(reps)};
+   const unit=rec.unit||x.originalUnit,kg=bvomStravaKg(rec.load,unit);
+   if(kg!=null&&ex.loadSemantics==='total')out.weight=kg;
+   else if(kg!=null&&ex.loadSemantics==='perImplement'&&!warnedPerImplement){warnings.push({exerciseId:ex.exerciseId,name:String(ex.name||ex.exerciseId),reason:'ambiguous_per_implement_weight'});warnedPerImplement=true}
+   if(Number.isFinite(Number(rec.durationSeconds))&&Number(rec.durationSeconds)>=0)out.duration=Math.round(Number(rec.durationSeconds));
+   if(typeof rec.startedAt==='string'&&!Number.isNaN(Date.parse(rec.startedAt)))out.start_time=rec.startedAt;
+   sets.push(out);
+  }
+ }
+ for(const g of (Array.isArray(x.conditioning)?x.conditioning:[]))if(g&&typeof g==='object')omitted.push({activityId:String(g.activityId||''),name:String(g.name||'Conditioning'),reason:'conditioning_not_mapped_v1'});
+ if(!sets.length)return null;
+ const externalId='bvom-'+x.workoutId;
+ return {provider:'strava',schemaVersion:1,requiredScope:'activity:write',request:{method:'POST',path:'/uploads',fields:{sport_type:'WeightTraining',name:'BVOM Strength Workout',description:typeof x.note==='string'?x.note:'',trainer:0,commute:0,data_type:'json',external_id:externalId}},fileName:externalId+'.json',file:{version:'1.0',start_time:x.startedAt,utc_offset:Math.round(x.utcOffsetMinutes*60),elapsed_time:x.elapsedSeconds,creator:{name:'BVOM Strength'},sets},warnings,omitted};
+}
 function saveWorkoutRecord(incomplete,note,duration,volume){
  {const gppOnly=!bvomStrengthSessionHasActivity(state)&&bvomGppSessionHasActivity(state),historyDuration=duration||bvomDuration(),historySession=JSON.parse(JSON.stringify(state.session));state.history.push({date:new Date().toISOString(),...bvomHistoryExportMeta(historySession,historyDuration),unit:unitLabel(),program:bvomWorkoutProgramTag(),day:state.day,gppOnly,incomplete:!!incomplete,weights:{...state.weights},accessoryNames:Object.fromEntries((state.accessoryList||[]).map(a=>[a.id,a.name])),session:historySession,gpp:bvomGppResultSnapshot(),note:note||'',duration:historyDuration,volume:gppOnly?null:(Number.isFinite(volume)?volume:bvomWorkoutVolume())});}
 }
