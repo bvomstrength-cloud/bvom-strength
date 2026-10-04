@@ -119,6 +119,47 @@ test('EXPORT-HISTORY-METADATA','CONTROL','New completed History records carry du
   if(new Set(ids).size!==ids.length)issues.push('workoutId not unique');
   return ok(!issues.length,issues.join('; ')||('ids='+ids.length+' LP='+lp.elapsedSeconds+'s'));
 }));
+test('EXPORT-V1-TRANSLATOR','CONTROL','Export v1 translates only actual completed-workout facts and refuses legacy/non-workout History',()=>{
+  const h=H.boot(build),history={
+    date:'2026-10-04T10:31:30.000Z',workoutId:'11111111-2222-4333-8444-555555555555',startedAt:'2026-10-04T10:30:00.000Z',elapsedSeconds:90,utcOffsetMinutes:600,sourceAppVersion:'2.8.6',
+    unit:'kg',program:'lprpt',day:'A',incomplete:false,note:'Good session',volume:1234.5,
+    session:{
+      Squat:{0:{reps:5,load:100,target:5,top:true,index:0},1:{reps:5,load:100,target:5,index:1}},
+      'ACC:db1':{0:{reps:10,load:12.5,target:10,rpe:8,amrap:false}}
+    },
+    exerciseMeta:{
+      Squat:{id:'core.squat',name:'Squat',category:'compound',equipment:'barbell',loadSemantics:'total'},
+      'ACC:db1':{id:'accessory.db1',name:'DB Curl',category:'Upper',equipment:'dumbbell',loadSemantics:'perImplement'}
+    },
+    weights:{Squat:102.5},bodybuilding:{decisions:[{id:'x',decision:'increase'}]},
+    gpp:[{id:'g1',name:'Sled Push',unit:'kg',metrics:{sets:true,reps:true,load:true,distance:true,time:true,rounds:true},planned:{sets:2,reps:10,load:40,distance:20,distanceUnit:'m',timeSeconds:30,rounds:4},sets:[{completed:true,reps:10,load:35,distance:20,distanceUnit:'m',timeSeconds:28,roundsCompleted:1}],actual:{reps:10,load:35,distance:20,distanceUnit:'m',elapsedSeconds:28,roundsCompleted:1}}]
+  };
+  h.S().unit='lb'; // translator must use the completed History record, not current live state
+  const before=JSON.stringify(history),a=h.ctx.bvomBuildExportV1(history),b=h.ctx.bvomBuildExportV1(history),issues=[];
+  if(!a)issues.push('missing export');else{
+    if(a.schemaVersion!==1||a.workoutId!==history.workoutId||a.sourceApp!=='BVOM Strength'||a.sourceAppVersion!=='2.8.6')issues.push('identity');
+    if(a.startedAt!==history.startedAt||a.finishedAt!==history.date||a.elapsedSeconds!==90||a.utcOffsetMinutes!==600||a.originalUnit!=='kg')issues.push('timing/units');
+    if(a.workoutType!=='mixed'||a.program!=='lprpt'||a.incomplete!==false||a.note!=='Good session'||a.volume!==1234.5)issues.push('workout fields');
+    if(a.exercises?.length!==2||a.exercises[0]?.exerciseId!=='core.squat'||a.exercises[1]?.exerciseId!=='accessory.db1')issues.push('exercise identity');
+    const sq=a.exercises?.[0],db=a.exercises?.[1];
+    if(sq?.sets?.[0]?.setNumber!==1||sq?.sets?.[0]?.reps!==5||sq?.sets?.[0]?.load!==100||sq?.sets?.[0]?.unit!=='kg')issues.push('strength actuals');
+    if(db?.equipment!=='dumbbell'||db?.loadSemantics!=='perImplement'||db?.sets?.[0]?.rpe!==8)issues.push('dumbbell/rpe');
+    if('target' in (sq?.sets?.[0]||{})||'top' in (sq?.sets?.[0]||{})||'amrap' in (db?.sets?.[0]||{}))issues.push('prescription leaked');
+    const g=a.conditioning?.[0];
+    if(g?.activityId!=='gpp.g1'||g?.name!=='Sled Push'||g?.reps!==10||g?.load!==35||g?.unit!=='kg'||g?.distance!==20||g?.distanceUnit!=='m'||g?.elapsedSeconds!==28||g?.rounds!==1)issues.push('GPP actuals');
+    if(g?.sets?.[0]?.durationSeconds!==28||g?.sets?.[0]?.rounds!==1||'planned' in g||'metrics' in g)issues.push('GPP set/planned leak');
+    if('weights' in a||'bodybuilding' in a)issues.push('internal state leaked');
+  }
+  const legacy=h.ctx.bvomBuildExportV1({date:'2025-01-01T00:00:00.000Z',unit:'kg',program:'lprpt',day:'A',session:{Squat:{0:{reps:5,load:100}}}});
+  const activity=h.ctx.bvomBuildExportV1({type:'activity',date:'2026-10-04T00:00:00.000Z',note:'Walked'});
+  const missingMeta=h.ctx.bvomBuildExportV1({...history,gpp:[],exerciseMeta:{},session:{Squat:{0:{reps:5,load:100}}}});
+  const badGpp=h.ctx.bvomBuildExportV1({...history,session:{},exerciseMeta:{},gpp:[{id:'',name:'',actual:{elapsedSeconds:30}}]});
+  const strengthOnly=h.ctx.bvomBuildExportV1({...history,gpp:[]}),conditioningOnly=h.ctx.bvomBuildExportV1({...history,session:{},exerciseMeta:{}}),onramp=h.ctx.bvomBuildExportV1({...history,gpp:[],program:'bodybuilding',bodybuilding:{onramp:true}});
+  if(legacy!==null)issues.push('legacy guessed');if(activity!==null)issues.push('activity exported');if(missingMeta!==null)issues.push('missing exercise meta accepted');if(badGpp!==null)issues.push('bad GPP accepted');
+  if(strengthOnly?.workoutType!=='strength'||conditioningOnly?.workoutType!=='conditioning'||onramp?.program!=='bodybuilding_onramp')issues.push('type/program mapping');
+  if(JSON.stringify(a)!==JSON.stringify(b))issues.push('non-deterministic');if(JSON.stringify(history)!==before)issues.push('mutated history');
+  return ok(!issues.length,issues.join('; ')||`exercises=${a.exercises.length} conditioning=${a.conditioning.length}`);
+});
 test('BB-INCOMPLETE-NOT-CONSUMED','CONTROL','Incomplete BB workout is saved but does not consume one of the 24',()=>{
   const h=H.boot(build);bbStart(h);const id=H.bbDayIds(h)[0];bbSet(h,id,0,{reps:7});finish(h);
   const S=h.S();return ok(S.bodybuilding.completedSessions===0&&S.history.length===1&&S.history[0].incomplete===true&&S.day==='A',`completed=${S.bodybuilding.completedSessions} history=${S.history.length}`);
