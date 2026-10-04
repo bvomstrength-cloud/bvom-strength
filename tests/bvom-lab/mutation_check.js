@@ -170,7 +170,8 @@ if(knownBad){
     'F25-ONRAMP-UNIT-ROUNDTRIP-HANDOFF-REVERSIBLE',
     // Forward feature contract added after v2.8.0; the old reference is not expected to implement it.
     'EXPORT-HISTORY-METADATA',
-    'EXPORT-V1-TRANSLATOR'
+    'EXPORT-V1-TRANSLATOR',
+    'STRAVA-ADAPTER-V1'
   ]);
   line(`\nKNOWN-BAD REFERENCE — ${path.resolve(knownBad)} (expected: applicable DEFECT contracts fail; CONTROL/NEGATIVE pass)`);
   const r=run(knownBad);if(r.error){line('reference run error: '+r.error);failures++}
