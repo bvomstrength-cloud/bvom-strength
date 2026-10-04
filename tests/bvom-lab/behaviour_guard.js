@@ -77,6 +77,48 @@ test('F45-BB-GPP-HISTORY-PRESERVED','DEFECT','Stopped Bodybuilding GPP is preser
   const hist=h.S().history.at(-1),g=(hist?.gpp||[]).find(x=>x.id==='bbg1');
   return ok(hist?.program==='bodybuilding'&&g?.actual?.elapsedSeconds===95,'history program='+hist?.program+'; gpp='+JSON.stringify(g?.actual));
 }));
+test('EXPORT-HISTORY-METADATA','CONTROL','New completed History records carry durable destination-neutral export metadata without rewriting legacy History',()=>withClock(clock=>{
+  const issues=[],ids=[];
+  const checkBase=(label,hist,buildVersion)=>{
+    if(!hist)issues.push(label+': missing history');
+    else{
+      if(!(typeof hist.workoutId==='string'&&hist.workoutId.length>=16))issues.push(label+': workoutId');
+      else ids.push(hist.workoutId);
+      if(!(typeof hist.startedAt==='string'&&!Number.isNaN(Date.parse(hist.startedAt))))issues.push(label+': startedAt');
+      if(!(Number.isInteger(hist.elapsedSeconds)&&hist.elapsedSeconds>=0))issues.push(label+': elapsedSeconds');
+      if(!Number.isFinite(hist.utcOffsetMinutes))issues.push(label+': utcOffsetMinutes');
+      if(hist.sourceAppVersion!==buildVersion)issues.push(label+': sourceAppVersion');
+      if(!hist.exerciseMeta||typeof hist.exerciseMeta!=='object'||Array.isArray(hist.exerciseMeta))issues.push(label+': exerciseMeta');
+    }
+  };
+
+  const h=H.boot(build);configureLP(h);
+  h.S().history.push({date:'2025-01-01T00:00:00.000Z',unit:'kg',program:'lprpt',day:'A',session:{}});
+  h.S().accessoryList=[{id:'meta_db',name:'DB Curl',category:'Upper',assignment:'A',hlmAssignment:'Any',fourDayAssignment:'Any',freeAssignment:null,bbAssignment:null,equipment:'dumbbell',plateMode:'standard',style:'straight',sets:1,reps:10,topReps:10,weight:15,increment:2.5,drop:5}];
+  h.ctx.tapAccessory('meta_db',0);
+  for(const n of ['Squat','Bench Press','Prone Row'])for(let i=0;i<3;i++)h.ctx.tapSet(n,i);
+  clock.advance(90e3);finish(h);
+  const lp=h.S().history.at(-1);checkBase('LP',lp,h.ev('BVOM_BUILD'));
+  if(lp?.elapsedSeconds!==90)issues.push('LP: elapsed '+lp?.elapsedSeconds);
+  if(lp?.exerciseMeta?.Squat?.id!=='core.squat'||lp?.exerciseMeta?.Squat?.loadSemantics!=='total')issues.push('LP: core meta');
+  if(lp?.exerciseMeta?.['ACC:meta_db']?.id!=='accessory.meta_db'||lp?.exerciseMeta?.['ACC:meta_db']?.equipment!=='dumbbell'||lp?.exerciseMeta?.['ACC:meta_db']?.loadSemantics!=='perImplement')issues.push('LP: dumbbell accessory meta');
+  if('workoutId' in h.S().history[0]||'startedAt' in h.S().history[0]||'exerciseMeta' in h.S().history[0])issues.push('legacy history rewritten');
+
+  const hb=H.boot(build);bbStart(hb);bbSession(hb);const bb=hb.S().history.at(-1);checkBase('BB',bb,hb.ev('BVOM_BUILD'));
+  if(bb?.exerciseMeta?.['BB:machine_chest_press']?.id!=='bb.machine_chest_press'||bb?.exerciseMeta?.['BB:machine_chest_press']?.equipment!=='machine')issues.push('BB: exercise meta');
+
+  const hc=H.boot(build);configureLP(hc);const C=hc.S();C.programMode='free';hc.ctx.bvomFtEnsure();C.freeTraining.days=[{id:'ft1',compounds:[{lift:'Squat',style:'straight',weight:80,sets:1,reps:8}]}];C.freeTraining.selectedDay=1;C.day='1';hc.ctx.bvomFtEnsure();hc.ev('save()');
+  hc.ctx.bvomFtSetModal('Squat',0);hc.lastOverlay().querySelector('[data-load]').value='80';hc.lastOverlay().querySelector('[data-s]').onclick();finish(hc);
+  const free=hc.S().history.at(-1);checkBase('Custom',free,hc.ev('BVOM_BUILD'));
+  if(free?.exerciseMeta?.Squat?.id!=='core.squat')issues.push('Custom: core meta');
+
+  const ho=H.boot(build);bbStart(ho,{onramp:true});orSession(ho);const ramp=ho.S().history.at(-1);checkBase('On-Ramp',ramp,ho.ev('BVOM_BUILD'));
+  if(ramp?.exerciseMeta?.['BBOR:machine_chest_press']?.id!=='bb.machine_chest_press')issues.push('On-Ramp: exercise meta');
+  if(typeof ramp?.duration!=='string')issues.push('On-Ramp: duration');
+
+  if(new Set(ids).size!==ids.length)issues.push('workoutId not unique');
+  return ok(!issues.length,issues.join('; ')||('ids='+ids.length+' LP='+lp.elapsedSeconds+'s'));
+}));
 test('BB-INCOMPLETE-NOT-CONSUMED','CONTROL','Incomplete BB workout is saved but does not consume one of the 24',()=>{
   const h=H.boot(build);bbStart(h);const id=H.bbDayIds(h)[0];bbSet(h,id,0,{reps:7});finish(h);
   const S=h.S();return ok(S.bodybuilding.completedSessions===0&&S.history.length===1&&S.history[0].incomplete===true&&S.day==='A',`completed=${S.bodybuilding.completedSessions} history=${S.history.length}`);
