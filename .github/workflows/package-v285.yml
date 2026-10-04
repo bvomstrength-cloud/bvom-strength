@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - "dev/package-v2.8.5"
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
