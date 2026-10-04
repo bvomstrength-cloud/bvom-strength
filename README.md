@@ -4,41 +4,35 @@ Production source repository for BVOM Strength.
 
 ## Current source baseline
 
-- Application version: **v2.8.4**
+- Application version: **v2.8.5 release candidate**
 - Branch: **`main`**
-- Regression suite: **v15.2 maintenance + F44**
-- Current gate: **23/23 static · 78/78 behaviour · 14/14 sequence · 62/62 mutations killed**
-- Known-bad reference: **47/47 applicable DEFECT contracts fail**; F23/F25 are documented provenance N/A
-- Final v2.8.4 deployment ZIP SHA-256: `1278dceb8c43429996317c16166627ddc44cb2b017214b562752fd2ee48d8ba5`
+- Regression suite: **v15.2 maintenance + F45**
+- Current gate: **23/23 static · 79/79 behaviour · 14/14 sequence · 62/62 mutations killed**
+- Known-bad reference: **48/48 applicable DEFECT contracts fail**; F23/F25 are documented provenance N/A
+- v2.8.5 release-candidate ZIP SHA-256: `ee98469ee65d55b43a4d84a30b5e50bf4cd8df6f5ca58841d369da69529176d9`
 
-The current source includes the maintenance guard that blocks Cloud Restore while an unfinished workout is active.
+The current source preserves completed Bodybuilding GPP/conditioning results in Workout History and includes permanent F45 regression coverage.
 
-## v2.8.4 release status
+## v2.8.5 release status
 
-The final v2.8.4 package was built deterministically from the 12 shipped production files and is byte-identical to the previously verified release-candidate ZIP.
+The v2.8.5 package was built deterministically from the 12 shipped production files after the protected release-candidate gate passed.
 
 Automated release evidence:
 
 - 23/23 static PASS
-- 78/78 behaviour PASS
+- 79/79 behaviour PASS
 - 14/14 sequence PASS
 - all 62 mutations killed
-- 47/47 applicable known-bad DEFECT contracts fail as expected
-- F44 active-workout Cloud Restore guard PASS
+- 48/48 applicable known-bad DEFECT contracts fail as expected
+- F45 Bodybuilding GPP History preservation PASS
+- deterministic deployment ZIP contains exactly the 12 shipped production files
+- deployment ZIP SHA-256: `ee98469ee65d55b43a4d84a30b5e50bf4cd8df6f5ca58841d369da69529176d9`
 
-Real-device smoke evidence on the Netlify test site:
-
-- v2.8.4 loaded successfully on Android/Chrome
-- existing local BVOM data remained available after the update
-- an LP/RPT workout was started and Squat 100 kg × 5 was recorded
-- Cloud Restore was refused while the workout was unfinished
-- the expected unfinished-workout protection message was shown
-- the active workout remained running and the recorded set remained intact after the blocked restore
-
-**Production deployment completed and was smoke-verified on 2 October 2026.** The production app loaded as v2.8.4 and normal user data remained available.
+**Production deployment is still pending the Netlify test-site check and production promotion. The currently deployed production version remains v2.8.4 until that release step is completed.**
 
 ## Historical approved package
 
+- Approved v2.8.4 package SHA-256: `1278dceb8c43429996317c16166627ddc44cb2b017214b562752fd2ee48d8ba5`
 - Approved v2.8.3 package SHA-256: `8354302d31a4b1573e519cf0e3f2323f369aba3d4599eca984745a592b92286f`
 
 This hash is retained as historical package evidence and is not a claim that the current `main` tree is byte-identical to that ZIP.
