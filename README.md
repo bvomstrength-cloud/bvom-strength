@@ -4,12 +4,12 @@ Production source repository for BVOM Strength.
 
 ## Current source baseline
 
-- Application version: **v2.8.7 release candidate**
+- Application version: **v2.8.7**
 - Branch: **`main`**
 - Regression suite: **v15.2 maintenance + F45 + export-ready History metadata + Export v1 translator**
 - Current gate: **23/23 static · 81/81 behaviour · 14/14 sequence · 62/62 mutations killed**
 - Known-bad reference: **48/48 applicable DEFECT contracts fail**; EXPORT-HISTORY-METADATA, EXPORT-V1-TRANSLATOR, F23 and F25 are documented historical-provenance N/A
-- v2.8.7 release-candidate ZIP SHA-256: `802b7671e70c3538b70213f1f4716a7a1df0150811e503137ce28dd731af9976`
+- Final v2.8.7 deployment ZIP SHA-256: `802b7671e70c3538b70213f1f4716a7a1df0150811e503137ce28dd731af9976`
 
 The current source preserves completed Bodybuilding GPP/conditioning results in Workout History, adds destination-neutral metadata to newly completed workout History records, and includes a pure Export v1 translator that converts eligible v2.8.6+ History records into a destination-neutral workout object without network calls or external-service coupling.
 
@@ -31,7 +31,7 @@ Automated release evidence:
 - deterministic deployment ZIP contains exactly the 12 shipped production files
 - deployment ZIP SHA-256: `802b7671e70c3538b70213f1f4716a7a1df0150811e503137ce28dd731af9976`
 
-**Production deployment is pending the Netlify test-site check and production promotion. The currently deployed production version remains v2.8.6 until that release step is completed.**
+**Production deployment completed on 4 October 2026 using the exact verified v2.8.7 deployment ZIP.** The owner confirmed the Netlify test-site and production upload sequence was completed.
 
 ## Historical approved package
 
