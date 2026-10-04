@@ -51,6 +51,7 @@ This hash is retained as historical package evidence and is not a claim that the
 - `ARCHITECTURE.md` — system structure and high-risk boundaries
 - `BVOM_SPEC.md` — behavioural specification
 - `TESTING.md` — test tiers, commands, CI gate and release evidence
+- `STRAVA_OAUTH.md` — one-way Strava OAuth/security architecture and server contract
 
 ## Development rule
 
