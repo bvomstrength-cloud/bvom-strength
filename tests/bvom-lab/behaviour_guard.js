@@ -70,6 +70,13 @@ test('BB-CORE-DECISIONS','CONTROL','BB decisions: top 8→increase, 7→hold, 8 
   bbSession(h,(id,i)=>id==='machine_chest_press'&&i===0?{reps:5}:{});r.push(P().machine_chest_press.load===60);
   return ok(r.every(Boolean),`checks=${r.map(x=>x?1:0).join('')} chest=${P().machine_chest_press.load} legcurl=${P().seated_leg_curl.load}`);
 });
+test('F45-BB-GPP-HISTORY-PRESERVED','DEFECT','Stopped Bodybuilding GPP is preserved in History when the workout finishes',()=>withClock(clock=>{
+  const h=H.boot(build);bbStart(h);h.ctx.bvomGppEnsure();h.S().gppList.push({id:'bbg1',name:'Intervals',assignment:'__BODYBUILDING__',hlmAssignment:'__BODYBUILDING__',fourDayAssignment:'__BODYBUILDING__',freeAssignment:'__BODYBUILDING__',bbAssignment:'Any',metrics:{time:true},planned:{timeSeconds:600}});h.ev('save()');
+  h.ctx.bvomStartGppTimer('bbg1');clock.advance(95e3);h.ctx.bvomStopGppTimer('bbg1');
+  for(const id of H.bbDayIds(h)){const rx=h.ctx.bvomBbPrescription(id);for(let i=0;i<rx.sets.length;i++)bbSet(h,id,i,{reps:rx.sets[i].type==='top'?7:rx.sets[i].maxReps})}finish(h);
+  const hist=h.S().history.at(-1),g=(hist?.gpp||[]).find(x=>x.id==='bbg1');
+  return ok(hist?.program==='bodybuilding'&&g?.actual?.elapsedSeconds===95,'history program='+hist?.program+'; gpp='+JSON.stringify(g?.actual));
+}));
 test('BB-INCOMPLETE-NOT-CONSUMED','CONTROL','Incomplete BB workout is saved but does not consume one of the 24',()=>{
   const h=H.boot(build);bbStart(h);const id=H.bbDayIds(h)[0];bbSet(h,id,0,{reps:7});finish(h);
   const S=h.S();return ok(S.bodybuilding.completedSessions===0&&S.history.length===1&&S.history[0].incomplete===true&&S.day==='A',`completed=${S.bodybuilding.completedSessions} history=${S.history.length}`);
