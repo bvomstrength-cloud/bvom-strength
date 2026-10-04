@@ -170,7 +170,7 @@ test('STRAVA-ADAPTER-V1','CONTROL','Strava adapter builds a JSON strength-upload
       {exerciseId:'bb.dumbbell_bench_press',name:'Dumbbell Bench Press',equipment:'dumbbell',loadSemantics:'perImplement',sets:[{setNumber:1,reps:10,load:25,unit:'kg'}]},
       {exerciseId:'bb.pull_up',name:'Pull-Up',equipment:'bodyweight',loadSemantics:'bodyweight',sets:[{setNumber:1,reps:8}]},
       {exerciseId:'accessory.custom123',name:'Mystery Curl',equipment:'dumbbell',loadSemantics:'perImplement',sets:[{setNumber:1,reps:12,load:10,unit:'kg'}]}
-    ],conditioning:[]
+    ],conditioning:[{activityId:'gpp.sled1',name:'Sled Push',elapsedSeconds:90}]
   };
   const before=JSON.stringify(x),a=h.ctx.bvomBuildStravaUploadV1(x),b=h.ctx.bvomBuildStravaUploadV1(x),issues=[];
   if(!a)issues.push('missing adapter output');else{
@@ -185,10 +185,12 @@ test('STRAVA-ADAPTER-V1','CONTROL','Strava adapter builds a JSON strength-upload
     if(sets[2]?.exercise_type!=='DUMBBELL_BENCH_PRESS'||sets[2]?.repetitions!==10||'weight' in (sets[2]||{}))issues.push('dumbbell semantics');
     if(sets[3]?.exercise_type!=='PULL_UP_GENERIC'||sets[3]?.repetitions!==8||'weight' in (sets[3]||{}))issues.push('bodyweight mapping');
     if(!a.omitted?.some(o=>o.exerciseId==='accessory.custom123'&&o.reason==='unmapped_exercise'))issues.push('unknown exercise not flagged');
+    if(!a.omitted?.some(o=>o.activityId==='gpp.sled1'&&o.reason==='conditioning_not_mapped_v1'))issues.push('conditioning omission not flagged');
     if(!a.warnings?.some(w=>w.exerciseId==='bb.dumbbell_bench_press'&&w.reason==='ambiguous_per_implement_weight'))issues.push('dumbbell warning missing');
     if('accessToken' in a||'refreshToken' in a||'clientSecret' in a)issues.push('auth leaked');
   }
-  const lb=h.ctx.bvomBuildStravaUploadV1({...x,originalUnit:'lb',exercises:[{exerciseId:'core.deadlift',name:'Deadlift',equipment:'barbell',loadSemantics:'total',sets:[{setNumber:1,reps:5,load:220,unit:'lb'}]}]});
+  const bbIds=h.ev('Object.keys(BVOM_BB_EXERCISES)'),stravaMap=h.ev('BVOM_STRAVA_EXERCISE_MAP');if(bbIds.some(id=>!stravaMap['bb.'+id]))issues.push('bodybuilding mapping gap');
+  const lb=h.ctx.bvomBuildStravaUploadV1({...x,conditioning:[],originalUnit:'lb',exercises:[{exerciseId:'core.deadlift',name:'Deadlift',equipment:'barbell',loadSemantics:'total',sets:[{setNumber:1,reps:5,load:220,unit:'lb'}]}]});
   if(Math.abs((lb?.file?.sets?.[0]?.weight??0)-99.79)>.01)issues.push('lb to kg conversion');
   const onlyUnknown=h.ctx.bvomBuildStravaUploadV1({...x,exercises:[{exerciseId:'accessory.x',name:'Odd Thing',equipment:'machine',loadSemantics:'total',sets:[{setNumber:1,reps:10,load:20,unit:'kg'}]}]});
   if(onlyUnknown!==null)issues.push('unsupported workout accepted');
