@@ -175,10 +175,10 @@ if(knownBad){
   const r=run(knownBad);if(r.error){line('reference run error: '+r.error);failures++}
   else{
     const eligible=r.filter(x=>x.kind==='DEFECT'&&!notApplicableToV280.has(x.id));
-    const exempt=r.filter(x=>x.kind==='DEFECT'&&notApplicableToV280.has(x.id));
+    const exempt=r.filter(x=>notApplicableToV280.has(x.id));
     const bad=eligible.filter(x=>x.pass),brokenCtl=r.filter(x=>x.kind!=='DEFECT'&&!notApplicableToV280.has(x.id)&&!x.pass);
     line(`Applicable DEFECT contracts failing on reference: ${eligible.filter(x=>!x.pass).length}/${eligible.length}`);
-    if(exempt.length)line(`Reference N/A (later-regression provenance): ${exempt.map(x=>x.id).join(', ')}`);
+    if(exempt.length)line(`Reference N/A (historical provenance): ${exempt.map(x=>x.id).join(', ')}`);
     for(const x of bad){line(`TOOTHLESS ${x.id} passes on the known-bad reference`);failures++}
     for(const x of brokenCtl){line(`REFERENCE-CONTROL-FAIL ${x.id} — ${x.detail}`);failures++}
   }
