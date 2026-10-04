@@ -70,7 +70,7 @@ test('BB-CORE-DECISIONS','CONTROL','BB decisions: top 8→increase, 7→hold, 8 
   bbSession(h,(id,i)=>id==='machine_chest_press'&&i===0?{reps:5}:{});r.push(P().machine_chest_press.load===60);
   return ok(r.every(Boolean),`checks=${r.map(x=>x?1:0).join('')} chest=${P().machine_chest_press.load} legcurl=${P().seated_leg_curl.load}`);
 });
-test('BB-GPP-HISTORY','CONTROL','Stopped Bodybuilding GPP is preserved in History when the workout finishes',()=>withClock(clock=>{
+test('F45-BB-GPP-HISTORY-PRESERVED','DEFECT','Stopped Bodybuilding GPP is preserved in History when the workout finishes',()=>withClock(clock=>{
   const h=H.boot(build);bbStart(h);h.ctx.bvomGppEnsure();h.S().gppList.push({id:'bbg1',name:'Intervals',assignment:'__BODYBUILDING__',hlmAssignment:'__BODYBUILDING__',fourDayAssignment:'__BODYBUILDING__',freeAssignment:'__BODYBUILDING__',bbAssignment:'Any',metrics:{time:true},planned:{timeSeconds:600}});h.ev('save()');
   h.ctx.bvomStartGppTimer('bbg1');clock.advance(95e3);h.ctx.bvomStopGppTimer('bbg1');
   for(const id of H.bbDayIds(h)){const rx=h.ctx.bvomBbPrescription(id);for(let i=0;i<rx.sets.length;i++)bbSet(h,id,i,{reps:rx.sets[i].type==='top'?7:rx.sets[i].maxReps})}finish(h);
