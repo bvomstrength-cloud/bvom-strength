@@ -167,14 +167,16 @@ if(knownBad){
   // contracts toothless. Keep provenance exceptions explicit instead of weakening the contracts.
   const notApplicableToV280=new Set([
     'F23-NOOP-POSTCOMPLETE-SETTINGS-PRESERVE-ROLLBACK',
-    'F25-ONRAMP-UNIT-ROUNDTRIP-HANDOFF-REVERSIBLE'
+    'F25-ONRAMP-UNIT-ROUNDTRIP-HANDOFF-REVERSIBLE',
+    // Forward feature contract added after v2.8.0; the old reference is not expected to implement it.
+    'EXPORT-HISTORY-METADATA'
   ]);
   line(`\nKNOWN-BAD REFERENCE — ${path.resolve(knownBad)} (expected: applicable DEFECT contracts fail; CONTROL/NEGATIVE pass)`);
   const r=run(knownBad);if(r.error){line('reference run error: '+r.error);failures++}
   else{
     const eligible=r.filter(x=>x.kind==='DEFECT'&&!notApplicableToV280.has(x.id));
     const exempt=r.filter(x=>x.kind==='DEFECT'&&notApplicableToV280.has(x.id));
-    const bad=eligible.filter(x=>x.pass),brokenCtl=r.filter(x=>x.kind!=='DEFECT'&&!x.pass);
+    const bad=eligible.filter(x=>x.pass),brokenCtl=r.filter(x=>x.kind!=='DEFECT'&&!notApplicableToV280.has(x.id)&&!x.pass);
     line(`Applicable DEFECT contracts failing on reference: ${eligible.filter(x=>!x.pass).length}/${eligible.length}`);
     if(exempt.length)line(`Reference N/A (later-regression provenance): ${exempt.map(x=>x.id).join(', ')}`);
     for(const x of bad){line(`TOOTHLESS ${x.id} passes on the known-bad reference`);failures++}
