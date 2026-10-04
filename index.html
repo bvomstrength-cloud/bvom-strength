@@ -1259,6 +1259,49 @@ function bvomWorkoutVolume(){
  }
  return Math.round(total*100)/100;
 }
+function bvomExportV1Number(v){const n=Number(v);return Number.isFinite(n)?n:null}
+function bvomExportV1Set(rec,setNumber,unit){
+ if(!rec||typeof rec!=='object')return null;
+ const out={setNumber};
+ const reps=bvomExportV1Number(rec.reps);if(reps!=null&&reps>=0)out.reps=reps;
+ const load=bvomExportV1Number(rec.load);if(load!=null&&load>0){out.load=load;if(unit)out.unit=unit}
+ const rpe=bvomExportV1Number(rec.rpe);if(rpe!=null)out.rpe=rpe;
+ const duration=bvomExportV1Number(rec.durationSeconds??rec.timeSeconds);if(duration!=null&&duration>=0)out.durationSeconds=duration;
+ const distance=bvomExportV1Number(rec.distance);if(distance!=null&&distance>=0){out.distance=distance;if(rec.distanceUnit)out.distanceUnit=String(rec.distanceUnit)}
+ const rounds=bvomExportV1Number(rec.rounds??rec.roundsCompleted);if(rounds!=null&&rounds>=0)out.rounds=rounds;
+ if(typeof rec.resistance==='string'&&rec.resistance.trim())out.resistance=rec.resistance.trim();
+ if(typeof rec.startedAt==='string'&&!Number.isNaN(Date.parse(rec.startedAt)))out.startedAt=rec.startedAt;
+ return Object.keys(out).length>1?out:null;
+}
+function bvomExportV1Conditioning(g,defaultUnit){
+ if(!g||typeof g!=='object')return null;
+ const out={activityId:'gpp.'+String(g.id||''),name:String(g.name||'Activity')},a=g.actual&&typeof g.actual==='object'?g.actual:{},unit=String(g.unit||defaultUnit||'');
+ const reps=bvomExportV1Number(a.reps);if(reps!=null&&reps>=0)out.reps=reps;
+ const load=bvomExportV1Number(a.load);if(load!=null&&load>0){out.load=load;if(unit)out.unit=unit}
+ const distance=bvomExportV1Number(a.distance);if(distance!=null&&distance>=0){out.distance=distance;if(a.distanceUnit)out.distanceUnit=String(a.distanceUnit)}
+ const elapsed=bvomExportV1Number(a.elapsedSeconds);if(elapsed!=null&&elapsed>=0)out.elapsedSeconds=elapsed;
+ const rounds=bvomExportV1Number(a.rounds??a.roundsCompleted);if(rounds!=null&&rounds>=0)out.rounds=rounds;
+ const sets=(Array.isArray(g.sets)?g.sets:[]).map((r,i)=>bvomExportV1Set(r,i+1,unit)).filter(Boolean);if(sets.length)out.sets=sets;
+ return Object.keys(out).length>2?out:null;
+}
+function bvomBuildExportV1(h){
+ if(!h||typeof h!=='object'||h.type==='activity')return null;
+ if(typeof h.workoutId!=='string'||h.workoutId.length<16||typeof h.startedAt!=='string'||Number.isNaN(Date.parse(h.startedAt))||typeof h.date!=='string'||Number.isNaN(Date.parse(h.date)))return null;
+ if(!Number.isInteger(h.elapsedSeconds)||h.elapsedSeconds<0||!Number.isFinite(h.utcOffsetMinutes)||typeof h.sourceAppVersion!=='string'||!h.sourceAppVersion||!['kg','lb'].includes(h.unit))return null;
+ if(!h.exerciseMeta||typeof h.exerciseMeta!=='object'||Array.isArray(h.exerciseMeta))return null;
+ const exercises=[];
+ for(const [key,obj] of Object.entries(h.session||{})){
+  const rawSets=Object.values(obj||{}).filter(v=>v&&v.reps!==undefined);if(!rawSets.length)continue;
+  const meta=h.exerciseMeta[key];if(!meta||typeof meta.id!=='string'||!meta.id||typeof meta.name!=='string'||!meta.name)return null;
+  const sets=rawSets.map((r,i)=>bvomExportV1Set(r,i+1,h.unit)).filter(Boolean);if(!sets.length)continue;
+  const ex={exerciseId:meta.id,name:meta.name};if(meta.category)ex.category=String(meta.category);if(meta.equipment)ex.equipment=String(meta.equipment);if(meta.loadSemantics)ex.loadSemantics=String(meta.loadSemantics);ex.sets=sets;exercises.push(ex);
+ }
+ const conditioning=(Array.isArray(h.gpp)?h.gpp:[]).map(g=>bvomExportV1Conditioning(g,h.unit)).filter(Boolean);
+ if(!exercises.length&&!conditioning.length)return null;
+ const out={schemaVersion:1,workoutId:h.workoutId,sourceApp:'BVOM Strength',sourceAppVersion:h.sourceAppVersion,startedAt:h.startedAt,finishedAt:h.date,elapsedSeconds:h.elapsedSeconds,utcOffsetMinutes:h.utcOffsetMinutes,originalUnit:h.unit,workoutType:exercises.length?(conditioning.length?'mixed':'strength'):'conditioning',program:h.bodybuilding?.onramp?'bodybuilding_onramp':String(h.program||''),incomplete:!!h.incomplete,note:typeof h.note==='string'?h.note:'',exercises,conditioning};
+ if(Number.isFinite(h.volume))out.volume=h.volume;
+ return out;
+}
 function saveWorkoutRecord(incomplete,note,duration,volume){
  state.history.push({date:new Date().toISOString(),unit:unitLabel(),day:state.day,incomplete:!!incomplete,weights:{...state.weights},accessoryNames:Object.fromEntries((state.accessoryList||[]).map(a=>[a.id,a.name])),session:JSON.parse(JSON.stringify(state.session)),note:note||'',duration:duration||bvomDuration(),volume:Number.isFinite(volume)?volume:bvomWorkoutVolume()});
 }
