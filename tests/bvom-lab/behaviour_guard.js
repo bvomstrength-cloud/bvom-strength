@@ -134,6 +134,7 @@ test('EXPORT-V1-TRANSLATOR','CONTROL','Export v1 translates only actual complete
     weights:{Squat:102.5},bodybuilding:{decisions:[{id:'x',decision:'increase'}]},
     gpp:[{id:'g1',name:'Sled Push',unit:'kg',metrics:{sets:true,reps:true,load:true,distance:true,time:true,rounds:true},planned:{sets:2,reps:10,load:40,distance:20,distanceUnit:'m',timeSeconds:30,rounds:4},sets:[{completed:true,reps:10,load:35,distance:20,distanceUnit:'m',timeSeconds:28,roundsCompleted:1}],actual:{reps:10,load:35,distance:20,distanceUnit:'m',elapsedSeconds:28,roundsCompleted:1}}]
   };
+  h.S().unit='lb'; // translator must use the completed History record, not current live state
   const before=JSON.stringify(history),a=h.ctx.bvomBuildExportV1(history),b=h.ctx.bvomBuildExportV1(history),issues=[];
   if(!a)issues.push('missing export');else{
     if(a.schemaVersion!==1||a.workoutId!==history.workoutId||a.sourceApp!=='BVOM Strength'||a.sourceAppVersion!=='2.8.6')issues.push('identity');
@@ -151,7 +152,11 @@ test('EXPORT-V1-TRANSLATOR','CONTROL','Export v1 translates only actual complete
   }
   const legacy=h.ctx.bvomBuildExportV1({date:'2025-01-01T00:00:00.000Z',unit:'kg',program:'lprpt',day:'A',session:{Squat:{0:{reps:5,load:100}}}});
   const activity=h.ctx.bvomBuildExportV1({type:'activity',date:'2026-10-04T00:00:00.000Z',note:'Walked'});
-  if(legacy!==null)issues.push('legacy guessed');if(activity!==null)issues.push('activity exported');
+  const missingMeta=h.ctx.bvomBuildExportV1({...history,gpp:[],exerciseMeta:{},session:{Squat:{0:{reps:5,load:100}}}});
+  const badGpp=h.ctx.bvomBuildExportV1({...history,session:{},exerciseMeta:{},gpp:[{id:'',name:'',actual:{elapsedSeconds:30}}]});
+  const strengthOnly=h.ctx.bvomBuildExportV1({...history,gpp:[]}),conditioningOnly=h.ctx.bvomBuildExportV1({...history,session:{},exerciseMeta:{}}),onramp=h.ctx.bvomBuildExportV1({...history,gpp:[],program:'bodybuilding',bodybuilding:{onramp:true}});
+  if(legacy!==null)issues.push('legacy guessed');if(activity!==null)issues.push('activity exported');if(missingMeta!==null)issues.push('missing exercise meta accepted');if(badGpp!==null)issues.push('bad GPP accepted');
+  if(strengthOnly?.workoutType!=='strength'||conditioningOnly?.workoutType!=='conditioning'||onramp?.program!=='bodybuilding_onramp')issues.push('type/program mapping');
   if(JSON.stringify(a)!==JSON.stringify(b))issues.push('non-deterministic');if(JSON.stringify(history)!==before)issues.push('mutated history');
   return ok(!issues.length,issues.join('; ')||`exercises=${a.exercises.length} conditioning=${a.conditioning.length}`);
 });
