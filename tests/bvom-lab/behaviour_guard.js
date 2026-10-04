@@ -212,13 +212,15 @@ test('STRAVA-OAUTH-CLIENT-V1','CONTROL','Strava OAuth client boundary requests w
     good.replace('scope=activity%3Awrite','scope=activity%3Aread_all%2Cactivity%3Awrite'),
     good.replace('state=0123456789abcdef0123456789abcdef','state=x'),
     good+'&client_secret=secret',
-    good.replace('redirect_uri=https%3A%2F%2F','redirect_uri=http%3A%2F%2F')
+    good.replace('redirect_uri=https%3A%2F%2F','redirect_uri=http%3A%2F%2F'),
+    good.replace('hkteienxwdsjncchuvnz.supabase.co','evil.example')
   ]) if(h.ctx.bvomValidateStravaAuthorizeUrl(bad)!==null)issues.push('unsafe authorize url accepted');
   const connected=h.ctx.bvomSanitizeStravaConnectionStatus({connected:true,scope:'activity:write'});
   if(connected?.connected!==true||connected?.scope?.join(',')!=='activity:write')issues.push('connected status');
   if(h.ctx.bvomSanitizeStravaConnectionStatus({connected:true,scope:'activity:read activity:write'})!==null)issues.push('read scope accepted');
   if(h.ctx.bvomSanitizeStravaConnectionStatus({connected:true,scope:'activity:write',access_token:'secret'})!==null)issues.push('access token accepted');
   if(h.ctx.bvomSanitizeStravaConnectionStatus({connected:true,scope:'activity:write',refresh_token:'secret'})!==null)issues.push('refresh token accepted');
+  if(h.ctx.bvomSanitizeStravaConnectionStatus({connected:true,scope:'activity:write',meta:{access_token:'secret'}})!==null)issues.push('nested token accepted');
   if(h.ctx.bvomSanitizeStravaConnectionStatus({connected:false})?.connected!==false)issues.push('disconnected status');
   const okReturn=h.ctx.bvomParseStravaReturn('?strava=connected'),denied=h.ctx.bvomParseStravaReturn('?strava=denied'),err=h.ctx.bvomParseStravaReturn('?strava=error&reason=scope_missing');
   if(okReturn?.status!=='connected'||denied?.status!=='denied'||err?.status!=='error'||err?.reason!=='scope_missing')issues.push('return marker');
