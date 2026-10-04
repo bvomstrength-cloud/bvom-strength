@@ -197,6 +197,36 @@ test('STRAVA-ADAPTER-V1','CONTROL','Strava adapter builds a JSON strength-upload
   if(JSON.stringify(a)!==JSON.stringify(b))issues.push('non-deterministic');if(JSON.stringify(x)!==before)issues.push('mutated export');
   return ok(!issues.length,issues.join('; ')||`sets=${a.file.sets.length} omitted=${a.omitted.length} warnings=${a.warnings.length}`);
 });
+test('STRAVA-OAUTH-CLIENT-V1','CONTROL','Strava OAuth client boundary requests write-only connection actions and rejects token/code leakage into the PWA',()=>{
+  const h=H.boot(build),issues=[];
+  const start=h.ctx.bvomStravaOAuthStartRequest('/?strava=return'),status=h.ctx.bvomStravaOAuthStatusRequest(),disconnect=h.ctx.bvomStravaOAuthDisconnectRequest();
+  if(start?.action!=='strava_oauth_start'||start?.returnPath!=='/?strava=return')issues.push('start request');
+  if(status?.action!=='strava_status'||disconnect?.action!=='strava_disconnect')issues.push('status/disconnect request');
+  if(h.ctx.bvomStravaOAuthStartRequest('https://evil.example/x')!==null||h.ctx.bvomStravaOAuthStartRequest('//evil.example/x')!==null||h.ctx.bvomStravaOAuthStartRequest('javascript:alert(1)')!==null)issues.push('unsafe return path accepted');
+  const good='https://www.strava.com/oauth/authorize?client_id=12345&redirect_uri=https%3A%2F%2Fhkteienxwdsjncchuvnz.supabase.co%2Ffunctions%2Fv1%2Fsuper-api%2Fstrava%2Fcallback&response_type=code&scope=activity%3Awrite&state=0123456789abcdef0123456789abcdef';
+  if(h.ctx.bvomValidateStravaAuthorizeUrl(good)!==good)issues.push('good authorize url rejected');
+  for(const bad of [
+    good.replace('https://www.strava.com','https://evil.example'),
+    good.replace('/oauth/authorize','/oauth/token'),
+    good.replace('response_type=code','response_type=token'),
+    good.replace('scope=activity%3Awrite','scope=activity%3Aread_all%2Cactivity%3Awrite'),
+    good.replace('state=0123456789abcdef0123456789abcdef','state=x'),
+    good+'&client_secret=secret',
+    good.replace('redirect_uri=https%3A%2F%2F','redirect_uri=http%3A%2F%2F'),
+    good.replace('hkteienxwdsjncchuvnz.supabase.co','evil.example')
+  ]) if(h.ctx.bvomValidateStravaAuthorizeUrl(bad)!==null)issues.push('unsafe authorize url accepted');
+  const connected=h.ctx.bvomSanitizeStravaConnectionStatus({connected:true,scope:'activity:write'});
+  if(connected?.connected!==true||connected?.scope?.join(',')!=='activity:write')issues.push('connected status');
+  if(h.ctx.bvomSanitizeStravaConnectionStatus({connected:true,scope:'activity:read activity:write'})!==null)issues.push('read scope accepted');
+  if(h.ctx.bvomSanitizeStravaConnectionStatus({connected:true,scope:'activity:write',access_token:'secret'})!==null)issues.push('access token accepted');
+  if(h.ctx.bvomSanitizeStravaConnectionStatus({connected:true,scope:'activity:write',refresh_token:'secret'})!==null)issues.push('refresh token accepted');
+  if(h.ctx.bvomSanitizeStravaConnectionStatus({connected:true,scope:'activity:write',meta:{access_token:'secret'}})!==null)issues.push('nested token accepted');
+  if(h.ctx.bvomSanitizeStravaConnectionStatus({connected:false})?.connected!==false)issues.push('disconnected status');
+  const okReturn=h.ctx.bvomParseStravaReturn('?strava=connected'),denied=h.ctx.bvomParseStravaReturn('?strava=denied'),err=h.ctx.bvomParseStravaReturn('?strava=error&reason=scope_missing');
+  if(okReturn?.status!=='connected'||denied?.status!=='denied'||err?.status!=='error'||err?.reason!=='scope_missing')issues.push('return marker');
+  if(h.ctx.bvomParseStravaReturn('?code=abc&state=xyz')!==null||h.ctx.bvomParseStravaReturn('?strava=connected&code=abc')!==null)issues.push('oauth code reached PWA');
+  return ok(!issues.length,issues.join('; ')||'write-only OAuth client boundary clean');
+});
 test('BB-INCOMPLETE-NOT-CONSUMED','CONTROL','Incomplete BB workout is saved but does not consume one of the 24',()=>{
   const h=H.boot(build);bbStart(h);const id=H.bbDayIds(h)[0];bbSet(h,id,0,{reps:7});finish(h);
   const S=h.S();return ok(S.bodybuilding.completedSessions===0&&S.history.length===1&&S.history[0].incomplete===true&&S.day==='A',`completed=${S.bodybuilding.completedSessions} history=${S.history.length}`);
