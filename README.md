@@ -4,12 +4,12 @@ Production source repository for BVOM Strength.
 
 ## Current source baseline
 
-- Application version: **v2.8.5 release candidate**
+- Application version: **v2.8.5**
 - Branch: **`main`**
 - Regression suite: **v15.2 maintenance + F45**
 - Current gate: **23/23 static · 79/79 behaviour · 14/14 sequence · 62/62 mutations killed**
 - Known-bad reference: **48/48 applicable DEFECT contracts fail**; F23/F25 are documented provenance N/A
-- v2.8.5 release-candidate ZIP SHA-256: `ee98469ee65d55b43a4d84a30b5e50bf4cd8df6f5ca58841d369da69529176d9`
+- Final v2.8.5 deployment ZIP SHA-256: `ee98469ee65d55b43a4d84a30b5e50bf4cd8df6f5ca58841d369da69529176d9`
 
 The current source preserves completed Bodybuilding GPP/conditioning results in Workout History and includes permanent F45 regression coverage.
 
@@ -28,7 +28,7 @@ Automated release evidence:
 - deterministic deployment ZIP contains exactly the 12 shipped production files
 - deployment ZIP SHA-256: `ee98469ee65d55b43a4d84a30b5e50bf4cd8df6f5ca58841d369da69529176d9`
 
-**Production deployment is still pending the Netlify test-site check and production promotion. The currently deployed production version remains v2.8.4 until that release step is completed.**
+**Production deployment completed on 4 October 2026 using the exact verified v2.8.5 deployment ZIP.** The owner confirmed the Netlify test-site and production upload sequence was completed. Independent live-site fetch verification was unavailable from the release assistant environment at closeout.
 
 ## Historical approved package
 
