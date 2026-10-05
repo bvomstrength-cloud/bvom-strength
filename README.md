@@ -4,12 +4,12 @@ Production source repository for BVOM Strength.
 
 ## Current source baseline
 
-- Application version: **v2.8.9 release candidate**
+- Application version: **v2.8.9**
 - Branch: **`main`**
 - Regression suite: **v15.2 maintenance + F45 + export-ready History metadata + Export v1 translator + Strava adapter v1 + Strava OAuth client boundary v1**
 - Current gate: **23/23 static · 83/83 behaviour · 14/14 sequence · 62/62 mutations killed**
 - Known-bad reference: **48/48 applicable DEFECT contracts fail**; EXPORT-HISTORY-METADATA, EXPORT-V1-TRANSLATOR, STRAVA-ADAPTER-V1, STRAVA-OAUTH-CLIENT-V1, F23 and F25 are documented historical-provenance N/A
-- v2.8.9 release-candidate ZIP SHA-256: `3fa86b33fffc37b0616baa892f0795457c7de9a9e422dcc41cfe9774e7cdbada`
+- Final v2.8.9 deployment ZIP SHA-256: `3fa86b33fffc37b0616baa892f0795457c7de9a9e422dcc41cfe9774e7cdbada`
 
 The current source preserves completed Bodybuilding GPP/conditioning results in Workout History, adds destination-neutral metadata to newly completed workout History records, includes a pure Export v1 translator and Strava adapter, and now adds a pure write-only Strava OAuth client boundary plus the documented server-side OAuth/security architecture. No live OAuth execution, token storage, webhook endpoint, Settings UI, or workout upload is enabled.
 
@@ -34,7 +34,7 @@ Automated release evidence:
 - deterministic deployment ZIP contains exactly the 12 shipped production files
 - deployment ZIP SHA-256: `3fa86b33fffc37b0616baa892f0795457c7de9a9e422dcc41cfe9774e7cdbada`
 
-**Production deployment is pending the Netlify test-site check and production promotion. The currently deployed production version remains v2.8.8 until that release step is completed.**
+**Production deployment completed on 5 October 2026 using the exact verified v2.8.9 deployment ZIP.** The owner confirmed the Netlify test-site and production upload sequence was completed.
 
 ## Historical approved package
 
