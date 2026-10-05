@@ -1,4 +1,4 @@
-const CACHE = 'bvom-2.8.8';
+const CACHE = 'bvom-2.8.9';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './og-image.png', './i18n/en.js?v=ca8e7a101b80', './i18n/ja.js?v=2a86f7297fa9',
   './theme-bee-v23c.svg',
   './theme-cherry-v23f.svg',
