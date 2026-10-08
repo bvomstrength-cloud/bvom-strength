@@ -3364,26 +3364,45 @@ const bvomBbDev36FinishBase=bvomBbFinish;bvomBbFinish=function(){if(bvomBbOnRamp
 const bvomBbDev36ChangeUnitsBase=changeUnits;changeUnits=function(to,quiet=false){const before=state.unit||'kg',activeBbLoads=[];for(const [key,ss] of Object.entries(state.session||{})){if(!key.startsWith('BB:')&&!key.startsWith('BBOR:'))continue;for(const [i,set] of Object.entries(ss||{}))if(set&&set.load!=null){const m=set._unitLoadOrigins?.load,load=Number(set.load),roundTrip=!!(m&&m.unit===to&&m.convertedUnit===before&&Math.abs(Number(m.converted)-load)<1e-9&&Number.isFinite(Number(m.value)));activeBbLoads.push({key,i,load,roundTrip})}}bvomBbDev36ChangeUnitsBase(to,quiet);if(before===state.unit||!state.bodybuilding)return;if(state.bodybuilding.onramp){for(const e of Object.values(state.bodybuilding.onramp.exercises||{})){if(!e)continue;const step=bvomConvertIncrementRoundTrip(e,e.increment??2.5,before,to);if(e.load!=null)e.load=bvomBbConvertLoadRoundTrip(e,e.load,before,to,step);e.increment=step}}for(const x of activeBbLoads){const ss=state.session?.[x.key],set=ss?.[x.i];if(!set)continue;if(x.roundTrip)continue;if(!(x.load>0)){set.load=x.load;continue}const id=x.key.startsWith('BBOR:')?x.key.slice(5):x.key.slice(3),step=x.key.startsWith('BBOR:')?bvomBbOnRampLoadStep(id):bvomBbLoadStep(id),converted=bvomBbConvertLoadToStep(x.load,to,step);set.load=converted;const m=set._unitLoadOrigins?.load;if(m&&m.unit===before&&m.convertedUnit===to&&Math.abs(Number(m.value)-x.load)<1e-9)m.converted=converted}save();if(state.configured)renderAll()}
 /* ===== END BODYBUILDING DEV3.12 ON-RAMP + WARM-UP LAYER ===== */
 
+function bvomShowServiceWorkerUpdate(reg){
+ const waiting=reg?.waiting;if(!waiting)return;
+ let el=document.getElementById('bvomUpdateBanner');
+ if(!el){
+  el=document.createElement('div');el.id='bvomUpdateBanner';
+  el.style.cssText='position:fixed;left:10px;right:10px;bottom:10px;z-index:260000;background:#171717;color:#fff;border:1px solid #777;border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:center;justify-content:space-between;box-shadow:0 4px 20px rgba(0,0,0,.35)';
+  el.innerHTML=`<span style="font-size:13px">${hlmTxt('BVOM update ready. Reload when you are not in a workout.','BVOMの更新準備ができました。ワークアウト中でないときに再読み込みしてください。')}</span><button type="button" class="primary" data-bvom-update>${hlmTxt('UPDATE & RELOAD','更新して再読み込み')}</button>`;
+  document.body.appendChild(el);
+ }
+ const btn=el.querySelector('[data-bvom-update]');
+ if(btn)btn.onclick=()=>{
+  if(bvomAnyWorkoutActive()){
+   bvomBeeModal(hlmTxt('FINISH THIS WORKOUT FIRST','まずこのワークアウトを終了してください'),hlmTxt('The update is ready, but BVOM will not reload while a workout is active. Finish or exit the workout, then update.','更新の準備はできていますが、ワークアウト中はBVOMを再読み込みしません。ワークアウトを終了または中止してから更新してください。'));return;
+  }
+  try{sessionStorage.setItem('bvom-update-reload-requested','1')}catch(e){}
+  waiting.postMessage({type:'SKIP_WAITING'});
+ };
+}
+function bvomWatchServiceWorkerUpdate(reg){
+ const offer=()=>{if(reg?.waiting)bvomShowServiceWorkerUpdate(reg)};
+ offer();
+ reg?.addEventListener?.('updatefound',()=>{
+  const worker=reg.installing;if(!worker)return;
+  worker.addEventListener('statechange',()=>{if(worker.state==='installed'&&navigator.serviceWorker.controller)offer()});
+ });
+}
 bvomHideMainSurfaces();if("serviceWorker" in navigator){
   window.addEventListener("load", async ()=>{
     try{
       const reg = await navigator.serviceWorker.register("./sw.js?v=2.8.9");
-      await reg.update();
-
-      // If this page was restored from an older cached navigation,
-      // force one normal reload for this build only.
-      const seen = sessionStorage.getItem("bvom-build-seen");
-      if(seen !== BVOM_BUILD){
-        sessionStorage.setItem("bvom-build-seen", BVOM_BUILD);
-        setTimeout(()=>location.reload(), 100);
-      }
-
+      bvomWatchServiceWorkerUpdate(reg);
       navigator.serviceWorker.addEventListener("controllerchange", ()=>{
-        if(sessionStorage.getItem("bvom-controller-reload") !== BVOM_BUILD){
-          sessionStorage.setItem("bvom-controller-reload", BVOM_BUILD);
+        if(sessionStorage.getItem("bvom-update-reload-requested")==='1'){
+          sessionStorage.removeItem("bvom-update-reload-requested");
           location.reload();
         }
       });
+      await reg.update();
+      if(reg.waiting)bvomShowServiceWorkerUpdate(reg);
     }catch(e){ console.log("BVOM service worker:", e); }
   });
 }
