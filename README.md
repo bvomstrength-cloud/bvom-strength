@@ -13,6 +13,30 @@ Production source repository for BVOM Strength.
 
 The current source preserves completed Bodybuilding GPP/conditioning results in Workout History, adds destination-neutral metadata to newly completed workout History records, includes a pure Export v1 translator and Strava adapter, and now adds a pure write-only Strava OAuth client boundary plus the documented server-side OAuth/security architecture. No live OAuth execution, token storage, webhook endpoint, Settings UI, or workout upload is enabled.
 
+## v2.9.0 release-candidate status
+
+v2.9.0 is the startup-resilience release candidate. It keeps BVOM local-first on previously verified devices even when the network is absent or slow, while preserving the existing owner-bound 7-day offline entitlement boundary.
+
+Key changes:
+- repeat navigation serves the known-good cached shell immediately;
+- trusted matching local data can open before live entitlement and cloud reads finish;
+- live failures are treated as degraded/offline rather than destructive denial;
+- delayed definitive revocation cannot destroy or interrupt an active workout;
+- service-worker updates require an explicit safe reload and cannot auto-reload an active workout;
+- Supabase JS is pinned and vendored as same-origin `2.117.3` and included in the shell cache.
+
+Release-candidate evidence:
+- 29/29 static PASS
+- 87/87 behaviour PASS
+- 14/14 sequence PASS
+- all mutations killed
+- 51/51 applicable known-bad DEFECT contracts fail as expected
+- Android Chrome: true-offline app visible at 203.5 ms versus 74196.6 ms on v2.8.9
+- Android Chrome: mobile-data app visible at 254.7 ms
+- exact vendored Supabase JS SHA-256: `d6a5c4414a5d4ce646d9c1de223aa7067d3ff664c15394ffeb7fcffc763354a3`
+
+This candidate is not yet recorded here as production-deployed. The existing v2.8.9 production record remains below until deployment is completed.
+
 ## v2.8.9 release status
 
 The v2.8.9 package was built deterministically from the 12 shipped production files after the protected release-candidate gate passed.
