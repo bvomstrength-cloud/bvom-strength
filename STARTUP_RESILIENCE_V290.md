@@ -1,6 +1,6 @@
 # BVOM Strength v2.9.0 — Startup Resilience Design
 
-Status: DESIGN / TEST-CONTRACT PHASE ONLY  
+Status: IMPLEMENTED / AUTOMATED GO / REAL-DEVICE VERIFIED  
 Baseline: v2.8.9 main @ `c24acc12b019fdcb00ebc082e035c2d1f85050cb`
 
 ## Why this exists
@@ -233,3 +233,17 @@ Before merge:
 - no new framework/build-system migration;
 - no replacement of the existing cloud fingerprint/conflict model;
 - no analytics dependency.
+
+
+## Real-device verification
+
+Completed on Android Chrome against the Netlify test site on 9 October 2026.
+
+Observed startup timings:
+- Normal connection after cache-reset install: app visible at 1389.4 ms.
+- True offline (Airplane Mode on, Wi-Fi off): app visible at 203.5 ms.
+- Mobile data / 5G: app visible at 254.7 ms.
+
+The previous v2.8.9 true-offline startup measured 74196.6 ms on the same device class/test site. The v2.9.0 true-offline result is therefore roughly 365× faster and confirms that cached shell delivery plus trusted local startup remove navigation, entitlement, and cloud waits from the critical startup path.
+
+A deliberate real-world lie-fi field test was not performed. Because v2.9.0 no longer awaits those network operations before rendering trusted local training, remaining degraded-network risk is low and can be exercised later with controlled browser throttling.
