@@ -360,7 +360,9 @@ function save(){
  try{current=localStorage.getItem(BVOM_DATA_KEY)}catch(e){bvomLocalPersistenceFailureNotice();return false}
  if(bvomLocalWriteConflictActive||current!==bvomLastPersistedRaw){bvomLocalWriteConflictNotice();return false}
  try{localStorage.setItem(BVOM_DATA_KEY,next);if(window.__bvomAuthUserId)bvomSetLocalOwnerId(window.__bvomAuthUserId);bvomLastPersistedRaw=next}catch(e){bvomLocalPersistenceFailureNotice();return false}
- if(window.__bvomCloudBooted&&typeof bvomCloudMaybeScheduleFromSave==='function')bvomCloudMaybeScheduleFromSave();return true
+ if(window.__bvomCloudBooted&&typeof bvomCloudMaybeScheduleFromSave==='function')bvomCloudMaybeScheduleFromSave();
+ if(window.__bvomCloudBooted&&typeof bvomMaybeApplyPendingEntitlementLock==='function')bvomMaybeApplyPendingEntitlementLock();
+ return true
 }
 function unitLabel(){return state.unit==='lb'?'lb':'kg'}
 function isLb(){return state.unit==='lb'}
@@ -2125,8 +2127,8 @@ function saveLiftSettings(n){
 function liftSettingsHTML(n){let id=n.replace(/\W/g,''),c=cfg(n);if(isIntermediate()&&(n==='Squat'||n==='Bench Press'))return `<details class="card"><summary><b>${liftLabel(n)}</b> <span class="small">HLM RPT · ${fmt(hlmDriver(n))} ${unitLabel()}</span></summary><label>Plate loading<select id="plateMode${id}"><option value="standard" ${state.plateMode[n]!=='micro'?'selected':''}>Standard</option><option value="micro" ${state.plateMode[n]==='micro'?'selected':''} ${!microAvailable()?'disabled':''}>Microplates${!microAvailable()?' — unavailable':''}</option></select></label><label>${isFourDay()?'Progression driver':'Heavy driver'}<input id="weight${id}" type="number" step=".25" value="${fmt(hlmDriver(n))}"></label><label>Progression increment<select id="inc${id}">${(isLb()?[1,2.5,5,10]:[.5,1,1.5,2,2.5,5]).map(x=>`<option ${c.increment===x?'selected':''}>${x}</option>`).join('')}</select></label><label>${isFourDay()?'Driver rep target':'HLM rep target'}<select id="hlmRep${id}">${HLM_REPS.map(x=>`<option ${hlmRep(n)===x?'selected':''}>${x}</option>`).join('')}</select></label><label>RPT drop %<input id="drop${id}" type="number" step=".5" min="1" max="25" value="${c.drop}"></label><label>Bar weight for this lift<input id="bar${id}" type="number" step=".5" value="${state.barByLift[n]}"></label><button class="choice on wide" onclick="saveLiftSettings('${n}')">SAVE ${liftLabel(n).toUpperCase()}</button></details>`;let levels=n==='Deadlift'?['4 / 5+','3 / 4+','2 / 3+','1 / 2+']:n==='Supine Row'?['8 / 9 / 11+','7 / 8 / 10+','6 / 7 / 9+','5 / 6 / 8+','4 / 5 / 7+']:['5 / 6 / 8+','4 / 5 / 7+','3 / 4 / 6+','2 / 3 / 5+','1 / 2 / 4+'];if(n==='Overhead Press')levels=['5/5/5/6/8+','4/4/4/5/7+','3/3/3/4/6+','2/2/2/3/5+','1/1/1/2/4+'];return `<details class="card"><summary><b>${liftLabel(n)}</b> <span class="small">${c.mode.toUpperCase()} · ${fmt(state.weights[n])} ${unitLabel()}</span></summary><label>Plate loading<select id="plateMode${id}"><option value="standard" ${state.plateMode[n]!=='micro'?'selected':''}>Standard</option><option value="micro" ${state.plateMode[n]==='micro'?'selected':''} ${!microAvailable()?'disabled':''}>Microplates${!microAvailable()?' — unavailable':''}</option></select></label><label>Mode<select id="mode${id}"><option value="straight" ${c.mode==='straight'?'selected':''}>Straight sets</option><option value="rpt" ${c.mode==='rpt'?'selected':''}>RPT</option></select></label><label>Working / top weight<input id="weight${id}" type="number" step=".25" value="${fmt(state.weights[n])}"></label><label>Progression increment<select id="inc${id}">${(isLb()?[1,2.5,5,10]:[.5,1,1.5,2,2.5,5]).map(x=>`<option ${c.increment===x?'selected':''}>${x}</option>`).join('')}</select></label><label>RPT rep level<select id="level${id}">${levels.map((x,i)=>`<option value="${i}" ${c.rptLevel===i?'selected':''}>${x}</option>`).join('')}</select></label><label>RPT drop %<input id="drop${id}" type="number" step=".5" min="1" max="25" value="${c.drop}"></label><label>Bar weight for this lift<input id="bar${id}" type="number" step=".5" value="${state.barByLift[n]}"></label><button class="choice on wide" onclick="saveLiftSettings('${n}')">SAVE ${liftLabel(n).toUpperCase()}</button></details>`}
 const BVOM_SUPABASE_URL='https://hkteienxwdsjncchuvnz.supabase.co';
 const BVOM_SUPABASE_KEY='sb_publishable_73S6bOHFrxOx8guc1kq4gg_xyMdjdW7';
-const bvomCloud={client:null,user:null,email:'',codeSent:false,busy:false,message:'',error:false,lastSaved:null,lastAutoSaved:null,syncReady:false,conflict:false,cloudExists:false,remoteFingerprint:null,autoTimer:null,pendingAuto:false,assessing:false,deferWorkoutCommit:false,workoutBaselineFingerprint:null,accountSwitchDeferred:false,conflictNoticeShown:false,offlineLocalAccess:false};
-const bvomEntitlement={record:null,error:'',checkoutBusy:false};
+const bvomCloud={client:null,user:null,email:'',codeSent:false,busy:false,message:'',error:false,lastSaved:null,lastAutoSaved:null,syncReady:false,conflict:false,cloudExists:false,remoteFingerprint:null,autoTimer:null,pendingAuto:false,assessing:false,deferWorkoutCommit:false,workoutBaselineFingerprint:null,accountSwitchDeferred:false,conflictNoticeShown:false,offlineLocalAccess:false,startupState:'BOOTING'};
+const bvomEntitlement={record:null,error:'',checkoutBusy:false,pendingLock:null};
 const bvomAuthGate={mode:null,email:'',codeSent:false,busy:false,message:'',error:false};
 let bvomPublicAuthHandling=false;
 let bvomSetupStarting=false;
@@ -2214,10 +2216,24 @@ function bvomEntitlementAccessDecision(record,userId,allowOfflineCache=false){
 function bvomOpenVerifiedOfflineOwner(){
  const owner=bvomLocalOwnerId();if(!owner)return false;
  const decision=bvomEntitlementOfflineAccessDecision(owner);if(!decision.allowed)return false;
- bvomCloud.user={id:owner,email:''};bvomCloud.offlineLocalAccess=true;window.__bvomAuthUserId=owner;bvomEntitlement.record=decision.row;bvomEntitlement.error='';
+ bvomCloud.user={id:owner,email:''};bvomCloud.offlineLocalAccess=true;bvomCloud.startupState='OFFLINE_DEGRADED';window.__bvomAuthUserId=owner;bvomEntitlement.record=decision.row;bvomEntitlement.error='';
  bvomCloud.syncReady=false;bvomCloud.conflict=false;bvomCloud.remoteFingerprint=null;bvomCloud.accountSwitchDeferred=false;clearTimeout(bvomCloud.autoTimer);bvomCloud.pendingAuto=false;
  bvomCloud.message=hlmTxt('Offline — training is available on this device. Cloud backup will resume when you reconnect.','オフラインです。この端末ではトレーニングを続けられます。再接続するとクラウドバックアップが再開します。');bvomCloud.error=false;
  bvomHideAuthGate();if(state.configured)showApp();else showSetup();return true;
+}
+function bvomOpenTrustedLocalForSignedInUser(userId,mode){
+ if(mode!=='session')return null;
+ const owner=bvomLocalOwnerId();if(!owner||owner!==userId)return null;
+ const decision=bvomEntitlementOfflineAccessDecision(userId);if(!decision.allowed)return null;
+ bvomEntitlement.record=decision.row;bvomCloud.startupState='VERIFYING';bvomCloud.offlineLocalAccess=true;
+ bvomCloud.syncReady=false;bvomCloud.conflict=false;bvomCloud.remoteFingerprint=null;clearTimeout(bvomCloud.autoTimer);bvomCloud.pendingAuto=false;
+ bvomCloud.message=hlmTxt('Opening local training while BVOM verifies your account and cloud status…','アカウントとクラウド状態を確認している間、端末上のトレーニングを開いています…');bvomCloud.error=false;
+ bvomHideAuthGate();if(state.configured)showApp();else showSetup();return decision;
+}
+function bvomMaybeApplyPendingEntitlementLock(){
+ const decision=bvomEntitlement.pendingLock;if(!decision||bvomAnyWorkoutActive())return false;
+ bvomEntitlement.pendingLock=null;
+ setTimeout(()=>bvomShowEntitlementGate(decision),0);return true;
 }
 function bvomShowEntitlementGate(decision){
  bvomHideMainSurfaces();const el=document.querySelector('#authgate');if(!el)return;el.classList.remove('hidden');
@@ -2288,7 +2304,7 @@ function bvomHandleCheckoutReturn(){
 async function bvomPublicContinueAfterSignIn(mode){
  bvomHideAuthGate();
  const userId=bvomCloud.user?.id;if(!userId){bvomShowAuthGate();return}
- bvomCloud.offlineLocalAccess=false;
+ bvomCloud.offlineLocalAccess=false;bvomCloud.startupState='VERIFYING';
  const localOwner=bvomLocalOwnerId();
  // An owner tag is the authority for current account-owned local data. Do not use raw
  // bvom_data presence here: migrate17() writes a default placeholder blob on every fresh boot.
@@ -2300,11 +2316,26 @@ async function bvomPublicContinueAfterSignIn(mode){
   bvomBeeModal(hlmTxt('FINISH THIS WORKOUT FIRST','まずこのワークアウトを終了してください'),hlmTxt('BVOM detected a different account in another tab. Your current workout has been kept on this device and cloud actions are paused. Finish or exit the workout, then reload BVOM to open the other account safely.','別のタブで別のアカウントが検出されました。現在のワークアウトはこの端末に保持され、クラウド操作は一時停止しています。ワークアウトを終了または中止してからBVOMを再読み込みし、別のアカウントを安全に開いてください。'));
   return;
  }
+ const fastLocalDecision=bvomOpenTrustedLocalForSignedInUser(userId,mode);
  window.__bvomAuthUserId=userId;bvomCloud.accountSwitchDeferred=false;const entitlementRecord=await bvomEntitlementEnsure();
  const entitlementDecision=bvomEntitlementAccessDecision(entitlementRecord,userId,!entitlementRecord&&!!bvomEntitlement.error);
- if(!entitlementDecision.allowed){bvomShowEntitlementGate(entitlementDecision);return}
- if(entitlementDecision.fromCache){bvomEntitlement.record=entitlementDecision.row;bvomCloud.syncReady=false;bvomCloud.message=hlmTxt('Offline — training is available on this device. Cloud backup will resume when you reconnect.','オフラインです。この端末ではトレーニングを続けられます。再接続するとクラウドバックアップが再開します。');bvomCloud.error=false}
- let latest=null;try{latest=await bvomCloudLatest()}catch(e){}
+ if(!entitlementDecision.allowed){
+  bvomCloud.startupState=entitlementDecision.reason==='expired'?'REVOKED':'SIGNED_OUT';bvomCloud.offlineLocalAccess=false;bvomCloud.syncReady=false;
+  if(fastLocalDecision&&bvomAnyWorkoutActive()){
+   bvomEntitlement.pendingLock=entitlementDecision;
+   bvomCloud.message=hlmTxt('BVOM access changed while this workout was active. Finish or exit this workout; your local data is safe.','ワークアウト中にBVOMアクセス状態が変更されました。このワークアウトを終了または中止してください。端末上のデータは安全です。');bvomCloud.error=true;
+   return;
+  }
+  bvomShowEntitlementGate(entitlementDecision);return
+ }
+ if(entitlementDecision.fromCache){
+  bvomEntitlement.record=entitlementDecision.row;bvomCloud.startupState='OFFLINE_DEGRADED';bvomCloud.offlineLocalAccess=true;bvomCloud.syncReady=false;bvomCloud.message=hlmTxt('Offline — training is available on this device. Cloud backup will resume when you reconnect.','オフラインです。この端末ではトレーニングを続けられます。再接続するとクラウドバックアップが再開します。');bvomCloud.error=false;
+  if(!fastLocalDecision){bvomHideAuthGate();if(state.configured)showApp();else showSetup()}
+  return;
+ }
+ bvomCloud.offlineLocalAccess=false;
+ let latest=null;try{latest=await bvomCloudLatest()}catch(e){latest={data:null,error:e}}
+ bvomCloud.startupState=latest?.error?'OFFLINE_DEGRADED':'VERIFIED';
  const cloudData=latest?.data?.data&&bvomCloudValidData(latest.data.data)?latest.data.data:null;
 
  // One-time Beta 15 migration: only data that genuinely existed before this page loaded
@@ -2339,7 +2370,7 @@ async function bvomPublicContinueAfterSignIn(mode){
   bvomSetLocalOwnerId(userId);
  }
  if(state.configured)showApp();else showSetup();
- setTimeout(()=>bvomCloudAssessSync(),0);
+ if(!latest?.error)setTimeout(()=>bvomCloudAssessSync(),0);
 }
 
 function bvomCloudClient(){
@@ -2482,7 +2513,7 @@ async function bvomCloudLatest(){
  if(r.error)return {data:null,error:r.error};return {data:r.data?.[0]||null,error:null};
 }
 async function bvomCloudAssessSync(){
- if(!bvomCloud.user||bvomCloud.offlineLocalAccess||bvomCloud.assessing)return;
+ if(!bvomCloud.user||bvomCloud.offlineLocalAccess||bvomCloud.startupState==='VERIFYING'||bvomCloud.assessing)return;
  if(bvomCloud.accountSwitchDeferred){bvomCloud.message=hlmTxt('Finish or exit the current workout, then reload BVOM before syncing.','現在のワークアウトを終了または中止してからBVOMを再読み込みし、同期してください。');bvomCloud.error=false;if(document.querySelector('#settings'))renderSettings();return}
  if(bvomCloudWorkoutActive()){bvomCloud.message='An unfinished workout is active on this device. Cloud checking will resume after the workout is finished.';bvomCloud.error=false;if(document.querySelector('#settings'))renderSettings();return}
  bvomCloud.assessing=true;bvomCloud.error=false;if(document.querySelector('#settings'))renderSettings();
