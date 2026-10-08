@@ -240,12 +240,27 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
 const BVOM_BUILD='2.8.9';
 const BVOM_BOOT_DIAG=(()=>{try{return new URLSearchParams(location.search).get('bootdiag')==='1'}catch(e){return false}})();
 const bvomBootTimings=[];
+function bvomBootDiagRender(){
+ if(!BVOM_BOOT_DIAG||typeof document==='undefined'||!document.body)return;
+ let el=document.getElementById('bvomBootDiagPanel');
+ if(!el){
+  el=document.createElement('details');el.id='bvomBootDiagPanel';el.open=true;
+  el.style.cssText='position:fixed;left:6px;right:6px;bottom:6px;z-index:300000;max-height:42vh;overflow:auto;background:#111;color:#fff;border:1px solid #777;border-radius:8px;padding:8px;font:12px/1.35 monospace;white-space:pre-wrap';
+  el.innerHTML='<summary style="cursor:pointer;font-weight:800">BVOM STARTUP DIAGNOSTICS</summary><pre style="margin:6px 0 0;white-space:pre-wrap"></pre>';
+  document.body.appendChild(el);
+ }
+ const nav=performance.getEntriesByType?.('navigation')?.[0];
+ const navLine=nav?[`responseStart=${nav.responseStart.toFixed(1)}ms`,`responseEnd=${nav.responseEnd.toFixed(1)}ms`,`domInteractive=${nav.domInteractive.toFixed(1)}ms`].join('  '):'navigation timing unavailable';
+ const rows=bvomBootTimings.map(x=>`${x.ms==null?'?':x.ms.toFixed(1).padStart(8)} ms  ${x.stage}${x.detail?'  '+x.detail:''}`);
+ el.querySelector('pre').textContent=navLine+'\n'+rows.join('\n');
+}
 function bvomBootMark(stage,detail=''){
  if(!BVOM_BOOT_DIAG)return;
  const ms=(typeof performance!=='undefined'&&typeof performance.now==='function')?performance.now():null;
  const entry={stage,ms,detail:String(detail||'')};
  bvomBootTimings.push(entry);window.__bvomBootTimings=bvomBootTimings;
  console.log(`[BVOM BOOT ${ms==null?'?':ms.toFixed(1)+'ms'}] ${stage}${detail?' — '+detail:''}`);
+ bvomBootDiagRender();
 }
 bvomBootMark('main-script-start');
 try{
@@ -3378,5 +3393,5 @@ bvomHideMainSurfaces();if("serviceWorker" in navigator){
     }catch(e){ console.log("BVOM service worker:", e); }
   });
 }
-window.addEventListener("DOMContentLoaded",()=>{bvomBootMark('dom-content-loaded');bvomCloudInit();bvomHandleCheckoutReturn()});
+window.addEventListener("DOMContentLoaded",()=>{bvomBootMark('dom-content-loaded');bvomBootDiagRender();bvomCloudInit();bvomHandleCheckoutReturn()});
 </script></body></html>
