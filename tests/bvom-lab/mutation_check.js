@@ -68,7 +68,7 @@ const MUTATIONS=[
  {id:'SIGNEDOUT-EVENT-KEEPS-OFFLINE-ACCESS',why:'a SIGNED_OUT auth event gates the open app but leaves cached offline entitlement eligible for a later relaunch',targets:['F12-NEG-SIGNED-OUT-EVENT'],
   apply:inRegion('c.auth.onAuthStateChange(',"if(_event==='SIGNED_OUT')bvomEntitlementCacheClear(old||owner);",'')},
  {id:'OFFLINE-LOCAL-CLOUD-ASSESS',why:'synthetic offline-owner state is allowed to assess/enable cloud sync before a real session exists',targets:['F12-OFFLINE-NO-CLOUD-WITHOUT-SESSION'],
-  apply:inRegion('async function bvomCloudAssessSync()','if(!bvomCloud.user||bvomCloud.offlineLocalAccess||bvomCloud.assessing)return;','if(!bvomCloud.user||bvomCloud.assessing)return;')},
+  apply:inRegion('async function bvomCloudAssessSync()',"if(!bvomCloud.user||bvomCloud.offlineLocalAccess||bvomCloud.startupState==='VERIFYING'||bvomCloud.assessing)return;","if(!bvomCloud.user||bvomCloud.startupState==='VERIFYING'||bvomCloud.assessing)return;")},
  {id:'OFFLINE-OWNER-CHECK-REMOVED',why:'cached entitlement for one account is allowed to unlock a different local data owner',targets:['F12-NEG-OWNER-MISMATCH'],
   apply:src=>{const s1=inRegion('function bvomEntitlementOfflineAccessDecision(',"if(!userId||!owner||owner!==userId||!cached)return {allowed:false,","if(!userId||!owner||!cached)return {allowed:false,")(src);if(!s1)return null;return inRegion('function bvomOpenVerifiedOfflineOwner()',"bvomEntitlementOfflineAccessDecision(owner)","bvomEntitlementOfflineAccessDecision('user-1')")(s1)}},
  {id:'OFFLINE-GRACE-CHECK-REMOVED',why:'stale cached verification remains eligible beyond the offline grace period',targets:['F12-NEG-GRACE-EXPIRED'],
