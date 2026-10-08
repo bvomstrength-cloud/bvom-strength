@@ -32,7 +32,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf .bvom-candidate
-          mkdir -p .bvom-candidate/i18n
+          mkdir -p .bvom-candidate/i18n .bvom-candidate/vendor
 
           cp index.html .bvom-candidate/
           cp admin.html .bvom-candidate/
@@ -46,6 +46,7 @@ jobs:
           cp theme-coastal-v23f.svg .bvom-candidate/
           cp i18n/en.js .bvom-candidate/i18n/
           cp i18n/ja.js .bvom-candidate/i18n/
+          cp vendor/supabase-js-2.117.3.js .bvom-candidate/vendor/
 
           echo "Staged BVOM production candidate:"
           find .bvom-candidate -type f -print | sort
