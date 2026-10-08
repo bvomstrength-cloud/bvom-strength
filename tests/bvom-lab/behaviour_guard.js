@@ -461,6 +461,21 @@ test('F48-FASTBOOT-DOES-NOT-EXTEND-GRACE','NEGATIVE','Starting from trusted loca
   const after=JSON.parse(ls.getItem(k)||'null')?.verifiedAt;
   return ok(!!before&&after===before,`before=${before} after=${after}`);
 });
+test('F49-FASTBOOT-REVOCATION-ACTIVE-WORKOUT','DEFECT','A definitive live revocation discovered after trusted local boot never destroys or interrupts the active workout; the workout can finish locally, then access gates',async()=>{
+  const {ls,net}=await establish();net.online=true;
+  const sup=H.mockSupabase({net,session:true,entitlement:[{status:'expired',user_id:'user-1'}],deferEntitlement:true});
+  const h=H.boot(build,{ls,online:true,supabase:sup}),beforeHistory=h.S().history.length;
+  const init=h.ctx.bvomCloudInit();await settleFastBoot(h);
+  if(!appUsable(h))return ok(false,'trusted local app did not open before live revocation');
+  h.reps.push(5);h.ctx.tapSet('Squat',0);
+  const activeBefore=h.S().session?.Squat?.['0']?.reps===5&&!!h.S().workoutStartedAt;
+  sup._resolveEntitlement();await init;await settleFastBoot(h);
+  const keptDuring=appUsable(h)&&h.S().session?.Squat?.['0']?.reps===5&&!!h.S().workoutStartedAt&&!!h.ev('bvomEntitlement.pendingLock');
+  finish(h);h.flush();
+  const historyKept=h.S().history.length===beforeHistory+1&&h.S().history.at(-1)?.session?.Squat?.['0']?.reps===5;
+  const gatedAfter=!appUsable(h)&&h.visible('#authgate')&&!h.ev('bvomEntitlement.pendingLock');
+  return ok(activeBefore&&keptDuring&&historyKept&&gatedAfter,`active=${activeBefore} keptDuring=${keptDuring} history=${historyKept} gatedAfter=${gatedAfter}`);
+});
 
 
 /* ======================= COLD-AUDIT FOLLOW-UPS: F13–F16 ======================= */
