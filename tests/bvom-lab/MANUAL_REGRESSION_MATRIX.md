@@ -60,3 +60,24 @@ F23–F27 are automated in `behaviour_guard.js`, with their broader state-machin
 ## v15 pending-decision follow-up
 
 F42 and F43 are automated in `behaviour_guard.js` and the shared pending-decision rule is covered by `sequence_guard.js`. On a final device smoke pass, it is still useful to reproduce one HLM third-failure choice and one LP/RPT close-miss choice, kill/reopen the installed PWA before choosing, and confirm the same decision returns. Then choose a branch and confirm a second relaunch does not ask again.
+
+
+## v2.9 startup-resilience device matrix
+
+Before any v2.9 production promotion, test the startup path on a previously verified device with matching local ownership and a valid cached entitlement.
+
+- **Good connection baseline:** cold open and warm repeat open; local training must appear normally and cloud verification must complete without a false conflict.
+- **True offline:** airplane mode on, Wi-Fi off, fully close the browser/PWA, relaunch. Cached BVOM shell and local training must appear promptly; the app must not wait tens of seconds for navigation, entitlement, or cloud timeouts.
+- **Lie-fi / hanging network:** throttle or otherwise create a connection that stays technically online while requests stall. Local training must still become usable from trusted local state before live entitlement/cloud requests resolve.
+- **Never-verified / fresh device:** offline or hanging-network launch must remain gated. No local fast path.
+- **Owner mismatch:** cached entitlement for account A must never expose local data owned by account B.
+- **Grace expiry:** entitlement verification older than 7 days must not unlock local fast boot.
+- **Explicit sign-out:** after sign-out, offline/hanging-network relaunch must remain gated while local training data remains intact.
+- **Unknown vs denied:** fetch failure, timeout, 5xx, or malformed response after trusted local boot must leave local training available; a definitive live expired/revoked result must gate future use without deleting local data.
+- **Revocation during active workout:** if a definitive denial arrives after the user has started/resumed a workout, the workout remains recoverable and finishable locally; once resolved, BVOM gates before another workout begins.
+- **Late auth event:** INITIAL_SESSION / SIGNED_IN / TOKEN_REFRESHED after local UI is visible must not reset, replace, or hide an active workout.
+- **Edit before cloud reconciliation:** make a local change immediately after fast boot, then allow delayed cloud checking to finish. Existing fingerprint/conflict handling must prevent silent replacement.
+- **Service-worker update while idle:** deploy build N+1 over installed N. The old build remains usable until the update is ready; update notice appears; explicit UPDATE & RELOAD moves to N+1 exactly once.
+- **Service-worker update during active workout:** update may become ready, but tapping update must refuse to reload until the workout is finished/exited.
+- **Two-tab update safety:** with a workout active in one tab, another tab must not be able to force that workout tab to reload.
+- **Failed update install:** interrupt the N+1 install/precache. Build N must remain launchable from its known-good cache.

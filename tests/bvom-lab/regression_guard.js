@@ -11,14 +11,14 @@ const exists=f=>fs.existsSync(path.join(target,f)),read=f=>fs.readFileSync(path.
 const compiles=(src,name)=>{try{new vm.Script(src,{filename:name});return ''}catch(e){return e.message}};
 
 // --- Packaging / loadability
-const REQUIRED=['index.html','sw.js','manifest.json','i18n/en.js','i18n/ja.js','icon-192.png','icon-512.png'];
+const REQUIRED=['index.html','sw.js','manifest.json','i18n/en.js','i18n/ja.js','icon-192.png','icon-512.png','vendor/supabase-js-2.117.3.js'];
 const missing=REQUIRED.filter(f=>!exists(f));t('Required release files present',!missing.length,missing.join(', '));
 if(missing.includes('index.html')){console.log(`\nRESULT: ${pass} passed, ${fail+1} failed`);process.exit(1)}
 const html=read('index.html'),sw=exists('sw.js')?read('sw.js'):'';
 let app='';try{app=extractAppScript(html)}catch(e){}
 t('Inline application script found',!!app);
 {const e=compiles(app,'index.html#app');t('Inline application script compiles',!e,e)}
-for(const f of ['i18n/en.js','i18n/ja.js','sw.js'])if(exists(f)){const e=compiles(read(f),f);t(`${f} compiles`,!e,e)}
+for(const f of ['i18n/en.js','i18n/ja.js','sw.js','vendor/supabase-js-2.117.3.js'])if(exists(f)){const e=compiles(read(f),f);t(`${f} compiles`,!e,e)}
 if(exists('admin.html')){const s=read('admin.html'),m=s.match(/<script>([\s\S]*?)<\/script>/);const e=m?compiles(m[1],'admin.html'):'no inline script';t('admin.html inline script compiles',!e,e)}
 let manifest=null;try{manifest=JSON.parse(read('manifest.json'))}catch(e){}
 t('manifest.json parses with name, start_url, scope, display',!!(manifest&&manifest.name&&manifest.start_url&&manifest.scope&&manifest.display));
@@ -28,6 +28,22 @@ t('manifest.json parses with name, start_url, scope, display',!!(manifest&&manif
 {const all=[];(function walk(d,rel=''){for(const e of fs.readdirSync(d,{withFileTypes:true})){const r=rel?rel+'/'+e.name:e.name;e.isDirectory()?walk(path.join(d,e.name),r):all.push(r)}})(target);
  const stray=all.filter(f=>/(^|\/)(__MACOSX|node_modules|\.DS_Store)|\.(bak|orig|tmp|map|log)$|~$|(copy|mirror|debug|backup)[^/]*$/i.test(f));
  t('No accidental debug/backup/mirror files in release',!stray.length,stray.join(', '))}
+t('SW repeat navigation is cache-first for the known-good shell',
+  /request\.mode\s*===\s*['"]navigate['"][\s\S]{0,1800}caches\.match\(['"]\.\/index\.html['"]\)/.test(sw)&&
+  !/request\.mode\s*===\s*['"]navigate['"][\s\S]{0,700}respondWith\(fetch\(event\.request\)/.test(sw));
+t('SW updates do not auto-skip-waiting during install',
+  !/addEventListener\(['"]install['"][\s\S]{0,1200}skipWaiting\s*\(/.test(sw));
+t('Page reload on controllerchange requires an explicit update request',
+  html.includes('bvom-update-reload-requested')&&!html.includes('bvom-controller-reload'));
+t('Supabase browser client is pinned, same-origin and precached',
+  html.includes('<script src="./vendor/supabase-js-2.117.3.js"></script>')&&
+  !html.includes('cdn.jsdelivr.net/npm/@supabase/supabase-js@2')&&
+  sw.includes("'./vendor/supabase-js-2.117.3.js'"));
+if(exists('vendor/supabase-js-2.117.3.js')){
+ const vendor=read('vendor/supabase-js-2.117.3.js');
+ t('Vendored Supabase JS 2.117.3 matches approved SHA-256',
+   crypto.createHash('sha256').update(vendor).digest('hex')==='d6a5c4414a5d4ce646d9c1de223aa7067d3ff664c15394ffeb7fcffc763354a3');
+}
 
 // --- Build/cache identifiers (textual contract; carried from v5)
 const header=(html.match(/BEST VERSION OF MYSELF · v([0-9.]+(?: BB DEV [0-9.]+)?)/i)||[])[1];
