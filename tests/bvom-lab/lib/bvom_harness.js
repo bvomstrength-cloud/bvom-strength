@@ -113,9 +113,10 @@ function bbSession(h,override=()=>({})){for(const id of bbDayIds(h)){const rx=h.
 function orSession(h,override=()=>({})){for(const id of bbDayIds(h)){const e=h.ctx.bvomBbOnRampEx(id),n=h.ctx.bvomBbOnRampSetCount(id),first=e.state==='UNSET';for(let i=0;i<n;i++){const r=h.ctx.bvomBbOnRampTarget(id);orSet(h,id,i,{load:first&&i===0?BB_LOADS[id]:undefined,reps:Math.min(r[1],r[0]+1),...override(id,i,e)})}}finish(h)}
 function withClock(fn){const real=Date.now;let t=Date.UTC(2026,8,30,8,0,0);Date.now=()=>t;const clock={advance:ms=>{t+=ms},now:()=>t};try{return fn(clock)}finally{Date.now=real}}
 // Controlled Supabase-js v2 surface: auth session, entitlement RPC, bvom_data table.
-function mockSupabase({net,user={id:'user-1',email:'lifter@example.com'},entitlement=[{status:'subscriber',user_id:'user-1'}],session=true,refreshImpossibleOffline=false,signOutFailsOffline=false,hangEntitlement=false,hangCloudSelect=false}){
+function mockSupabase({net,user={id:'user-1',email:'lifter@example.com'},entitlement=[{status:'subscriber',user_id:'user-1'}],session=true,refreshImpossibleOffline=false,signOutFailsOffline=false,hangEntitlement=false,hangCloudSelect=false,deferEntitlement=false}){
   const offline={data:null,error:{message:'TypeError: Failed to fetch'}};let row=null;const authListeners=[];
   const never=()=>new Promise(()=>{});
+  let resolveEntitlement;const deferredEntitlement=deferEntitlement?new Promise(r=>{resolveEntitlement=r}):null;
   const res=ok=>net.online?Promise.resolve(ok()):Promise.resolve(offline);
   const table=()=>{const q={op:'select'};const p=new Proxy({},{get(_,k){
     if(k==='then')return(a,b)=>(q.op==='select'&&hangCloudSelect?never():res(()=>q.op==='select'?{data:row?[row]:[],error:null}:q.op==='insert'?(row={id:'r1',data:q.v.data,created_at:new Date().toISOString()},{data:{id:'r1'},error:null}):(row={...row,data:q.v.data},{data:{id:row.id},error:null}))).then(a,b);
@@ -124,8 +125,12 @@ function mockSupabase({net,user={id:'user-1',email:'lifter@example.com'},entitle
       getSession:async()=>{if(!session)return{data:{session:null},error:null};if(refreshImpossibleOffline&&!net.online)return{data:{session:null},error:{message:'AuthRetryableFetchError: Failed to fetch'}};return{data:{session:{user,access_token:'t'}},error:null}},
       onAuthStateChange:(cb)=>{authListeners.push(cb);return{data:{subscription:{unsubscribe(){}}}}},
       signOut:async()=>signOutFailsOffline&&!net.online?{error:{message:'AuthRetryableFetchError: Failed to fetch'}}:{error:null}},
-    rpc:()=>hangEntitlement?never():res(()=>({data:entitlement,error:null})),from:()=>table()};
-  return {createClient:()=>client,_emitAuth(event,nextSession=null){for(const cb of authListeners)cb(event,nextSession)}};
+    rpc:()=>hangEntitlement?never():(deferEntitlement?deferredEntitlement:res(()=>({data:entitlement,error:null}))),from:()=>table()};
+  return {
+    createClient:()=>client,
+    _emitAuth(event,nextSession=null){for(const cb of authListeners)cb(event,nextSession)},
+    _resolveEntitlement(result={data:entitlement,error:null}){if(resolveEntitlement){const r=resolveEntitlement;resolveEntitlement=null;r(result)}}
+  };
 }
 async function launch(build,{ls,net,supabase}){const h=boot(build,{ls,supabase,online:net.online});await h.ctx.bvomCloudInit();for(let k=0;k<4;k++){await new Promise(r=>setImmediate(r));h.flush()}return h}
 module.exports={loadBuild,extractAppScript,memStore,boot,text,configureLP,finish,bbStart,bbSet,orSet,bbDayIds,bbSession,orSession,withClock,mockSupabase,launch,LP_W,BB_LOADS};
