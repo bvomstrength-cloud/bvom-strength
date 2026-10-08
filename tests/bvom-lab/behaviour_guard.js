@@ -441,6 +441,27 @@ test('F12-OFFLINE-NO-CLOUD-WITHOUT-SESSION','CONTROL','Offline local-owner acces
   net.online=true;h.ctx.navigator.onLine=true;h.ctx.supabase=mk();await h.ctx.bvomCloudAssessSync();h.flush();return ok(h.ev('bvomCloud.syncReady')===false&&h.ev('bvomCloud.pendingAuto')===false,`syncReady=${h.ev('bvomCloud.syncReady')} pendingAuto=${h.ev('bvomCloud.pendingAuto')}`);
 });
 
+async function settleFastBoot(h){for(let k=0;k<4;k++){await new Promise(r=>setImmediate(r));h.flush()}}
+test('F46-FASTBOOT-ENTITLEMENT-HANG','DEFECT','A previously verified matching owner becomes locally usable without waiting for a live entitlement RPC that never resolves',async()=>{
+  const {ls,net,mk}=await establish();net.online=true;
+  const h=H.boot(build,{ls,online:true,supabase:mk({hangEntitlement:true})});
+  h.ctx.bvomCloudInit();await settleFastBoot(h);
+  return ok(appUsable(h)&&h.S().configured===true,`app usable=${appUsable(h)} configured=${h.S().configured}`);
+});
+test('F47-FASTBOOT-CLOUD-HANG','DEFECT','A previously verified matching owner becomes locally usable without waiting for cloud-latest when the cloud read never resolves',async()=>{
+  const {ls,net,mk}=await establish();net.online=true;
+  const h=H.boot(build,{ls,online:true,supabase:mk({hangCloudSelect:true})});
+  h.ctx.bvomCloudInit();await settleFastBoot(h);
+  return ok(appUsable(h)&&h.S().configured===true,`app usable=${appUsable(h)} configured=${h.S().configured}`);
+});
+test('F48-FASTBOOT-DOES-NOT-EXTEND-GRACE','NEGATIVE','Starting from trusted local entitlement never refreshes verifiedAt unless a live entitlement response succeeds',async()=>{
+  const {ls,net,mk}=await establish(),k='bvom_entitlement_cache_user-1',before=JSON.parse(ls.getItem(k)||'null')?.verifiedAt;net.online=true;
+  const h=H.boot(build,{ls,online:true,supabase:mk({hangEntitlement:true})});
+  h.ctx.bvomCloudInit();await settleFastBoot(h);
+  const after=JSON.parse(ls.getItem(k)||'null')?.verifiedAt;
+  return ok(!!before&&after===before,`before=${before} after=${after}`);
+});
+
 
 /* ======================= COLD-AUDIT FOLLOW-UPS: F13–F16 ======================= */
 test('F13-BB-UNIT-CHANGE-ATOMIC','DEFECT','Active Bodybuilding unit change is atomic: rendered prescription, logged set and progression stay on the same physical/grid load',()=>{
