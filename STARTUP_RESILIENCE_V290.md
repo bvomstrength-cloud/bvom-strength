@@ -1,6 +1,6 @@
 # BVOM Strength v2.9.0 — Startup Resilience Design
 
-Status: IMPLEMENTED / AUTOMATED GO / REAL-DEVICE VERIFIED  
+Status: PRODUCTION DEPLOYED / AUTOMATED GO / REAL-DEVICE VERIFIED  
 Baseline: v2.8.9 main @ `c24acc12b019fdcb00ebc082e035c2d1f85050cb`
 
 ## Why this exists
@@ -247,3 +247,13 @@ Observed startup timings:
 The previous v2.8.9 true-offline startup measured 74196.6 ms on the same device class/test site. The v2.9.0 true-offline result is therefore roughly 365× faster and confirms that cached shell delivery plus trusted local startup remove navigation, entitlement, and cloud waits from the critical startup path.
 
 A deliberate real-world lie-fi field test was not performed. Because v2.9.0 no longer awaits those network operations before rendering trusted local training, remaining degraded-network risk is low and can be exercised later with controlled browser throttling.
+
+
+## Production deployment
+
+Production deployment completed on 9 October 2026.
+
+- Application production merge commit: `35561db61f42e0449a614ff18b1ec6d88486e14c`
+- Exact deployment ZIP SHA-256: `22048220ceb88da2ef19f9c13812f13f976c0b53d6d5d53f6a7555d2cce3c0fe`
+- Live production URL verified by the owner: `https://app.bvomstrength.com/?v=290`
+- Visual verification confirmed the live header displays `v2.9.0`.

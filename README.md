@@ -13,9 +13,9 @@ Production source repository for BVOM Strength.
 
 The current source preserves completed Bodybuilding GPP/conditioning results in Workout History, adds destination-neutral metadata to newly completed workout History records, includes a pure Export v1 translator and Strava adapter, and now adds a pure write-only Strava OAuth client boundary plus the documented server-side OAuth/security architecture. No live OAuth execution, token storage, webhook endpoint, Settings UI, or workout upload is enabled.
 
-## v2.9.0 release-candidate status
+## v2.9.0 release status
 
-v2.9.0 is the startup-resilience release candidate. It keeps BVOM local-first on previously verified devices even when the network is absent or slow, while preserving the existing owner-bound 7-day offline entitlement boundary.
+v2.9.0 is the approved production startup-resilience release. It keeps BVOM local-first on previously verified devices even when the network is absent or slow, while preserving the existing owner-bound 7-day offline entitlement boundary.
 
 Key changes:
 - repeat navigation serves the known-good cached shell immediately;
@@ -25,7 +25,7 @@ Key changes:
 - service-worker updates require an explicit safe reload and cannot auto-reload an active workout;
 - Supabase JS is pinned and vendored as same-origin `2.117.3` and included in the shell cache.
 
-Release-candidate evidence:
+Release evidence:
 - 29/29 static PASS
 - 87/87 behaviour PASS
 - 14/14 sequence PASS
@@ -34,8 +34,10 @@ Release-candidate evidence:
 - Android Chrome: true-offline app visible at 203.5 ms versus 74196.6 ms on v2.8.9
 - Android Chrome: mobile-data app visible at 254.7 ms
 - exact vendored Supabase JS SHA-256: `d6a5c4414a5d4ce646d9c1de223aa7067d3ff664c15394ffeb7fcffc763354a3`
+- exact deployment ZIP SHA-256: `22048220ceb88da2ef19f9c13812f13f976c0b53d6d5d53f6a7555d2cce3c0fe`
+- application production merge commit: `35561db61f42e0449a614ff18b1ec6d88486e14c`
 
-This candidate is not yet recorded here as production-deployed. The existing v2.8.9 production record remains below until deployment is completed.
+**Production deployment completed on 9 October 2026 using the exact verified v2.9.0 deployment ZIP.** The owner visually confirmed the live production app at `https://app.bvomstrength.com/?v=290` showing `v2.9.0` after deployment.
 
 ## v2.8.9 release status
 
