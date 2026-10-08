@@ -238,6 +238,20 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const BVOM_BUILD='2.8.9';
+const BVOM_BOOT_DIAG=(()=>{try{return new URLSearchParams(location.search).get('bootdiag')==='1'}catch(e){return false}})();
+const bvomBootTimings=[];
+function bvomBootMark(stage,detail=''){
+ if(!BVOM_BOOT_DIAG)return;
+ const ms=(typeof performance!=='undefined'&&typeof performance.now==='function')?performance.now():null;
+ const entry={stage,ms,detail:String(detail||'')};
+ bvomBootTimings.push(entry);window.__bvomBootTimings=bvomBootTimings;
+ console.log(`[BVOM BOOT ${ms==null?'?':ms.toFixed(1)+'ms'}] ${stage}${detail?' — '+detail:''}`);
+}
+bvomBootMark('main-script-start');
+try{
+ const r=performance.getEntriesByType?.('resource')?.find(x=>String(x.name||'').includes('@supabase/supabase-js'));
+ if(r)bvomBootMark('supabase-resource-observed',`duration=${r.duration.toFixed(1)}ms responseEnd=${r.responseEnd.toFixed(1)}ms`);
+}catch(e){}
 const programs={A:[["Squat",3,5],["Bench Press",3,5],["Prone Row",3,5]],B:[["Squat",3,5],["Overhead Press",5,5],["Deadlift",1,5]]};
 function liftLabel(n){return n==='Prone Row'?(isHLM()?'Prone Row':'Row'):n==='Overhead Press'?'Press':n;}
 const inc={Squat:2.5,"Bench Press":2.5,"Prone Row":2.5,"Overhead Press":2.5,Deadlift:5};
@@ -2286,6 +2300,7 @@ function bvomHandleCheckoutReturn(){
  },250);
 }
 async function bvomPublicContinueAfterSignIn(mode){
+ bvomBootMark('signed-in-flow-start',mode);
  bvomHideAuthGate();
  const userId=bvomCloud.user?.id;if(!userId){bvomShowAuthGate();return}
  bvomCloud.offlineLocalAccess=false;
@@ -2301,10 +2316,12 @@ async function bvomPublicContinueAfterSignIn(mode){
   return;
  }
  window.__bvomAuthUserId=userId;bvomCloud.accountSwitchDeferred=false;const entitlementRecord=await bvomEntitlementEnsure();
+ bvomBootMark('entitlement-resolved',bvomEntitlement.error?'error':'ok');
  const entitlementDecision=bvomEntitlementAccessDecision(entitlementRecord,userId,!entitlementRecord&&!!bvomEntitlement.error);
  if(!entitlementDecision.allowed){bvomShowEntitlementGate(entitlementDecision);return}
  if(entitlementDecision.fromCache){bvomEntitlement.record=entitlementDecision.row;bvomCloud.syncReady=false;bvomCloud.message=hlmTxt('Offline — training is available on this device. Cloud backup will resume when you reconnect.','オフラインです。この端末ではトレーニングを続けられます。再接続するとクラウドバックアップが再開します。');bvomCloud.error=false}
  let latest=null;try{latest=await bvomCloudLatest()}catch(e){}
+ bvomBootMark('cloud-latest-resolved',latest?.error?'error':latest?.data?'found':'empty');
  const cloudData=latest?.data?.data&&bvomCloudValidData(latest.data.data)?latest.data.data:null;
 
  // One-time Beta 15 migration: only data that genuinely existed before this page loaded
@@ -2339,6 +2356,7 @@ async function bvomPublicContinueAfterSignIn(mode){
   bvomSetLocalOwnerId(userId);
  }
  if(state.configured)showApp();else showSetup();
+ bvomBootMark(state.configured?'app-shown':'setup-shown');
  setTimeout(()=>bvomCloudAssessSync(),0);
 }
 
@@ -2573,9 +2591,10 @@ async function bvomCloudRestore(){
 }
 async function bvomCloudSignOut(){const signedOutUser=bvomCloud.user?.id||bvomLocalOwnerId();bvomEntitlementCacheClear(signedOutUser);const c=bvomCloudClient();let error=null;if(c){bvomCloud.busy=true;renderSettings();try{const result=await c.auth.signOut({scope:'local'});error=result?.error||null}catch(e){error=e}}bvomCloud.busy=false;bvomCloud.user=null;bvomCloud.offlineLocalAccess=false;window.__bvomAuthUserId=null;bvomCloud.codeSent=false;bvomCloud.syncReady=false;bvomCloud.conflict=false;bvomCloud.remoteFingerprint=null;bvomCloud.message=error?(error.message||hlmTxt('Signed out on this device. Cloud sign-out could not be confirmed.','この端末ではサインアウトしましたが、クラウド側のサインアウトを確認できませんでした。')):hlmTxt('Signed out on this device.','この端末でサインアウトしました。');bvomCloud.error=!!error;bvomShowAuthGate()}
 async function bvomCloudInit(){
+ bvomBootMark('cloud-init-start');
  const c=bvomCloudClient();if(!c){if(!bvomOpenVerifiedOfflineOwner())bvomShowAuthGate();return}
  try{
-  const {data,error}=await c.auth.getSession();bvomCloud.user=data?.session?.user||null;if(bvomCloud.user)bvomCloud.offlineLocalAccess=false;window.__bvomAuthUserId=bvomCloud.user?.id||null;
+  const {data,error}=await c.auth.getSession();bvomBootMark('session-resolved',error?'error':data?.session?.user?'signed-in':'no-session');bvomCloud.user=data?.session?.user||null;if(bvomCloud.user)bvomCloud.offlineLocalAccess=false;window.__bvomAuthUserId=bvomCloud.user?.id||null;
   if(bvomCloud.user){await bvomPublicContinueAfterSignIn('session')}
   else if((error||navigator.onLine===false)&&bvomOpenVerifiedOfflineOwner()){}
   else bvomShowAuthGate();
@@ -3335,9 +3354,12 @@ const bvomBbDev36ChangeUnitsBase=changeUnits;changeUnits=function(to,quiet=false
 
 bvomHideMainSurfaces();if("serviceWorker" in navigator){
   window.addEventListener("load", async ()=>{
+    bvomBootMark('window-load');
     try{
       const reg = await navigator.serviceWorker.register("./sw.js?v=2.8.9");
+      bvomBootMark('service-worker-registered');
       await reg.update();
+      bvomBootMark('service-worker-update-check-complete');
 
       // If this page was restored from an older cached navigation,
       // force one normal reload for this build only.
@@ -3356,5 +3378,5 @@ bvomHideMainSurfaces();if("serviceWorker" in navigator){
     }catch(e){ console.log("BVOM service worker:", e); }
   });
 }
-window.addEventListener("DOMContentLoaded",()=>{bvomCloudInit();bvomHandleCheckoutReturn()});
+window.addEventListener("DOMContentLoaded",()=>{bvomBootMark('dom-content-loaded');bvomCloudInit();bvomHandleCheckoutReturn()});
 </script></body></html>
