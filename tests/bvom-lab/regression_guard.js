@@ -28,6 +28,13 @@ t('manifest.json parses with name, start_url, scope, display',!!(manifest&&manif
 {const all=[];(function walk(d,rel=''){for(const e of fs.readdirSync(d,{withFileTypes:true})){const r=rel?rel+'/'+e.name:e.name;e.isDirectory()?walk(path.join(d,e.name),r):all.push(r)}})(target);
  const stray=all.filter(f=>/(^|\/)(__MACOSX|node_modules|\.DS_Store)|\.(bak|orig|tmp|map|log)$|~$|(copy|mirror|debug|backup)[^/]*$/i.test(f));
  t('No accidental debug/backup/mirror files in release',!stray.length,stray.join(', '))}
+t('SW repeat navigation is cache-first for the known-good shell',
+  /request\.mode\s*===\s*['"]navigate['"][\s\S]{0,1800}caches\.match\(['"]\.\/index\.html['"]\)/.test(sw)&&
+  !/request\.mode\s*===\s*['"]navigate['"][\s\S]{0,700}respondWith\(fetch\(event\.request\)/.test(sw));
+t('SW updates do not auto-skip-waiting during install',
+  !/addEventListener\(['"]install['"][\s\S]{0,1200}skipWaiting\s*\(/.test(sw));
+t('Page reload on controllerchange requires an explicit update request',
+  html.includes('bvom-update-reload-requested')&&!html.includes('bvom-controller-reload'));
 
 // --- Build/cache identifiers (textual contract; carried from v5)
 const header=(html.match(/BEST VERSION OF MYSELF · v([0-9.]+(?: BB DEV [0-9.]+)?)/i)||[])[1];
