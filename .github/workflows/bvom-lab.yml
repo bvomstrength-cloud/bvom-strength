@@ -55,31 +55,3 @@ jobs:
           node tests/bvom-lab/gate.js \
             .bvom-candidate \
             test-fixtures/v2.8.0-known-bad
-
-      - name: Restage diagnostic candidate
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf bvom-diagnostic
-          mkdir -p bvom-diagnostic/i18n
-
-          cp index.html bvom-diagnostic/
-          cp admin.html bvom-diagnostic/
-          cp sw.js bvom-diagnostic/
-          cp manifest.json bvom-diagnostic/
-          cp icon-192.png bvom-diagnostic/
-          cp icon-512.png bvom-diagnostic/
-          cp og-image.png bvom-diagnostic/
-          cp theme-bee-v23c.svg bvom-diagnostic/
-          cp theme-cherry-v23f.svg bvom-diagnostic/
-          cp theme-coastal-v23f.svg bvom-diagnostic/
-          cp i18n/en.js bvom-diagnostic/i18n/
-          cp i18n/ja.js bvom-diagnostic/i18n/
-
-      - name: Package diagnostic candidate
-        uses: actions/upload-artifact@v4
-        with:
-          name: bvom-startup-diagnostic-v289
-          path: bvom-diagnostic
-          if-no-files-found: error
-          retention-days: 7
