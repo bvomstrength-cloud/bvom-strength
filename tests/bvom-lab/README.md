@@ -359,3 +359,9 @@ F50–F57 cover secondary pending answers, later warm-up leakage, acquisition or
 `boot(build,{ls,ss})` accepts pre-populated localStorage and sessionStorage separately. A same-tab reload preserves its session identity **before** application initialization; a distinct tab uses a separate store. Never infer identity from the shared owner marker or inject it only after boot. Correction/reload controls now preserve native identity and must still detect their original mutations.
 
 These tests model sequential/scheduled interleavings, not linearizable concurrency, duplicate-tab identity, real authentication, installed PWA lifecycle or safe owner takeover. A GO gate does not authorize release: owner recovery policy and Android evidence remain separate prerequisites.
+
+## Monkey 009 corrective contracts (draft review only)
+
+F58–F64 in `monkey009_contracts.js` run through the authoritative behaviour tier. They cover delayed backup/cloud confirmation, History and Custom accessory/GPP apply callbacks, intermediate/setup continuation, committed-blob owner-key failures, pending creation failure followed by same-tab reload, storage ordering/nested attempts, and assigned timer-sound handling. All seven are red against exact pre-009 PR head `e6631e478a80b68df6cff80615382430348238ee`. Their explicit v2.8.0 provenance exclusion does not replace that red proof.
+
+The platform/services are artificial; dialogs and progression are real application functions. New mutants remove whole responsible protections where a second commit/rollback check also prevents the defect. F20 retains its original assertions and now removes both setup-time active-workout checks. The gate and historical reference expectations are unchanged. Pending reload retry covers only required LP close-miss and HLM/4-Day third-failure decisions; it does not provide abandoned-owner recovery or claim atomic cross-tab writes.
