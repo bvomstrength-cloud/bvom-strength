@@ -35,14 +35,14 @@ function mkEl(tag='div',initialClasses=[]){
 }
 // Boot the real app. opts.supabase: 'inert' (default: client whose calls resolve empty),
 // null (CDN script missing), or a supabase-js-shaped library object.
-function boot(build,{ls=memStore(),supabase='inert',online=true}={}){
+function boot(build,{ls=memStore(),ss=memStore(),supabase='inert',online=true}={}){
   // Mirror index.html: #app and #authgate start hidden.
   const els={'#app':mkEl('div',['hidden']),'#authgate':mkEl('div',['setup','hidden']),'#setup':mkEl('div',['setup'])};
   const log=[],timers=[];
   const document={body:mkEl('body'),documentElement:mkEl('html'),head:mkEl('head'),visibilityState:'visible',title:'',
     getElementById:id=>els['#'+id]||(els['#'+id]=mkEl()),querySelector:s=>els[s]||(els[s]=mkEl()),querySelectorAll:()=>[],
     createElement:t=>mkEl(t),createTextNode:t=>({nodeValue:t}),addEventListener(){}};
-  const ctx={console:{log(){},warn(){},error(){},info(){},debug(){}},localStorage:ls,sessionStorage:memStore(),document,
+  const ctx={console:{log(){},warn(){},error(){},info(){},debug(){}},localStorage:ls,sessionStorage:ss,document,
     navigator:{language:'en-AU',onLine:online,userAgent:'bvom-harness'},
     location:{href:'https://bvom.test/',search:'',hash:'',origin:'https://bvom.test',pathname:'/',reload(){log.push(['reload'])},replace(){}},
     history:{replaceState(){},pushState(){}},
@@ -58,7 +58,7 @@ function boot(build,{ls=memStore(),supabase='inert',online=true}={}){
   vm.createContext(ctx);
   for(const src of build.i18n)vm.runInContext(src,ctx);
   vm.runInContext(build.script+'\n;globalThis.__bvomHarnessEval=(expr)=>eval(expr);',ctx,{filename:'index.html#app'});
-  const h={ctx,els,log,timers,ls,
+  const h={ctx,els,log,timers,ls,realChoiceModal:ctx.bvomChoiceModal,
     S:()=>ctx.__bvomHarnessEval('state'),
     ev:x=>ctx.__bvomHarnessEval(x),
     fn:n=>ctx[n],

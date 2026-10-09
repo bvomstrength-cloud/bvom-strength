@@ -786,6 +786,13 @@ The stale window is blocked and the user is told to reload.
 
 While one tab owns an active workout, another tab must not casually write competing local training state.
 
+Intentional workout actions must check ownership and the local persisted baseline before changing live work or the owner marker. A secondary context stays read-only: warm-up ticks, set entry/correction, program-specific records and pending answers do not implicitly transfer ownership. A rejected action must explain that it was not saved, without asserting the other window is still alive. Non-mutating views remain available.
+
+Critical LP/RPT and HLM/4-Day pending answers require a real local write; a benign secondary boot/render no-op is not a successful answer. A rejected answer retains the pending decision and does not mutate progression or launch follow-up decisions. Ownership release follows a successful training write, not a rejected stale/storage write.
+
+**Phase-1 branch only; not release-ready:** explicit abandoned-owner recovery and installed Android lifecycle proof are mandatory release prerequisites. Recovery policy/coordination is not approved or implemented by these guards. A new context with an old active owner remains blocked; no age/heartbeat or ordinary workout action authorizes takeover. Separate localStorage keys do not provide an atomic multi-tab transaction or independent identity for duplicated/restored contexts.
+
+
 ## 16. Account and entitlement
 
 Normal online access passes through the BVOM account and entitlement layer.

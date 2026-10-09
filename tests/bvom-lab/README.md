@@ -351,3 +351,11 @@ Final v15 gate on the working tree:
 - Mutation: **62/62 mutations killed**
 - v2.8.0 reference: **46/46 applicable DEFECT contracts fail**; F23/F25 remain explicit later-regression provenance N/A
 - Verdict: **GO**
+
+## Monkey 007 phase-1 ownership contracts (not release-ready)
+
+F50–F57 cover secondary pending answers, later warm-up leakage, acquisition ordering, exceptional pending commits, representative program entry/Finish, shared HLM/4-Day decisions, scheduled ownership changes, and record dialogs answered after permission changes. Each is red against pinned v2.9.0 `b551f07c5c68e127239de4963c82a8a53bd7a3eb`; they are explicit historical-provenance N/A against v2.8.0, which is not this ownership baseline. Existing mutation/known-bad contracts remain mandatory.
+
+`boot(build,{ls,ss})` accepts pre-populated localStorage and sessionStorage separately. A same-tab reload preserves its session identity **before** application initialization; a distinct tab uses a separate store. Never infer identity from the shared owner marker or inject it only after boot. Correction/reload controls now preserve native identity and must still detect their original mutations.
+
+These tests model sequential/scheduled interleavings, not linearizable concurrency, duplicate-tab identity, real authentication, installed PWA lifecycle or safe owner takeover. A GO gate does not authorize release: owner recovery policy and Android evidence remain separate prerequisites.

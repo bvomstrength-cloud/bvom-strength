@@ -81,3 +81,9 @@ Before any v2.9 production promotion, test the startup path on a previously veri
 - **Service-worker update during active workout:** update may become ready, but tapping update must refuse to reload until the workout is finished/exited.
 - **Two-tab update safety:** with a workout active in one tab, another tab must not be able to force that workout tab to reload.
 - **Failed update install:** interrupt the N+1 install/precache. Build N must remain launchable from its known-good cache.
+
+## Monkey 007 release blockers (not performed by Codex)
+
+- Agree and implement a safe, useful explicit abandoned-owner recovery policy before release; phase-1 read-only blocking alone is not releasable recovery.
+- On an already legitimately eligible installed Android PWA test device using artificial workout data, compare same-tab refresh with full close/reopen offline while a close-miss decision is pending; record native identity/lifecycle, pending persistence, truthful warnings and exactly-once progression. No assumption that process restart creates a new identity.
+- Check two-window ownership notices in English/Japanese, focus and keyboard behavior, small-screen labels, and History viewing. Verify actual account/offline boundaries separately under owner authorization. No real accounts/services were exercised in Monkey 007.
