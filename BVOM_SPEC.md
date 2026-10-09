@@ -790,7 +790,7 @@ Intentional workout actions must check ownership and the local persisted baselin
 
 Critical LP/RPT and HLM/4-Day pending answers require a real local write; a benign secondary boot/render no-op is not a successful answer. A rejected answer retains the pending decision and does not mutate progression or launch follow-up decisions. Ownership release follows a successful training write, not a rejected stale/storage write.
 
-Delayed restore and mutation confirmations recheck the latest saved baseline and workout ownership at commit time. Restore also rechecks account identity, access and unfinished work. History and Custom accessory/GPP rejection cannot leave a mutation for a later save.
+Delayed restore, History deletion, Custom accessory/GPP removal and intermediate/setup confirmations recheck the latest saved baseline and workout ownership at commit time. Restore also rechecks account identity, access and unfinished work. History and Custom accessory/GPP rejection cannot leave a mutation for a later save.
 
 The training blob and owner marker are separate localStorage operations. After the blob is committed, an owner bookkeeping failure must retain the committed in-memory result, warn that training was saved, and stop further actions in that window. It must not report a rejected training write or roll back only memory. Required LP close-miss and HLM/4-Day third-failure pending creation publishes processing state and the decision in the same blob write. Failure retains recorded sets with an unprocessed result; an owner reload retries that required decision before normal continuation.
 
