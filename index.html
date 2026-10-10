@@ -3653,6 +3653,7 @@ function bvomLegacyArchiveCommit(){
   ));
   renderAll();return true;
  }catch(e){
+  console.warn('BVOM old-workout archive refused:',e?.message||e);
   if(committed){bvomPostCommitOwnerFailureNotice();return true}
   bvomBeeModal(hlmTxt('ARCHIVE STOPPED','履歴への保存を停止しました'),hlmTxt('The earlier workout was not changed. The saved data, account or ownership changed, or the device could not save the backup. Close other BVOM windows, check storage and try again.','以前のワークアウトは変更されていません。データ・アカウント・画面管理情報が変更されたか、端末にバックアップを保存できませんでした。他のBVOM画面を閉じ、端末の空き容量を確認して再試行してください。'));
   return false;
