@@ -121,6 +121,64 @@ test('expired real close/reopen and next set attempt finalize without leaking a 
   const d=await saved(p);assert.equal(d.history.length,1);assert.equal(d.history[0].incomplete,true);assert.deepEqual(d.history[0].session,before.session);assert.equal(await p.evaluate(()=>bvomSessionHasActivity()),false);assert.ok(Object.values(d.session).every(rows=>Object.keys(rows).length===0));
  }finally{await context.close()}}
 });
+test('old v2.9 workout is read-only until explicit archive; cancel leaves exact bytes unchanged',async()=>{
+ const old=fixture();old.session.Squat={0:{reps:5,load:60,index:0}};old.workoutStartedAt=Date.now()-300000;
+ delete old.workoutOwnershipVersion;delete old.workoutLastActivityAt;
+ const {context,a}=await setup(old);try{
+  await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').waitFor();
+  const before=await raw(a);
+  a.once('dialog',d=>d.dismiss());
+  await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
+  assert.equal(await raw(a),before);
+  assert.equal(await a.evaluate(()=>localStorage.getItem('bvom_legacy_workout_before_archive')),null);
+  a.once('dialog',d=>d.accept());
+  await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
+  const after=await saved(a);
+  assert.equal(after.history.length,1);
+  assert.equal(after.history[0].incomplete,true);
+  assert.equal(after.history[0].legacyUpgradeArchive,true);
+  assert.deepEqual(after.history[0].session.Squat,old.session.Squat);
+  assert.equal(after.workoutStartedAt,null);
+  assert.equal(await a.evaluate(()=>bvomWorkoutActionAllowed()),true);
+  const backup=await a.evaluate(()=>JSON.parse(localStorage.getItem('bvom_legacy_workout_before_archive')));
+  assert.equal(backup.raw,before);
+  await a.reload();await a.waitForSelector('#app:not(.hidden)');
+  assert.equal((await saved(a)).history.length,1);
+  await record(a,'Squat',0);
+ }finally{await context.close()}
+});
+test('legacy pending decision and active GPP are archived undecided, with exact backup; changed owner is refused',async()=>{
+ const old=fixture();old.session['Bench Press']={0:{reps:5,load:45,index:0}};old.workoutStartedAt=Date.now()-300000;
+ old.pendingCloseMissChoice={lift:'Bench Press',weight:45,increment:2.5};
+ old.gppList=[{id:'erg',name:'Dummy erg',assignment:'Both',metrics:{time:true},planned:{timeSeconds:60}}];
+ old.gppSession={erg:{started:true,timing:{status:'running',startedAt:Date.now()-30000,accumulatedMs:0}}};
+ delete old.workoutOwnershipVersion;delete old.workoutLastActivityAt;
+ const {context,a}=await setup(old);try{
+  await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').waitFor();
+  const before=await raw(a);
+  // Competing old writer changing the owner marker between lock acquisition and confirmation.
+  await a.evaluate(()=>localStorage.setItem('bvom_workout_tab_owner','changed-owner'));
+  a.once('dialog',d=>d.accept());
+  await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
+  assert.equal(await raw(a),before);
+  assert.equal(await a.evaluate(()=>localStorage.getItem('bvom_legacy_workout_before_archive')),null);
+  // Restore old-marker snapshot only in this synthetic test; new document gets it at lock acquisition.
+  await a.evaluate(()=>localStorage.removeItem('bvom_workout_tab_owner'));
+  await a.reload();await a.waitForSelector('#app:not(.hidden)');
+  await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').waitFor();
+  a.once('dialog',d=>d.accept());
+  await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
+  const after=await saved(a);assert.equal(after.history.length,1);
+  const h=after.history[0];
+  assert.equal(h.incomplete,true);assert.equal(h.legacyPendingChoices.lp.weight,45);
+  assert.equal(h.legacyGppSession.erg.timing.status,'running');
+  assert.deepEqual(h.session['Bench Press'],old.session['Bench Press']);
+  assert.equal(after.pendingCloseMissChoice,undefined);
+  assert.deepEqual(after.weights,old.weights);
+  assert.equal(after.gppSession.erg,undefined);
+  assert.equal(await a.evaluate(()=>JSON.parse(localStorage.getItem('bvom_legacy_workout_before_archive')).raw),before);
+ }finally{await context.close()}
+});
 test('optional Android loopback server seeds dummy data and refuses replacement',async()=>{
  const {spawn}=require('node:child_process');const child=spawn(process.execPath,[path.join(__dirname,'recovery_phone_server.cjs'),'33331'],{stdio:['ignore','pipe','pipe']});let context;
  try{
