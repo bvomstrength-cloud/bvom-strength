@@ -351,3 +351,32 @@ Final v15 gate on the working tree:
 - Mutation: **62/62 mutations killed**
 - v2.8.0 reference: **46/46 applicable DEFECT contracts fail**; F23/F25 remain explicit later-regression provenance N/A
 - Verdict: **GO**
+
+## Monkey 007 phase-1 ownership contracts (not release-ready)
+
+F50–F57 cover secondary pending answers, later warm-up leakage, acquisition ordering, exceptional pending commits, representative program entry/Finish, shared HLM/4-Day decisions, scheduled ownership changes, and record dialogs answered after permission changes. Each is red against pinned v2.9.0 `b551f07c5c68e127239de4963c82a8a53bd7a3eb`; they are explicit historical-provenance N/A against v2.8.0, which is not this ownership baseline. Existing mutation/known-bad contracts remain mandatory.
+
+`boot(build,{ls,ss})` accepts pre-populated localStorage and sessionStorage separately. A same-tab reload preserves its session identity **before** application initialization; a distinct tab uses a separate store. Never infer identity from the shared owner marker or inject it only after boot. Correction/reload controls now preserve native identity and must still detect their original mutations.
+
+These tests model sequential/scheduled interleavings, not linearizable concurrency, duplicate-tab identity, real authentication, installed PWA lifecycle or safe owner takeover. A GO gate does not authorize release: owner recovery policy and Android evidence remain separate prerequisites.
+
+## Monkey 009 corrective contracts (draft review only)
+
+F58–F64 in `monkey009_contracts.js` run through the authoritative behaviour tier. They cover delayed backup/cloud confirmation, History and Custom accessory/GPP apply callbacks, intermediate/setup continuation, committed-blob owner-key failures, pending creation failure followed by same-tab reload, storage ordering/nested attempts, and assigned timer-sound handling. All seven are red against exact pre-009 PR head `e6631e478a80b68df6cff80615382430348238ee`. Their explicit v2.8.0 provenance exclusion does not replace that red proof.
+
+The platform/services are artificial; dialogs and progression are real application functions. New mutants remove whole responsible protections where a second commit/rollback check also prevents the defect. F20 retains its original assertions and now removes both setup-time active-workout checks. The gate and historical reference expectations are unchanged. Pending reload retry covers only required LP close-miss and HLM/4-Day third-failure decisions; it does not provide abandoned-owner recovery or claim atomic cross-tab writes.
+
+## Monkey 011 corrective contracts
+
+F65–F69 are pinned-pre-011 (`f75202f9fb94d3ab69e1de15b5c5876d6e8d8a97`) red→green contracts, historically N/A on v2.8.0. F65 checks resolve/reject sign-out with changed saved training, owner/account, memory, auth events and storage-read failure. F66 invokes actual Cancel while sign-out is pending and checks repeated confirmation, no local erase/reload and truthful status. F67 checks exact History identity across overlapping confirmations, normal note-edit callback, reorder, replacement, duplicates, stale bytes and owner changes. F68/F69 controls protect legitimate offline/signed-in erase, expected mocked auth-listener delivery, fresh RESET and preconfirmation Cancel. All use artificial storage/services and real application callbacks; no native browser or installed-device claim.
+
+Four new mutants remove erase snapshot revalidation, cancellation invalidation History identity validation and auth-event tracking. The documented 13-file staging and unchanged full gate remain required. Captured Node spawnSync EPERM is a local launcher NO-GO; separate Python subprocess mutation replay is tier evidence, not local full GO. Required GitHub CI must independently pass. Release remains NO GO pending recovery and device proof.
+
+
+## Draft PR #39 — exclusive recovery and inactivity
+
+`recovery_contracts.js` adds F70–F76 for meaningful activity, atomic incomplete expiry across programs, pending/GPP holds, lock/account fencing, failed-write rollback, timestamp grace and ambiguous old-version ownership. The VM platform uses explicit synthetic locks/document identities to keep previous callback contracts intact; those stubs are not liveness evidence.
+
+`recovery_browser.cjs` serves the real BVOM app on isolated loopback HTTP, uses native Chromium Web Locks and storage, drives the effective rep dialog and blocks external requests/services. The separate Actions job **BVOM real application recovery checks** executes close/reopen, duplicated sessionStorage, live/background/frozen ownership, simultaneous boots, expiry and safeguards. The existing browser primitive smoke job is preserved. F70–F76 are replayed RED against exact pre-recovery `42710195f3aef3e9d8959a8592ad92b00c88f722`; their v2.8.0 provenance is N/A because recovery is a later feature. Six new fault injections complement the earlier mutations. Stronger save fencing requires the existing ownership-boundary mutations to remove both permission checks to reproduce their original fault; their behavioural targets and assertions remain unchanged.
+
+Browser clocks, accounts, entitlement caches and workouts are synthetic. This is not Android installed-PWA/Safari evidence. Unknown older-version workout ownership fails closed rather than being automatically upgraded. See the manual matrix and optional loopback-only `recovery_phone_server.cjs` for isolated dummy-workout phone checks. No preview or production deployment is created by tests.

@@ -14,6 +14,74 @@ const test=(id,kind,title,fn)=>T.push({id,kind,title,fn});
 const ok=(cond,detail)=>({pass:!!cond,detail});
 const {text,finish,configureLP,bbStart,bbSet,orSet,bbSession,orSession,withClock}=H;
 
+// Real shared-origin storage, distinct identities supplied BEFORE application initialization.
+function ownershipPair(){
+ const ls=H.memStore(),ss=H.memStore({bvom_tab_id:'owner-A'}),a=H.boot(build,{ls,ss,supabase:null,online:false});configureLP(a,{Squat:60,'Bench Press':45,'Prone Row':40,'Overhead Press':30,Deadlift:75});
+ a.S().core['Bench Press'].mode='rpt';a.ev('save()');a.ctx.bvomChoiceModal=(title,body,l,r,onL,onR)=>{a.dialog={onL,onR}};
+ for(const n of ['Squat','Prone Row'])for(let i=0;i<3;i++)a.ctx.tapSet(n,i);
+ a.reps.push(5,5,6);for(let i=0;i<3;i++)a.ctx.tapSet('Bench Press',i);
+ const b=H.boot(build,{ls,ss:H.memStore({bvom_tab_id:'secondary-B'}),supabase:null,online:false});b.ctx.bvomChoiceModal=(title,body,l,r,onL,onR)=>{b.dialog={onL,onR}};b.ctx.renderAll();return{a,b,ls,ss};
+}
+const readOnlyNotice=h=>h.overlays().some(o=>o.id==='bvomWorkoutReadOnlyOverlay'&&!o.removed);
+require('./monkey009_contracts')({test,ok,H,build,configureLP,ownershipPair,readOnlyNotice});
+require('./monkey011_contracts')({test,ok,H,build,configureLP});
+require('./recovery_contracts')({test,ok,H,build});
+test('F50-SECONDARY-PENDING-ANSWER-ATOMIC','DEFECT','Different-tab pending answers leave memory/blob/owner unchanged and explain non-persistence',()=>{
+ const result=[];for(const pick of ['onL','onR']){const{a,b,ls}=ownershipPair(),raw=ls.getItem('bvom_data'),memory=JSON.stringify(b.S()),owner=ls.getItem('bvom_workout_tab_owner');b.dialog[pick]();const rejected=raw===ls.getItem('bvom_data')&&memory===JSON.stringify(b.S())&&owner===ls.getItem('bvom_workout_tab_owner')&&readOnlyNotice(b);a.dialog.onR();const p=JSON.parse(ls.getItem('bvom_data'));result.push(rejected&&p.weights['Bench Press']===47.5&&!p.pendingCloseMissChoice)}return ok(result.every(Boolean),JSON.stringify(result));
+});
+test('F51-SECONDARY-WARMUP-NO-LEAK','DEFECT','Blocked answer cannot leak through warm-up or steal live ownership',()=>{
+ const result=[];for(const pick of ['onL','onR']){const{a,b,ls}=ownershipPair(),raw=ls.getItem('bvom_data'),memory=JSON.stringify(b.S());b.dialog[pick]();b.ctx.completeWarmup('Squat',0,3,{classList:{add(){},remove(){}}});result.push(raw===ls.getItem('bvom_data')&&memory===JSON.stringify(b.S())&&ls.getItem('bvom_workout_tab_owner')==='owner-A'&&readOnlyNotice(b));a.dialog.onL();finish(a);const p=JSON.parse(ls.getItem('bvom_data'));result.push(p.history.length===1&&p.attempts['Bench Press']===1)}return ok(result.every(Boolean),JSON.stringify(result));
+});
+test('F52-SECONDARY-STALE-CLAIM-ORDER','DEFECT','Stale and live second-tab workout entry cannot mutate or replace owner before validation',()=>{
+ const {a,b,ls}=ownershipPair();b.dialog.onL();a.dialog.onR();const raw=ls.getItem('bvom_data'),memory=JSON.stringify(b.S());b.ctx.completeWarmup('Squat',0,3,{classList:{add(){},remove(){}}});const warm=raw===ls.getItem('bvom_data')&&ls.getItem('bvom_workout_tab_owner')==='owner-A'&&memory===JSON.stringify(b.S());b.ctx.bvomMarkThisTabAsWorkoutOwner();b.reps.push(4);b.ctx.tapSet('Squat',0);const set=raw===ls.getItem('bvom_data')&&ls.getItem('bvom_workout_tab_owner')==='owner-A'&&memory===JSON.stringify(b.S());a.reps.push(4);a.ctx.tapSet('Squat',0);const continued=JSON.parse(ls.getItem('bvom_data')).session.Squat[0].reps===4;return ok(warm&&set&&continued,JSON.stringify({warm,set,continued}));
+});
+
+
+test('F53-PENDING-SAVE-FAILURE-KEEPS-DECISION','DEFECT','Exceptional critical saves retain actual modal, memory, stored pending and owner; no nested rejected result',()=>{
+ const out=[];for(const pick of ['[data-l]','[data-r]']){
+  const {a,ls}=ownershipPair();a.S().attempts['Bench Press']=2;a.ev('save()');a.ctx.__bvomCloseMissChoiceOpen=false;a.ctx.bvomChoiceModal=a.realChoiceModal;a.ctx.bvomPresentPendingCloseMissChoice();const modal=a.lastOverlay(),raw=ls.getItem('bvom_data'),memory=JSON.stringify(a.S()),owner=ls.getItem('bvom_workout_tab_owner'),put=ls.setItem;
+  ls.setItem=(k,v)=>{if(k==='bvom_data')throw Error('synthetic quota');put(k,v)};modal.querySelector(pick).onclick();ls.setItem=put;
+  out.push(!modal.removed&&raw===ls.getItem('bvom_data')&&memory===JSON.stringify(a.S())&&owner===ls.getItem('bvom_workout_tab_owner')&&a.overlays().some(o=>o.id==='bvomLocalSaveFailureOverlay'));
+ }
+ return ok(out.every(Boolean),JSON.stringify(out));
+});
+test('F54-SHARED-PROGRAM-ACTION-GUARDS','DEFECT','Secondary accessory, GPP, Custom, Bodybuilding and On-Ramp entry/Finish stay read-only',()=>{
+ const out=[];
+ for(const mode of ['accessory','gpp','free','bb','onramp']){
+  const ls=H.memStore(),a=H.boot(build,{ls,ss:H.memStore({bvom_tab_id:'A'}),supabase:null,online:false});configureLP(a);
+  if(mode==='bb'||mode==='onramp'){bbStart(a,{onramp:mode==='onramp'});if(mode==='bb')bbSet(a,'machine_chest_press',0,{reps:8});else orSet(a,'machine_chest_press',0,{reps:7,load:60});}
+  else if(mode==='free'){a.ctx.chooseProgramMode('free');a.S().freeTraining.days[0].compounds=[{lift:'Squat',style:'straight',weight:60,sets:3,reps:5}];a.ev('save()');a.ctx.bvomFtSetModal('Squat',0);const o=a.lastOverlay();o.querySelector('[data-load]').value='60';o.querySelector('[data-s]').onclick();}
+  else {if(mode==='accessory')a.S().accessoryList=[accessoryFixture()];if(mode==='gpp'){a.ctx.bvomGppEnsure();a.S().gppList=[{id:'g1',name:'Erg',assignment:'Both',hlmAssignment:'Any',fourDayAssignment:'Any',metrics:{time:true},planned:{timeSeconds:60}}];}a.ev('save()');a.ctx.tapSet('Squat',0);}
+  const b=H.boot(build,{ls,ss:H.memStore({bvom_tab_id:'B'}),supabase:null,online:false}),raw=ls.getItem('bvom_data'),memory=JSON.stringify(b.S()),owner=ls.getItem('bvom_workout_tab_owner');
+  if(mode==='accessory')b.ctx.tapAccessory('a1',0);if(mode==='gpp'){b.ctx.bvomStartGppTimer('g1');b.ctx.bvomGppQuickRecord('g1');}if(mode==='free')b.ctx.bvomFtSetModal('Squat',1);if(mode==='bb')b.ctx.bvomBbSetModal('machine_chest_press',1);if(mode==='onramp')b.ctx.bvomBbOnRampSetModal('machine_chest_press',0);
+  b.ctx.finishWorkout();out.push({mode,pass:raw===ls.getItem('bvom_data')&&memory===JSON.stringify(b.S())&&owner==='A'&&ls.getItem('bvom_workout_tab_owner')===owner&&readOnlyNotice(b)});
+ }
+ return ok(out.every(x=>x.pass),JSON.stringify(out));
+});
+test('F55-HLM-FOURDAY-SECONDARY-DECISIONS','DEFECT','Both shared intermediate choices reject secondary answers and commit owner branches once',()=>{
+ const out=[];for(const mode of ['hlm','fourday'])for(const pick of ['onL','onR']){
+  const ls=H.memStore(),a=H.boot(build,{ls,ss:H.memStore({bvom_tab_id:'A'}),supabase:null,online:false});configureLP(a);a.choices.push('R');a.ctx.chooseProgramMode(mode);const lift=mode==='fourday'?'Bench Press':'Squat';a.ctx.tapSet(lift,0);a.S().hlm.failCount[lift]=3;a.ev('save()');a.ctx.bvomChoiceModal=(t,b,l,r,onL,onR)=>{a.dialog={onL,onR}};a.ctx.offerHlmRepChoice(lift);
+  const b=H.boot(build,{ls,ss:H.memStore({bvom_tab_id:'B'}),supabase:null,online:false});b.ctx.bvomChoiceModal=(t,bdy,l,r,onL,onR)=>{b.dialog={onL,onR}};b.ctx.renderAll();const raw=ls.getItem('bvom_data'),memory=JSON.stringify(b.S());b.dialog[pick]();const reject=raw===ls.getItem('bvom_data')&&memory===JSON.stringify(b.S())&&readOnlyNotice(b);a.dialog[pick]();const p=JSON.parse(ls.getItem('bvom_data'));const reload=H.boot(build,{ls,ss:a.ctx.sessionStorage,supabase:null,online:false});out.push({mode,pick,pass:reject&&!p.hlm.pendingRepChoice&&p.hlm.failCount[lift]===0&&p.hlm.rep[lift]===(pick==='onR'?4:5)&&!reload.S().hlm.pendingRepChoice});
+ }return ok(out.every(x=>x.pass),JSON.stringify(out));
+});
+
+test('F56-CRITICAL-COMMIT-RECHECKS-OWNERSHIP','DEFECT','A scheduled owner change at commit prevents false durable success; failed writes never release existing ownership',()=>{
+ const out=[];for(const pick of ['onL','onR']){const{a,ls}=ownershipPair(),raw=ls.getItem('bvom_data'),memory=JSON.stringify(a.S()),original=a.ctx.save;a.ctx.save=(...args)=>{ls.setItem('bvom_workout_tab_owner','new-owner');return original(...args)};const result=a.dialog[pick]();out.push(result===false&&raw===ls.getItem('bvom_data')&&memory===JSON.stringify(a.S())&&ls.getItem('bvom_workout_tab_owner')==='new-owner');}
+ const {a,ls}=ownershipPair(),owner=ls.getItem('bvom_workout_tab_owner');a.S().session={};a.S().workoutStartedAt=null;const raw=ls.getItem('bvom_data'),put=ls.setItem;ls.setItem=(k,v)=>{if(k==='bvom_data')throw Error('quota');return put(k,v)};const failed=a.ev('save()');out.push(failed===false&&raw===ls.getItem('bvom_data')&&ls.getItem('bvom_workout_tab_owner')===owner);return ok(out.every(Boolean),JSON.stringify(out));
+});
+
+
+test('F57-OPEN-DIALOG-PERMISSION-RECHECK','DEFECT','Record callbacks opened by an owner recheck ownership before modifying program data',()=>{
+ const out=[];for(const mode of ['core','accessory','gpp','free','bb','onramp']){
+  const ls=H.memStore(),a=H.boot(build,{ls,ss:H.memStore({bvom_tab_id:'A'}),supabase:null,online:false});configureLP(a);let commit;
+  if(mode==='bb'||mode==='onramp'){bbStart(a,{onramp:mode==='onramp'});if(mode==='bb'){bbSet(a,'machine_chest_press',0,{reps:8});a.ctx.bvomBbSetModal('machine_chest_press',1);}else{orSet(a,'machine_chest_press',0,{reps:7,load:60});a.ctx.bvomBbOnRampSetModal('machine_chest_press',0);}commit=()=>a.lastOverlay().querySelector('[data-save]').onclick();}
+  else if(mode==='free'){a.ctx.chooseProgramMode('free');a.S().freeTraining.days[0].compounds=[{lift:'Squat',style:'straight',weight:60,sets:3,reps:5}];a.ev('save()');a.ctx.bvomFtSetModal('Squat',0);const first=a.lastOverlay();first.querySelector('[data-load]').value='60';first.querySelector('[data-s]').onclick();a.ctx.bvomFtSetModal('Squat',1);commit=()=>a.lastOverlay().querySelector('[data-s]').onclick();}
+  else {if(mode==='accessory')a.S().accessoryList=[accessoryFixture()];if(mode==='gpp'){a.ctx.bvomGppEnsure();a.S().gppList=[{id:'g1',name:'Erg',assignment:'Both',hlmAssignment:'Any',fourDayAssignment:'Any',metrics:{time:true},planned:{timeSeconds:60}}];}a.ev('save()');a.ctx.tapSet('Squat',0);if(mode==='gpp'){a.ctx.bvomGppQuickRecord('g1');commit=()=>a.lastOverlay().querySelector('[data-s]').onclick();}else{a.ctx.bvomRepModal=(t,w,target,reps,cb)=>{commit=()=>cb(reps,8)};if(mode==='accessory')a.ctx.tapAccessory('a1',0);else a.ctx.tapSet('Squat',1);}}
+  // Deterministic external ownership change between opening and answering; not race proof.
+  const raw=ls.getItem('bvom_data'),memory=JSON.stringify(a.S());ls.setItem('bvom_workout_tab_owner','B');commit();out.push({mode,pass:raw===ls.getItem('bvom_data')&&memory===JSON.stringify(a.S())&&ls.getItem('bvom_workout_tab_owner')==='B'&&readOnlyNotice(a)});
+ }return ok(out.every(x=>x.pass),JSON.stringify(out));
+});
+
 /* ======================= CONTROLS: core programs ======================= */
 test('LP-RESCUE-LIVE','CONTROL','LP/RPT live rescue: 100×3 → 90×4 → 80×6+ (plus 4/2/1 first-set misses)',()=>{
   const out=[];let pass=true;
@@ -266,7 +334,7 @@ test('CUSTOM-NO-LEAK','CONTROL','Custom Training records sets without touching s
 test('GPP-PAUSE-RESUME','CONTROL','GPP pause freezes elapsed time; resume continues; survives reload while paused',()=>withClock(clock=>{
   const ls=H.memStore();let h=H.boot(build,{ls});configureLP(h);h.ctx.bvomGppEnsure();h.S().gppList.push({id:'g1',name:'Row erg',assignment:'Both',hlmAssignment:'Any',fourDayAssignment:'Any',bbAssignment:null,metrics:{time:true},planned:{timeSeconds:600}});h.ev('save()');
   h.ctx.bvomStartGppTimer('g1');clock.advance(120e3);h.ctx.bvomPauseGppTimer('g1');clock.advance(300e3);
-  h=H.boot(build,{ls});const t=()=>h.S().gppSession.g1.timing;const paused=h.ctx.bvomGppElapsed(t());h.ctx.bvomResumeGppTimer('g1');clock.advance(60e3);
+  h=H.boot(build,{ls,ss:h.ctx.sessionStorage});const t=()=>h.S().gppSession.g1.timing;const paused=h.ctx.bvomGppElapsed(t());h.ctx.bvomResumeGppTimer('g1');clock.advance(60e3);
   return ok(paused===120e3&&h.ctx.bvomGppElapsed(t())===180e3,`paused=${paused/1000}s resumed=${h.ctx.bvomGppElapsed(t())/1000}s`);
 }));
 test('F6-STOP-THEN-FINISH','CONTROL','A stopped timed GPP activity is recorded by Finish',()=>withClock(clock=>{
@@ -277,7 +345,7 @@ test('F6-STOP-THEN-FINISH','CONTROL','A stopped timed GPP activity is recorded b
 
 test('BB-RESUME-AFTER-RELOAD','CONTROL','An in-progress BB workout survives app relaunch and finishes as one completed session',()=>{
   const ls=H.memStore();let h=H.boot(build,{ls});bbStart(h);const ids=H.bbDayIds(h);bbSet(h,ids[0],0,{reps:8});bbSet(h,ids[0],1,{reps:10});
-  h=H.boot(build,{ls});const kept=Object.keys(h.S().session['BB:'+ids[0]]||{}).length;
+  h=H.boot(build,{ls,ss:h.ctx.sessionStorage});const kept=Object.keys(h.S().session['BB:'+ids[0]]||{}).length;
   for(const id of H.bbDayIds(h)){const rx=h.ctx.bvomBbPrescription(id);for(let i=0;i<rx.sets.length;i++)if(!h.S().session['BB:'+id]?.[i])bbSet(h,id,i,{reps:rx.sets[i].type==='top'?7:rx.sets[i].maxReps})}finish(h);
   const S=h.S();return ok(kept===2&&S.bodybuilding.completedSessions===1&&S.history.length===1&&S.day==='B',`kept sets=${kept} completed=${S.bodybuilding.completedSessions} day=${S.day}`);
 });
@@ -285,7 +353,7 @@ test('CLOUD-FINGERPRINT','CONTROL','Comparable cloud fingerprint ignores unsaved
   const ls=H.memStore();let h=H.boot(build,{ls});bbStart(h);bbSession(h);const fp=()=>h.ctx.bvomCloudComparableFingerprint(h.ctx.bvomCloudPayload());
   const f0=fp();bbSet(h,H.bbDayIds(h)[0],0,{reps:8});const fMid=h.ctx.bvomCloudComparableFingerprint(JSON.parse(JSON.stringify(h.S())));  // raw state incl. unsaved workout, as a stored/remote blob would carry it
   h.S().session={};h.S().workoutStartedAt=null;h.ev('save()');
-  h=H.boot(build,{ls});h.ctx.renderAll();const fReload=fp();bbSession(h,(id,i,q)=>({reps:q.type==='top'?8:q.maxReps}));const fAfter=fp();
+  h=H.boot(build,{ls,ss:h.ctx.sessionStorage});h.ctx.renderAll();const fReload=fp();bbSession(h,(id,i,q)=>({reps:q.type==='top'?8:q.maxReps}));const fAfter=fp();
   const legacy=JSON.parse(ls.getItem('bvom_data'));delete legacy.bodybuilding;let legacyOk=true;try{legacyOk=typeof h.ctx.bvomCloudComparableFingerprint(legacy)==='string'&&h.ctx.bvomCloudComparableFingerprint(legacy).length>0}catch(e){legacyOk=false}
   return ok(f0===fMid&&f0===fReload&&fAfter!==f0&&legacyOk,`mid-workout same=${f0===fMid} reload same=${f0===fReload} progress changes=${fAfter!==f0} legacy ok=${legacyOk}`);
 });
@@ -681,7 +749,7 @@ test('F28-CORE-POSTRESULT-INCREMENT-EDIT-PRESERVES-EARNED-PROGRESSION','DEFECT',
   const ls=H.memStore(),h=H.boot(build,{ls});configureLP(h,{...H.LP_W,Squat:40});for(let i=0;i<3;i++)h.ctx.tapSet('Squat',i);
   const earned=h.S().weights.Squat,preSnap=JSON.parse(JSON.stringify(h.S().processedSnapshots?.Squat||null));
   setLiftSettingsFields(h,'Squat',{weight:earned,increment:5});h.ctx.saveLiftSettings('Squat');const saved=h.S().weights.Squat===42.5&&h.S().core.Squat.increment===5;
-  const r=H.boot(build,{ls});r.reps.push(5);r.ctx.tapSet('Squat',2);let plan=r.ctx.getSetPlan('Squat');for(let i=0;i<plan.length;i++){if(!r.S().session.Squat?.[i])r.ctx.tapSet('Squat',i);plan=r.ctx.getSetPlan('Squat')}
+  const r=H.boot(build,{ls,ss:h.ctx.sessionStorage});r.reps.push(5);r.ctx.tapSet('Squat',2);let plan=r.ctx.getSetPlan('Squat');for(let i=0;i<plan.length;i++){if(!r.S().session.Squat?.[i])r.ctx.tapSet('Squat',i);plan=r.ctx.getSetPlan('Squat')}
   const loads=Object.values(r.S().session.Squat||{}).filter(x=>x&&x.reps!==undefined).map(x=>Number(x.load)),final=r.S().weights.Squat,incNow=r.S().core.Squat.increment;
   return ok(earned===42.5&&preSnap?.weight===40&&preSnap?.cfg?.increment===2.5&&saved&&final===42.5&&incNow===5&&loads.length===3&&loads.every(x=>x===40),`earned=${earned} snap=${preSnap?.weight}/+${preSnap?.cfg?.increment} saved=${saved} final=${final}/+${incNow} loads=${loads.join('/')}`);
 });
@@ -748,7 +816,7 @@ test('F34-ACTIVE-CORE-PRESCRIPTION-IMMUTABLE-AFTER-SETTINGS-EDIT','DEFECT','Afte
 });
 
 test('F35-POSTCOMPLETE-SETTINGS-WEIGHT-EDIT-CORRECTION-SAFE','DEFECT','A working-weight change saved through Advanced Settings after progression must survive later correction without repricing the completed session or progressing the edited future weight again',()=>{
-  const run=(withUnits)=>{const ls=H.memStore(),h=H.boot(build,{ls});configureLP(h,{...H.LP_W,Squat:100});for(let i=0;i<3;i++)h.ctx.tapSet('Squat',i);const earned=h.S().weights.Squat;setLiftSettingsFields(h,'Squat',{weight:110,increment:2.5,mode:'straight'});h.ctx.saveLiftSettings('Squat');if(withUnits)h.ctx.changeUnits('lb',true);const selected=h.S().weights.Squat;const originalSet=Number(h.S().session.Squat?.[0]?.load);const r=H.boot(build,{ls});r.reps.push(5);r.ctx.tapSet('Squat',0);let p=r.ctx.getSetPlan('Squat');for(let i=1;i<p.length;i++){if(!r.S().session.Squat?.[i])r.ctx.tapSet('Squat',i);p=r.ctx.getSetPlan('Squat')}const loads=Object.values(r.S().session.Squat||{}).filter(x=>x&&x.reps!==undefined).sort((a,b)=>a.index-b.index).map(x=>Number(x.load));return{earned,selected,originalSet,final:r.S().weights.Squat,loads,unit:r.S().unit}};
+  const run=(withUnits)=>{const ls=H.memStore(),h=H.boot(build,{ls});configureLP(h,{...H.LP_W,Squat:100});for(let i=0;i<3;i++)h.ctx.tapSet('Squat',i);const earned=h.S().weights.Squat;setLiftSettingsFields(h,'Squat',{weight:110,increment:2.5,mode:'straight'});h.ctx.saveLiftSettings('Squat');if(withUnits)h.ctx.changeUnits('lb',true);const selected=h.S().weights.Squat;const originalSet=Number(h.S().session.Squat?.[0]?.load);const r=H.boot(build,{ls,ss:h.ctx.sessionStorage});r.reps.push(5);r.ctx.tapSet('Squat',0);let p=r.ctx.getSetPlan('Squat');for(let i=1;i<p.length;i++){if(!r.S().session.Squat?.[i])r.ctx.tapSet('Squat',i);p=r.ctx.getSetPlan('Squat')}const loads=Object.values(r.S().session.Squat||{}).filter(x=>x&&x.reps!==undefined).sort((a,b)=>a.index-b.index).map(x=>Number(x.load));return{earned,selected,originalSet,final:r.S().weights.Squat,loads,unit:r.S().unit}};
   const kg=run(false),lb=run(true),kgGood=kg.earned===102.5&&kg.selected===110&&kg.final===110&&kg.loads.length===3&&kg.loads.every(x=>x===100),lbGood=lb.unit==='lb'&&lb.originalSet>=219&&lb.originalSet<=221&&lb.selected>=240&&lb.selected<=245&&lb.final===lb.selected&&lb.loads.every(x=>Math.abs(x-lb.originalSet)<1e-9);
   return ok(kgGood&&lbGood,`kg earned=${kg.earned} selected=${kg.selected} final=${kg.final} loads=${kg.loads.join('/')} | lb set=${lb.originalSet} selected=${lb.selected} final=${lb.final} loads=${lb.loads.join('/')}`);
 });
@@ -783,10 +851,10 @@ function f38LpCase(){
   const ls=H.memStore(),h=H.boot(build,{ls});configureLP(h,{...H.LP_W,Squat:100});for(let i=0;i<3;i++)h.ctx.tapSet('Squat',i);
   const earned=h.S().weights.Squat;
   setLiftSettingsFields(h,'Squat',{weight:earned,increment:5});h.ctx.saveLiftSettings('Squat');
-  const r=H.boot(build,{ls});r.reps.push(4);r.ctx.tapSet('Squat',0);completeMissingCoreV14(r,'Squat');
+  const r=H.boot(build,{ls,ss:h.ctx.sessionStorage});r.reps.push(4);r.ctx.tapSet('Squat',0);completeMissingCoreV14(r,'Squat');
   const afterCorrection={weight:r.S().weights.Squat,increment:r.S().core.Squat.increment,attempts:r.S().attempts.Squat||0,result:r.ctx.coreResult('Squat'),loads:Object.values(r.S().session.Squat||{}).filter(x=>x&&x.reps!==undefined).sort((a,b)=>a.index-b.index).map(x=>Number(x.load))};
   for(const n of ['Bench Press','Prone Row'])for(let i=0;i<3;i++)r.ctx.tapSet(n,i);finish(r);
-  const z=H.boot(build,{ls}),hist=z.S().history.at(-1),histSq=Object.values(hist?.session?.Squat||{}).filter(x=>x&&x.reps!==undefined).sort((a,b)=>a.index-b.index);
+  const z=H.boot(build,{ls,ss:h.ctx.sessionStorage}),hist=z.S().history.at(-1),histSq=Object.values(hist?.session?.Squat||{}).filter(x=>x&&x.reps!==undefined).sort((a,b)=>a.index-b.index);
   return {earned,afterCorrection,reload:{weight:z.S().weights.Squat,increment:z.S().core.Squat.increment,attempts:z.S().attempts.Squat||0},histFirst:histSq[0]};
 }
 function f38IntermediateCase(mode){
@@ -808,9 +876,9 @@ function f39AccessoryFutureOverrideCase(correctedReps,{completeCorrection=true,f
   const ls=H.memStore(),h=H.boot(build,{ls});configureLP(h);const a={...accessoryFixture(),name:'Biceps Curl',weight:20,increment:2.5};h.S().accessoryList=[a];h.S().accessoryProgress={a1:{weight:20,attempts:0}};
   if(finishPartial)for(const n of ['Squat','Bench Press','Prone Row'])for(let i=0;i<3;i++)h.ctx.tapSet(n,i);
   for(let i=0;i<3;i++)h.ctx.tapAccessory('a1',i);const earned=a.weight;editAccessoryFutureFieldsViaBuilder(h,a,{weight:30,increment:2.5});const storedEdit=JSON.parse(ls.getItem('bvom_data')).accessoryList.find(x=>x.id==='a1')?.weight;
-  const r=H.boot(build,{ls}),ar=r.S().accessoryList.find(x=>x.id==='a1');r.reps.push(correctedReps);r.ctx.tapAccessory('a1',0);
+  const r=H.boot(build,{ls,ss:h.ctx.sessionStorage}),ar=r.S().accessoryList.find(x=>x.id==='a1');r.reps.push(correctedReps);r.ctx.tapAccessory('a1',0);
   if(completeCorrection){let guard=0;while(guard++<12){const p=r.ctx.accessoryPlan17(ar);let did=false;for(let i=0;i<p.length;i++)if(!r.S().session['ACC:a1']?.[i]){r.ctx.tapAccessory('a1',i);did=true;break}if(!did)break}}
-  const beforeFinish=ar.weight,loads=Object.values(r.S().session['ACC:a1']||{}).filter(x=>x&&x.reps!==undefined).map(x=>Number(x.load));if(finishPartial)finish(r);else r.ev('save()');const z=H.boot(build,{ls}),az=z.S().accessoryList.find(x=>x.id==='a1');
+  const beforeFinish=ar.weight,loads=Object.values(r.S().session['ACC:a1']||{}).filter(x=>x&&x.reps!==undefined).map(x=>Number(x.load));if(finishPartial)finish(r);else r.ev('save()');const z=H.boot(build,{ls,ss:h.ctx.sessionStorage}),az=z.S().accessoryList.find(x=>x.id==='a1');
   return {earned,storedEdit,beforeFinish,final:az?.weight,inc:az?.increment,attempts:Number(az?.attempts||0),loads,history:z.S().history.length};
 }
 test('F39-ACCESSORY-CORRECTION-PRESERVES-EXPLICIT-FUTURE-TEMPLATE-OVERRIDE','DEFECT','A persisted post-result accessory template weight edit must survive later success/failure correction of the old workout and also survive resolving an incomplete correction',()=>{
@@ -852,7 +920,7 @@ function f42ThirdFailurePending(){
   const ls=H.memStore(),h=H.boot(build,{ls});configureLP(h,{...H.LP_W,Squat:100,'Bench Press':80});h.choices.push('R');h.ctx.chooseProgramMode('hlm');h.S().hlm.failCount.Squat=2;h.ev('save()');let shown='';h.ctx.bvomChoiceModal=(title,body,l,r,onL,onR)=>{shown=String(title)};
   h.ctx.tapSet('Squat',0);h.ctx.tapSet('Squat',1);h.reps.push(4);h.ctx.tapSet('Squat',2);f40CompleteHeavy(h,'Squat');
   const before={shown,fail:Number(h.S().hlm.failCount.Squat||0),rep:Number(h.S().hlm.rep.Squat||5),processed:!!h.S().processed?.Squat,pending:JSON.parse(JSON.stringify(h.S().hlm.pendingRepChoice||null))},tabId=h.ctx.bvomTabId();
-  const r=H.boot(build,{ls});r.ctx.sessionStorage.setItem('bvom_tab_id',tabId);let reopened='',drop=null;r.ctx.bvomChoiceModal=(title,body,l,rr,onL,onR)=>{reopened=String(title);drop=onR};r.ctx.renderAll();
+  const r=H.boot(build,{ls,ss:H.memStore({bvom_tab_id:tabId})});let reopened='',drop=null;r.ctx.bvomChoiceModal=(title,body,l,rr,onL,onR)=>{reopened=String(title);drop=onR};r.ctx.renderAll();
   const after={reopened,fail:Number(r.S().hlm.failCount.Squat||0),rep:Number(r.S().hlm.rep.Squat||5),processed:!!r.S().processed?.Squat,pending:JSON.parse(JSON.stringify(r.S().hlm.pendingRepChoice||null))};
   if(typeof drop==='function')drop();
   const storedAfter=JSON.parse(ls.getItem('bvom_data')||'{}');const resolved={fail:Number(r.S().hlm.failCount.Squat||0),rep:Number(r.S().hlm.rep.Squat||5),pending:r.S().hlm.pendingRepChoice||null,storedFail:Number(storedAfter.hlm?.failCount?.Squat??-1),storedRep:Number(storedAfter.hlm?.rep?.Squat??-1),storedPending:storedAfter.hlm?.pendingRepChoice||null};
@@ -867,11 +935,11 @@ function f43CloseMissPending(branch){
   const ls=H.memStore(),h=H.boot(build,{ls});configureLP(h,{...H.LP_W,'Bench Press':30});h.S().core['Bench Press'].mode='rpt';h.S().core['Bench Press'].rptLevel=0;h.ev('save()');let shown='';h.ctx.bvomChoiceModal=(title)=>{shown=String(title)};
   h.ctx.tapSet('Bench Press',0);h.reps.push(5);h.ctx.tapSet('Bench Press',1);f40CompleteHeavy(h,'Bench Press');
   const tabId=h.ctx.bvomTabId(),before={shown,attempts:Number(h.S().attempts['Bench Press']||0),weight:Number(h.S().weights['Bench Press']),processed:!!h.S().processed?.['Bench Press'],pending:JSON.parse(JSON.stringify(h.S().pendingCloseMissChoice||null))};
-  const r=H.boot(build,{ls});r.ctx.sessionStorage.setItem('bvom_tab_id',tabId);let reopened='',onRepeat=null,onProgress=null;r.ctx.bvomChoiceModal=(title,body,left,right,onL,onR)=>{reopened=String(title);onRepeat=onL;onProgress=onR};r.ctx.renderAll();
+  const r=H.boot(build,{ls,ss:H.memStore({bvom_tab_id:tabId})});let reopened='',onRepeat=null,onProgress=null;r.ctx.bvomChoiceModal=(title,body,left,right,onL,onR)=>{reopened=String(title);onRepeat=onL;onProgress=onR};r.ctx.renderAll();
   const after={reopened,attempts:Number(r.S().attempts['Bench Press']||0),weight:Number(r.S().weights['Bench Press']),processed:!!r.S().processed?.['Bench Press'],pending:JSON.parse(JSON.stringify(r.S().pendingCloseMissChoice||null))};
   const choose=branch==='progress'?onProgress:onRepeat;if(typeof choose==='function')choose();
   const stored=JSON.parse(ls.getItem('bvom_data')||'{}'),resolved={attempts:Number(r.S().attempts['Bench Press']||0),weight:Number(r.S().weights['Bench Press']),pending:r.S().pendingCloseMissChoice||null,storedAttempts:Number(stored.attempts?.['Bench Press']||0),storedWeight:Number(stored.weights?.['Bench Press']),storedPending:stored.pendingCloseMissChoice||null};
-  const rr=H.boot(build,{ls});rr.ctx.sessionStorage.setItem('bvom_tab_id',tabId);let reopenedAgain='';rr.ctx.bvomChoiceModal=(title)=>{reopenedAgain=String(title)};rr.ctx.renderAll();
+  const rr=H.boot(build,{ls,ss:H.memStore({bvom_tab_id:tabId})});let reopenedAgain='';rr.ctx.bvomChoiceModal=(title)=>{reopenedAgain=String(title)};rr.ctx.renderAll();
   return{branch,before,after,resolved,reloadResolved:{reopened:reopenedAgain,attempts:Number(rr.S().attempts['Bench Press']||0),weight:Number(rr.S().weights['Bench Press']),pending:rr.S().pendingCloseMissChoice||null}};
 }
 test('F43-LP-CLOSE-MISS-DECISION-PERSISTS','DEFECT','Reloading while an LP/RPT close-miss REPEAT / PROGRESS ANYWAY decision is unresolved must restore the persisted choice, and either branch must commit exactly once and clear pending state',()=>{

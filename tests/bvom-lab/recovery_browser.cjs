@@ -1,0 +1,216 @@
+'use strict';
+// REAL BVOM HTML/DOM/callbacks and browser locks/storage; only account/network/clock are fixtures.
+const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
+const {chromium}=require('playwright'),H=require('./lib/bvom_harness');
+const root=path.resolve(__dirname,'../..'),build=H.loadBuild(root);
+const fixture=()=>{const h=H.boot(build,{supabase:null,online:false});H.configureLP(h,{Squat:60,'Bench Press':45,'Prone Row':40,'Overhead Press':30,Deadlift:75});h.S().accessoryList=[];h.S().gppList=[];h.ev('save()');return JSON.parse(JSON.stringify(h.S()))};
+const tests=[],test=(name,fn)=>tests.push({name,fn});
+let browser,origin;
+async function setup(data=fixture(),options={}){
+ const context=await browser.newContext({serviceWorkers:'block'});context.setDefaultTimeout(5000);
+ await context.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
+ await context.addInitScript(({now,noLocks})=>{
+  window.testNow=now;const RealDate=Date;window.Date=class extends RealDate{constructor(...a){super(...(a.length?a:[window.testNow+(window.testReopenOffset||0)]))}static now(){return window.testNow+(window.testReopenOffset||0)}};
+  Object.defineProperty(navigator,'onLine',{get:()=>false});
+  if(noLocks)Object.defineProperty(navigator,'locks',{value:undefined});
+ },{now:Date.now(),noLocks:options.noLocks||false});
+ const seed=await context.newPage();await seed.goto(origin+'/seed');
+ await seed.evaluate(d=>{localStorage.setItem('bvom_data',JSON.stringify(d));localStorage.setItem('bvom_data_owner','dummy-owner');localStorage.setItem('bvom_entitlement_cache_dummy-owner',JSON.stringify({userId:'dummy-owner',verifiedAt:new Date().toISOString(),record:{user_id:'dummy-owner',status:'complimentary'}}))},data);
+ await seed.close();const a=await open(context);return {context,a};
+}
+async function open(context,id,advanceMs=0){const p=await context.newPage();if(advanceMs)await p.addInitScript(ms=>{window.testReopenOffset=ms},advanceMs);if(id)await p.addInitScript(id=>sessionStorage.setItem('bvom_tab_id',id),id);await p.goto(origin+'/index.html');await p.waitForSelector('#app:not(.hidden)');await p.waitForTimeout(100);return p;}
+const raw=p=>p.evaluate(()=>localStorage.getItem('bvom_data'));
+const saved=async p=>JSON.parse(await raw(p));
+async function record(p,lift,i,reps=5){await p.evaluate(({lift,i})=>tapSet(lift,i),{lift,i});const o=p.locator('.bvomModalOverlay').last();let current=Number(await o.locator('[data-v]').textContent());while(current>reps){await o.locator('[data-m]').click();current--}while(current<reps){await o.locator('[data-p]').click();current++}await o.locator('[data-ok]').click();assert.equal((await saved(p)).session[lift][i].reps,reps);}
+async function tick(p,ms){await p.evaluate(ms=>window.testNow+=ms,ms);}
+test('real close/reopen preserves squat + bench and allows new work',async()=>{
+ const {context,a}=await setup();try{
+  await record(a,'Squat',0);await record(a,'Bench Press',0);const before=await saved(a);await a.close();const b=await open(context,undefined,5*60000);await b.waitForFunction(()=>document.querySelector('#clock').textContent==='5:00');
+  assert.deepEqual((await saved(b)).session,before.session);assert.equal((await saved(b)).timerStart,before.timerStart);assert.equal((await saved(b)).history.length,0);await record(b,'Squat',1);
+  await b.reload();await b.waitForSelector('#app:not(.hidden)');await record(b,'Squat',2);
+ }finally{await context.close()}
+});
+test('duplicate session identity cannot write with A live/background/frozen after 65 minutes',async()=>{
+ const {context,a}=await setup();try{
+  await record(a,'Squat',0);const id=await a.evaluate(()=>sessionStorage.getItem('bvom_tab_id'));const b=await open(context,id);const before=await raw(a);
+  await b.bringToFront();const cdp=await context.newCDPSession(a);await cdp.send('Page.setWebLifecycleState',{state:'frozen'});
+  await tick(b,65*60000);await b.evaluate(()=>{tapSet('Squat',1);completeWarmup('Squat',0,3,document.createElement('button'));finishWorkout();save({durable:true})});
+  assert.equal(await raw(b),before);await cdp.send('Page.setWebLifecycleState',{state:'active'});await record(a,'Squat',1);
+ }finally{await context.close()}
+});
+test('ONE read-only reload tap waits for old Android-style document lock release',async()=>{
+ const {context,a}=await setup();try{
+  await record(a,'Squat',0);
+  const b=await open(context);const before=await raw(a);
+  await b.evaluate(()=>tapSet('Squat',1));
+  await b.locator('#bvomWorkoutReadOnlyOverlay [data-reload]').waitFor();
+  // Original document is still alive when the user presses retry. Simulate a delayed
+  // Android tab-close lifecycle: the lock disappears only AFTER the single tap.
+  const lateClose=(async()=>{await new Promise(r=>setTimeout(r,900));await a.close()})();
+  await b.locator('#bvomWorkoutReadOnlyOverlay [data-reload]').click();
+  await lateClose;
+  await b.waitForFunction(()=>bvomWindowLockOwned===true,undefined,{timeout:15000});
+  await b.waitForSelector('#app:not(.hidden)',{timeout:15000});
+  assert.equal(await b.evaluate(()=>sessionStorage.getItem('bvom-readonly-lock-retry-once-v1')),null);
+  assert.equal(await b.evaluate(()=>bvomWorkoutActionAllowed()),true);
+  assert.deepEqual((await saved(b)).session.Squat,{0:JSON.parse(before).session.Squat[0]});
+  await record(b,'Squat',1);
+ }finally{await context.close()}
+});
+test('ONE retry cannot take ownership while original tab stays alive',async()=>{
+ const {context,a}=await setup();try{
+  await record(a,'Squat',0);const b=await open(context);
+  await b.evaluate(()=>tapSet('Squat',1));
+  await b.locator('#bvomWorkoutReadOnlyOverlay [data-reload]').click();
+  await b.waitForSelector('#app:not(.hidden)',{timeout:15000});
+  assert.equal(await b.evaluate(()=>bvomWindowLockOwned),false);
+  const before=await raw(a);
+  await b.evaluate(()=>{tapSet('Squat',1);save({durable:true})});
+  assert.equal(await raw(b),before);
+  await record(a,'Squat',1);
+  assert.equal((await saved(a)).session.Squat[1].reps,5);
+ }finally{await context.close()}
+});
+test('60 minute boundary, passive renders and exactly one incomplete record',async()=>{
+ const {context,a}=await setup();try{
+  await record(a,'Squat',0);const before=await saved(a);await tick(a,3599000);await a.evaluate(()=>{renderAll();bvomRecoveryCheck()});assert.equal((await saved(a)).history.length,0);
+  await tick(a,1000);await a.evaluate(()=>bvomRecoveryCheck());const d=await saved(a);assert.equal(d.history.length,1);assert.equal(d.history[0].incomplete,true);assert.deepEqual(d.history[0].session,before.session);assert.deepEqual(d.weights,before.weights);assert.ok(Object.values(d.session).every(rows=>Object.keys(rows).length===0));assert.equal(d.workoutStartedAt,null);assert.equal(d.timerStart,null);assert.equal(await a.evaluate(()=>bvomSessionHasActivity()),false);
+  await a.reload();await a.waitForSelector('#app:not(.hidden)');assert.equal((await saved(a)).history.length,1);
+ }finally{await context.close()}
+});
+test('pending decision survives expired close/reopen and blocked B answer',async()=>{
+ const d=fixture();d.core['Bench Press'].mode='rpt';const {context,a}=await setup(d);try{
+  await record(a,'Bench Press',0);await record(a,'Bench Press',1);await a.evaluate(()=>tapSet('Bench Press',2));const modal=a.locator('.bvomModalOverlay').last();await modal.locator('[data-m]').click();await modal.locator('[data-m]').click();await modal.locator('[data-ok]').click();
+  const before=await saved(a);assert.ok(before.pendingCloseMissChoice);const b=await open(context);const rawBefore=await raw(a);await b.evaluate(()=>{bvomPresentPendingCloseMissChoice();document.querySelector('.bvomModalOverlay [data-r]')?.click();completeWarmup('Squat',0,3,document.createElement('button'))});assert.equal(await raw(b),rawBefore);await b.close();await a.close();const c=await open(context);await tick(c,65*60000);await c.evaluate(()=>bvomRecoveryCheck());const held=await saved(c);assert.deepEqual(held.pendingCloseMissChoice,before.pendingCloseMissChoice);assert.deepEqual(held.session,before.session);assert.equal(held.history.length,0);await c.locator('.bvomModalOverlay [data-r]').click();const resolved=await saved(c);assert.equal(resolved.pendingCloseMissChoice,undefined);assert.match(await c.locator('#bvomRecoveryStatus').textContent(),/Workout activity saved/);assert.equal(resolved.weights['Bench Press'],before.weights['Bench Press']+2.5);await c.reload();await c.waitForSelector('#app:not(.hidden)');assert.equal((await saved(c)).weights['Bench Press'],resolved.weights['Bench Press']);
+ }finally{await context.close()}
+});
+test('missing Web Locks fails closed without writes',async()=>{
+ const d=fixture();d.session.Squat={0:{reps:5,load:60,index:0}};d.workoutStartedAt=Date.now()-300000;const {context,a}=await setup(d,{noLocks:true});try{const before=await raw(a);await a.evaluate(()=>{tapSet('Squat',1);save({durable:true});finishWorkout()});assert.equal(await raw(a),before);assert.ok(await a.locator('#bvomWorkoutReadOnlyOverlay').count())}finally{await context.close()}
+});
+test('running and paused GPP survive close/reopen and expiry',async()=>{
+ for(const status of ['running','paused']){const d=fixture();d.gppList=[{id:'erg',name:'Dummy erg',assignment:'Both',metrics:{time:true},planned:{timeSeconds:60}}];const {context,a}=await setup(d);try{
+  await record(a,'Squat',0);await a.evaluate(()=>bvomStartGppTimer('erg'));if(status==='paused')await a.evaluate(()=>bvomPauseGppTimer('erg'));const before=await saved(a);await a.close();const b=await open(context);await tick(b,65*60000);await b.evaluate(()=>bvomRecoveryCheck());const held=await saved(b);assert.deepEqual(held.gppSession,before.gppSession);assert.deepEqual(held.session,before.session);assert.equal(held.history.length,0);
+ }finally{await context.close()}}
+});
+test('two fast competing application boots have exactly one writer',async()=>{
+ const {context,a}=await setup();try{await a.close();const [x,y]=await Promise.all([open(context),open(context)]);const allowed=await Promise.all([x.evaluate(()=>bvomWorkoutActionAllowed()),y.evaluate(()=>bvomWorkoutActionAllowed())]);assert.equal(allowed.filter(Boolean).length,1);const owner=allowed[0]?x:y,other=allowed[0]?y:x;await record(owner,'Squat',0);const before=await raw(owner);await other.evaluate(()=>{tapSet('Squat',1);save({durable:true})});assert.equal(await raw(owner),before)}finally{await context.close()}
+});
+test('three-hour workout stays active with meaningful interactions; clock grace and passive saves',async()=>{
+ const {context,a}=await setup();try{
+  await record(a,'Squat',0);const start=(await saved(a)).workoutStartedAt;
+  for(let i=0;i<4;i++){await tick(a,45*60000);await a.evaluate(()=>{renderAll();save();startTimer()});const previous=(await saved(a)).workoutLastActivityAt;await record(a,'Squat',0,4+i);const d=await saved(a);assert.ok(d.workoutLastActivityAt>previous);assert.equal(d.history.length,0);assert.equal(d.workoutStartedAt,start)}
+  await tick(a,-300000);await a.evaluate(()=>bvomRecoveryCheck());assert.equal((await saved(a)).history.length,0);assert.equal((await saved(a)).workoutLastActivityAt,await a.evaluate(()=>Date.now()));
+ }finally{await context.close()}
+});
+test('expiry storage failure preserves data; restored storage/reload finishes once',async()=>{
+ const {context,a}=await setup();try{
+  await record(a,'Squat',0);const before=await raw(a);await a.evaluate(()=>{window.testPut=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k==='bvom_data')throw new DOMException('Dummy quota','QuotaExceededError');return window.testPut.call(this,k,v)}});await tick(a,3600000);await a.evaluate(()=>bvomRecoveryCheck());assert.equal(await raw(a),before);assert.equal((await saved(a)).history.length,0);await a.evaluate(()=>Storage.prototype.setItem=window.testPut);await a.close();const b=await open(context);await tick(b,3600000);await b.evaluate(()=>bvomRecoveryCheck());assert.equal((await saved(b)).history.length,1);
+ }finally{await context.close()}
+});
+test('changed account and stale opened callback cannot leak through a later save',async()=>{
+ const {context,a}=await setup();try{await record(a,'Squat',0);await a.evaluate(()=>tapSet('Squat',1));const before=await raw(a);await a.evaluate(()=>{bvomCloud.user={id:'other-dummy-owner'};document.querySelector('.bvomModalOverlay [data-ok]').click();completeWarmup('Squat',0,3,document.createElement('button'));save({durable:true})});assert.equal(await raw(a),before)}finally{await context.close()}
+});
+test('old-version active workout fails closed even with matching duplicated identity',async()=>{
+ const d=fixture();d.session.Squat={0:{reps:5,load:60,index:0}};d.workoutStartedAt=Date.now()-65*60000;delete d.workoutLastActivityAt;delete d.workoutOwnershipVersion;const {context,a}=await setup(d);try{const before=await raw(a);await a.evaluate(()=>{tapSet('Squat',1);bvomRecoveryCheck();save({durable:true})});assert.equal(await raw(a),before);assert.ok(await a.locator('#bvomWorkoutReadOnlyOverlay').count())}finally{await context.close()}
+});
+test('expired real close/reopen and next set attempt finalize without leaking a new set',async()=>{
+ for(const trigger of ['boot','action']){const {context,a}=await setup();try{
+  await record(a,'Squat',0);const before=await saved(a);let p=a;
+  if(trigger==='boot'){await a.close();p=await open(context,undefined,65*60000)}
+  else{await tick(a,3600000);await a.evaluate(()=>tapSet('Squat',1))}
+  const d=await saved(p);assert.equal(d.history.length,1);assert.equal(d.history[0].incomplete,true);assert.deepEqual(d.history[0].session,before.session);assert.equal(await p.evaluate(()=>bvomSessionHasActivity()),false);assert.ok(Object.values(d.session).every(rows=>Object.keys(rows).length===0));
+ }finally{await context.close()}}
+});
+test('old v2.9 workout is read-only until explicit archive; cancel leaves exact bytes unchanged',async()=>{
+ const old=fixture();old.session.Squat={0:{reps:5,load:60,index:0}};old.workoutStartedAt=Date.now()-300000;
+ delete old.workoutOwnershipVersion;delete old.workoutLastActivityAt;
+ const {context,a}=await setup(old);a.on('console',m=>{if(m.type()==='warning')console.log('ARCHIVE CONSOLE',m.text())});try{
+  await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').waitFor();
+  const before=await raw(a);
+  a.once('dialog',d=>d.dismiss());
+  await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
+  assert.equal(await raw(a),before);
+  assert.equal(await a.evaluate(()=>localStorage.getItem('bvom_legacy_workout_before_archive')),null);
+  a.once('dialog',d=>d.accept());
+  await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
+  const after=await saved(a);if(after.history.length!==1)console.log('ARCHIVE DEBUG 1',await a.evaluate(()=>({snapshot:localStorage.getItem('bvom_legacy_workout_before_archive')?.length,owner:localStorage.getItem('bvom_workout_tab_owner'),lock:bvomWindowLockOwned,legacy:bvomRecoveryLegacyBlocked,account:bvomRecoveryAccount,auth:window.__bvomAuthUserId,cloud:bvomCloud.user?.id,overlays:Array.from(document.querySelectorAll('.bvomModalOverlay')).map(x=>x.textContent.slice(0,400))})));
+  assert.equal(after.history.length,1);
+  assert.equal(after.history[0].incomplete,true);
+  assert.equal(after.history[0].legacyUpgradeArchive,true);
+  assert.deepEqual(after.history[0].session.Squat,old.session.Squat);
+  assert.equal(after.workoutStartedAt,null);
+  assert.equal(await a.evaluate(()=>bvomWorkoutActionAllowed()),true);
+  const backup=await a.evaluate(()=>JSON.parse(localStorage.getItem('bvom_legacy_workout_before_archive')));
+  assert.equal(backup.raw,before);
+  await a.reload();await a.waitForSelector('#app:not(.hidden)');
+  assert.equal((await saved(a)).history.length,1);
+  await record(a,'Squat',0);
+ }finally{await context.close()}
+});
+test('legacy pending decision and active GPP are archived undecided, with exact backup; changed owner is refused',async()=>{
+ const old=fixture();old.session['Bench Press']={0:{reps:5,load:45,index:0}};old.workoutStartedAt=Date.now()-300000;
+ old.pendingCloseMissChoice={lift:'Bench Press',weight:45,increment:2.5};
+ old.gppList=[{id:'erg',name:'Dummy erg',assignment:'Both',metrics:{time:true},planned:{timeSeconds:60}}];
+ old.gppSession={erg:{started:true,timing:{status:'running',startedAt:Date.now()-30000,accumulatedMs:0}}};
+ delete old.workoutOwnershipVersion;delete old.workoutLastActivityAt;
+ const {context,a}=await setup(old);a.on('console',m=>{if(m.type()==='warning')console.log('ARCHIVE CONSOLE',m.text())});try{
+  await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').waitFor();
+  const before=await raw(a);
+  // Competing old writer changing the owner marker between lock acquisition and confirmation.
+  await a.evaluate(()=>localStorage.setItem('bvom_workout_tab_owner','changed-owner'));
+  a.once('dialog',d=>d.accept());
+  await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
+  assert.equal(await raw(a),before);
+  assert.equal(await a.evaluate(()=>localStorage.getItem('bvom_legacy_workout_before_archive')),null);
+  // Restore old-marker snapshot only in this synthetic test; new document gets it at lock acquisition.
+  await a.evaluate(()=>localStorage.removeItem('bvom_workout_tab_owner'));
+  await a.reload();await a.waitForSelector('#app:not(.hidden)');
+  await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').waitFor();
+  a.once('dialog',d=>d.accept());
+  await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
+  const after=await saved(a);if(after.history.length!==1)console.log('ARCHIVE DEBUG 2',await a.evaluate(()=>({snapshot:localStorage.getItem('bvom_legacy_workout_before_archive')?.length,owner:localStorage.getItem('bvom_workout_tab_owner'),lock:bvomWindowLockOwned,legacy:bvomRecoveryLegacyBlocked,account:bvomRecoveryAccount,auth:window.__bvomAuthUserId,cloud:bvomCloud.user?.id,overlays:Array.from(document.querySelectorAll('.bvomModalOverlay')).map(x=>x.textContent.slice(0,400))})));assert.equal(after.history.length,1);
+  const h=after.history[0];
+  assert.equal(h.incomplete,true);assert.equal(h.legacyPendingChoices.lp.weight,45);
+  assert.equal(h.legacyGppSession.erg.timing.status,'running');
+  assert.deepEqual(h.session['Bench Press'],old.session['Bench Press']);
+  assert.equal(after.pendingCloseMissChoice,undefined);
+  assert.deepEqual(after.weights,old.weights);
+  assert.equal(after.gppSession.erg,undefined);
+  assert.equal(await a.evaluate(()=>JSON.parse(localStorage.getItem('bvom_legacy_workout_before_archive')).raw),before);
+ }finally{await context.close()}
+});
+test('real v2.9.0 source workout can be archived after upgrade without changing earned weights',async()=>{
+ const {context,a}=await setup();try{
+  await a.close();
+  const old=await context.newPage();await old.goto(origin+'/legacy-v290');await old.waitForSelector('#app:not(.hidden)');
+  await record(old,'Squat',0);
+  const oldSaved=await saved(old);
+  assert.equal(oldSaved.workoutOwnershipVersion,undefined,'actual 2.9.0 must not know new ownership protocol');
+  await old.close();
+  const upgraded=await open(context);
+  await upgraded.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').waitFor();
+  const exactBefore=await raw(upgraded);
+  upgraded.once('dialog',d=>d.accept());
+  await upgraded.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
+  const after=await saved(upgraded);
+  assert.equal(after.history.length,oldSaved.history.length+1);
+  assert.equal(after.history.at(-1).incomplete,true);
+  assert.deepEqual(after.history.at(-1).session.Squat,oldSaved.session.Squat);
+  assert.deepEqual(after.weights,oldSaved.weights);
+  assert.equal(await upgraded.evaluate(()=>JSON.parse(localStorage.getItem('bvom_legacy_workout_before_archive')).raw),exactBefore);
+  await record(upgraded,'Squat',1);
+ }finally{await context.close()}
+});
+test('optional Android loopback server seeds dummy data and refuses replacement',async()=>{
+ const {spawn}=require('node:child_process');const child=spawn(process.execPath,[path.join(__dirname,'recovery_phone_server.cjs'),'33331'],{stdio:['ignore','pipe','pipe']});let context;
+ try{
+  await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Dummy phone server did not start')),5000);child.once('error',reject);child.once('exit',code=>{clearTimeout(timer);reject(Error('Dummy phone server exited '+code))});child.stdout.once('data',()=>{clearTimeout(timer);resolve()})});
+  context=await browser.newContext({serviceWorkers:'block'});await context.route('**/*',r=>new URL(r.request().url()).hostname==='localhost'?r.continue():r.abort());const p=await context.newPage();context.setDefaultTimeout(5000);
+  const response=await p.goto('http://localhost:33331/__dummy__');assert.ok(response.headers()['content-security-policy'].includes("connect-src 'self'"));await p.locator('#start').click();await p.waitForSelector('#app:not(.hidden)');await record(p,'Squat',0);const before=await raw(p);await p.goto('http://localhost:33331/__dummy__');await p.locator('#start').click();assert.match(await p.locator('#status').textContent(),/Nothing replaced/);assert.equal(await raw(p),before);
+ }finally{if(context)await context.close();child.kill()}
+});
+(async()=>{
+ const server=http.createServer((req,res)=>{const url=new URL(req.url,'http://local');if(url.pathname==='/seed'){res.end('<!doctype html>seed');return}if(url.pathname.startsWith('/vendor/')){res.writeHead(200,{'Content-Type':'text/javascript'});res.end('// External service stub: library unavailable; verified dummy offline owner only.');return}const f=url.pathname==='/legacy-v290'?path.join(root,'.bvom-production-v290','index.html'):path.join(root,url.pathname);if(!f.startsWith(root+path.sep)||!fs.existsSync(f)){res.writeHead(404);res.end();return}res.writeHead(200,{'Content-Type':f.endsWith('.html')?'text/html':f.endsWith('.js')?'text/javascript':'image/png','Cache-Control':'no-store'});res.end(fs.readFileSync(f))});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));origin='http://127.0.0.1:'+server.address().port;
+ let failed=0;try{browser=await chromium.launch({headless:true});for(const t of tests){try{await t.fn();console.log('PASS:',t.name)}catch(e){failed++;console.error('FAIL:',t.name,e.stack)}}}finally{if(browser)await browser.close();await new Promise(r=>server.close(r))}console.log(`BVOM application browser checks: ${tests.length-failed}/${tests.length} PASS`);if(failed)process.exitCode=1;
+})().catch(e=>{console.error(e);process.exitCode=1});

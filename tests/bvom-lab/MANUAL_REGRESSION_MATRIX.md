@@ -3,6 +3,13 @@
 Run before production promotion, **after** `node gate.js` is GO. Everything that the harness can execute has moved to `behaviour_guard.js`; this matrix keeps only what needs a real browser, device, account or payment service.
 
 ## A. Installed PWA / device lifecycle
+
+- **PR #39 recovery (dummy workouts on a separate isolated HTTPS test origin only):** record squat/bench, note exact sets and timer, close the owning PWA completely and reopen within 5 minutes. Continue a set and confirm no lost work/phantom History. Repeat same-window reload.
+- Keep A live/backgrounded, open B on that same test origin: B must be visibly read-only for sets/warm-ups/Finish/Settings even after 65 minutes. A can still save. After closing A, reload B and resume. Do not test against production, clear existing app storage, or import a real backup.
+- Check 59m59s vs 60 full minutes since the last recorded interaction. Eligible abandoned work yields one incomplete History record; reopening does not duplicate it. Regular interactions during a 2–3 hour workout prevent expiry. Duration excludes abandonment time.
+- Repeat expiry/close/reopen with pending REPEAT/PROGRESS, running GPP, paused GPP and stopped GPP awaiting metrics: work stays protected for manual resolution. Use dummy BB/On-Ramp sessions and check completed-session counts do not advance on expiry.
+- **Old-version upgrade (separate test-origin, disposable account and exact v2.9.0-format fixture):** with a previously recorded unfinished LP workout, new draft opens READ-ONLY with ARCHIVE OLD WORKOUT AS INCOMPLETE. Cancel leaves the original training bytes untouched. Close all other old-version tabs/windows; confirm Archive: recorded sets become an INCOMPLETE History record once, no new progression/day advance, and a full pre-archive copy remains on this device. Relaunch, record a new workout set, and verify no duplicate History. Repeat with pending LP/HLM progression and running/paused GPP; pending choices are *not* decided and raw GPP state remains in the archive/backup, with no fake completed GPP result. Simulate a storage failure during archive: original saved training must survive unchanged. A changed owner/data/account before confirmation must block archive without deleting a set.
+- **Important old-version limit:** an older BVOM window does not use the Web Lock. Explicitly close ALL old windows before archival; do not claim lock-based detection of older windows or zero-risk cross-window atomicity. If an old window is accessible, prefer finishing there. Unsupported Web Locks remain read-only. Android installed-PWA process eviction and Safari/iOS lock lifecycle remain manual checks; headless Chromium does not prove these platforms.
 - **F12 airplane-mode relaunch (one-time per release, iOS and Android):** sign in online on an installed PWA with a valid subscription; confirm the account screen shows active access; open a workout, log one set; fully close the PWA (swipe away). Enable airplane mode. Relaunch: local training must open, the logged set must still be there, sets can be recorded, Finish works, cloud status shows unavailable (not an access/sign-in screen). Repeat after >1 hour offline (access token expired). Repeat with a complimentary account.
 - **F12 negative, device:** on a fresh install that has never signed in, airplane-mode launch must not open training.
 - **F12 explicit sign-out:** after a verified account has worked offline successfully, reconnect and use SIGN OUT. Then enable airplane mode and relaunch: training must stay behind the sign-in gate, while the local training data itself remains on the device.
@@ -81,3 +88,28 @@ Before any v2.9 production promotion, test the startup path on a previously veri
 - **Service-worker update during active workout:** update may become ready, but tapping update must refuse to reload until the workout is finished/exited.
 - **Two-tab update safety:** with a workout active in one tab, another tab must not be able to force that workout tab to reload.
 - **Failed update install:** interrupt the N+1 install/precache. Build N must remain launchable from its known-good cache.
+
+## Monkey 007 release blockers (not performed by Codex)
+
+- Agree and implement a safe, useful explicit abandoned-owner recovery policy before release; phase-1 read-only blocking alone is not releasable recovery.
+- On an already legitimately eligible installed Android PWA test device using artificial workout data, compare same-tab refresh with full close/reopen offline while a close-miss decision is pending; record native identity/lifecycle, pending persistence, truthful warnings and exactly-once progression. No assumption that process restart creates a new identity.
+- Check two-window ownership notices in English/Japanese, focus and keyboard behavior, small-screen labels, and History viewing. Verify actual account/offline boundaries separately under owner authorization. No real accounts/services were exercised in Monkey 007.
+
+
+### Local Android dummy-only setup for draft PR #39
+
+No preview or deployment is required. On a computer with Node and Android USB debugging/ADB, check out the exact PR candidate (never `main`), then run:
+
+```sh
+node tests/bvom-lab/recovery_phone_server.cjs 33331
+adb reverse tcp:33331 tcp:33331
+```
+
+On Android Chrome open `http://localhost:33331/__dummy__`, confirm **DUMMY TEST ONLY**, then create the dummy profile. The initializer refuses to replace existing data. If the port already has unrelated data, choose another unused port and repeat both commands. This server substitutes the Supabase library and uses CSP to block external connections; do not sign in, import backups or use production. Chrome may offer Install/Add to Home screen for this loopback PWA; test both Chrome and the installed PWA when available. Keep USB forwarding/server running while opening the app; after the shell is cached, airplane-mode checks can use the installed dummy app.
+
+1. Record dummy squat and bench sets. Close completely and reopen within 5 minutes: exact loads/reps and rest timer remain; another set saves; History has no phantom entry.
+2. Keep A open/backgrounded, open B on the same local test origin. B must refuse set, warm-up and Finish edits, including after 65 minutes. A can save. Close A and reload B to retry recovery.
+3. Leave eligible recorded work untouched for 60 full minutes, reopen: one incomplete History record preserves sets; reopen again without duplicates. Regular recorded actions during a long workout reset the clock.
+4. Create a pending bench choice (5/5/6 in the default RPT fixture) and separately start/pause Dummy erg. Close/reopen and wait past expiry: decision/GPP work must stay protected until explicitly resolved/stopped.
+
+Stop the server with Ctrl-C and remove only the ADB forwarding rule with `adb reverse --remove tcp:33331`. Do not clear production app data. These are owner field-test instructions; CI cannot certify Android process eviction, installed-PWA lifecycle or Safari.
