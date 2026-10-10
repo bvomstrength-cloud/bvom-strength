@@ -1,0 +1,109 @@
+name: BVOM Browser Runner Proof
+
+# Test-only workflow on draft PR #39. No app code, production or real-user data.
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  chromium-two-window-proof:
+    name: Chromium two-window & Web Locks proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install test-only Playwright and Chromium
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: Prove two real isolated tabs and exclusive lock lifecycle
+        shell: bash
+        run: |
+          node <<'NODE'
+          'use strict';
+          const assert = require('node:assert/strict');
+          const http = require('node:http');
+          const { chromium } = require('playwright');
+
+          (async () => {
+            const server = http.createServer((_req, res) => {
+              res.writeHead(200, {
+                'Content-Type': 'text/html; charset=utf-8',
+                'Cache-Control': 'no-store'
+              });
+              res.end('<!doctype html><html><title>BVOM isolated browser proof</title><body>TEST ONLY</body></html>');
+            });
+            await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+            const origin = 'http://127.0.0.1:' + server.address().port;
+            let browser;
+            try {
+              browser = await chromium.launch({ headless: true });
+              const context = await browser.newContext({ serviceWorkers: 'block' });
+              await context.route('**/*', route => {
+                const url = new URL(route.request().url());
+                return url.hostname === '127.0.0.1' ? route.continue() : route.abort();
+              });
+              const a = await context.newPage();
+              const b = await context.newPage();
+              await Promise.all([a.goto(origin), b.goto(origin)]);
+
+              assert.equal(await a.evaluate(() => window.isSecureContext && !!navigator.locks), true);
+              const idA = await a.evaluate(() => {
+                sessionStorage.setItem('proof_tab_id', 'owner_A');
+                localStorage.setItem('proof_workout', JSON.stringify({ squat: [5] }));
+                return sessionStorage.getItem('proof_tab_id');
+              });
+              const idB = await b.evaluate(() => {
+                sessionStorage.setItem('proof_tab_id', 'visitor_B');
+                return sessionStorage.getItem('proof_tab_id');
+              });
+              assert.notEqual(idA, idB);
+              assert.equal(await b.evaluate(() => sessionStorage.getItem('proof_tab_id')), 'visitor_B');
+              assert.equal(await b.evaluate(() => localStorage.getItem('proof_workout')), '{"squat":[5]}');
+
+              await a.evaluate(() => {
+                window.proofHold = new Promise(resolve => { window.proofRelease = resolve; });
+                navigator.locks.request('bvom-browser-proof', { mode: 'exclusive' }, async () => {
+                  window.proofAcquired = true;
+                  await window.proofHold;
+                });
+              });
+              await a.waitForFunction(() => window.proofAcquired === true);
+
+              const tryB = () => b.evaluate(() =>
+                navigator.locks.request('bvom-browser-proof', { ifAvailable: true }, lock => Boolean(lock))
+              );
+              assert.equal(await tryB(), false, 'B must not acquire A live lock');
+              await b.bringToFront();
+              assert.equal(await tryB(), false, 'B must not acquire A background lock');
+
+              await a.close();
+              let acquired = false;
+              for (let i = 0; i < 30 && !acquired; i++) {
+                acquired = await tryB();
+                if (!acquired) await new Promise(resolve => setTimeout(resolve, 100));
+              }
+              assert.equal(acquired, true, 'B should acquire once A document closes');
+              assert.equal(await b.evaluate(() => localStorage.getItem('proof_workout')), '{"squat":[5]}');
+              console.log('PASS: Chromium launched; separate sessionStorage, shared localStorage,');
+              console.log('exclusive lock rejects a live/background tab and releases on close.');
+              console.log('This proves TEST INFRASTRUCTURE only — not BVOM recovery correctness.');
+            } finally {
+              if (browser) await browser.close();
+              await new Promise(resolve => server.close(resolve));
+            }
+          })().catch(error => { console.error(error); process.exitCode = 1; });
+          NODE
