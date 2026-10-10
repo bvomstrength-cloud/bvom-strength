@@ -786,6 +786,18 @@ The stale window is blocked and the user is told to reload.
 
 While one tab owns an active workout, another tab must not casually write competing local training state.
 
+### 15.4 Interrupted workouts and inactivity (draft PR #39)
+
+The editing document holds an exclusive `bvom-training-document-v1` Web Lock for its whole lifetime, including idle, background and frozen states. It never steals or releases that lock on an elapsed timer. Other windows stay read-only until the owner closes and they reload. Each document has an independent in-memory identity; copied sessionStorage cannot grant editing. Older cached versions cannot match the new document's owner marker.
+
+A reopened, authenticated matching owner can resume a workout written under this coordination protocol without changing its recorded sets or rest timer. Unsupported Web Locks and workouts from an older, uncoordinated version fail closed: their recorded data stays intact and read-only because absence of a lock cannot prove that an older window closed. Such legacy workouts must be resolved in their original window when available; this draft does not claim automatic migration/recovery of ambiguous old ownership.
+
+`workoutLastActivityAt` is a separate persisted wall-clock timestamp. Committed set entry/correction, warm-up actions, explicit progression decisions and GPP start/pause/resume/stop/result entry advance it. Rendering, rest timers, notifications, cloud checks and no-op Settings saves do not. Missing, invalid or future timestamps get a durable fresh grace period, never immediate expiry. The timestamp and ownership protocol field are local live-workout metadata and are excluded from cloud payloads/comparison.
+
+At 60 full minutes without meaningful activity, boot, foreground or the next action may save exactly one incomplete History record and clear the resolved live session in one training-blob write. Exclusive ownership, matching account and unchanged saved data must still hold at commit. Storage failure retains the active state. Automatic expiry preserves actual sets/GPP results, notes, exercise metadata and earned progression; it invokes no progression/calibration or day advancement and consumes no Bodybuilding/On-Ramp completed session. Recorded duration ends at the last meaningful interaction, excluding abandonment time. No recorded results means no automatic History entry.
+
+Unresolved LP/RPT/HLM choices, an interrupted required-choice creation, running/paused GPP, unfinished GPP result entry and open dialogs hold the workout for explicit resolution. Expiry never defaults a progression choice or silently stops GPP. Wall-clock changes while a document is closed cannot be distinguished from real elapsed time without a trusted external clock; backwards/future persisted values are rebased conservatively. Android installed-PWA and Safari lifecycle validation remains a separate release requirement.
+
 Intentional workout actions must check ownership and the local persisted baseline before changing live work or the owner marker. A secondary context stays read-only: warm-up ticks, set entry/correction, program-specific records and pending answers do not implicitly transfer ownership. A rejected action must explain that it was not saved, without asserting the other window is still alive. Non-mutating views remain available.
 
 Critical LP/RPT and HLM/4-Day pending answers require a real local write; a benign secondary boot/render no-op is not a successful answer. A rejected answer retains the pending decision and does not mutate progression or launch follow-up decisions. Ownership release follows a successful training write, not a rejected stale/storage write.

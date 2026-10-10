@@ -15,6 +15,12 @@ const guard=path.join(__dirname,'behaviour_guard.js');
 // replace exactly one occurrence of `from`, searching only inside the function/region starting at `region`
 function inRegion(region,from,to){return src=>{const r=src.indexOf(region);if(r<0)return null;const i=src.indexOf(from,r);if(i<0||i-r>20000)return null;return src.slice(0,i)+to+src.slice(i+from.length)}}
 const MUTATIONS=[
+ {id:'RECOVERY-PASSIVE-CLOCK-RESET',why:'renders/rest saves postpone abandonment',targets:['F70-MEANINGFUL-ACTIVITY-CLOCK'],apply:inRegion('function save(options)', 'options?.activity||bvomRecordedActivityChanged(persisted,state)', 'true')},
+ {id:'RECOVERY-BB-CONSUMES-SESSION',why:'incomplete expiry consumes a completed BB session',targets:['F71-INCOMPLETE-EXPIRY-PROGRAMS'],apply:inRegion('function bvomRecoveryCheck()', 'state.history.push(record);', 'state.history.push(record);if(isBodybuilding())state.bodybuilding.completedSessions++;')},
+ {id:'RECOVERY-PENDING-HOLD-REMOVED',why:'expiry discards an unresolved decision',targets:['F72-EXPIRY-PENDING-GPP-HOLD'],apply:inRegion('function bvomRecoveryHold()', "if(state.pendingCloseMissChoice||state.hlm?.pendingRepChoice)return 'choice';", '')},
+ {id:'RECOVERY-FAILED-WRITE-ROLLBACK-REMOVED',why:'memory reports incomplete while stored session remains active',targets:['F74-EXPIRY-SAVE-FAILURE-ROLLBACK'],apply:inRegion('// Recheck all fencing', 'state=before;', '')},
+ {id:'RECOVERY-LEGACY-GRACE-REMOVED',why:'missing clock immediately expires',targets:['F75-LEGACY-AND-CLOCK-GRACE'],apply:inRegion('function bvomRecoveryCheck()', 'state.workoutLastActivityAt=now;', 'state.workoutLastActivityAt=now-BVOM_INACTIVITY_MS;')},
+ {id:'RECOVERY-LOCK-ACTION-GUARD-REMOVED',why:'denied document can mutate memory before a rejected save',targets:['F73-LOCK-AND-ACCOUNT-FENCING'],apply:inRegion('function bvomWorkoutActionAllowed()', 'if(!bvomWindowLockOwned||bvomRecoveryLegacyBlocked)', 'if(bvomRecoveryLegacyBlocked)')},
  {id:'ERASE-AUTH-EVENT-TRACKING-REMOVED',why:'account transition during await escapes snapshot validation',targets:['F69-ERASE-NATIVE-AUTH-CALLBACK'],apply:inRegion('c.auth.onAuthStateChange(', 'bvomEraseAuthEvent(_event,old||null,next);', '')},
  {id:'ERASE-SNAPSHOT-RECHECK-REMOVED',why:'post-signout erase deletes changed saved data',targets:['F65-ERASE-STALE-AWAIT'],apply:inRegion('async function bvomEraseModal(', '||!bvomEraseStillCurrent(op)', '')},
  {id:'ERASE-CANCEL-INVALIDATION-REMOVED',why:'Cancel only hides the modal while deletion continues',targets:['F66-ERASE-CANCEL-AWAIT'],apply:inRegion('async function bvomEraseModal(', 'if(op.cancelled||closed||!bvomEraseStillCurrent(op))', 'if(!bvomEraseStillCurrent(op))')},
@@ -32,9 +38,9 @@ const MUTATIONS=[
  {id:'TIMER-SOUND-ASSIGNED-GUARD-REMOVED',why:'assigned DOM callback mutates secondary memory',targets:['F64-ASSIGNED-TIMER-SOUND-GUARD'],apply:src=>{const a=inRegion('const bvomRenderSettingsV24Base=', 'if(!bvomWorkoutActionAllowed()){e.target.checked=state.timerSound!==false;return}', '')(src);return a&&inRegion('const bvomRenderSettingsV24Base=', 'if(!save({durable:true})){state.timerSound=before;e.target.checked=before!==false}', 'save();')(a)}},
  {id:'SECONDARY-WARMUP-GUARD-REMOVED',why:'non-owner warm-up changes memory before write protection',targets:['F51-SECONDARY-WARMUP-NO-LEAK'],apply:inRegion('function completeWarmup(', 'if(!bvomWorkoutActionAllowed())return;', '')},
  {id:'SECONDARY-MARKER-STEAL-RESTORED',why:'direct acquisition steals a live owner even on rejected stale save',targets:['F52-SECONDARY-STALE-CLAIM-ORDER'],apply:inRegion('function bvomMarkThisTabAsWorkoutOwner()', "return bvomWorkoutActionAllowed()?bvomTabId():''", "localStorage.setItem(BVOM_WORKOUT_TAB_OWNER_KEY,bvomTabId());return bvomTabId()")},
- {id:'PENDING-OWNER-CHECK-REMOVED',why:'secondary pending answer is mistaken for a durable no-op',targets:['F50-SECONDARY-PENDING-ANSWER-ATOMIC'],apply:inRegion('function bvomWorkoutActionAllowed()', 'if(owner&&owner!==id&&', 'if(false&&owner&&owner!==id&&')},
+ {id:'PENDING-OWNER-CHECK-REMOVED',why:'secondary pending answer is mistaken for a durable no-op',targets:['F50-SECONDARY-PENDING-ANSWER-ATOMIC'],apply:src=>{const a=inRegion('function bvomWorkoutActionAllowed()', 'if(owner&&owner!==id&&', 'if(false&&owner&&owner!==id&&')(src);return a&&inRegion('function save(options)', 'if(bvomSecondaryTabWriteBlocked())return false;', '')(a)}},
  {id:'PENDING-ANSWER-ROLLBACK-REMOVED',why:'failed critical save leaves rejected progression in memory',targets:['F53-PENDING-SAVE-FAILURE-KEEPS-DECISION'],apply:inRegion('function bvomCommitPendingChoice(', 'state=before;return false;', 'return false;')},
- {id:'PENDING-STRICT-SAVE-RECHECK-REMOVED',why:'ownership change at commit is mistaken for a durable save',targets:['F56-CRITICAL-COMMIT-RECHECKS-OWNERSHIP'],apply:inRegion('function save(options)', 'if(options?.durable&&!bvomWorkoutActionAllowed())return false;', '')},
+ {id:'PENDING-STRICT-SAVE-RECHECK-REMOVED',why:'ownership change at commit is mistaken for a durable save',targets:['F56-CRITICAL-COMMIT-RECHECKS-OWNERSHIP'],apply:src=>{const a=inRegion('function save(options)', 'if(!bvomWorkoutActionAllowed())return false;', '')(src);return a&&inRegion('function save(options)', 'if(bvomSecondaryTabWriteBlocked())return false;', '')(a)}},
  {id:'OWNER-RELEASE-BEFORE-WRITE-RESTORED',why:'failed Finish relinquishes original ownership',targets:['F56-CRITICAL-COMMIT-RECHECKS-OWNERSHIP'],apply:inRegion('function save(options)', 'const next=JSON.stringify(state);', 'if(!bvomStateWorkoutActive(state))bvomReleaseWorkoutTabOwnerIfThisTab();const next=JSON.stringify(state);')},
 
  {id:'LP-PRESCRIBED-TARGET',why:'historical 22 Sep bug: rescue built from the prescribed target instead of achieved reps',targets:['LP-RESCUE-LIVE'],
@@ -169,7 +175,8 @@ const MUTATIONS=[
   apply:inRegion('function renderAll(){bvomApplyShell();',"bvomPresentPendingCloseMissChoice();","")},
 ];
 function run(buildDir,ids){const r=spawnSync(process.execPath,[guard,buildDir,'--json',...(ids?['--only='+ids.join(',')]:[])],{encoding:'utf8',maxBuffer:1<<26});
-  try{return JSON.parse(r.stdout)}catch(e){return {error:(r.stderr||r.stdout||'').slice(0,400)}}}
+  if(r.error)return {error:r.error.message};
+  try{return JSON.parse(r.stdout)}catch(e){return {error:(r.stderr||r.stdout||'behaviour process produced no JSON').slice(0,400)}}}
 function copyBuild(src){const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'bvom-mut-'));fs.cpSync(src,tmp,{recursive:true});return tmp}
 let failures=0;const line=(s)=>console.log(s);
 line(`MUTATION CHECK — candidate: ${path.resolve(dir)}`);
@@ -206,7 +213,9 @@ if(knownBad){
     // Monkey 009 proof is exact pre-009 PR e6631e4, not historical v2.8.0.
     'F58-DELAYED-BACKUP-COMMIT','F59-DEFERRED-MUTATION-COMMIT','F60-POSTCOMMIT-OWNER-FAILURE','F61-PENDING-CREATION-DURABILITY','F62-DELAYED-CLOUD-AND-SETUP','F63-STORAGE-ORDER-AND-NESTED-CHOICE','F64-ASSIGNED-TIMER-SOUND-GUARD',
     // Monkey 011 red proof is exact pre-011 f75202f, not historical v2.8.0.
-    'F65-ERASE-STALE-AWAIT','F66-ERASE-CANCEL-AWAIT','F67-HISTORY-EXACT-TARGET','F68-ERASE-LEGITIMATE-CONTROLS','F69-ERASE-NATIVE-AUTH-CALLBACK'
+    'F65-ERASE-STALE-AWAIT','F66-ERASE-CANCEL-AWAIT','F67-HISTORY-EXACT-TARGET','F68-ERASE-LEGITIMATE-CONTROLS','F69-ERASE-NATIVE-AUTH-CALLBACK',
+    // New recovery contracts are RED on pre-recovery PR 42710195, not v2.8.0.
+    'F70-MEANINGFUL-ACTIVITY-CLOCK','F71-INCOMPLETE-EXPIRY-PROGRAMS','F72-EXPIRY-PENDING-GPP-HOLD','F73-LOCK-AND-ACCOUNT-FENCING','F74-EXPIRY-SAVE-FAILURE-ROLLBACK','F75-LEGACY-AND-CLOCK-GRACE','F76-UNCOORDINATED-LEGACY-FAIL-CLOSED'
   ]);
   line(`\nKNOWN-BAD REFERENCE — ${path.resolve(knownBad)} (expected: applicable DEFECT contracts fail; CONTROL/NEGATIVE pass)`);
   const r=run(knownBad);if(r.error){line('reference run error: '+r.error);failures++}

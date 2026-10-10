@@ -7,7 +7,7 @@ const fixture=()=>{const h=H.boot(build,{supabase:null,online:false});H.configur
 const tests=[],test=(name,fn)=>tests.push({name,fn});
 let browser,origin;
 async function setup(data=fixture(),options={}){
- const context=await browser.newContext({serviceWorkers:'block'});
+ const context=await browser.newContext({serviceWorkers:'block'});context.setDefaultTimeout(5000);
  await context.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
  await context.addInitScript(({now,noLocks})=>{
   window.testNow=now;const RealDate=Date;window.Date=class extends RealDate{constructor(...a){super(...(a.length?a:[window.testNow]))}static now(){return window.testNow}};
@@ -53,6 +53,32 @@ test('pending decision survives expired close/reopen and blocked B answer',async
 });
 test('missing Web Locks fails closed without writes',async()=>{
  const d=fixture();d.session.Squat={0:{reps:5,load:60,index:0}};d.workoutStartedAt=Date.now()-300000;const {context,a}=await setup(d,{noLocks:true});try{const before=await raw(a);await a.evaluate(()=>{tapSet('Squat',1);save({durable:true});finishWorkout()});assert.equal(await raw(a),before);assert.ok(await a.locator('#bvomWorkoutReadOnlyOverlay').count())}finally{await context.close()}
+});
+test('running and paused GPP survive close/reopen and expiry',async()=>{
+ for(const status of ['running','paused']){const d=fixture();d.gppList=[{id:'erg',name:'Dummy erg',assignment:'Both',metrics:{time:true},planned:{timeSeconds:60}}];const {context,a}=await setup(d);try{
+  await record(a,'Squat',0);await a.evaluate(()=>bvomStartGppTimer('erg'));if(status==='paused')await a.evaluate(()=>bvomPauseGppTimer('erg'));const before=await saved(a);await a.close();const b=await open(context);await tick(b,65*60000);await b.evaluate(()=>bvomRecoveryCheck());const held=await saved(b);assert.deepEqual(held.gppSession,before.gppSession);assert.deepEqual(held.session,before.session);assert.equal(held.history.length,0);
+ }finally{await context.close()}}
+});
+test('two fast competing application boots have exactly one writer',async()=>{
+ const {context,a}=await setup();try{await a.close();const [x,y]=await Promise.all([open(context),open(context)]);const allowed=await Promise.all([x.evaluate(()=>bvomWorkoutActionAllowed()),y.evaluate(()=>bvomWorkoutActionAllowed())]);assert.equal(allowed.filter(Boolean).length,1);const owner=allowed[0]?x:y,other=allowed[0]?y:x;await record(owner,'Squat',0);const before=await raw(owner);await other.evaluate(()=>{tapSet('Squat',1);save({durable:true})});assert.equal(await raw(owner),before)}finally{await context.close()}
+});
+test('three-hour workout stays active with meaningful interactions; clock grace and passive saves',async()=>{
+ const {context,a}=await setup();try{
+  await record(a,'Squat',0);const start=(await saved(a)).workoutStartedAt;
+  for(let i=0;i<4;i++){await tick(a,45*60000);await a.evaluate(()=>{renderAll();save();startTimer()});const previous=(await saved(a)).workoutLastActivityAt;await record(a,'Squat',0,4+i);const d=await saved(a);assert.ok(d.workoutLastActivityAt>previous);assert.equal(d.history.length,0);assert.equal(d.workoutStartedAt,start)}
+  await tick(a,-300000);await a.evaluate(()=>bvomRecoveryCheck());assert.equal((await saved(a)).history.length,0);assert.equal((await saved(a)).workoutLastActivityAt,await a.evaluate(()=>Date.now()));
+ }finally{await context.close()}
+});
+test('expiry storage failure preserves data; restored storage/reload finishes once',async()=>{
+ const {context,a}=await setup();try{
+  await record(a,'Squat',0);const before=await raw(a);await a.evaluate(()=>{window.testPut=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k==='bvom_data')throw new DOMException('Dummy quota','QuotaExceededError');return window.testPut.call(this,k,v)}});await tick(a,3600000);await a.evaluate(()=>bvomRecoveryCheck());assert.equal(await raw(a),before);assert.equal((await saved(a)).history.length,0);await a.evaluate(()=>Storage.prototype.setItem=window.testPut);await a.close();const b=await open(context);await tick(b,3600000);await b.evaluate(()=>bvomRecoveryCheck());assert.equal((await saved(b)).history.length,1);
+ }finally{await context.close()}
+});
+test('changed account and stale opened callback cannot leak through a later save',async()=>{
+ const {context,a}=await setup();try{await record(a,'Squat',0);await a.evaluate(()=>tapSet('Squat',1));const before=await raw(a);await a.evaluate(()=>{bvomCloud.user={id:'other-dummy-owner'};document.querySelector('.bvomModalOverlay [data-ok]').click();completeWarmup('Squat',0,3,document.createElement('button'));save({durable:true})});assert.equal(await raw(a),before)}finally{await context.close()}
+});
+test('old-version active workout fails closed even with matching duplicated identity',async()=>{
+ const d=fixture();d.session.Squat={0:{reps:5,load:60,index:0}};d.workoutStartedAt=Date.now()-65*60000;delete d.workoutLastActivityAt;delete d.workoutOwnershipVersion;const {context,a}=await setup(d);try{const before=await raw(a);await a.evaluate(()=>{tapSet('Squat',1);bvomRecoveryCheck();save({durable:true})});assert.equal(await raw(a),before);assert.ok(await a.locator('#bvomWorkoutReadOnlyOverlay').count())}finally{await context.close()}
 });
 (async()=>{
  const server=http.createServer((req,res)=>{const url=new URL(req.url,'http://local');if(url.pathname==='/seed'){res.end('<!doctype html>seed');return}if(url.pathname.startsWith('/vendor/')){res.writeHead(200,{'Content-Type':'text/javascript'});res.end('// External service stub: library unavailable; verified dummy offline owner only.');return}const f=path.join(root,url.pathname);if(!f.startsWith(root+path.sep)||!fs.existsSync(f)){res.writeHead(404);res.end();return}res.writeHead(200,{'Content-Type':f.endsWith('.html')?'text/html':f.endsWith('.js')?'text/javascript':'image/png','Cache-Control':'no-store'});res.end(fs.readFileSync(f))});

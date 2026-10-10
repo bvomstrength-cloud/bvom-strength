@@ -122,5 +122,18 @@ jobs:
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
           npx playwright install --with-deps chromium
+      - name: Check out exact pre-recovery source for RED provenance
+        uses: actions/checkout@v4
+        with:
+          ref: 42710195f3aef3e9d8959a8592ad92b00c88f722
+          path: .bvom-pre-recovery
+      - name: Prove new deterministic contracts fail on pre-recovery application
+        shell: bash
+        run: |
+          if node tests/bvom-lab/behaviour_guard.js .bvom-pre-recovery --only=F70-MEANINGFUL-ACTIVITY-CLOCK,F71-INCOMPLETE-EXPIRY-PROGRAMS,F72-EXPIRY-PENDING-GPP-HOLD,F73-LOCK-AND-ACCOUNT-FENCING,F74-EXPIRY-SAVE-FAILURE-ROLLBACK,F75-LEGACY-AND-CLOCK-GRACE,F76-UNCOORDINATED-LEGACY-FAIL-CLOSED --json > .bvom-red.json; then
+            echo "ERROR: pre-recovery source unexpectedly passed"
+            exit 1
+          fi
+          node -e "const a=require('node:assert/strict'),r=require('./.bvom-red.json');a.equal(r.length,7);a.ok(r.every(t=>!t.pass));console.log('PASS: 7/7 new recovery contracts RED on exact pre-recovery source')"
       - name: Run isolated real BVOM application checks
         run: node tests/bvom-lab/recovery_browser.cjs

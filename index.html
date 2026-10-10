@@ -254,7 +254,7 @@ window.__bvomAuthUserId=null;
 function loadBVOMData(){
  try{let x=localStorage.getItem(BVOM_DATA_KEY);if(x)return JSON.parse(x)}catch(e){}
  for(const k of ["bvom13","bvom12"]){
-  try{let x=localStorage.getItem(k);if(x){let d=JSON.parse(x);localStorage.setItem(BVOM_DATA_KEY,JSON.stringify(d));return d}}catch(e){}
+  try{let x=localStorage.getItem(k);if(x){let d=JSON.parse(x);return d}}catch(e){}
  }
  return null;
 }
@@ -265,23 +265,31 @@ const bvomLoadedData=loadBVOMData();
 const bvomHadLocalData=!!bvomLoadedData;
 function bvomLocalOwnerId(){try{return localStorage.getItem(BVOM_DATA_OWNER_KEY)||''}catch(e){return ''}}
 
+// The editing identity belongs to this document, never to copied/restored sessionStorage.
+// The independent legacy tag ensures older cached app versions cannot match our owner marker.
+let bvomDocumentTabId='';
 function bvomTabId(){
  try{
-  let id=sessionStorage.getItem(BVOM_TAB_SESSION_KEY);
-  if(!id){id=(globalThis.crypto&&typeof globalThis.crypto.randomUUID==='function')?globalThis.crypto.randomUUID():('tab_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2));sessionStorage.setItem(BVOM_TAB_SESSION_KEY,id)}
-  return id;
- }catch(e){return 'tab_fallback'}
+  if(!bvomDocumentTabId){
+   if(!globalThis.crypto?.randomUUID)return '';
+   bvomDocumentTabId=globalThis.crypto.randomUUID();
+   if(!sessionStorage.getItem(BVOM_TAB_SESSION_KEY))sessionStorage.setItem(BVOM_TAB_SESSION_KEY,'legacy_'+globalThis.crypto.randomUUID());
+  }
+  return bvomDocumentTabId;
+ }catch(e){return ''}
 }
+
 function bvomWorkoutTabOwnerId(){try{return localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY)||''}catch(e){return ''}}
 // Acquisition is completed by save only after the training write succeeds.
 function bvomMarkThisTabAsWorkoutOwner(){return bvomWorkoutActionAllowed()?bvomTabId():''}
 function bvomReleaseWorkoutTabOwnerIfThisTab(){try{const id=bvomTabId();if(localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY)===id)localStorage.removeItem(BVOM_WORKOUT_TAB_OWNER_KEY);return true}catch(e){return false}}
 function bvomSecondaryTabWriteBlocked(){
  try{
+  if(!bvomWindowLockOwned)return true;
   if(!bvomStateWorkoutActive(state))return false;
   const owner=bvomWorkoutTabOwnerId();
   return !!(owner&&owner!==bvomTabId());
- }catch(e){return false}
+ }catch(e){return true}
 }
 function bvomSetLocalOwnerId(id){try{if(id)localStorage.setItem(BVOM_DATA_OWNER_KEY,String(id));else localStorage.removeItem(BVOM_DATA_OWNER_KEY)}catch(e){}}
 function bvomArchiveForeignLocalData(){
@@ -291,6 +299,7 @@ function bvomArchiveForeignLocalData(){
  }catch(e){}
 }
 function bvomReplaceLocalForAccount(userId,data){
+ if(!bvomWindowLockOwned)return false;
  // Archive only genuine pre-existing/account-owned data. A fresh boot writes a default
  // placeholder blob during migrate17(); that placeholder is not another user's data.
  if(bvomLocalOwnerId()||bvomHadLocalData)bvomArchiveForeignLocalData();
@@ -313,6 +322,10 @@ let state=bvomLoadedData||{
  attempts:{},history:[],session:{},timerStart:null
 };
 let bvomLastPersistedRaw=(()=>{try{return localStorage.getItem(BVOM_DATA_KEY)}catch(e){return null}})();
+// One exclusive lock for the lifetime of this document, including idle/background/frozen.
+// Never release on visibility, inactivity or pagehide. Browser destruction releases it.
+let bvomWindowLockOwned=false,bvomWindowLockState='starting',bvomWindowOwnerAtLock='';
+let bvomRecoveryBusy=false,bvomRecoveryAccount='',bvomRecoveryMessage='',bvomRecoveryLegacyBlocked=false;
 let bvomLocalWriteConflictActive=false,bvomLocalWriteConflictOverlayShown=false;
 let bvomLocalPersistenceFailureActive=false,bvomLocalPersistenceFailureOverlayShown=false;
 function bvomPersistenceBlocked(){return !!(bvomLocalWriteConflictActive||bvomLocalPersistenceFailureActive)}
@@ -356,21 +369,25 @@ function bvomWorkoutReadOnlyNotice(){
  if(document.getElementById('bvomWorkoutReadOnlyOverlay')?.parentNode)return;
  const previousFocus=document.activeElement;const o=document.createElement('div');o.id='bvomWorkoutReadOnlyOverlay';o.className='bvomModalOverlay';o.style.zIndex='270000';
  const title=hlmTxt('THIS WORKOUT IS READ-ONLY HERE','この画面ではワークアウトは読み取り専用です');
- const body=hlmTxt('Another BVOM window is recorded as owning this unfinished workout on this device. Nothing from this action was saved. Return to the original window if available. Reloading does not transfer ownership. Reload will discard any unsaved changes in this window.','この端末の未完了のワークアウトは別のBVOM画面が管理している状態です。この操作の変更は保存されていません。元の画面が利用できる場合はそちらに戻ってください。再読み込みしても管理する画面は切り替わりません。この画面の未保存の変更は再読み込みで破棄されます。');
+ const body=bvomRecoveryLegacyBlocked?hlmTxt('This workout began before exclusive window coordination. BVOM cannot prove the older window closed, so this workout is preserved read-only. Keep a backup; finish in the original window if it is available.','このワークアウトは排他的な画面管理の導入前に開始されました。古い画面が閉じたことを確認できないため、記録を読み取り専用で保持しています。バックアップを保持し、元の画面が利用できる場合はそこで終了してください。'):bvomWindowLockState==='unsupported'?hlmTxt('This browser cannot prove exclusive workout ownership. Your recorded work is preserved, but editing and automatic recovery are blocked. Open BVOM in a browser with Web Locks support.','このブラウザーではワークアウトの排他的な管理を確認できません。記録は保持されていますが、編集と自動復旧は停止しています。Web Locks対応ブラウザーでBVOMを開いてください。'):hlmTxt('Another live BVOM window owns editing, or exclusive ownership could not be confirmed. Nothing from this action was saved. Close the older window, then reload this one to retry safely.','別のBVOM画面が編集を管理しているか、排他的な管理を確認できません。この操作は保存されていません。古い画面を閉じてから、この画面を再読み込みして再試行してください。');
  o.setAttribute('role','alertdialog');o.setAttribute('aria-modal','true');o.setAttribute('aria-labelledby','bvomReadOnlyTitle');o.setAttribute('aria-describedby','bvomReadOnlyBody');
  o.innerHTML=`<div class="bvomModal"><h3 id="bvomReadOnlyTitle">${title}</h3><p id="bvomReadOnlyBody">${body}</p><button type="button" class="secondary modalWide" data-view>${hlmTxt('VIEW ONLY','閲覧のみ')}</button><button type="button" class="primary modalWide" data-reload>${hlmTxt('RELOAD LATEST DATA','最新のデータを再読み込み')}</button></div>`;
  document.body.appendChild(o);const btn=o.querySelector('[data-reload]'),view=o.querySelector('[data-view]');btn.onclick=()=>location.reload();view.onclick=()=>{o.remove();previousFocus?.focus?.()};view.focus();
  o.addEventListener('keydown',e=>{if(e.key==='Tab'){e.preventDefault();(document.activeElement===view?btn:view).focus()}if(e.key==='Escape')e.preventDefault()});
 }
 function bvomWorkoutActionAllowed(){
+ if(!bvomWindowLockOwned||bvomRecoveryLegacyBlocked){bvomWorkoutReadOnlyNotice();return false}
  if(bvomLocalPersistenceFailureActive){bvomLocalPersistenceFailureNotice();return false}
  if(bvomLocalWriteConflictActive){bvomLocalWriteConflictNotice();return false}
  try{
   const raw=localStorage.getItem(BVOM_DATA_KEY),stored=raw?JSON.parse(raw):null;
-  const id=bvomTabId();if(!id||sessionStorage.getItem(BVOM_TAB_SESSION_KEY)!==id)throw Error('Tab identity unavailable');
+  const account=localStorage.getItem(BVOM_DATA_OWNER_KEY)||'';
+  if(bvomRecoveryAccount&&(account!==bvomRecoveryAccount||window.__bvomAuthUserId!==account||bvomCloud.user?.id!==account||bvomCloud.accountSwitchDeferred)){bvomWorkoutReadOnlyNotice();return false}
+  const id=bvomTabId();if(!id)throw Error('Document identity unavailable');sessionStorage.getItem(BVOM_TAB_SESSION_KEY);
   const owner=localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY);
   if(owner&&owner!==id&&(bvomStateWorkoutActive(state)||bvomStateWorkoutActive(stored))){bvomWorkoutReadOnlyNotice();return false}
   if(raw!==bvomLastPersistedRaw){bvomLocalWriteConflictNotice();return false}
+  if(!bvomRecoveryBusy&&bvomRecoveryCheck())return false;
   return true;
  }catch(e){bvomLocalPersistenceFailureNotice();return false}
 }
@@ -380,7 +397,7 @@ function bvomCommitPendingChoice(kind,expected,apply){
  const current=kind==='lp'?state.pendingCloseMissChoice:state.hlm?.pendingRepChoice;
  if(!current||JSON.stringify(current)!==JSON.stringify(expected))return false;
  const before=JSON.parse(JSON.stringify(state));
- try{apply();if(save({durable:true}))return true}catch(e){bvomLocalPersistenceFailureNotice()}
+ try{apply();if(save({durable:true,activity:true}))return true}catch(e){bvomLocalPersistenceFailureNotice()}
  state=before;return false;
 }
 function bvomPersistPendingChoice(kind,pending){
@@ -417,17 +434,29 @@ function bvomPostCommitOwnerFailureNotice(){
  document.body.appendChild(o);o.querySelector('[data-reload]').onclick=()=>location.reload();o.querySelector('[data-reload]').focus();
 }
 function save(options){
- if(options?.durable&&!bvomWorkoutActionAllowed())return false;
+ // Before async lock acquisition, boot defaults stay in memory. A rejected save is false.
+ if(!bvomWindowLockOwned||bvomRecoveryLegacyBlocked)return false;
+ if(!bvomWorkoutActionAllowed())return false;
  if(bvomLocalPersistenceFailureActive){bvomLocalPersistenceFailureNotice();return false}
  // While another tab owns an active workout, this tab must stay read-only for local BVOM data.
  // This prevents incidental render/cache writes from tripping the active tab's stale-write guard.
- if(bvomSecondaryTabWriteBlocked())return true;
- const next=JSON.stringify(state);let current=null;
+ if(bvomSecondaryTabWriteBlocked())return false;
+ let current=null;
  try{current=localStorage.getItem(BVOM_DATA_KEY)}catch(e){bvomLocalPersistenceFailureNotice();return false}
  if(bvomLocalWriteConflictActive||current!==bvomLastPersistedRaw){bvomLocalWriteConflictNotice();return false}
  // false means the training blob was NOT committed. Separate-key bookkeeping
  // after this point cannot undo that durable write or justify rolling memory back.
- try{localStorage.setItem(BVOM_DATA_KEY,next)}catch(e){bvomLocalPersistenceFailureNotice();return false}
+ const previousActivity=state.workoutLastActivityAt,previousProtocol=state.workoutOwnershipVersion;
+ const persisted=current?JSON.parse(current):null;
+ if(!options?.recovery){
+  if(!bvomStateWorkoutActive(state)){delete state.workoutLastActivityAt;delete state.workoutOwnershipVersion;}
+  else if(!options?.passive&&(options?.activity||bvomRecordedActivityChanged(persisted,state))){
+   const now=Date.now();if(Number.isFinite(now)&&now>0)state.workoutLastActivityAt=now;
+  }
+ }
+ if(bvomStateWorkoutActive(state))state.workoutOwnershipVersion=1;
+ const next=JSON.stringify(state);
+ try{localStorage.setItem(BVOM_DATA_KEY,next)}catch(e){if(previousActivity===undefined)delete state.workoutLastActivityAt;else state.workoutLastActivityAt=previousActivity;if(previousProtocol===undefined)delete state.workoutOwnershipVersion;else state.workoutOwnershipVersion=previousProtocol;bvomLocalPersistenceFailureNotice();return false}
  bvomLastPersistedRaw=next;
  try{if(window.__bvomAuthUserId)bvomSetLocalOwnerId(window.__bvomAuthUserId);
   if(bvomStateWorkoutActive(state)){
@@ -596,7 +625,7 @@ function completeSetup(){if(!bvomWorkoutActionAllowed())return;
  state.warmupDone={};state.warmupPlans={};
  save();showApp();
 }
-function showApp(){document.querySelector("#setup").classList.add("hidden");document.querySelector("#app").classList.remove("hidden");renderAll();cancelTimer()}
+function showApp(){document.querySelector("#setup").classList.add("hidden");document.querySelector("#app").classList.remove("hidden");bvomActivateRecovery();renderAll();if(!bvomStateWorkoutActive(state))cancelTimer()}
 function spec(n,s,r){return n==="Deadlift"&&state.weights.Deadlift<=60?[3,5]:[s,r]}
 function program(){return programs[state.day].map(([n,s,r])=>[n,...spec(n,s,r)])}
 function switchDay(d){if(!bvomWorkoutActionAllowed())return;
@@ -864,12 +893,12 @@ function completeWarmup(name,index,total,btn){if(!bvomWorkoutActionAllowed())ret
   if(done[index]){
     delete done[index];
     btn.classList.remove("done");
-    save();
+    save({activity:true});
     return;
   }
   done[index]=true;
   btn.classList.add("done");
-  save();startTimer();
+  save({activity:true});startTimer();
   if(index===total-1){
     activateTab("workout");
     scrollExercise("work-",name);
@@ -2059,7 +2088,7 @@ function getSetPlan(n){
  }
  return out;
 }
-function skipOptionalSingle(n){if(!bvomWorkoutActionAllowed())return;ensureHLM();state.hlm.skippedSingles[state.day+'|'+n]=true;state.processed=state.processed||{};if(!state.processed[n]){processedSnapshot(n);state.processed[n]=true;}save();renderAll();advanceAfterExercise(n);advanceToNextCoreWarmup(n)}
+function skipOptionalSingle(n){if(!bvomWorkoutActionAllowed())return;ensureHLM();state.hlm.skippedSingles[state.day+'|'+n]=true;state.processed=state.processed||{};if(!state.processed[n]){processedSnapshot(n);state.processed[n]=true;}save({activity:true});renderAll();advanceAfterExercise(n);advanceToNextCoreWarmup(n)}
 function processedSnapshot(n){state.processedSnapshots=state.processedSnapshots||{};if(state.processedSnapshots[n])return;const snap=bvomMakeProcessedSnapshot(n);if(snap)state.processedSnapshots[n]=snap}
 function restoreProcessedSnapshot(n){
  const snap=state.processedSnapshots?.[n];if(!snap)return;
@@ -2491,7 +2520,7 @@ function bvomCloudFingerprint(v){try{return bvomCloudStable(v)}catch(e){return '
    being mistaken for genuine user-data conflicts. The source objects are never mutated. */
 function bvomCloudNormalizeForCompare(v){
  const d=JSON.parse(JSON.stringify(v||{}));
- d.session={};d.gppSession={};d.sessionOverrides={};d.processed={};d.processedSnapshots={};d.warmupDone={};d.warmupPlans={};d.timerStart=null;d.workoutStartedAt=null;d.hlmActiveWorkoutSettings=null;
+ d.session={};d.gppSession={};d.sessionOverrides={};d.processed={};d.processedSnapshots={};d.warmupDone={};d.warmupPlans={};d.timerStart=null;d.workoutStartedAt=null;delete d.workoutLastActivityAt;delete d.workoutOwnershipVersion;d.hlmActiveWorkoutSettings=null;
 
  d.theme=d.theme||'classic';
  d.unit=d.unit||'kg';
@@ -2607,7 +2636,7 @@ function bvomStateWorkoutActive(s){if(s?.workoutStartedAt)return true;for(const 
 function bvomCloudWorkoutActive(){return bvomStateWorkoutActive(state)}
 function bvomStoredWorkoutActive(){try{const raw=localStorage.getItem(BVOM_DATA_KEY);return raw?bvomStateWorkoutActive(JSON.parse(raw)):false}catch(e){return bvomCloudWorkoutActive()}}
 function bvomAnyWorkoutActive(){return bvomCloudWorkoutActive()||bvomStoredWorkoutActive()}
-function bvomCloudPayload(){const d=JSON.parse(JSON.stringify(state));d.session={};d.gppSession={};d.sessionOverrides={};d.processed={};d.processedSnapshots={};d.warmupDone={};d.warmupPlans={};d.timerStart=null;d.workoutStartedAt=null;d.hlmActiveWorkoutSettings=null;if(d.hlm)d.hlm.skippedSingles={};return d}
+function bvomCloudPayload(){const d=JSON.parse(JSON.stringify(state));d.session={};d.gppSession={};d.sessionOverrides={};d.processed={};d.processedSnapshots={};d.warmupDone={};d.warmupPlans={};d.timerStart=null;d.workoutStartedAt=null;delete d.workoutLastActivityAt;delete d.workoutOwnershipVersion;d.hlmActiveWorkoutSettings=null;if(d.hlm)d.hlm.skippedSingles={};return d}
 function bvomCloudMaybeScheduleFromSave(){if(bvomCloudWorkoutActive()){if(!bvomCloud.workoutBaselineFingerprint)bvomCloud.workoutBaselineFingerprint=bvomCloudComparableFingerprint(bvomCloudPayload());return}if(bvomCloud.deferWorkoutCommit)return;bvomCloudScheduleAutoSave()}
 function bvomCloudValidData(d){return !!(d&&typeof d==='object'&&d.weights&&Array.isArray(d.history))}
 async function bvomCloudLatest(){
@@ -3067,7 +3096,7 @@ function bvomPauseGppTimer(id){if(!bvomWorkoutActionAllowed())return;const t=sta
 function bvomResumeGppTimer(id){if(!bvomWorkoutActionAllowed())return;const t=state.gppSession[id]?.timing;if(!t||t.status!=='paused')return;const a=bvomGppActiveTimed();if(a&&a.id!==id)return;t.startedAt=Date.now();t.status='running';save();bvomStartGppTicker();renderWorkout();bvomSyncGppTimerbar()}
 function bvomGppResultIncomplete(g,x){const m=g?.metrics||{},a=x?.actual||{};return !!((m.reps&&a.reps==null)||(m.load&&a.load==null)||(m.distance&&a.distance==null))}
 function bvomGppResultModal(id){if(!bvomWorkoutActionAllowed())return;const g=state.gppList.find(x=>x.id===id),x=state.gppSession[id];if(!g||!x||x.timing?.status!=='stopped')return;const m=g.metrics,p=g.planned,a=x.actual=x.actual||{},o=document.createElement('div');o.className='bvomModalOverlay';let h=`<div class="bvomModal"><h3>${bvomEsc(g.name)} — ${hlmTxt('RESULT','結果')}</h3><div class="sub">${hlmTxt('Time recorded:','記録時間:')} <b>${bvomGppTime(a.elapsedSeconds)}</b></div>`;if(m.reps)h+=`<label>${hlmTxt('Reps','回数')}<input data-k="reps" type="number" min="0" step="1" value="${a.reps??p.reps??0}"></label>`;if(m.load)h+=`<label>${hlmTxt('Load','重量')} (${unitLabel()})<input data-k="load" type="number" min="0" step=".25" value="${a.load??p.load??0}"></label>`;if(m.distance)h+=`<label>${hlmTxt('Distance','距離')}<input data-k="distance" type="number" min="0" step=".01" value="${a.distance??p.distance??0}"></label><label>${hlmTxt('Unit','単位')}<select data-u>${['m','km','ft','yd','mi'].map(u=>`<option ${String(a.distanceUnit||p.distanceUnit||bvomGppDefaultDistanceUnit())===u?'selected':''}>${u}</option>`).join('')}</select></label>`;h+=`<div class="modalActions"><button class="primary" data-s>${hlmTxt('SAVE RESULT','結果を保存')}</button></div></div>`;o.innerHTML=h;document.body.appendChild(o);o.querySelector('[data-s]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;o.querySelectorAll('[data-k]').forEach(el=>a[el.dataset.k]=Number(el.value));if(m.distance)a.distanceUnit=o.querySelector('[data-u]').value;o.remove();save();renderWorkout();bvomSyncWorkoutControls();bvomSyncGppTimerbar()}}
-function bvomStopGppTimer(id,auto=false){if(!bvomWorkoutActionAllowed())return;const g=state.gppList.find(x=>x.id===id),x=state.gppSession[id],t=x?.timing;if(!g||!t)return;if(t.status==='running')t.accumulatedMs=bvomGppElapsed(t);t.startedAt=null;t.status='stopped';x.actual=x.actual||{};x.actual.elapsedSeconds=Math.round((t.accumulatedMs||0)/1000);if(g.metrics.rounds){const z=bvomGppIntervalState(g,t);x.actual.roundsCompleted=auto?Number(g.planned.rounds)||0:Math.min(Number(g.planned.rounds)||0,z.roundsCompleted)}save();if(!bvomGppResultIncomplete(g,x)){renderWorkout();bvomSyncWorkoutControls();bvomSyncGppTimerbar();return}bvomGppResultModal(id)}
+function bvomStopGppTimer(id,auto=false){if(!bvomWorkoutActionAllowed())return;const g=state.gppList.find(x=>x.id===id),x=state.gppSession[id],t=x?.timing;if(!g||!t)return;if(t.status==='running')t.accumulatedMs=bvomGppElapsed(t);t.startedAt=null;t.status='stopped';x.actual=x.actual||{};x.actual.elapsedSeconds=Math.round((t.accumulatedMs||0)/1000);if(g.metrics.rounds){const z=bvomGppIntervalState(g,t);x.actual.roundsCompleted=auto?Number(g.planned.rounds)||0:Math.min(Number(g.planned.rounds)||0,z.roundsCompleted)}save({passive:auto});if(!bvomGppResultIncomplete(g,x)){renderWorkout();bvomSyncWorkoutControls();bvomSyncGppTimerbar();return}bvomGppResultModal(id)}
 
 function bvomStartGppTicker(){if(bvomGppTimerInt)return;bvomGppTimerInt=setInterval(()=>{const a=bvomGppActiveTimed();if(!a){clearInterval(bvomGppTimerInt);bvomGppTimerInt=null;return}if(a.x.timing.status==='running'&&a.g?.metrics.rounds){const z=bvomGppIntervalState(a.g,a.x.timing);const key=`${z.round}|${z.phase}`;if(key!==bvomGppLastIntervalKey){if(bvomGppLastIntervalKey&&a.g.intervalCue!==false&&state.timerSound!==false)ding(180);bvomGppLastIntervalKey=key}if(z.done){bvomStopGppTimer(a.id,true);return}}bvomSyncGppTimerbar()},250)}
 function bvomSyncGppTimerbar(){const a=bvomGppActiveTimed(),bar=document.querySelector('#timerbar'),clock=document.querySelector('#clock'),marks=bar?.querySelector('.marks');if(!a){if(!state.timerStart){bar?.classList.add('idle');if(clock)clock.textContent='0:00';if(marks)marks.textContent=hlmTxt('DINGS 3 · 5 · 10','音 3 · 5 · 10')}return}bar?.classList.remove('idle');if(a.g?.metrics.rounds){const z=bvomGppIntervalState(a.g,a.x.timing),phase=z.phase==='work'?hlmTxt('WORK','運動'):hlmTxt('REST','休憩'),paused=a.x.timing.status==='paused'?` · ${hlmTxt('PAUSED','一時停止')}`:'';if(clock)clock.textContent=bvomGppTime(Math.ceil(Math.max(0,z.phaseTotal-z.phaseElapsed)/1000));if(marks)marks.textContent=Number(a.g.planned.everySeconds)>0?`GPP · ${hlmTxt('ROUND','ラウンド')} ${z.round}/${z.rounds} · ${hlmTxt('EVERY','間隔')} ${bvomGppTime(a.g.planned.everySeconds)}${paused}`:`GPP · ${hlmTxt('ROUND','ラウンド')} ${z.round}/${z.rounds} · ${phase}${paused}`}else{if(clock)clock.textContent=bvomGppTime(Math.floor(bvomGppElapsed(a.x.timing)/1000));if(marks)marks.textContent=`GPP · ${bvomEsc(a.g?.name||hlmTxt('TIMED ACTIVITY','時間制アクティビティ')).toUpperCase()}${a.x.timing.status==='paused'?` · ${hlmTxt('PAUSED','一時停止')}`:''}`}}
@@ -3507,6 +3536,132 @@ function bvomWatchServiceWorkerUpdate(reg){
   worker.addEventListener('statechange',()=>{if(worker.state==='installed'&&navigator.serviceWorker.controller)offer()});
  });
 }
+/* ===== EXCLUSIVE DOCUMENT OWNERSHIP / INTERRUPTED WORKOUT RECOVERY ===== */
+const BVOM_INACTIVITY_MS=60*60*1000;
+function bvomRecordedActivity(s){
+ const sets={};for(const [key,rows] of Object.entries(s?.session||{})){
+  const actual=Object.fromEntries(Object.entries(rows||{}).filter(([,r])=>r&&r.reps!==undefined));if(Object.keys(actual).length)sets[key]=actual;
+ }
+ const custom={};for(const [key,x] of Object.entries(s?.freeTrainingSession||{})){
+  const rows=(x?.sets||[]).filter(r=>r&&r.reps!==undefined),single=x?.single?.reps!==undefined?x.single:null;
+  if(rows.length||single)custom[key]={sets:x.sets,single};
+ }
+ return JSON.stringify({sets,custom,gpp:s?.gppSession||{}});
+}
+function bvomRecordedActivityChanged(before,after){return bvomRecordedActivity(before)!==bvomRecordedActivity(after)}
+function bvomRecoveryStatus(message){
+ bvomRecoveryMessage=message;let el=document.getElementById('bvomRecoveryStatus');
+ if(!el){el=document.createElement('div');el.id='bvomRecoveryStatus';el.setAttribute('role','status');el.className='notice';document.querySelector('#app')?.prepend(el)}
+ el.textContent=message;
+}
+function bvomActivateRecovery(){
+ if(!bvomWindowLockOwned){bvomWorkoutReadOnlyNotice();return false}
+ try{
+  const account=localStorage.getItem(BVOM_DATA_OWNER_KEY)||'';
+  // Recovery cannot run merely because DOM/default state exists. Auth/access must open the app.
+  if(!account||window.__bvomAuthUserId!==account||bvomCloud.user?.id!==account||bvomCloud.accountSwitchDeferred)return false;
+  if(localStorage.getItem(BVOM_DATA_KEY)!==bvomLastPersistedRaw){bvomLocalWriteConflictNotice();return false}
+  if(bvomStateWorkoutActive(state)&&JSON.parse(bvomLastPersistedRaw||'null')?.workoutOwnershipVersion!==1){bvomRecoveryLegacyBlocked=true;bvomWorkoutReadOnlyNotice();return false}
+  const marker=localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY)||'';
+  // Only the marker observed when this document obtained its real exclusive lock is recoverable.
+  // A changed marker after acquisition is a conflict, never another opportunity to steal.
+  if(marker&&marker!==bvomTabId()&&marker!==bvomWindowOwnerAtLock){bvomWorkoutReadOnlyNotice();return false}
+  bvomRecoveryAccount=account;
+  if(bvomStateWorkoutActive(state)){
+   localStorage.setItem(BVOM_WORKOUT_TAB_OWNER_KEY,bvomTabId());
+   bvomRecoveryStatus(hlmTxt('Interrupted workout recovered. Recorded work is preserved.','中断したワークアウトを復旧しました。記録は保持されています。'));
+   bvomRecoveryCheck();
+  }
+  return true;
+ }catch(e){bvomLocalPersistenceFailureNotice();return false}
+}
+function bvomRecoveryHold(){
+ if(state.pendingCloseMissChoice||state.hlm?.pendingRepChoice)return 'choice';
+ if(bvomGppActiveTimed())return 'gpp';
+ for(const [id,x] of Object.entries(state.gppSession||{})){
+  const g=(state.gppList||[]).find(g=>g.id===id);if(!g)return 'gpp';
+  if(x?.started&&!g.metrics.sets&&bvomGppResultIncomplete(g,x))return 'gpp';
+  if(x?.started&&g.metrics.sets&&!(x.sets||[]).some(Boolean))return 'gpp';
+ }
+ // A final set may be durable while creating its required choice was interrupted.
+ if(!isFreeTraining()&&!isBodybuilding())for(const n of Object.keys(state.session||{})){
+  if(n.startsWith('ACC:'))continue;const r=coreResult(n);
+  if(r.complete&&!state.processed?.[n]&&(r.close||(isIntermediate()&&corePrescription(n).kind==='hlmHeavy'&&!r.hlmTopSuccess&&(state.hlm?.failCount?.[n]||0)>=2)))return 'choice';
+ }
+ if(window.__bvomFinishBusy||document.querySelector('.bvomModalOverlay'))return 'dialog';
+ return '';
+}
+function bvomRecoveryCheck(){
+ if(bvomRecoveryBusy||!bvomWindowLockOwned||!bvomRecoveryAccount||bvomPersistenceBlocked()||!bvomStateWorkoutActive(state))return false;
+ const account=bvomRecoveryAccount;let rollback=null,committed=false;
+ try{
+  if(document.querySelector('#app')?.classList.contains('hidden')||bvomCloud.accountSwitchDeferred||window.__bvomAuthUserId!==account||bvomCloud.user?.id!==account||localStorage.getItem(BVOM_DATA_OWNER_KEY)!==account)return false;
+  const raw=localStorage.getItem(BVOM_DATA_KEY);
+  if(raw!==bvomLastPersistedRaw){bvomLocalWriteConflictNotice();return false}
+  if(localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY)!==bvomTabId())return false;
+  const persisted=raw?JSON.parse(raw):null;
+  // Never finish a merely in-memory edit that is not represented by the same durable activity.
+  if(!persisted||bvomRecordedActivityChanged(persisted,state))return false;
+  const now=Date.now(),last=persisted.workoutLastActivityAt;
+  if(!Number.isFinite(now)||now<=0)return false;
+  // Missing/invalid/future/rolled-back clocks get a durable fresh grace period, never instant expiry.
+  if(typeof last!=='number'||!Number.isFinite(last)||last<=0||last>now){
+   const before=JSON.parse(JSON.stringify(state));state.workoutLastActivityAt=now;bvomRecoveryBusy=true;
+   if(!save({durable:true,recovery:true}))state=before;
+   return false;
+  }
+  if(now-last<BVOM_INACTIVITY_MS)return false;
+  const hold=bvomRecoveryHold();
+  if(hold){bvomRecoveryStatus(hold==='choice'?hlmTxt('Workout kept: resolve the pending REPEAT / PROGRESS decision before finishing.','ワークアウトを保持しています。終了する前に未決定のREPEAT / PROGRESSを選択してください。'):hold==='gpp'?hlmTxt('Workout kept: stop GPP and save any remaining results before finishing.','ワークアウトを保持しています。終了する前にGPPを停止し、残りの結果を保存してください。'):hlmTxt('Workout kept while a dialog is open. Close or resolve it before automatic recovery.','ダイアログが開いているためワークアウトを保持しています。閉じるか操作を完了してください。'));return false}
+  const session=isFreeTraining()?Object.assign({},bvomFtRecordForHistory(),Object.fromEntries(Object.entries(state.session||{}).filter(([k])=>k.startsWith('ACC:')))):JSON.parse(JSON.stringify(state.session||{}));
+  const gpp=bvomGppResultSnapshot();
+  const hasSets=Object.values(session).some(rows=>Object.values(rows||{}).some(r=>r&&r.reps!==undefined));
+  if(!hasSets&&!gpp.length){bvomRecoveryStatus(hlmTxt('Workout kept: no recorded sets or GPP results to save in History.','ワークアウトを保持しています。履歴に保存するセットやGPP結果がありません。'));return false}
+  const before=JSON.parse(JSON.stringify(state));rollback=before;bvomRecoveryBusy=true;
+  // Duration ends at the last recorded interaction, not when a closed app happens to reopen.
+  const start=Number(state.workoutStartedAt),seconds=Number.isFinite(start)&&start>0?Math.max(0,Math.floor((last-start)/1000)):0;
+  const duration=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;
+  const record={date:new Date(last).toISOString(),...bvomHistoryExportMeta(session,duration),unit:unitLabel(),program:isBodybuilding()?'bodybuilding':isFreeTraining()?'free':state.programMode||'lprpt',day:state.day,incomplete:true,abandoned:true,session,gpp,weights:{...state.weights},accessoryNames:Object.fromEntries((state.accessoryList||[]).map(a=>[a.id,a.name])),note:state.workoutNote||'',duration,volume:isFreeTraining()?bvomFtVolume():bvomWorkoutVolume()};
+  if(isBodybuilding())record.bodybuilding=bvomBbOnRampActive()?{onramp:true,sessionNumber:state.bodybuilding.onramp.sessionsCompleted+1}:{workoutNumber:state.bodybuilding.completedSessions+1,decisions:[]};
+  if(isFreeTraining())record.dayId=bvomFtDayId();
+  state.history.push(record);bvomApplyPendingAccessoryFutureOverrides();if(isFreeTraining()&&Array.isArray(state.freeTrainingDraft))bvomFtDay().compounds=JSON.parse(JSON.stringify(state.freeTrainingDraft));
+  // No progression calls, program/day advancement or calibration handoff. Earned state remains.
+  state.session={};state.gppSession={};state.freeTrainingSession={};state.freeTrainingDraft=null;
+  state.sessionOverrides={};state.processed={};state.processedSnapshots={};state.warmupDone={};state.warmupPlans={};
+  state.hlmActiveWorkoutSettings=null;if(state.hlm)state.hlm.skippedSingles={};
+  state.workoutStartedAt=null;state.timerStart=null;delete state.workoutLastActivityAt;delete state.workoutOwnershipVersion;
+  // Recheck all fencing immediately before the single training-blob commit (no await).
+  if(!bvomWindowLockOwned||localStorage.getItem(BVOM_DATA_KEY)!==raw||localStorage.getItem(BVOM_DATA_OWNER_KEY)!==account||window.__bvomAuthUserId!==account||bvomCloud.user?.id!==account||localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY)!==bvomTabId()||!save({durable:true,recovery:true})){
+   state=before;bvomRecoveryStatus(hlmTxt('Workout remains active: incomplete recovery could not be saved. Reload and check device storage.','ワークアウトは未完了のままです。復旧結果を保存できませんでした。再読み込みし、端末の保存領域を確認してください。'));return false;
+  }
+  committed=true;cancelTimer();bvomStopGppRuntime();bvomRecoveryStatus(hlmTxt('Inactive workout safely saved as INCOMPLETE in History.','操作のなかったワークアウトを未完了として履歴に保存しました。'));
+  renderAll();return true;
+ }catch(e){if(rollback&&!committed)state=rollback;bvomLocalPersistenceFailureNotice();return false}finally{bvomRecoveryBusy=false}
+}
+function bvomAcquireWindowLock(){
+ return new Promise(resolve=>{
+  if(!navigator.locks?.request){bvomWindowLockState='unsupported';resolve(false);return}
+  try{
+   navigator.locks.request('bvom-training-document-v1',{mode:'exclusive',ifAvailable:true},lock=>{
+    if(!lock){bvomWindowLockState='competing';resolve(false);return}
+    try{
+     if(localStorage.getItem(BVOM_DATA_KEY)!==bvomLastPersistedRaw){bvomWindowLockState='conflict';resolve(false);return}
+     bvomWindowOwnerAtLock=localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY)||'';
+     bvomWindowLockOwned=true;bvomWindowLockState='owned';if(!bvomStateWorkoutActive(state))save();resolve(true);
+     return new Promise(()=>{}); // Held until this document is destroyed; never expires or steals.
+    }catch(e){bvomWindowLockOwned=false;bvomWindowLockState='failed';resolve(false)}
+   }).catch(()=>{bvomWindowLockOwned=false;bvomWindowLockState='failed';resolve(false)});
+  }catch(e){bvomWindowLockState='failed';resolve(false)}
+ });
+}
+const bvomWindowLockReady=bvomAcquireWindowLock();
+const bvomRecoveryCloudInitBase=bvomCloudInit;
+bvomCloudInit=async function(){await bvomWindowLockReady;return bvomRecoveryCloudInitBase()};
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')bvomRecoveryCheck()});
+window.addEventListener('pageshow',()=>{bvomRecoveryCheck()});
+/* ===== END EXCLUSIVE DOCUMENT OWNERSHIP / RECOVERY ===== */
+
+
 bvomHideMainSurfaces();if("serviceWorker" in navigator){
   window.addEventListener("load", async ()=>{
     try{

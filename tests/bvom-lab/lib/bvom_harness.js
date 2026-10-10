@@ -35,20 +35,26 @@ function mkEl(tag='div',initialClasses=[]){
 }
 // Boot the real app. opts.supabase: 'inert' (default: client whose calls resolve empty),
 // null (CDN script missing), or a supabase-js-shaped library object.
-function boot(build,{ls=memStore(),ss=memStore(),supabase='inert',online=true}={}){
+function boot(build,{ls=memStore(),ss=memStore(),supabase='inert',online=true,locks}={}){
   // Mirror index.html: #app and #authgate start hidden.
   const els={'#app':mkEl('div',['hidden']),'#authgate':mkEl('div',['setup','hidden']),'#setup':mkEl('div',['setup'])};
+  // Historical VM contracts supply their document identity through ss. Actual browser tests
+  // use native UUIDs and intentionally copied sessionStorage to prove independent identities.
+  if(!ss.getItem('bvom_tab_id'))ss.setItem('bvom_tab_id',nodeCrypto.randomUUID());
+  let firstUuid=true;const platformCrypto={randomUUID:()=>{if(firstUuid){firstUuid=false;return ss.getItem('bvom_tab_id')}return nodeCrypto.randomUUID()}};
   const log=[],timers=[];
   const document={body:mkEl('body'),documentElement:mkEl('html'),head:mkEl('head'),visibilityState:'visible',title:'',
-    getElementById:id=>els['#'+id]||(els['#'+id]=mkEl()),querySelector:s=>els[s]||(els[s]=mkEl()),querySelectorAll:()=>[],
+    getElementById:id=>els['#'+id]||(els['#'+id]=mkEl()),querySelector:s=>s==='.bvomModalOverlay'?(document.body.children.find(e=>e.className==='bvomModalOverlay'&&!e.removed)||null):(els[s]||(els[s]=mkEl())),querySelectorAll:()=>[],
     createElement:t=>mkEl(t),createTextNode:t=>({nodeValue:t}),addEventListener(){}};
   const ctx={console:{log(){},warn(){},error(){},info(){},debug(){}},localStorage:ls,sessionStorage:ss,document,
-    navigator:{language:'en-AU',onLine:online,userAgent:'bvom-harness'},
+    // Default synchronous lock stub keeps historical callback contracts deterministic.
+    // It does NOT prove liveness: real exclusion/release is exercised in Chromium CI.
+    navigator:{language:'en-AU',onLine:online,userAgent:'bvom-harness',locks:locks===undefined?{request:(_n,_o,cb)=>{cb({name:_n});return Promise.resolve()}}:locks},
     location:{href:'https://bvom.test/',search:'',hash:'',origin:'https://bvom.test',pathname:'/',reload(){log.push(['reload'])},replace(){}},
     history:{replaceState(){},pushState(){}},
     setTimeout:(f)=>{timers.push(f);return timers.length},clearTimeout(){},setInterval:()=>1,clearInterval(){},requestAnimationFrame:()=>0,
     alert:m=>log.push(['alert',String(m)]),confirm:m=>{log.push(['confirm',String(m)]);return true},prompt:m=>{log.push(['prompt',String(m)]);return null},
-    Date,Math,JSON,Promise,URL,URLSearchParams,crypto:nodeCrypto.webcrypto,
+    Date,Math,JSON,Promise,URL,URLSearchParams,crypto:platformCrypto,
     fetch:async()=>{throw new TypeError('Failed to fetch')},matchMedia:()=>({matches:false,addEventListener(){},addListener(){}}),
     Audio:function(){return{play(){return Promise.resolve()}}},addEventListener(){},removeEventListener(){},scrollTo(){},getComputedStyle:()=>({}),
     Blob:function(){},FileReader:function(){},performance:{now:()=>Date.now()}};

@@ -3,6 +3,12 @@
 Run before production promotion, **after** `node gate.js` is GO. Everything that the harness can execute has moved to `behaviour_guard.js`; this matrix keeps only what needs a real browser, device, account or payment service.
 
 ## A. Installed PWA / device lifecycle
+
+- **PR #39 recovery (dummy workouts on a separate isolated HTTPS test origin only):** record squat/bench, note exact sets and timer, close the owning PWA completely and reopen within 5 minutes. Continue a set and confirm no lost work/phantom History. Repeat same-window reload.
+- Keep A live/backgrounded, open B on that same test origin: B must be visibly read-only for sets/warm-ups/Finish/Settings even after 65 minutes. A can still save. After closing A, reload B and resume. Do not test against production, clear existing app storage, or import a real backup.
+- Check 59m59s vs 60 full minutes since the last recorded interaction. Eligible abandoned work yields one incomplete History record; reopening does not duplicate it. Regular interactions during a 2–3 hour workout prevent expiry. Duration excludes abandonment time.
+- Repeat expiry/close/reopen with pending REPEAT/PROGRESS, running GPP, paused GPP and stopped GPP awaiting metrics: work stays protected for manual resolution. Use dummy BB/On-Ramp sessions and check completed-session counts do not advance on expiry.
+- Older uncoordinated workouts and unsupported Web Locks must remain read-only with an honest explanation. Android installed-PWA process eviction and Safari/iOS lock lifecycle remain manual checks; headless Chromium is not Android evidence. No draft preview/staging URL is supplied by this development task.
 - **F12 airplane-mode relaunch (one-time per release, iOS and Android):** sign in online on an installed PWA with a valid subscription; confirm the account screen shows active access; open a workout, log one set; fully close the PWA (swipe away). Enable airplane mode. Relaunch: local training must open, the logged set must still be there, sets can be recorded, Finish works, cloud status shows unavailable (not an access/sign-in screen). Repeat after >1 hour offline (access token expired). Repeat with a complimentary account.
 - **F12 negative, device:** on a fresh install that has never signed in, airplane-mode launch must not open training.
 - **F12 explicit sign-out:** after a verified account has worked offline successfully, reconnect and use SIGN OUT. Then enable airplane mode and relaunch: training must stay behind the sign-in gate, while the local training data itself remains on the device.
