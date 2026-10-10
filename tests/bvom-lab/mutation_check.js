@@ -15,8 +15,13 @@ const guard=path.join(__dirname,'behaviour_guard.js');
 // replace exactly one occurrence of `from`, searching only inside the function/region starting at `region`
 function inRegion(region,from,to){return src=>{const r=src.indexOf(region);if(r<0)return null;const i=src.indexOf(from,r);if(i<0||i-r>20000)return null;return src.slice(0,i)+to+src.slice(i+from.length)}}
 const MUTATIONS=[
+ {id:'ERASE-AUTH-EVENT-TRACKING-REMOVED',why:'account transition during await escapes snapshot validation',targets:['F69-ERASE-NATIVE-AUTH-CALLBACK'],apply:inRegion('c.auth.onAuthStateChange(', 'bvomEraseAuthEvent(_event,old||null,next);', '')},
+ {id:'ERASE-SNAPSHOT-RECHECK-REMOVED',why:'post-signout erase deletes changed saved data',targets:['F65-ERASE-STALE-AWAIT'],apply:inRegion('async function bvomEraseModal(', '||!bvomEraseStillCurrent(op)', '')},
+ {id:'ERASE-CANCEL-INVALIDATION-REMOVED',why:'Cancel only hides the modal while deletion continues',targets:['F66-ERASE-CANCEL-AWAIT'],apply:inRegion('async function bvomEraseModal(', 'if(op.cancelled||closed||!bvomEraseStillCurrent(op))', 'if(!bvomEraseStillCurrent(op))')},
+ {id:'HISTORY-IDENTITY-CHECK-REMOVED',why:'stale record confirmation deletes a different or changed record',targets:['F67-HISTORY-EXACT-TARGET'],apply:inRegion('function deleteHistoryWorkout(', 'if(matches.length!==1||state.history[matches[0]]!==h||', 'if(false&&matches.length!==1||false&&state.history[matches[0]]!==h||')},
+
  {id:'DELAYED-RESTORE-RECHECK-REMOVED',why:'stale backup callback overwrites a foreign active workout',targets:['F58-DELAYED-BACKUP-COMMIT'],apply:inRegion('function bvomRestoreCommitAllowed(', 'if(!bvomWorkoutActionAllowed())return false;', 'return true;')},
- {id:'HISTORY-CALLBACK-GUARD-REMOVED',why:'late History deletion mutates memory before validation',targets:['F59-DEFERRED-MUTATION-COMMIT'],apply:src=>{const a=inRegion('function deleteHistoryWorkout(', 'if(!bvomWorkoutActionAllowed())return;const before=', 'const before=')(src);return a&&inRegion('function deleteHistoryWorkout(', 'if(!save({durable:true})){state=before;return}', 'save();')(a)}},
+ {id:'HISTORY-CALLBACK-GUARD-REMOVED',why:'late History deletion mutates memory before validation',targets:['F59-DEFERRED-MUTATION-COMMIT'],apply:src=>{const a=inRegion('function deleteHistoryWorkout(', 'if(!bvomWorkoutActionAllowed())return;const matches=', 'const matches=')(src);return a&&inRegion('function deleteHistoryWorkout(', 'if(!save({durable:true})){state=before;return}', 'save();')(a)}},
  {id:'CUSTOM-ACCESSORY-CALLBACK-GUARD-REMOVED',why:'late accessory removal leaks into another write',targets:['F59-DEFERRED-MUTATION-COMMIT'],apply:src=>{const a=inRegion('const bvomFtBaseRemoveAccessory=', 'apply=()=>{if(!bvomWorkoutActionAllowed())return;', 'apply=()=>{')(src);return a&&inRegion('const bvomFtBaseRemoveAccessory=', 'if(!save({durable:true})){state=before;return}', 'save();')(a)}},
  {id:'CUSTOM-GPP-CALLBACK-GUARD-REMOVED',why:'late GPP removal leaks into another write',targets:['F59-DEFERRED-MUTATION-COMMIT'],apply:src=>{const a=inRegion('const bvomFtBaseRemoveGpp=', 'apply=()=>{if(!bvomWorkoutActionAllowed())return;', 'apply=()=>{')(src);return a&&inRegion('const bvomFtBaseRemoveGpp=', 'if(!save({durable:true})){state=before;return}', 'save();')(a)}},
  {id:'POSTCOMMIT-OWNER-FALSE-RESTORED',why:'a committed choice is wrongly rolled back in memory',targets:['F60-POSTCOMMIT-OWNER-FAILURE'],apply:inRegion('function save(options)', 'catch(e){bvomPostCommitOwnerFailureNotice();return true}', 'catch(e){bvomPostCommitOwnerFailureNotice();return false}')},
@@ -199,7 +204,9 @@ if(knownBad){
     // Monkey 007 red proof is pinned v2.9.0; v2.8.0 lacks this ownership contract.
     'F50-SECONDARY-PENDING-ANSWER-ATOMIC','F51-SECONDARY-WARMUP-NO-LEAK','F52-SECONDARY-STALE-CLAIM-ORDER','F53-PENDING-SAVE-FAILURE-KEEPS-DECISION','F54-SHARED-PROGRAM-ACTION-GUARDS','F55-HLM-FOURDAY-SECONDARY-DECISIONS','F56-CRITICAL-COMMIT-RECHECKS-OWNERSHIP','F57-OPEN-DIALOG-PERMISSION-RECHECK',
     // Monkey 009 proof is exact pre-009 PR e6631e4, not historical v2.8.0.
-    'F58-DELAYED-BACKUP-COMMIT','F59-DEFERRED-MUTATION-COMMIT','F60-POSTCOMMIT-OWNER-FAILURE','F61-PENDING-CREATION-DURABILITY','F62-DELAYED-CLOUD-AND-SETUP','F63-STORAGE-ORDER-AND-NESTED-CHOICE','F64-ASSIGNED-TIMER-SOUND-GUARD'
+    'F58-DELAYED-BACKUP-COMMIT','F59-DEFERRED-MUTATION-COMMIT','F60-POSTCOMMIT-OWNER-FAILURE','F61-PENDING-CREATION-DURABILITY','F62-DELAYED-CLOUD-AND-SETUP','F63-STORAGE-ORDER-AND-NESTED-CHOICE','F64-ASSIGNED-TIMER-SOUND-GUARD',
+    // Monkey 011 red proof is exact pre-011 f75202f, not historical v2.8.0.
+    'F65-ERASE-STALE-AWAIT','F66-ERASE-CANCEL-AWAIT','F67-HISTORY-EXACT-TARGET','F68-ERASE-LEGITIMATE-CONTROLS','F69-ERASE-NATIVE-AUTH-CALLBACK'
   ]);
   line(`\nKNOWN-BAD REFERENCE — ${path.resolve(knownBad)} (expected: applicable DEFECT contracts fail; CONTROL/NEGATIVE pass)`);
   const r=run(knownBad);if(r.error){line('reference run error: '+r.error);failures++}
