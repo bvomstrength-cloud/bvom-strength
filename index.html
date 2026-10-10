@@ -372,7 +372,7 @@ function bvomWorkoutReadOnlyNotice(){
  const body=bvomRecoveryLegacyBlocked?hlmTxt('This workout began before exclusive window coordination. BVOM cannot prove the older window closed, so this workout is preserved read-only. Keep a backup; finish in the original window if it is available.','このワークアウトは排他的な画面管理の導入前に開始されました。古い画面が閉じたことを確認できないため、記録を読み取り専用で保持しています。バックアップを保持し、元の画面が利用できる場合はそこで終了してください。'):bvomWindowLockState==='unsupported'?hlmTxt('This browser cannot prove exclusive workout ownership. Your recorded work is preserved, but editing and automatic recovery are blocked. Open BVOM in a browser with Web Locks support.','このブラウザーではワークアウトの排他的な管理を確認できません。記録は保持されていますが、編集と自動復旧は停止しています。Web Locks対応ブラウザーでBVOMを開いてください。'):hlmTxt('Another live BVOM window owns editing, or exclusive ownership could not be confirmed. Nothing from this action was saved. Close the older window, then reload this one to retry safely.','別のBVOM画面が編集を管理しているか、排他的な管理を確認できません。この操作は保存されていません。古い画面を閉じてから、この画面を再読み込みして再試行してください。');
  o.setAttribute('role','alertdialog');o.setAttribute('aria-modal','true');o.setAttribute('aria-labelledby','bvomReadOnlyTitle');o.setAttribute('aria-describedby','bvomReadOnlyBody');
  o.innerHTML=`<div class="bvomModal"><h3 id="bvomReadOnlyTitle">${title}</h3><p id="bvomReadOnlyBody">${body}</p><button type="button" class="secondary modalWide" data-view>${hlmTxt('VIEW ONLY','閲覧のみ')}</button><button type="button" class="primary modalWide" data-reload>${hlmTxt('RELOAD LATEST DATA','最新のデータを再読み込み')}</button></div>`;
- document.body.appendChild(o);const btn=o.querySelector('[data-reload]'),view=o.querySelector('[data-view]');btn.onclick=()=>location.reload();view.onclick=()=>{o.remove();previousFocus?.focus?.()};view.focus();
+ document.body.appendChild(o);const btn=o.querySelector('[data-reload]'),view=o.querySelector('[data-view]');btn.onclick=()=>bvomReloadReadOnlyWithRetry();view.onclick=()=>{o.remove();previousFocus?.focus?.()};view.focus();
  o.addEventListener('keydown',e=>{if(e.key==='Tab'){e.preventDefault();(document.activeElement===view?btn:view).focus()}if(e.key==='Escape')e.preventDefault()});
 }
 function bvomWorkoutActionAllowed(){
@@ -3645,11 +3645,31 @@ function bvomRecoveryCheck(){
   renderAll();return true;
  }catch(e){if(rollback&&!committed)state=rollback;bvomLocalPersistenceFailureNotice();return false}finally{bvomRecoveryBusy=false}
 }
+// One explicit read-only retry may wait briefly for Chrome to destroy the previous tab.
+// Never queue ownership merely because the original owner is idle or backgrounded.
+const BVOM_LOCK_RETRY_ONCE_KEY='bvom-readonly-lock-retry-once-v1';
+function bvomReloadReadOnlyWithRetry(){
+ try{sessionStorage.setItem(BVOM_LOCK_RETRY_ONCE_KEY,'1')}catch(e){}
+ location.reload();
+}
 function bvomAcquireWindowLock(){
  return new Promise(resolve=>{
   if(!navigator.locks?.request){bvomWindowLockState='unsupported';resolve(false);return}
+  let opts={mode:'exclusive',ifAvailable:true},timeout=null,controller=null;
   try{
-   navigator.locks.request('bvom-training-document-v1',{mode:'exclusive',ifAvailable:true},lock=>{
+   const retry=sessionStorage.getItem(BVOM_LOCK_RETRY_ONCE_KEY)==='1';
+   if(retry)sessionStorage.removeItem(BVOM_LOCK_RETRY_ONCE_KEY);
+   if(retry){
+    if(typeof AbortController!=='function'){bvomWindowLockState='unsupported';resolve(false);return}
+    controller=new AbortController();
+    opts={mode:'exclusive',signal:controller.signal};
+    timeout=setTimeout(()=>controller.abort(),7000);
+   }
+  }catch(e){bvomWindowLockState='failed';resolve(false);return}
+  const clearWait=()=>{if(timeout!==null){clearTimeout(timeout);timeout=null}};
+  try{
+   navigator.locks.request('bvom-training-document-v1',opts,lock=>{
+    clearWait();
     if(!lock){bvomWindowLockState='competing';resolve(false);return}
     try{
      if(localStorage.getItem(BVOM_DATA_KEY)!==bvomLastPersistedRaw){bvomWindowLockState='conflict';resolve(false);return}
@@ -3657,8 +3677,8 @@ function bvomAcquireWindowLock(){
      bvomWindowLockOwned=true;bvomWindowLockState='owned';if(!bvomStateWorkoutActive(state))save();resolve(true);
      return new Promise(()=>{}); // Held until this document is destroyed; never expires or steals.
     }catch(e){bvomWindowLockOwned=false;bvomWindowLockState='failed';resolve(false)}
-   }).catch(()=>{bvomWindowLockOwned=false;bvomWindowLockState='failed';resolve(false)});
-  }catch(e){bvomWindowLockState='failed';resolve(false)}
+   }).catch(()=>{clearWait();bvomWindowLockOwned=false;bvomWindowLockState=controller?.signal.aborted?'competing':'failed';resolve(false)});
+  }catch(e){clearWait();bvomWindowLockState='failed';resolve(false)}
  });
 }
 const bvomWindowLockReady=bvomAcquireWindowLock();
