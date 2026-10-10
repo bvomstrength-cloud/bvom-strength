@@ -124,7 +124,7 @@ test('expired real close/reopen and next set attempt finalize without leaking a 
 test('old v2.9 workout is read-only until explicit archive; cancel leaves exact bytes unchanged',async()=>{
  const old=fixture();old.session.Squat={0:{reps:5,load:60,index:0}};old.workoutStartedAt=Date.now()-300000;
  delete old.workoutOwnershipVersion;delete old.workoutLastActivityAt;
- const {context,a}=await setup(old);try{
+ const {context,a}=await setup(old);a.on('console',m=>{if(m.type()==='warning')console.log('ARCHIVE CONSOLE',m.text())});try{
   await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').waitFor();
   const before=await raw(a);
   a.once('dialog',d=>d.dismiss());
@@ -153,7 +153,7 @@ test('legacy pending decision and active GPP are archived undecided, with exact 
  old.gppList=[{id:'erg',name:'Dummy erg',assignment:'Both',metrics:{time:true},planned:{timeSeconds:60}}];
  old.gppSession={erg:{started:true,timing:{status:'running',startedAt:Date.now()-30000,accumulatedMs:0}}};
  delete old.workoutOwnershipVersion;delete old.workoutLastActivityAt;
- const {context,a}=await setup(old);try{
+ const {context,a}=await setup(old);a.on('console',m=>{if(m.type()==='warning')console.log('ARCHIVE CONSOLE',m.text())});try{
   await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').waitFor();
   const before=await raw(a);
   // Competing old writer changing the owner marker between lock acquisition and confirmation.
