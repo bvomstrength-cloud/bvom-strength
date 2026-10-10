@@ -179,6 +179,28 @@ test('legacy pending decision and active GPP are archived undecided, with exact 
   assert.equal(await a.evaluate(()=>JSON.parse(localStorage.getItem('bvom_legacy_workout_before_archive')).raw),before);
  }finally{await context.close()}
 });
+test('real v2.9.0 source workout can be archived after upgrade without changing earned weights',async()=>{
+ const {context,a}=await setup();try{
+  await a.close();
+  const old=await context.newPage();await old.goto(origin+'/legacy-v290');await old.waitForSelector('#app:not(.hidden)');
+  await record(old,'Squat',0);
+  const oldSaved=await saved(old);
+  assert.equal(oldSaved.workoutOwnershipVersion,undefined,'actual 2.9.0 must not know new ownership protocol');
+  await old.close();
+  const upgraded=await open(context);
+  await upgraded.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').waitFor();
+  const exactBefore=await raw(upgraded);
+  upgraded.once('dialog',d=>d.accept());
+  await upgraded.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
+  const after=await saved(upgraded);
+  assert.equal(after.history.length,oldSaved.history.length+1);
+  assert.equal(after.history.at(-1).incomplete,true);
+  assert.deepEqual(after.history.at(-1).session.Squat,oldSaved.session.Squat);
+  assert.deepEqual(after.weights,oldSaved.weights);
+  assert.equal(await upgraded.evaluate(()=>JSON.parse(localStorage.getItem('bvom_legacy_workout_before_archive')).raw),exactBefore);
+  await record(upgraded,'Squat',1);
+ }finally{await context.close()}
+});
 test('optional Android loopback server seeds dummy data and refuses replacement',async()=>{
  const {spawn}=require('node:child_process');const child=spawn(process.execPath,[path.join(__dirname,'recovery_phone_server.cjs'),'33331'],{stdio:['ignore','pipe','pipe']});let context;
  try{
@@ -188,7 +210,7 @@ test('optional Android loopback server seeds dummy data and refuses replacement'
  }finally{if(context)await context.close();child.kill()}
 });
 (async()=>{
- const server=http.createServer((req,res)=>{const url=new URL(req.url,'http://local');if(url.pathname==='/seed'){res.end('<!doctype html>seed');return}if(url.pathname.startsWith('/vendor/')){res.writeHead(200,{'Content-Type':'text/javascript'});res.end('// External service stub: library unavailable; verified dummy offline owner only.');return}const f=path.join(root,url.pathname);if(!f.startsWith(root+path.sep)||!fs.existsSync(f)){res.writeHead(404);res.end();return}res.writeHead(200,{'Content-Type':f.endsWith('.html')?'text/html':f.endsWith('.js')?'text/javascript':'image/png','Cache-Control':'no-store'});res.end(fs.readFileSync(f))});
+ const server=http.createServer((req,res)=>{const url=new URL(req.url,'http://local');if(url.pathname==='/seed'){res.end('<!doctype html>seed');return}if(url.pathname.startsWith('/vendor/')){res.writeHead(200,{'Content-Type':'text/javascript'});res.end('// External service stub: library unavailable; verified dummy offline owner only.');return}const f=url.pathname==='/legacy-v290'?path.join(root,'.bvom-production-v290','index.html'):path.join(root,url.pathname);if(!f.startsWith(root+path.sep)||!fs.existsSync(f)){res.writeHead(404);res.end();return}res.writeHead(200,{'Content-Type':f.endsWith('.html')?'text/html':f.endsWith('.js')?'text/javascript':'image/png','Cache-Control':'no-store'});res.end(fs.readFileSync(f))});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));origin='http://127.0.0.1:'+server.address().port;
  let failed=0;try{browser=await chromium.launch({headless:true});for(const t of tests){try{await t.fn();console.log('PASS:',t.name)}catch(e){failed++;console.error('FAIL:',t.name,e.stack)}}}finally{if(browser)await browser.close();await new Promise(r=>server.close(r))}console.log(`BVOM application browser checks: ${tests.length-failed}/${tests.length} PASS`);if(failed)process.exitCode=1;
 })().catch(e=>{console.error(e);process.exitCode=1});
