@@ -38,6 +38,39 @@ test('duplicate session identity cannot write with A live/background/frozen afte
   assert.equal(await raw(b),before);await cdp.send('Page.setWebLifecycleState',{state:'active'});await record(a,'Squat',1);
  }finally{await context.close()}
 });
+test('ONE read-only reload tap waits for old Android-style document lock release',async()=>{
+ const {context,a}=await setup();try{
+  await record(a,'Squat',0);
+  const b=await open(context);const before=await raw(a);
+  await b.evaluate(()=>tapSet('Squat',1));
+  await b.locator('#bvomWorkoutReadOnlyOverlay [data-reload]').waitFor();
+  // Original document is still alive when the user presses retry. Simulate a delayed
+  // Android tab-close lifecycle: the lock disappears only AFTER the single tap.
+  const lateClose=(async()=>{await new Promise(r=>setTimeout(r,900));await a.close()})();
+  await b.locator('#bvomWorkoutReadOnlyOverlay [data-reload]').click();
+  await lateClose;
+  await b.waitForFunction(()=>bvomWindowLockOwned===true,undefined,{timeout:15000});
+  await b.waitForSelector('#app:not(.hidden)',{timeout:15000});
+  assert.equal(await b.evaluate(()=>sessionStorage.getItem('bvom-readonly-lock-retry-once-v1')),null);
+  assert.equal(await b.evaluate(()=>bvomWorkoutActionAllowed()),true);
+  assert.deepEqual((await saved(b)).session.Squat,{0:JSON.parse(before).session.Squat[0]});
+  await record(b,'Squat',1);
+ }finally{await context.close()}
+});
+test('ONE retry cannot take ownership while original tab stays alive',async()=>{
+ const {context,a}=await setup();try{
+  await record(a,'Squat',0);const b=await open(context);
+  await b.evaluate(()=>tapSet('Squat',1));
+  await b.locator('#bvomWorkoutReadOnlyOverlay [data-reload]').click();
+  await b.waitForSelector('#app:not(.hidden)',{timeout:15000});
+  assert.equal(await b.evaluate(()=>bvomWindowLockOwned),false);
+  const before=await raw(a);
+  await b.evaluate(()=>{tapSet('Squat',1);save({durable:true})});
+  assert.equal(await raw(b),before);
+  await record(a,'Squat',1);
+  assert.equal((await saved(a)).session.Squat[1].reps,5);
+ }finally{await context.close()}
+});
 test('60 minute boundary, passive renders and exactly one incomplete record',async()=>{
  const {context,a}=await setup();try{
   await record(a,'Squat',0);const before=await saved(a);await tick(a,3599000);await a.evaluate(()=>{renderAll();bvomRecoveryCheck()});assert.equal((await saved(a)).history.length,0);
