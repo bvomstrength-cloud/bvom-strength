@@ -93,3 +93,22 @@ Before any v2.9 production promotion, test the startup path on a previously veri
 - Agree and implement a safe, useful explicit abandoned-owner recovery policy before release; phase-1 read-only blocking alone is not releasable recovery.
 - On an already legitimately eligible installed Android PWA test device using artificial workout data, compare same-tab refresh with full close/reopen offline while a close-miss decision is pending; record native identity/lifecycle, pending persistence, truthful warnings and exactly-once progression. No assumption that process restart creates a new identity.
 - Check two-window ownership notices in English/Japanese, focus and keyboard behavior, small-screen labels, and History viewing. Verify actual account/offline boundaries separately under owner authorization. No real accounts/services were exercised in Monkey 007.
+
+
+### Local Android dummy-only setup for draft PR #39
+
+No preview or deployment is required. On a computer with Node and Android USB debugging/ADB, check out the exact PR candidate (never `main`), then run:
+
+```sh
+node tests/bvom-lab/recovery_phone_server.cjs 33331
+adb reverse tcp:33331 tcp:33331
+```
+
+On Android Chrome open `http://localhost:33331/__dummy__`, confirm **DUMMY TEST ONLY**, then create the dummy profile. The initializer refuses to replace existing data. If the port already has unrelated data, choose another unused port and repeat both commands. This server substitutes the Supabase library and uses CSP to block external connections; do not sign in, import backups or use production. Chrome may offer Install/Add to Home screen for this loopback PWA; test both Chrome and the installed PWA when available. Keep USB forwarding/server running while opening the app; after the shell is cached, airplane-mode checks can use the installed dummy app.
+
+1. Record dummy squat and bench sets. Close completely and reopen within 5 minutes: exact loads/reps and rest timer remain; another set saves; History has no phantom entry.
+2. Keep A open/backgrounded, open B on the same local test origin. B must refuse set, warm-up and Finish edits, including after 65 minutes. A can save. Close A and reload B to retry recovery.
+3. Leave eligible recorded work untouched for 60 full minutes, reopen: one incomplete History record preserves sets; reopen again without duplicates. Regular recorded actions during a long workout reset the clock.
+4. Create a pending bench choice (5/5/6 in the default RPT fixture) and separately start/pause Dummy erg. Close/reopen and wait past expiry: decision/GPP work must stay protected until explicitly resolved/stopped.
+
+Stop the server with Ctrl-C and remove only the ADB forwarding rule with `adb reverse --remove tcp:33331`. Do not clear production app data. These are owner field-test instructions; CI cannot certify Android process eviction, installed-PWA lifecycle or Safari.

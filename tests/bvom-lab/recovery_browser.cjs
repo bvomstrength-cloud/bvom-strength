@@ -10,7 +10,7 @@ async function setup(data=fixture(),options={}){
  const context=await browser.newContext({serviceWorkers:'block'});context.setDefaultTimeout(5000);
  await context.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
  await context.addInitScript(({now,noLocks})=>{
-  window.testNow=now;const RealDate=Date;window.Date=class extends RealDate{constructor(...a){super(...(a.length?a:[window.testNow]))}static now(){return window.testNow}};
+  window.testNow=now;const RealDate=Date;window.Date=class extends RealDate{constructor(...a){super(...(a.length?a:[window.testNow+(window.testReopenOffset||0)]))}static now(){return window.testNow+(window.testReopenOffset||0)}};
   Object.defineProperty(navigator,'onLine',{get:()=>false});
   if(noLocks)Object.defineProperty(navigator,'locks',{value:undefined});
  },{now:Date.now(),noLocks:options.noLocks||false});
@@ -18,7 +18,7 @@ async function setup(data=fixture(),options={}){
  await seed.evaluate(d=>{localStorage.setItem('bvom_data',JSON.stringify(d));localStorage.setItem('bvom_data_owner','dummy-owner');localStorage.setItem('bvom_entitlement_cache_dummy-owner',JSON.stringify({userId:'dummy-owner',verifiedAt:new Date().toISOString(),record:{user_id:'dummy-owner',status:'complimentary'}}))},data);
  await seed.close();const a=await open(context);return {context,a};
 }
-async function open(context,id){const p=await context.newPage();if(id)await p.addInitScript(id=>sessionStorage.setItem('bvom_tab_id',id),id);await p.goto(origin+'/index.html');await p.waitForSelector('#app:not(.hidden)');await p.waitForTimeout(100);return p;}
+async function open(context,id,advanceMs=0){const p=await context.newPage();if(advanceMs)await p.addInitScript(ms=>{window.testReopenOffset=ms},advanceMs);if(id)await p.addInitScript(id=>sessionStorage.setItem('bvom_tab_id',id),id);await p.goto(origin+'/index.html');await p.waitForSelector('#app:not(.hidden)');await p.waitForTimeout(100);return p;}
 const raw=p=>p.evaluate(()=>localStorage.getItem('bvom_data'));
 const saved=async p=>JSON.parse(await raw(p));
 async function record(p,lift,i,reps=5){await p.evaluate(({lift,i})=>tapSet(lift,i),{lift,i});const o=p.locator('.bvomModalOverlay').last();let current=Number(await o.locator('[data-v]').textContent());while(current>reps){await o.locator('[data-m]').click();current--}while(current<reps){await o.locator('[data-p]').click();current++}await o.locator('[data-ok]').click();assert.equal((await saved(p)).session[lift][i].reps,reps);}
@@ -26,7 +26,7 @@ async function tick(p,ms){await p.evaluate(ms=>window.testNow+=ms,ms);}
 test('real close/reopen preserves squat + bench and allows new work',async()=>{
  const {context,a}=await setup();try{
   await record(a,'Squat',0);await record(a,'Bench Press',0);const before=await saved(a);await a.close();const b=await open(context);await tick(b,5*60000);
-  assert.deepEqual((await saved(b)).session,before.session);assert.equal((await saved(b)).history.length,0);await record(b,'Squat',1);
+  assert.deepEqual((await saved(b)).session,before.session);assert.equal((await saved(b)).timerStart,before.timerStart);assert.equal((await saved(b)).history.length,0);await record(b,'Squat',1);
   await b.reload();await b.waitForSelector('#app:not(.hidden)');await record(b,'Squat',2);
  }finally{await context.close()}
 });
@@ -41,14 +41,14 @@ test('duplicate session identity cannot write with A live/background/frozen afte
 test('60 minute boundary, passive renders and exactly one incomplete record',async()=>{
  const {context,a}=await setup();try{
   await record(a,'Squat',0);const before=await saved(a);await tick(a,3599000);await a.evaluate(()=>{renderAll();bvomRecoveryCheck()});assert.equal((await saved(a)).history.length,0);
-  await tick(a,1000);await a.evaluate(()=>bvomRecoveryCheck());const d=await saved(a);assert.equal(d.history.length,1);assert.equal(d.history[0].incomplete,true);assert.deepEqual(d.history[0].session,before.session);assert.deepEqual(d.weights,before.weights);assert.deepEqual(d.session,{});
+  await tick(a,1000);await a.evaluate(()=>bvomRecoveryCheck());const d=await saved(a);assert.equal(d.history.length,1);assert.equal(d.history[0].incomplete,true);assert.deepEqual(d.history[0].session,before.session);assert.deepEqual(d.weights,before.weights);assert.ok(Object.values(d.session).every(rows=>Object.keys(rows).length===0));assert.equal(d.workoutStartedAt,null);assert.equal(d.timerStart,null);assert.equal(await a.evaluate(()=>bvomSessionHasActivity()),false);
   await a.reload();await a.waitForSelector('#app:not(.hidden)');assert.equal((await saved(a)).history.length,1);
  }finally{await context.close()}
 });
 test('pending decision survives expired close/reopen and blocked B answer',async()=>{
  const d=fixture();d.core['Bench Press'].mode='rpt';const {context,a}=await setup(d);try{
   await record(a,'Bench Press',0);await record(a,'Bench Press',1);await a.evaluate(()=>tapSet('Bench Press',2));const modal=a.locator('.bvomModalOverlay').last();await modal.locator('[data-m]').click();await modal.locator('[data-m]').click();await modal.locator('[data-ok]').click();
-  const before=await saved(a);assert.ok(before.pendingCloseMissChoice);const b=await open(context);const rawBefore=await raw(a);await b.evaluate(()=>{bvomPresentPendingCloseMissChoice();completeWarmup('Squat',0,3,document.createElement('button'))});assert.equal(await raw(b),rawBefore);await b.close();await a.close();const c=await open(context);await tick(c,65*60000);await c.evaluate(()=>bvomRecoveryCheck());const held=await saved(c);assert.deepEqual(held.pendingCloseMissChoice,before.pendingCloseMissChoice);assert.deepEqual(held.session,before.session);assert.equal(held.history.length,0);
+  const before=await saved(a);assert.ok(before.pendingCloseMissChoice);const b=await open(context);const rawBefore=await raw(a);await b.evaluate(()=>{bvomPresentPendingCloseMissChoice();document.querySelector('.bvomModalOverlay [data-r]')?.click();completeWarmup('Squat',0,3,document.createElement('button'))});assert.equal(await raw(b),rawBefore);await b.close();await a.close();const c=await open(context);await tick(c,65*60000);await c.evaluate(()=>bvomRecoveryCheck());const held=await saved(c);assert.deepEqual(held.pendingCloseMissChoice,before.pendingCloseMissChoice);assert.deepEqual(held.session,before.session);assert.equal(held.history.length,0);await c.locator('.bvomModalOverlay [data-r]').click();const resolved=await saved(c);assert.equal(resolved.pendingCloseMissChoice,undefined);assert.equal(resolved.weights['Bench Press'],before.weights['Bench Press']+2.5);await c.reload();await c.waitForSelector('#app:not(.hidden)');assert.equal((await saved(c)).weights['Bench Press'],resolved.weights['Bench Press']);
  }finally{await context.close()}
 });
 test('missing Web Locks fails closed without writes',async()=>{
@@ -79,6 +79,22 @@ test('changed account and stale opened callback cannot leak through a later save
 });
 test('old-version active workout fails closed even with matching duplicated identity',async()=>{
  const d=fixture();d.session.Squat={0:{reps:5,load:60,index:0}};d.workoutStartedAt=Date.now()-65*60000;delete d.workoutLastActivityAt;delete d.workoutOwnershipVersion;const {context,a}=await setup(d);try{const before=await raw(a);await a.evaluate(()=>{tapSet('Squat',1);bvomRecoveryCheck();save({durable:true})});assert.equal(await raw(a),before);assert.ok(await a.locator('#bvomWorkoutReadOnlyOverlay').count())}finally{await context.close()}
+});
+test('expired real close/reopen and next set attempt finalize without leaking a new set',async()=>{
+ for(const trigger of ['boot','action']){const {context,a}=await setup();try{
+  await record(a,'Squat',0);const before=await saved(a);let p=a;
+  if(trigger==='boot'){await a.close();p=await open(context,undefined,65*60000)}
+  else{await tick(a,3600000);await a.evaluate(()=>tapSet('Squat',1))}
+  const d=await saved(p);assert.equal(d.history.length,1);assert.equal(d.history[0].incomplete,true);assert.deepEqual(d.history[0].session,before.session);assert.equal(await p.evaluate(()=>bvomSessionHasActivity()),false);assert.ok(Object.values(d.session).every(rows=>Object.keys(rows).length===0));
+ }finally{await context.close()}}
+});
+test('optional Android loopback server seeds dummy data and refuses replacement',async()=>{
+ const {spawn}=require('node:child_process');const child=spawn(process.execPath,[path.join(__dirname,'recovery_phone_server.cjs'),'33331'],{stdio:['ignore','pipe','pipe']});let context;
+ try{
+  await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Dummy phone server did not start')),5000);child.once('error',reject);child.once('exit',code=>{clearTimeout(timer);reject(Error('Dummy phone server exited '+code))});child.stdout.once('data',()=>{clearTimeout(timer);resolve()})});
+  context=await browser.newContext({serviceWorkers:'block'});await context.route('**/*',r=>new URL(r.request().url()).hostname==='localhost'?r.continue():r.abort());const p=await context.newPage();context.setDefaultTimeout(5000);
+  const response=await p.goto('http://localhost:33331/__dummy__');assert.ok(response.headers()['content-security-policy'].includes("connect-src 'self'"));await p.locator('#start').click();await p.waitForSelector('#app:not(.hidden)');await record(p,'Squat',0);const before=await raw(p);await p.goto('http://localhost:33331/__dummy__');await p.locator('#start').click();assert.match(await p.locator('#status').textContent(),/Nothing replaced/);assert.equal(await raw(p),before);
+ }finally{if(context)await context.close();child.kill()}
 });
 (async()=>{
  const server=http.createServer((req,res)=>{const url=new URL(req.url,'http://local');if(url.pathname==='/seed'){res.end('<!doctype html>seed');return}if(url.pathname.startsWith('/vendor/')){res.writeHead(200,{'Content-Type':'text/javascript'});res.end('// External service stub: library unavailable; verified dummy offline owner only.');return}const f=path.join(root,url.pathname);if(!f.startsWith(root+path.sep)||!fs.existsSync(f)){res.writeHead(404);res.end();return}res.writeHead(200,{'Content-Type':f.endsWith('.html')?'text/html':f.endsWith('.js')?'text/javascript':'image/png','Cache-Control':'no-store'});res.end(fs.readFileSync(f))});
