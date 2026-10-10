@@ -13,6 +13,19 @@ Production source repository for BVOM Strength.
 
 The current source preserves completed Bodybuilding GPP/conditioning results in Workout History, adds destination-neutral metadata to newly completed workout History records, includes a pure Export v1 translator and Strava adapter, and now adds a pure write-only Strava OAuth client boundary plus the documented server-side OAuth/security architecture. No live OAuth execution, token storage, webhook endpoint, Settings UI, or workout upload is enabled.
 
+## v2.9.1 release candidate (DRAFT — NOT DEPLOYED)
+
+Proposed next release from [draft PR #39](https://github.com/bvomstrength-cloud/bvom-strength/pull/39). The owner has accepted the Android repeated-tap window-recovery delay as a minor edge case; preserving recorded workouts remains mandatory.
+
+Changes compared with live v2.9.0:
+- exclusive browser Web Lock coordination blocks a second tab/window from writing a workout, including background/idle tabs;
+- reopened eligible interrupted workouts resume with saved sets and rest timer;
+- after 60 minutes without meaningful recorded activity, eligible abandoned workouts are saved once as INCOMPLETE in History, without unearned progression;
+- unfinished v2.9.0-format workouts remain read-only until the owner explicitly archives them as incomplete with a full local pre-archive backup, after closing other older BVOM windows; old windows do not participate in the new Web Lock;
+- v2.9.1 document title, visible label, shell build marker and new service-worker cache name support a clean update.
+
+Automated browser, static and behavioural regression evidence must be revalidated for the exact v2.9.1-labelled commit before release. Production `main` and live Netlify deployment remain at v2.9.0 until explicit owner approval. Do not present this draft as released.
+
 ## v2.9.0 release status
 
 v2.9.0 is the approved production startup-resilience release. It keeps BVOM local-first on previously verified devices even when the network is absent or slow, while preserving the existing owner-bound 7-day offline entitlement boundary.
