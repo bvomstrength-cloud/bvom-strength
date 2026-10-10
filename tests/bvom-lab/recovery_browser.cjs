@@ -21,7 +21,7 @@ async function setup(data=fixture(),options={}){
 async function open(context,id){const p=await context.newPage();if(id)await p.addInitScript(id=>sessionStorage.setItem('bvom_tab_id',id),id);await p.goto(origin+'/index.html');await p.waitForSelector('#app:not(.hidden)');await p.waitForTimeout(100);return p;}
 const raw=p=>p.evaluate(()=>localStorage.getItem('bvom_data'));
 const saved=async p=>JSON.parse(await raw(p));
-async function record(p,lift,i,reps=5){await p.evaluate(({lift,i})=>tapSet(lift,i),{lift,i});const o=p.locator('.bvomModalOverlay').last();await o.locator('[data-s]').click();assert.equal((await saved(p)).session[lift][i].reps,reps);}
+async function record(p,lift,i,reps=5){await p.evaluate(({lift,i})=>tapSet(lift,i),{lift,i});const o=p.locator('.bvomModalOverlay').last();let current=Number(await o.locator('[data-v]').textContent());while(current>reps){await o.locator('[data-m]').click();current--}while(current<reps){await o.locator('[data-p]').click();current++}await o.locator('[data-ok]').click();assert.equal((await saved(p)).session[lift][i].reps,reps);}
 async function tick(p,ms){await p.evaluate(ms=>window.testNow+=ms,ms);}
 test('real close/reopen preserves squat + bench and allows new work',async()=>{
  const {context,a}=await setup();try{
@@ -47,7 +47,7 @@ test('60 minute boundary, passive renders and exactly one incomplete record',asy
 });
 test('pending decision survives expired close/reopen and blocked B answer',async()=>{
  const d=fixture();d.core['Bench Press'].mode='rpt';const {context,a}=await setup(d);try{
-  await record(a,'Bench Press',0);await record(a,'Bench Press',1);await a.evaluate(()=>tapSet('Bench Press',2));const modal=a.locator('.bvomModalOverlay').last();await modal.locator('[data-m]').click();await modal.locator('[data-m]').click();await modal.locator('[data-s]').click();
+  await record(a,'Bench Press',0);await record(a,'Bench Press',1);await a.evaluate(()=>tapSet('Bench Press',2));const modal=a.locator('.bvomModalOverlay').last();await modal.locator('[data-m]').click();await modal.locator('[data-m]').click();await modal.locator('[data-ok]').click();
   const before=await saved(a);assert.ok(before.pendingCloseMissChoice);const b=await open(context);const rawBefore=await raw(a);await b.evaluate(()=>{bvomPresentPendingCloseMissChoice();completeWarmup('Squat',0,3,document.createElement('button'))});assert.equal(await raw(b),rawBefore);await b.close();await a.close();const c=await open(context);await tick(c,65*60000);await c.evaluate(()=>bvomRecoveryCheck());const held=await saved(c);assert.deepEqual(held.pendingCloseMissChoice,before.pendingCloseMissChoice);assert.deepEqual(held.session,before.session);assert.equal(held.history.length,0);
  }finally{await context.close()}
 });
