@@ -3641,7 +3641,7 @@ function bvomLegacyArchiveCommit(){
   delete next.pendingCloseMissChoice;if(next.hlm){delete next.hlm.pendingRepChoice;next.hlm.skippedSingles={}};
   delete next.workoutLastActivityAt;delete next.workoutOwnershipVersion;
   // No await or UI callback between the final unchanged-context check and blob replacement.
-  if(!bvomWindowLockOwned||localStorage.getItem(BVOM_DATA_KEY)!==raw||localStorage.getItem(BVOM_DATA_OWNER_KEY)!==account||localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY)!==marker||window.__bvomAuthUserId!==account||bvomCloud.user?.id!==account)throw Error('Saved training/account/owner changed before archive commit');
+  if(!bvomWindowLockOwned||localStorage.getItem(BVOM_DATA_KEY)!==raw||localStorage.getItem(BVOM_DATA_OWNER_KEY)!==account||(localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY)||'')!==marker||window.__bvomAuthUserId!==account||bvomCloud.user?.id!==account)throw Error('Saved training/account/owner changed before archive commit');
   const nextRaw=JSON.stringify(next);localStorage.setItem(BVOM_DATA_KEY,nextRaw);committed=true;
   state=next;bvomLastPersistedRaw=nextRaw;bvomRecoveryLegacyBlocked=false;bvomRecoveryAccount=account;
   if(localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY)===marker)localStorage.removeItem(BVOM_WORKOUT_TAB_OWNER_KEY);
