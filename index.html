@@ -369,11 +369,11 @@ function bvomWorkoutReadOnlyNotice(){
  if(document.getElementById('bvomWorkoutReadOnlyOverlay')?.parentNode)return;
  const previousFocus=document.activeElement;const o=document.createElement('div');o.id='bvomWorkoutReadOnlyOverlay';o.className='bvomModalOverlay';o.style.zIndex='270000';
  const title=hlmTxt('THIS WORKOUT IS READ-ONLY HERE','この画面ではワークアウトは読み取り専用です');
- const body=bvomRecoveryLegacyBlocked?hlmTxt('This workout began before exclusive window coordination. BVOM cannot prove the older window closed, so this workout is preserved read-only. Keep a backup; finish in the original window if it is available.','このワークアウトは排他的な画面管理の導入前に開始されました。古い画面が閉じたことを確認できないため、記録を読み取り専用で保持しています。バックアップを保持し、元の画面が利用できる場合はそこで終了してください。'):bvomWindowLockState==='unsupported'?hlmTxt('This browser cannot prove exclusive workout ownership. Your recorded work is preserved, but editing and automatic recovery are blocked. Open BVOM in a browser with Web Locks support.','このブラウザーではワークアウトの排他的な管理を確認できません。記録は保持されていますが、編集と自動復旧は停止しています。Web Locks対応ブラウザーでBVOMを開いてください。'):hlmTxt('Another live BVOM window owns editing, or exclusive ownership could not be confirmed. Nothing from this action was saved. Close the older window, then reload this one to retry safely.','別のBVOM画面が編集を管理しているか、排他的な管理を確認できません。この操作は保存されていません。古い画面を閉じてから、この画面を再読み込みして再試行してください。');
+ const body=bvomRecoveryLegacyBlocked?hlmTxt('This workout was started in an earlier BVOM version. It is protected from automatic changes. Finish in the old window if available, or close ALL other BVOM windows and explicitly archive this unfinished workout below. A full local pre-archive copy will be kept.','このワークアウトは以前のBVOMで開始されました。自動的な変更を防止しています。以前の画面が使える場合はそこで終了してください。または他のBVOM画面をすべて閉じてから、下の操作で未完了ワークアウトを明示的に履歴へ保存してください。保存前の完全な端末内コピーを保持します。'):bvomWindowLockState==='unsupported'?hlmTxt('This browser cannot prove exclusive workout ownership. Your recorded work is preserved, but editing and automatic recovery are blocked. Open BVOM in a browser with Web Locks support.','このブラウザーではワークアウトの排他的な管理を確認できません。記録は保持されていますが、編集と自動復旧は停止しています。Web Locks対応ブラウザーでBVOMを開いてください。'):hlmTxt('Another live BVOM window owns editing, or exclusive ownership could not be confirmed. Nothing from this action was saved. Close the older window, then reload this one to retry safely.','別のBVOM画面が編集を管理しているか、排他的な管理を確認できません。この操作は保存されていません。古い画面を閉じてから、この画面を再読み込みして再試行してください。');
  o.setAttribute('role','alertdialog');o.setAttribute('aria-modal','true');o.setAttribute('aria-labelledby','bvomReadOnlyTitle');o.setAttribute('aria-describedby','bvomReadOnlyBody');
- o.innerHTML=`<div class="bvomModal"><h3 id="bvomReadOnlyTitle">${title}</h3><p id="bvomReadOnlyBody">${body}</p><button type="button" class="secondary modalWide" data-view>${hlmTxt('VIEW ONLY','閲覧のみ')}</button><button type="button" class="primary modalWide" data-reload>${hlmTxt('RELOAD LATEST DATA','最新のデータを再読み込み')}</button></div>`;
- document.body.appendChild(o);const btn=o.querySelector('[data-reload]'),view=o.querySelector('[data-view]');btn.onclick=()=>bvomReloadReadOnlyWithRetry();view.onclick=()=>{o.remove();previousFocus?.focus?.()};view.focus();
- o.addEventListener('keydown',e=>{if(e.key==='Tab'){e.preventDefault();(document.activeElement===view?btn:view).focus()}if(e.key==='Escape')e.preventDefault()});
+ o.innerHTML=`<div class="bvomModal"><h3 id="bvomReadOnlyTitle">${title}</h3><p id="bvomReadOnlyBody">${body}</p><button type="button" class="secondary modalWide" data-view>${hlmTxt('VIEW ONLY','閲覧のみ')}</button><button type="button" class="primary modalWide" data-reload>${hlmTxt('RELOAD LATEST DATA','最新のデータを再読み込み')}</button>${bvomRecoveryLegacyBlocked?`<button type="button" class="secondary modalWide" style="margin-top:10px" data-legacy-archive>${hlmTxt('ARCHIVE OLD WORKOUT AS INCOMPLETE','以前のワークアウトを未完了として履歴に保存')}</button>`:''}</div>`;
+ document.body.appendChild(o);const btn=o.querySelector('[data-reload]'),view=o.querySelector('[data-view]');btn.onclick=()=>bvomReloadReadOnlyWithRetry();view.onclick=()=>{o.remove();previousFocus?.focus?.()};const archive=o.querySelector('[data-legacy-archive]');if(archive)archive.onclick=()=>bvomLegacyArchivePrompt();view.focus();
+ o.addEventListener('keydown',e=>{if(e.key==='Tab'){const focusables=[view,btn,...(archive?[archive]:[])];const index=focusables.indexOf(document.activeElement),next=e.shiftKey?(index+focusables.length-1)%focusables.length:(index+1)%focusables.length;e.preventDefault();focusables[next].focus()}if(e.key==='Escape')e.preventDefault()});
 }
 function bvomWorkoutActionAllowed(){
  if(!bvomWindowLockOwned||bvomRecoveryLegacyBlocked){bvomWorkoutReadOnlyNotice();return false}
@@ -1821,7 +1821,7 @@ function bvomWeightModal(name,current,onSave){const o=document.createElement('di
 function bvomUnitChangeModal(from,to){const fromName=bvomT(from==='lb'?'modals.pounds':'modals.kilograms'),toName=bvomT(to==='lb'?'modals.pounds':'modals.kilograms'),o=document.createElement('div');o.className='bvomModalOverlay';o.innerHTML=`<div class="bvomModal"><h3>${bvomT('modals.unitsTitle')}</h3><div style="font-size:18px;font-weight:900;margin:10px 0 14px">${fromName} → ${toName}</div><div class="sub" style="font-size:14px;line-height:1.45">${bvomT('modals.unitsBody')}</div><div class="small" style="margin-top:10px">${bvomT('modals.plateSet',{unit:to==='lb'?'lb':'kg'})}</div><div class="modalActions"><button type="button" data-c>${bvomT('shell.cancel')}</button><button type="button" class="primary" data-change>${bvomT('modals.change')}</button></div></div>`;document.body.appendChild(o);o.querySelector('[data-c]').onclick=()=>o.remove();o.querySelector('[data-change]').onclick=()=>{o.remove();changeUnits(to,true)}}
 function bvomStartingSetupModal(){if(!bvomWorkoutActionAllowed())return;if(bvomStateWorkoutActive(state)){bvomBeeModal(hlmTxt('FINISH WORKOUT FIRST','先にワークアウトを終了してください'),hlmTxt('Finish or exit the current workout before running Starting Setup again.','Starting Setupを再実行する前に、現在のワークアウトを終了または中止してください。'));return}const o=document.createElement('div');o.className='bvomModalOverlay';o.innerHTML=`<div class="bvomModal"><h3>${bvomT('modals.setupTitle')}</h3><div class="sub">${bvomT('modals.setupBody')}</div><div class="modalActions"><button type="button" data-c>${bvomT('shell.cancel')}</button><button type="button" class="primary" data-r>${bvomT('modals.runSetup')}</button></div></div>`;document.body.appendChild(o);o.querySelector('[data-c]').onclick=()=>o.remove();o.querySelector('[data-r]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;if(bvomStateWorkoutActive(state)||bvomStoredWorkoutActive()){bvomWorkoutReadOnlyNotice();return}const before=state.configured;state.configured=false;if(!save({durable:true})){state.configured=before;return}o.remove();showSetup()}}
 function bvomClearLocalCloudSession(){for(const store of [localStorage,sessionStorage]){try{store.removeItem('sb-hkteienxwdsjncchuvnz-auth-token')}catch(e){}try{if(typeof store.key==='function'){const keys=[];for(let n=0;n<store.length;n++){const k=store.key(n);if(k&&k.startsWith('sb-hkteienxwdsjncchuvnz-auth-token'))keys.push(k)}keys.forEach(k=>store.removeItem(k))}}catch(e){}}}
-const BVOM_ERASE_KEYS=[BVOM_DATA_KEY,BVOM_DATA_OWNER_KEY,BVOM_ACCOUNT_SWITCH_BACKUP_KEY,BVOM_WORKOUT_TAB_OWNER_KEY,'bvom13','bvom12','bvom_pre_restore','bvom_pre_cloud_restore','bvom_cloud_restore_baseline','bvom_bee_layoff_ack'];
+const BVOM_ERASE_KEYS=[BVOM_DATA_KEY,BVOM_DATA_OWNER_KEY,BVOM_ACCOUNT_SWITCH_BACKUP_KEY,BVOM_WORKOUT_TAB_OWNER_KEY,'bvom_legacy_workout_before_archive','bvom13','bvom12','bvom_pre_restore','bvom_pre_cloud_restore','bvom_cloud_restore_baseline','bvom_bee_layoff_ack'];
 let bvomEraseOperation=null;
 function bvomEraseSnapshot(){return {saved:BVOM_ERASE_KEYS.map(k=>localStorage.getItem(k)),memory:JSON.stringify(state),auth:window.__bvomAuthUserId||null,user:bvomCloud.user?.id||null,deferred:!!bvomCloud.accountSwitchDeferred,offline:!!bvomCloud.offlineLocalAccess,tab:sessionStorage.getItem(BVOM_TAB_SESSION_KEY)}}
 // Only the expected local SIGNED_OUT event may advance this operation's auth snapshot.
@@ -3581,6 +3581,82 @@ function bvomActivateRecovery(){
   }
   return true;
  }catch(e){bvomLocalPersistenceFailureNotice();return false}
+}
+// Owner-confirmed escape for already-active workouts saved by v2.9.0 or earlier.
+// This is not automatic ownership transfer: old documents do not participate in Web Locks.
+// Preserve the exact previous bytes before attempting the single training-blob replacement.
+const BVOM_LEGACY_ARCHIVE_BACKUP_KEY='bvom_legacy_workout_before_archive';
+function bvomLegacyArchivePrompt(){
+ if(!bvomRecoveryLegacyBlocked||!bvomWindowLockOwned)return false;
+ const question=hlmTxt(
+  'CLOSE ALL OTHER BVOM TABS OR WINDOWS BEFORE CONTINUING.\\n\\nArchive this earlier-version unfinished workout as INCOMPLETE? Recorded sets will be kept in History. No unanswered progression choice will be decided, and unfinished GPP will be marked interrupted. A complete copy of the original saved workout will remain on this device. Cancel to leave everything unchanged.',
+  '続行する前に、他のBVOMタブやウィンドウをすべて閉じてください。\\n\\n以前のバージョンの未完了ワークアウトを「未完了」として履歴に保存しますか？記録したセットは保持され、未回答の進行選択は自動決定されません。未完了のGPPは中断として記録されます。元のワークアウトの完全なコピーをこの端末に保持します。キャンセルすると何も変更しません。'
+ );
+ if(!confirm(question))return false;
+ return bvomLegacyArchiveCommit();
+}
+function bvomLegacyArchiveCommit(){
+ if(!bvomRecoveryLegacyBlocked||!bvomWindowLockOwned||bvomPersistenceBlocked())return false;
+ let committed=false;
+ try{
+  const raw=localStorage.getItem(BVOM_DATA_KEY),account=localStorage.getItem(BVOM_DATA_OWNER_KEY)||'',marker=localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY)||'';
+  if(!raw||raw!==bvomLastPersistedRaw||!account||window.__bvomAuthUserId!==account||bvomCloud.user?.id!==account||bvomCloud.accountSwitchDeferred||marker!==bvomWindowOwnerAtLock)throw Error('Saved training/account/owner changed');
+  const old=JSON.parse(raw);
+  if(!bvomStateWorkoutActive(old)||old.workoutOwnershipVersion===1)throw Error('Not an unresolved old-version workout');
+  const existing=localStorage.getItem(BVOM_LEGACY_ARCHIVE_BACKUP_KEY);
+  if(existing){
+   const previous=JSON.parse(existing);
+   if(previous.raw!==raw||previous.account!==account||previous.marker!==marker)throw Error('An unrelated previous archive backup exists');
+  }else{
+   localStorage.setItem(BVOM_LEGACY_ARCHIVE_BACKUP_KEY,JSON.stringify({savedAt:new Date().toISOString(),account,marker,raw}));
+  }
+  const next=JSON.parse(raw),session=JSON.parse(JSON.stringify(old.session||{}));
+  // Free Training stores working sets separately; include them as normal History rows.
+  for(const [lift,entry] of Object.entries(old.freeTrainingSession||{})){
+   const rows={};for(const [i,set] of (entry?.sets||[]).entries())if(set&&set.reps!==undefined)rows[i]=set;
+   if(entry?.single&&entry.single.reps!==undefined)rows.single=entry.single;
+   if(Object.keys(rows).length)session[lift]=rows;
+  }
+  const hadSets=Object.values(session).some(rows=>Object.values(rows||{}).some(set=>set&&set.reps!==undefined));
+  const hadGpp=Object.values(old.gppSession||{}).some(x=>x&&(x.started||x.timing||x.actual||(x.sets||[]).some(Boolean)));
+  if(hadSets||hadGpp){
+   const started=Number(old.workoutStartedAt),startedAt=Number.isFinite(started)&&started>0?new Date(started).toISOString():null;
+   const record={
+    date:new Date().toISOString(),sourceAppVersion:'2.9.0',startedAt,
+    unit:old.unit==='lb'?'lb':'kg',program:old.programMode||'lprpt',day:old.day,
+    incomplete:true,legacyUpgradeArchive:true,session,gpp:[],weights:{...(old.weights||{})},
+    accessoryNames:Object.fromEntries((old.accessoryList||[]).map(a=>[a.id,a.name])),
+    legacyGppSession:JSON.parse(JSON.stringify(old.gppSession||{})),
+    legacyGppList:JSON.parse(JSON.stringify(old.gppList||[])),
+    legacyPendingChoices:{lp:old.pendingCloseMissChoice||null,hlm:old.hlm?.pendingRepChoice||null},
+    note:hlmTxt('Archived unfinished workout from an earlier BVOM version. Unanswered progression choices were not decided. Any unfinished GPP details are preserved in the local pre-archive backup.','以前のBVOMの未完了ワークアウトを履歴に保存しました。未回答の進行選択は自動決定していません。未完了のGPP詳細は端末内の保存前バックアップに保持しています。')
+   };
+   if(old.programMode==='bodybuilding'&&old.bodybuilding)record.bodybuilding=old.bodybuilding.onramp?.status==='active'?{onramp:true,sessionNumber:(old.bodybuilding.onramp.sessionsCompleted||0)+1}:{workoutNumber:(old.bodybuilding.completedSessions||0)+1,decisions:[]};
+   if(old.programMode==='free'&&old.freeTraining)record.dayId=old.freeTraining.days?.[Math.max(0,(old.freeTraining.selectedDay||1)-1)]?.id||null;
+   next.history=next.history||[];next.history.push(record);
+  }
+  next.session={};next.gppSession={};next.freeTrainingSession={};next.freeTrainingDraft=null;
+  next.sessionOverrides={};next.processed={};next.processedSnapshots={};next.warmupDone={};next.warmupPlans={};
+  next.workoutStartedAt=null;next.timerStart=null;next.hlmActiveWorkoutSettings=null;
+  delete next.pendingCloseMissChoice;if(next.hlm){delete next.hlm.pendingRepChoice;next.hlm.skippedSingles={}};
+  delete next.workoutLastActivityAt;delete next.workoutOwnershipVersion;
+  // No await or UI callback between the final unchanged-context check and blob replacement.
+  if(!bvomWindowLockOwned||localStorage.getItem(BVOM_DATA_KEY)!==raw||localStorage.getItem(BVOM_DATA_OWNER_KEY)!==account||localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY)!==marker||window.__bvomAuthUserId!==account||bvomCloud.user?.id!==account)throw Error('Saved training/account/owner changed before archive commit');
+  const nextRaw=JSON.stringify(next);localStorage.setItem(BVOM_DATA_KEY,nextRaw);committed=true;
+  state=next;bvomLastPersistedRaw=nextRaw;bvomRecoveryLegacyBlocked=false;bvomRecoveryAccount=account;
+  if(localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY)===marker)localStorage.removeItem(BVOM_WORKOUT_TAB_OWNER_KEY);
+  clearInterval(timerInt);bvomStopGppRuntime();document.querySelector('#timerbar')?.classList.add('idle');
+  document.getElementById('bvomWorkoutReadOnlyOverlay')?.remove();
+  bvomRecoveryStatus(hlmTxt(
+   hadSets||hadGpp?'Earlier-version workout archived as INCOMPLETE. Recorded work kept in History and original saved data backed up on this device.':'Empty earlier-version workout closed. Original saved data backed up on this device.',
+   hadSets||hadGpp?'以前のワークアウトを未完了として履歴に保存しました。記録を保持し、元のデータもこの端末にバックアップしました。':'以前の空のワークアウトを終了しました。元のデータをこの端末にバックアップしました。'
+  ));
+  renderAll();return true;
+ }catch(e){
+  if(committed){bvomPostCommitOwnerFailureNotice();return true}
+  bvomBeeModal(hlmTxt('ARCHIVE STOPPED','履歴への保存を停止しました'),hlmTxt('The earlier workout was not changed. The saved data, account or ownership changed, or the device could not save the backup. Close other BVOM windows, check storage and try again.','以前のワークアウトは変更されていません。データ・アカウント・画面管理情報が変更されたか、端末にバックアップを保存できませんでした。他のBVOM画面を閉じ、端末の空き容量を確認して再試行してください。'));
+  return false;
+ }
 }
 function bvomRecoveryHold(){
  if(state.pendingCloseMissChoice||state.hlm?.pendingRepChoice)return 'choice';
