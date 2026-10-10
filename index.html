@@ -446,12 +446,12 @@ function save(options){
  if(bvomLocalWriteConflictActive||current!==bvomLastPersistedRaw){bvomLocalWriteConflictNotice();return false}
  // false means the training blob was NOT committed. Separate-key bookkeeping
  // after this point cannot undo that durable write or justify rolling memory back.
- const previousActivity=state.workoutLastActivityAt,previousProtocol=state.workoutOwnershipVersion;
+ const previousActivity=state.workoutLastActivityAt,previousProtocol=state.workoutOwnershipVersion;let activityCommitted=false;
  const persisted=current?JSON.parse(current):null;
  if(!options?.recovery){
   if(!bvomStateWorkoutActive(state)){delete state.workoutLastActivityAt;delete state.workoutOwnershipVersion;}
   else if(!options?.passive&&(options?.activity||bvomRecordedActivityChanged(persisted,state))){
-   const now=Date.now();if(Number.isFinite(now)&&now>0)state.workoutLastActivityAt=now;
+   const now=Date.now();if(Number.isFinite(now)&&now>0){state.workoutLastActivityAt=now;activityCommitted=true;}
   }
  }
  if(bvomStateWorkoutActive(state))state.workoutOwnershipVersion=1;
@@ -466,7 +466,7 @@ function save(options){
   }else if(!bvomReleaseWorkoutTabOwnerIfThisTab())throw Error('Workout owner cleanup failed');
  }catch(e){bvomPostCommitOwnerFailureNotice();return true}
  // A post-write notification must not turn a durable commit into a rejected transaction.
- try{if(window.__bvomCloudBooted&&typeof bvomCloudMaybeScheduleFromSave==='function')bvomCloudMaybeScheduleFromSave();
+ try{if(activityCommitted&&bvomRecoveryMessage)bvomRecoveryStatus(hlmTxt('Workout activity saved. Continue this workout.','ワークアウトの操作を保存しました。トレーニングを続けられます。'));if(window.__bvomCloudBooted&&typeof bvomCloudMaybeScheduleFromSave==='function')bvomCloudMaybeScheduleFromSave();
  if(window.__bvomCloudBooted&&typeof bvomMaybeApplyPendingEntitlementLock==='function')bvomMaybeApplyPendingEntitlementLock()}catch(e){console.warn('BVOM post-save notification failed',e)}
  return true
 }
