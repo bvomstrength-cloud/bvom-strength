@@ -25,7 +25,7 @@ async function record(p,lift,i,reps=5){await p.evaluate(({lift,i})=>tapSet(lift,
 async function tick(p,ms){await p.evaluate(ms=>window.testNow+=ms,ms);}
 test('real close/reopen preserves squat + bench and allows new work',async()=>{
  const {context,a}=await setup();try{
-  await record(a,'Squat',0);await record(a,'Bench Press',0);const before=await saved(a);await a.close();const b=await open(context);await tick(b,5*60000);
+  await record(a,'Squat',0);await record(a,'Bench Press',0);const before=await saved(a);await a.close();const b=await open(context,undefined,5*60000);await b.waitForFunction(()=>document.querySelector('#clock').textContent==='5:00');
   assert.deepEqual((await saved(b)).session,before.session);assert.equal((await saved(b)).timerStart,before.timerStart);assert.equal((await saved(b)).history.length,0);await record(b,'Squat',1);
   await b.reload();await b.waitForSelector('#app:not(.hidden)');await record(b,'Squat',2);
  }finally{await context.close()}

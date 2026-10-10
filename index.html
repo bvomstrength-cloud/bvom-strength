@@ -625,7 +625,7 @@ function completeSetup(){if(!bvomWorkoutActionAllowed())return;
  state.warmupDone={};state.warmupPlans={};
  save();showApp();
 }
-function showApp(){document.querySelector("#setup").classList.add("hidden");document.querySelector("#app").classList.remove("hidden");bvomActivateRecovery();renderAll();if(!bvomStateWorkoutActive(state))cancelTimer()}
+function showApp(){document.querySelector("#setup").classList.add("hidden");document.querySelector("#app").classList.remove("hidden");bvomActivateRecovery();renderAll();if(!bvomStateWorkoutActive(state))cancelTimer();else bvomResumeSavedRestTimer()}
 function spec(n,s,r){return n==="Deadlift"&&state.weights.Deadlift<=60?[3,5]:[s,r]}
 function program(){return programs[state.day].map(([n,s,r])=>[n,...spec(n,s,r)])}
 function switchDay(d){if(!bvomWorkoutActionAllowed())return;
@@ -700,7 +700,7 @@ function legacy_tapSet_1(n,i,setCount,base){
 
 let timerInt=null,dinged={};
 function startTimer(){clearInterval(timerInt);state.timerStart=Date.now();dinged={};save();document.querySelector("#timerbar").classList.remove("idle");tick();timerInt=setInterval(tick,250)}
-function tick(){if(!state.timerStart)return;let s=Math.floor((Date.now()-state.timerStart)/1000);document.querySelector("#clock").textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;[180,300,600].forEach(m=>{if(s>=m&&!dinged[m]){dinged[m]=1;ding(m)}})}
+function tick(){if(!state.timerStart)return;let s=Math.max(0,Math.floor((Date.now()-state.timerStart)/1000));document.querySelector("#clock").textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;[180,300,600].forEach(m=>{if(s>=m&&!dinged[m]){dinged[m]=1;ding(m)}})}
 function ding(m){if(state.timerSound!==false)try{let a=new(window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=m===600?660:880;g.gain.value=.12;o.start();o.stop(a.currentTime+.22)}catch(e){}if(navigator.vibrate)navigator.vibrate(m===600?[180,90,180]:120)}
 function cancelTimer(){clearInterval(timerInt);timerInt=null;state.timerStart=null;dinged={};save();let c=document.querySelector("#clock");if(c)c.textContent="0:00";let b=document.querySelector("#timerbar");if(b)b.classList.add("idle")}
 function legacy_warmups_1(w,n){
@@ -3538,6 +3538,13 @@ function bvomWatchServiceWorkerUpdate(reg){
 }
 /* ===== EXCLUSIVE DOCUMENT OWNERSHIP / INTERRUPTED WORKOUT RECOVERY ===== */
 const BVOM_INACTIVITY_MS=60*60*1000;
+function bvomResumeSavedRestTimer(){
+ if(!bvomWindowLockOwned||bvomRecoveryLegacyBlocked||!bvomRecoveryAccount||bvomGppActiveTimed()||!Number.isFinite(state.timerStart)||state.timerStart<=0)return;
+ // Restore the display/ticker using the saved epoch. No write, clock reset or replayed old dings.
+ clearInterval(timerInt);const elapsed=Math.max(0,Math.floor((Date.now()-state.timerStart)/1000));
+ dinged={};for(const mark of [180,300,600])if(elapsed>=mark)dinged[mark]=1;
+ document.querySelector('#timerbar').classList.remove('idle');tick();timerInt=setInterval(tick,250);
+}
 function bvomRecordedActivity(s){
  const sets={};for(const [key,rows] of Object.entries(s?.session||{})){
   const actual=Object.fromEntries(Object.entries(rows||{}).filter(([,r])=>r&&r.reps!==undefined));if(Object.keys(actual).length)sets[key]=actual;
