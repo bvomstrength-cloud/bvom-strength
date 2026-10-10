@@ -1,0 +1,51 @@
+name: BVOM Draft Netlify Test ZIP
+
+# Draft-only, no deployment. Produces a static site ZIP for manual Netlify Drop.
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  package-manual-test-site:
+    name: Package PR candidate for manual Netlify Drop
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out draft PR
+        uses: actions/checkout@v4
+
+      - name: Assemble exact static candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .bvom-netlify-test/i18n .bvom-netlify-test/vendor
+          cp index.html admin.html sw.js manifest.json .bvom-netlify-test/
+          cp icon-192.png icon-512.png og-image.png .bvom-netlify-test/
+          cp theme-bee-v23c.svg theme-cherry-v23f.svg theme-coastal-v23f.svg .bvom-netlify-test/
+          cp i18n/en.js i18n/ja.js .bvom-netlify-test/i18n/
+          cp vendor/supabase-js-2.117.3.js .bvom-netlify-test/vendor/
+          printf '%s\n' 'BVOM draft test site only' 'Manual upload to a DIFFERENT Netlify site.' \
+            'Uses the SAME cloud backend as normal BVOM; only sign in with a disposable test account.' \
+            "Source PR #39 commit: ${GITHUB_SHA}" \
+            > .bvom-netlify-test/NETLIFY-TEST-BUILD.txt
+          test -s .bvom-netlify-test/index.html
+          test -s .bvom-netlify-test/vendor/supabase-js-2.117.3.js
+          test -s .bvom-netlify-test/i18n/en.js
+          test -s .bvom-netlify-test/i18n/ja.js
+          (cd .bvom-netlify-test && zip -q -r ../BVOM-PR39-Netlify-Test.zip .)
+          unzip -t BVOM-PR39-Netlify-Test.zip | tail -2
+          printf '%s\n' 'NETLIFY ZIP CONTENTS:'
+          unzip -Z1 BVOM-PR39-Netlify-Test.zip | head -35
+
+      - name: Upload ZIP for owner
+        uses: actions/upload-artifact@v4
+        with:
+          name: BVOM-PR39-Netlify-Test-Site
+          path: BVOM-PR39-Netlify-Test.zip
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
