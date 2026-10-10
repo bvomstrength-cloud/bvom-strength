@@ -133,7 +133,7 @@ test('old v2.9 workout is read-only until explicit archive; cancel leaves exact 
   assert.equal(await a.evaluate(()=>localStorage.getItem('bvom_legacy_workout_before_archive')),null);
   a.once('dialog',d=>d.accept());
   await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
-  const after=await saved(a);
+  const after=await saved(a);if(after.history.length!==1)console.log('ARCHIVE DEBUG 1',await a.evaluate(()=>({snapshot:localStorage.getItem('bvom_legacy_workout_before_archive')?.length,owner:localStorage.getItem('bvom_workout_tab_owner'),lock:bvomWindowLockOwned,legacy:bvomRecoveryLegacyBlocked,account:bvomRecoveryAccount,auth:window.__bvomAuthUserId,cloud:bvomCloud.user?.id,overlays:Array.from(document.querySelectorAll('.bvomModalOverlay')).map(x=>x.textContent.slice(0,400))})));
   assert.equal(after.history.length,1);
   assert.equal(after.history[0].incomplete,true);
   assert.equal(after.history[0].legacyUpgradeArchive,true);
@@ -168,7 +168,7 @@ test('legacy pending decision and active GPP are archived undecided, with exact 
   await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').waitFor();
   a.once('dialog',d=>d.accept());
   await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
-  const after=await saved(a);assert.equal(after.history.length,1);
+  const after=await saved(a);if(after.history.length!==1)console.log('ARCHIVE DEBUG 2',await a.evaluate(()=>({snapshot:localStorage.getItem('bvom_legacy_workout_before_archive')?.length,owner:localStorage.getItem('bvom_workout_tab_owner'),lock:bvomWindowLockOwned,legacy:bvomRecoveryLegacyBlocked,account:bvomRecoveryAccount,auth:window.__bvomAuthUserId,cloud:bvomCloud.user?.id,overlays:Array.from(document.querySelectorAll('.bvomModalOverlay')).map(x=>x.textContent.slice(0,400))})));assert.equal(after.history.length,1);
   const h=after.history[0];
   assert.equal(h.incomplete,true);assert.equal(h.legacyPendingChoices.lp.weight,45);
   assert.equal(h.legacyGppSession.erg.timing.status,'running');
