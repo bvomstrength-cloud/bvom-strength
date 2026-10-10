@@ -127,6 +127,11 @@ jobs:
         with:
           ref: 42710195f3aef3e9d8959a8592ad92b00c88f722
           path: .bvom-pre-recovery
+      - name: Check out exact current production v2.9.0 for legacy upgrade proof
+        uses: actions/checkout@v4
+        with:
+          ref: b551f07c5c68e127239de4963c82a8a53bd7a3eb
+          path: .bvom-production-v290
       - name: Prove new deterministic contracts fail on pre-recovery application
         shell: bash
         run: |
