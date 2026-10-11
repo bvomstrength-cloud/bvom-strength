@@ -455,6 +455,92 @@ test('F10-SKIP-KEEPS-CONFIRMED','DEFECT','Skip via missing-load/manual path keep
 });
 
 
+
+
+test('F97-SW-UPDATE-ONE-TAP','DEFECT','One update tap disables repeats and performs exactly one reload on activation',()=>{
+ const h=H.boot(build),events={};let sent=0,reloaded=0;
+ h.ctx.location.reload=()=>{reloaded++};
+ h.ctx.navigator.serviceWorker={controller:{scriptURL:'sw.js?v=2.9.4'}};
+ const candidate={state:'installed',scriptURL:'sw.js?v=2.9.5',addEventListener:(name,cb)=>{events[name]=cb},postMessage:()=>{sent++}};
+ const reg={waiting:candidate,active:{scriptURL:'sw.js?v=2.9.4'}};
+ h.ctx.bvomShowServiceWorkerUpdate(reg);
+ const btn=h.ctx.document.getElementById('bvomUpdateBanner').querySelector('[data-bvom-update]');
+ btn.onclick();btn.onclick();
+ const once=sent===1&&btn.disabled&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')==='1';
+ candidate.state='activated';reg.active=candidate;events.statechange();events.statechange();
+ return ok(once&&reloaded===1&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null,JSON.stringify({sent,once,reloaded}));
+});
+test('F98-SW-UPDATE-RETRY-AND-ACTIVE-GUARD','DEFECT','Stalled worker enables retry; activation during a newly started workout cannot force reload',()=>{
+ const h=H.boot(build);let sent=0,reloaded=0;const events=[];
+ h.ctx.location.reload=()=>{reloaded++};
+ const candidate={state:'installed',scriptURL:'sw.js?v=2.9.5',addEventListener:(_,cb)=>events.push(cb),postMessage:()=>{sent++}};
+ const reg={waiting:candidate,active:{scriptURL:'sw.js?v=2.9.4'}};
+ h.ctx.bvomShowServiceWorkerUpdate(reg);
+ const btn=h.ctx.document.getElementById('bvomUpdateBanner').querySelector('[data-bvom-update]');
+ btn.onclick();h.flush();
+ const timedOut=!btn.disabled&&sent===1&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null;
+ btn.onclick();
+ const retried=sent===2&&btn.disabled;
+ h.S().workoutStartedAt=Date.now();
+ candidate.state='activated';reg.active=candidate;
+ for(const fn of events)fn();
+ const protectedActive=reloaded===0&&!btn.disabled&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null;
+ h.S().workoutStartedAt=null;
+ btn.onclick();
+ return ok(timedOut&&retried&&protectedActive&&reloaded===1,JSON.stringify({timedOut,retried,protectedActive,reloaded}));
+});
+test('F99-SW-UPDATE-NO-ACTIVE-START','DEFECT','An active workout cannot begin the service-worker update or arm a reload',()=>{
+ const h=H.boot(build);let sent=0;
+ const reg={waiting:{state:'installed',scriptURL:'sw.js?v=2.9.5',postMessage:()=>sent++}};
+ h.S().workoutStartedAt=Date.now();h.ctx.bvomShowServiceWorkerUpdate(reg);
+ const btn=h.ctx.document.getElementById('bvomUpdateBanner').querySelector('[data-bvom-update]');
+ btn.onclick();
+ return ok(sent===0&&!btn.disabled&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null,'Active workout blocked');
+});
+
+test('F92-ORDER-LP-B-ISOLATED','DEFECT','LP B reorder is persisted without changing core prescriptions, saved sets or A',()=>{
+ const h=H.boot(build);configureLP(h);h.ctx.switchDay('B');
+ const expected=h.ctx.program().map(x=>x[0]),rx=JSON.stringify(expected.map(x=>h.ctx.corePrescription(x))),history=JSON.stringify(h.S().history),sessions=JSON.stringify(h.S().session);
+ const changed=h.ctx.bvomOrderChange('Deadlift',-1),result=h.ctx.bvomOrderEffective().join('|');
+ h.ctx.switchDay('A');const separate=h.ctx.bvomOrderEffective().join('|')===h.ctx.program().map(x=>x[0]).join('|');
+ h.ctx.switchDay('B');const persisted=JSON.parse(h.ls.getItem('bvom_data'));
+ return ok(changed&&result==='Squat|Deadlift|Overhead Press'&&separate&&h.ctx.program().map(x=>x[0]).join('|')===expected.join('|')&&
+  rx===JSON.stringify(expected.map(x=>h.ctx.corePrescription(x)))&&history===JSON.stringify(h.S().history)&&sessions===JSON.stringify(h.S().session)&&
+  persisted.exerciseDisplayOrder['lprpt:B'].join('|')===result,'display preference only, B isolated');
+});
+test('F93-ORDER-BB-ONRAMP-REOPEN','DEFECT','On-Ramp arrow changes slots on screen only and survives restart and handoff to Bodybuilding',()=>{
+ const h=H.boot(build);bbStart(h,{onramp:true});const original=h.ctx.bvomOrderEntries(),slot=original.find(x=>/squat/i.test(x.label))?.key;
+ if(!slot)return ok(false,'No squat in default A');
+ const okMove=h.ctx.bvomOrderChange(slot,-1),after=h.ctx.bvomOrderEffective().join('|'),originalKeys=original.map(x=>x.key).join('|');
+ const saved=JSON.stringify(h.S().bodybuilding),history=JSON.stringify(h.S().history);
+ const re=H.boot(build,{ls:h.ls}),reopened=re.ctx.bvomOrderEffective().join('|');
+ re.S().bodybuilding.onramp.status='handed_off';re.ev('save()');
+ return ok(okMove&&after!==originalKeys&&after===reopened&&after===re.ctx.bvomOrderEffective().join('|')&&
+ JSON.stringify(h.S().bodybuilding)===saved&&JSON.stringify(h.S().history)===history,'On-Ramp A order stays on Bodybuilding A');
+});
+test('F94-ORDER-HLM-FOURDAY-RESET','DEFECT','HLM and Four-Day store independent day order and Reset restores default',()=>{
+ const h=H.boot(build);configureLP(h);const findings=[];
+ for(const [mode,day] of [['hlm','H'],['fourday','1']]){
+  h.S().programMode=mode;h.ev('ensureHLM()');h.S().day=day;h.ev('save()');
+  const original=h.ctx.bvomOrderEntries().map(x=>x.key);
+  const moved=h.ctx.bvomOrderChange(original[0],1),after=h.ctx.bvomOrderEffective();
+  const reset=h.ctx.bvomOrderReset(),restored=h.ctx.bvomOrderEffective();
+  findings.push(moved&&reset&&after[1]===original[0]&&restored.join('|')===original.join('|'));
+ }
+ return ok(findings.every(Boolean),JSON.stringify(findings));
+});
+test('F95-ORDER-READONLY-GUARD','DEFECT','Secondary tab cannot reorder an active workout or write changed order',()=>{
+ const {a,b,ls}=ownershipPair(),before=ls.getItem('bvom_data'),memory=JSON.stringify(b.S());
+ const invalid=b.ctx.bvomOrderChange('unknown-lift',1),blocked=b.ctx.bvomOrderChange('Squat',1);
+ return ok(!invalid&&!blocked&&before===ls.getItem('bvom_data')&&memory===JSON.stringify(b.S()),'Read-only session unchanged');
+});
+test('F96-ORDER-BAD-PREF-RECOVERY','DEFECT','Malformed saved order ignored; reset returns canonical, with no session mutation',()=>{
+ const h=H.boot(build);configureLP(h);h.S().exerciseDisplayOrder={'lprpt:A':['Squat','Squat','Other']};h.ev('save()');
+ const original=h.ctx.program().map(x=>x[0]),safe=h.ctx.bvomOrderEffective().join('|')===original.join('|');
+ const result=h.ctx.bvomOrderReset();
+ return ok(safe&&result&&h.ctx.bvomOrderEffective().join('|')===original.join('|'),'Invalid stored order cannot change prescriptions');
+});
+
 test('F89-ONRAMP-START-CONFIGURED','DEFECT','On-Ramp and manual Bodybuilding setup mark configured after successful setup, not just test helper preconfiguration',()=>{
  const result=[];
  for(const mode of ['onramp','manual']){

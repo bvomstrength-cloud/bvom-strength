@@ -8,7 +8,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="BVOM">
 <meta name="twitter:description" content="Best Version Of Myself — strength training and progression.">
-<title>BVOM Strength v2.9.3</title><link rel="manifest" href="manifest.json">
+<title>BVOM Strength v2.9.6</title><link rel="manifest" href="manifest.json">
 <style>
 :root{--bg:#f4f4f4;--card:#fff;--ink:#111;--muted:#737373;--accent:#d91e18;--line:#ddd}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
@@ -58,6 +58,14 @@ label{display:block;margin:11px 0}select{width:100%;padding:10px;border:1px soli
 .modalActions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}.modalActions button{min-width:110px}.modalWide{width:100%}
 .dangerInput{width:100%;box-sizing:border-box;padding:12px 14px;font-size:18px;margin-top:12px;border:1px solid #ccc;border-radius:10px}
 .dangerBtn{background:#b00020!important;color:#fff!important}.successTick{font-size:48px;line-height:1;text-align:center;margin-bottom:8px}.savedStats{display:flex;justify-content:center;gap:28px;margin:18px 0;flex-wrap:wrap}.savedStats .num{font-size:28px;font-weight:950}.savedStats .lbl{font-size:12px;color:#666}
+
+/* Display-only exercise ordering; fits narrow workout cards. */
+.bvomOrderControls{display:flex;align-items:center;gap:3px;flex:0 0 auto}
+.bvomOrderArrow{min-width:34px;min-height:36px;border:1px solid var(--line,#bbb);border-radius:8px;background:transparent;color:inherit;font-size:20px;font-weight:800;cursor:pointer}
+.bvomOrderArrow:disabled{opacity:.3;cursor:default}
+.bvomOrderReset{display:flex;justify-content:flex-end;margin:3px 0 7px}
+.bvomOrderReset button{border:0;background:transparent;color:var(--muted,#555);padding:7px 4px;font-size:12px;font-weight:800;cursor:pointer}
+
 </style><link rel="icon" href="./icon-192.png"><link rel="apple-touch-icon" href="./icon-192.png"><style id="bvom-finish-disabled-v221">
 #timerbar .finish:disabled{opacity:.38;filter:grayscale(.35);cursor:not-allowed}
 </style>
@@ -228,7 +236,7 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
 <div id="authgate" class="setup hidden"></div>
 <div id="setup" class="setup hidden"></div>
 <div id="app" class="hidden">
-<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v2.9.3</div></header>
+<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v2.9.6</div></header>
 <div class="tabs"><div class="tab on" data-tab="workout">WORKOUT</div><div class="tab" data-tab="warmup">WARM-UP</div><div class="tab" data-tab="history">HISTORY</div><div class="tab" data-tab="info">INFO</div><div class="tab" data-tab="settings">SETTINGS</div></div>
 <main><section id="workout"></section><section id="warmup" class="hidden"></section><section id="history" class="hidden"></section><section id="info" class="hidden"></section><section id="settings" class="hidden"></section></main>
 <div class="timer idle" id="timerbar"><div class="timerin"><div><div class="clock" id="clock">0:00</div><div class="marks">DINGS 3 · 5 · 10</div></div><button class="cancel" onclick="if(bvomWorkoutActionAllowed())cancelTimer()">CANCEL</button><button class="finish" onclick="finishWorkout()">FINISH</button></div></div>
@@ -237,7 +245,7 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
 <script src="./i18n/ja.js?v=2a86f7297fa9"></script>
 <script src="./vendor/supabase-js-2.117.3.js"></script>
 <script>
-const BVOM_BUILD='2.9.3';
+const BVOM_BUILD='2.9.6';
 const programs={A:[["Squat",3,5],["Bench Press",3,5],["Prone Row",3,5]],B:[["Squat",3,5],["Overhead Press",5,5],["Deadlift",1,5]]};
 function liftLabel(n){return n==='Prone Row'?(isHLM()?'Prone Row':'Row'):n==='Overhead Press'?'Press':n;}
 const inc={Squat:2.5,"Bench Press":2.5,"Prone Row":2.5,"Overhead Press":2.5,Deadlift:5};
@@ -3567,22 +3575,60 @@ const bvomBbDev36FinishBase=bvomBbFinish;bvomBbFinish=function(...args){if(!bvom
 const bvomBbDev36ChangeUnitsBase=changeUnits;changeUnits=function(to,quiet=false){if(!bvomWorkoutActionAllowed())return;const before=state.unit||'kg',activeBbLoads=[];for(const [key,ss] of Object.entries(state.session||{})){if(!key.startsWith('BB:')&&!key.startsWith('BBOR:'))continue;for(const [i,set] of Object.entries(ss||{}))if(set&&set.load!=null){const m=set._unitLoadOrigins?.load,load=Number(set.load),roundTrip=!!(m&&m.unit===to&&m.convertedUnit===before&&Math.abs(Number(m.converted)-load)<1e-9&&Number.isFinite(Number(m.value)));activeBbLoads.push({key,i,load,roundTrip})}}bvomBbDev36ChangeUnitsBase(to,quiet);if(before===state.unit||!state.bodybuilding)return;if(state.bodybuilding.onramp){for(const e of Object.values(state.bodybuilding.onramp.exercises||{})){if(!e)continue;const step=bvomConvertIncrementRoundTrip(e,e.increment??2.5,before,to);if(e.load!=null)e.load=bvomBbConvertLoadRoundTrip(e,e.load,before,to,step);e.increment=step}}for(const x of activeBbLoads){const ss=state.session?.[x.key],set=ss?.[x.i];if(!set)continue;if(x.roundTrip)continue;if(!(x.load>0)){set.load=x.load;continue}const id=x.key.startsWith('BBOR:')?x.key.slice(5):x.key.slice(3),step=x.key.startsWith('BBOR:')?bvomBbOnRampLoadStep(id):bvomBbLoadStep(id),converted=bvomBbConvertLoadToStep(x.load,to,step);set.load=converted;const m=set._unitLoadOrigins?.load;if(m&&m.unit===before&&m.convertedUnit===to&&Math.abs(Number(m.value)-x.load)<1e-9)m.converted=converted}save();if(state.configured)renderAll()}
 /* ===== END BODYBUILDING DEV3.12 ON-RAMP + WARM-UP LAYER ===== */
 
+let bvomSwUpdateBusy=false,bvomSwUpdateAttempt=0;
+const BVOM_SW_UPDATE_FLAG='bvom-update-reload-requested';
+function bvomSwFinishRequestedReload(){
+ let requested=bvomSwUpdateBusy;try{requested=requested||sessionStorage.getItem(BVOM_SW_UPDATE_FLAG)==='1'}catch(e){}
+ if(!requested)return false;
+ // Do not reload a live session, even if the user began one after tapping update.
+ if(bvomAnyWorkoutActive()){
+  try{sessionStorage.removeItem(BVOM_SW_UPDATE_FLAG)}catch(e){}
+  bvomSwUpdateBusy=false;
+  const btn=document.getElementById('bvomUpdateBanner')?.querySelector('[data-bvom-update]');
+  if(btn){btn.disabled=false;btn.textContent=hlmTxt('RELOAD AFTER WORKOUT','ワークアウト後に再読み込み')}
+  return false;
+ }
+ try{sessionStorage.removeItem(BVOM_SW_UPDATE_FLAG)}catch(e){}
+ bvomSwUpdateBusy=false;
+ location.reload();return true;
+}
 function bvomShowServiceWorkerUpdate(reg){
  const waiting=reg?.waiting;if(!waiting)return;
  let el=document.getElementById('bvomUpdateBanner');
  if(!el){
   el=document.createElement('div');el.id='bvomUpdateBanner';
   el.style.cssText='position:fixed;left:10px;right:10px;bottom:10px;z-index:260000;background:#171717;color:#fff;border:1px solid #777;border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:center;justify-content:space-between;box-shadow:0 4px 20px rgba(0,0,0,.35)';
-  el.innerHTML=`<span style="font-size:13px">${hlmTxt('BVOM update ready. Reload when you are not in a workout.','BVOMの更新準備ができました。ワークアウト中でないときに再読み込みしてください。')}</span><button type="button" class="primary" data-bvom-update>${hlmTxt('UPDATE & RELOAD','更新して再読み込み')}</button>`;
+  el.innerHTML='<span style="font-size:13px" data-bvom-update-status>'+hlmTxt('BVOM update ready. Reload when you are not in a workout.','BVOMの更新準備ができました。ワークアウト中でないときに再読み込みしてください。')+'</span><button type="button" class="primary" data-bvom-update>'+hlmTxt('UPDATE & RELOAD','更新して再読み込み')+'</button>';
   document.body.appendChild(el);
  }
- const btn=el.querySelector('[data-bvom-update]');
- if(btn)btn.onclick=()=>{
+ const btn=el.querySelector('[data-bvom-update]'),status=el.querySelector('[data-bvom-update-status]');
+ if(!btn)return;
+ btn.disabled=bvomSwUpdateBusy;
+ if(bvomSwUpdateBusy)btn.textContent=hlmTxt('UPDATING…','更新中…');
+ btn.onclick=()=>{
+  if(bvomSwUpdateBusy)return;
   if(bvomAnyWorkoutActive()){
    bvomBeeModal(hlmTxt('FINISH THIS WORKOUT FIRST','まずこのワークアウトを終了してください'),hlmTxt('The update is ready, but BVOM will not reload while a workout is active. Finish or exit the workout, then update.','更新の準備はできていますが、ワークアウト中はBVOMを再読み込みしません。ワークアウトを終了または中止してから更新してください。'));return;
   }
-  try{sessionStorage.setItem('bvom-update-reload-requested','1')}catch(e){}
-  waiting.postMessage({type:'SKIP_WAITING'});
+  bvomSwUpdateBusy=true;const attempt=++bvomSwUpdateAttempt;
+  btn.disabled=true;btn.textContent=hlmTxt('UPDATING…','更新中…');
+  if(status)status.textContent=hlmTxt('Updating BVOM — please wait a moment.','BVOMを更新中です。少々お待ちください。');
+  try{sessionStorage.setItem(BVOM_SW_UPDATE_FLAG,'1')}catch(e){}
+  const isActivated=()=>waiting.state==='activated'&&!!reg.active&&(reg.active===waiting||reg.active.scriptURL===waiting.scriptURL);
+  const complete=()=>{if(attempt===bvomSwUpdateAttempt&&bvomSwUpdateBusy&&isActivated())bvomSwFinishRequestedReload()};
+  const retry=()=>{
+   if(attempt!==bvomSwUpdateAttempt||!bvomSwUpdateBusy)return;
+   bvomSwUpdateBusy=false;
+   try{sessionStorage.removeItem(BVOM_SW_UPDATE_FLAG)}catch(e){}
+   btn.disabled=false;btn.textContent=hlmTxt('TRY UPDATE AGAIN','もう一度更新');
+   if(status)status.textContent=hlmTxt('Chrome is taking longer than expected. Tap to try again.','更新に時間がかかっています。もう一度タップしてください。');
+  };
+  waiting.addEventListener?.('statechange',complete);
+  // Some mobile Chromium versions may not deliver controllerchange promptly.
+  // Once this exact worker is active, a navigation uses its fresh cached shell.
+  if(isActivated()){bvomSwFinishRequestedReload();return}
+  try{waiting.postMessage({type:'SKIP_WAITING'})}catch(e){retry();return}
+  setTimeout(()=>{if(attempt!==bvomSwUpdateAttempt||!bvomSwUpdateBusy)return;if(!isActivated())retry();else bvomSwFinishRequestedReload()},8000);
  };
 }
 function bvomWatchServiceWorkerUpdate(reg){
@@ -3987,16 +4033,101 @@ window.addEventListener('pageshow',()=>{bvomRecoveryCheck()});
 /* ===== END EXCLUSIVE DOCUMENT OWNERSHIP / RECOVERY ===== */
 
 
+
+/* ===== DAY-SPECIFIC EXERCISE DISPLAY ORDER =====
+ * Changes only the screen order. Prescriptions, set keys, progression and History
+ * stay canonical. Custom Training already supports native compound ↑ ↓ ordering.
+ */
+function bvomOrderEntries(){
+ if(isFreeTraining())return [];
+ if(isBodybuilding()){
+  const day=bvomBbOnRampActive()?bvomBbOnRampDay():bvomBbDay();
+  if(!day)return [];
+  const slots=bvomBbOnRampActive()?bvomBbOnRampSlots(day):bvomBbSlotsForDay(day);
+  return slots.map(slot=>({key:slot,label:BVOM_BB_EXERCISES[state.bodybuilding.selections[slot]]?.name||''}));
+ }
+ return program().map(([name])=>({key:name,label:liftLabel(name)}));
+}
+function bvomOrderDayKey(){
+ if(isFreeTraining())return null;
+ const mode=isBodybuilding()?'bodybuilding':isFourDay()?'fourday':isHLM()?'hlm':'lprpt';
+ const day=isBodybuilding()?(bvomBbOnRampActive()?bvomBbOnRampDay():bvomBbDay()):state.day;
+ return day==null?null:mode+':'+String(day);
+}
+function bvomOrderEffective(entries=bvomOrderEntries(),scope=bvomOrderDayKey()){
+ const canonical=entries.map(x=>x.key),record=state.exerciseDisplayOrder;
+ if(!scope||!canonical.length||new Set(canonical).size!==canonical.length)return canonical;
+ const saved=record&&typeof record==='object'&&!Array.isArray(record)?record[scope]:null;
+ if(!Array.isArray(saved)||saved.length!==canonical.length||new Set(saved).size!==saved.length||!saved.every(x=>canonical.includes(x)))return canonical;
+ return [...saved];
+}
+function bvomOrderChange(key,direction){
+ if(!bvomWorkoutActionAllowed())return false;
+ const scope=bvomOrderDayKey(),entries=bvomOrderEntries(),order=bvomOrderEffective(entries,scope);
+ const i=order.indexOf(key),d=Number(direction),j=i+d;
+ if(!scope||!(d===-1||d===1)||i<0||j<0||j>=order.length)return false;
+ const previous=state.exerciseDisplayOrder;
+ const next=previous&&typeof previous==='object'&&!Array.isArray(previous)?{...previous}:{};
+ [order[i],order[j]]=[order[j],order[i]];
+ if(order.every((x,n)=>x===entries[n].key))delete next[scope];else next[scope]=order;
+ state.exerciseDisplayOrder=next;
+ if(!save({durable:true})){if(previous===undefined)delete state.exerciseDisplayOrder;else state.exerciseDisplayOrder=previous;return false}
+ renderAll();return true;
+}
+function bvomOrderReset(){
+ if(!bvomWorkoutActionAllowed())return false;
+ const scope=bvomOrderDayKey(),previous=state.exerciseDisplayOrder;
+ if(!scope||!previous||typeof previous!=='object'||!Object.prototype.hasOwnProperty.call(previous,scope))return false;
+ const next={...previous};delete next[scope];state.exerciseDisplayOrder=next;
+ if(!save({durable:true})){state.exerciseDisplayOrder=previous;return false}
+ renderAll();return true;
+}
+function bvomOrderApply(view){
+ const scope=bvomOrderDayKey(),entries=bvomOrderEntries();
+ if(!scope||entries.length<2)return;
+ const host=document.querySelector(view==='warmup'?'#warmup':'#workout');
+ if(!host)return;
+ const cards=[...host.querySelectorAll(':scope > .exercise')].slice(0,entries.length);
+ if(cards.length!==entries.length)return;
+ // Never rearrange unidentified content, even if a future renderer changes.
+ if(cards.some((card,i)=>card.querySelector('.exname')?.textContent?.trim()!==entries[i].label))return;
+ const byKey=new Map(entries.map((e,i)=>[e.key,cards[i]])),ordered=bvomOrderEffective(entries,scope);
+ const afterLast=cards[cards.length-1].nextSibling;
+ for(const key of ordered)host.insertBefore(byKey.get(key),afterLast);
+ if(view==='warmup')return;
+ for(let i=0;i<ordered.length;i++){
+  const key=ordered[i],card=byKey.get(key),header=card.querySelector('.exhead');
+  if(!header)continue;
+  const controls=document.createElement('div');controls.className='bvomOrderControls';
+  for(const [delta,arrow,label] of [[-1,'↑','up'],[1,'↓','down']]){
+   const button=document.createElement('button');button.type='button';button.className='bvomOrderArrow';
+   button.textContent=arrow;button.title='Move '+entries.find(x=>x.key===key).label+' '+label;
+   button.setAttribute('aria-label',button.title);button.disabled=i+delta<0||i+delta>=ordered.length;
+   button.onclick=()=>bvomOrderChange(key,delta);controls.appendChild(button);
+  }
+  header.insertBefore(controls,header.querySelector('.weight')||null);
+ }
+ if(ordered.some((x,i)=>x!==entries[i].key)){
+  const row=document.createElement('div');row.className='bvomOrderReset';
+  const reset=document.createElement('button');reset.type='button';
+  reset.textContent=hlmTxt('RESET EXERCISE ORDER','種目の順番をリセット');
+  reset.onclick=()=>bvomOrderReset();row.appendChild(reset);
+  host.insertBefore(row,byKey.get(ordered[0]));
+ }
+}
+const bvomOrderBaseWorkout=renderWorkout;
+renderWorkout=function(...args){const out=bvomOrderBaseWorkout(...args);bvomOrderApply('workout');return out};
+const bvomOrderBaseWarm=renderWarm;
+renderWarm=function(...args){const out=bvomOrderBaseWarm(...args);bvomOrderApply('warmup');return out};
+/* ===== END EXERCISE DISPLAY ORDER ===== */
+
 bvomHideMainSurfaces();if("serviceWorker" in navigator){
   window.addEventListener("load", async ()=>{
     try{
-      const reg = await navigator.serviceWorker.register("./sw.js?v=2.9.3");
+      const reg = await navigator.serviceWorker.register("./sw.js?v=2.9.6");
       bvomWatchServiceWorkerUpdate(reg);
       navigator.serviceWorker.addEventListener("controllerchange", ()=>{
-        if(sessionStorage.getItem("bvom-update-reload-requested")==='1'){
-          sessionStorage.removeItem("bvom-update-reload-requested");
-          location.reload();
-        }
+        bvomSwFinishRequestedReload();
       });
       await reg.update();
       if(reg.waiting)bvomShowServiceWorkerUpdate(reg);
