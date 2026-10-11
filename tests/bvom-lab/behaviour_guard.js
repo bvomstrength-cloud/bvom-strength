@@ -454,6 +454,50 @@ test('F10-SKIP-KEEPS-CONFIRMED','DEFECT','Skip via missing-load/manual path keep
   return ok(conf==='CONFIRMED'&&!d.calibration&&d.decision.action==='increase',`on-ramp=${conf}; first main: ${d.decision.action}${d.calibration?' (calibration path)':''}`);
 });
 
+
+test('F89-ONRAMP-START-CONFIGURED','DEFECT','On-Ramp and manual Bodybuilding setup mark configured after successful setup, not just test helper preconfiguration',()=>{
+ const result=[];
+ for(const mode of ['onramp','manual']){
+  const h=H.boot(build);
+  if(h.S().configured)return ok(false,'Fresh install unexpectedly configured');
+  h.ctx.chooseProgramMode('bodybuilding');
+  h.ctx.bvomBbOnRampSetupMode(mode);
+  if(mode==='manual')for(const [id,load] of Object.entries(H.BB_LOADS)){
+   h.ctx.bvomBbSetupValue(id,'load',load);h.ctx.bvomBbSetupValue(id,'increment','2.5');
+  }
+  h.ctx.bvomBbCommitSetup();
+  const saved=JSON.parse(h.ls.getItem('bvom_data')||'{}');
+  result.push(h.S().configured===true&&saved.configured===true&&h.visible('#app')&&
+    saved.bodybuilding?.status==='active'&&(mode==='manual'||saved.bodybuilding?.onramp?.status==='active'));
+ }
+ return ok(result.every(Boolean),JSON.stringify(result));
+});
+test('F90-ONRAMP-LEGACY-REOPEN-SESSION2','DEFECT','Saved historical false-configured completed On-Ramp Session 1 reopens directly into Session 2 with History/loads/exercises intact',async()=>{
+ const h=H.boot(build);
+ h.ctx.chooseProgramMode('bodybuilding');h.ctx.bvomBbOnRampSetupMode('onramp');h.ctx.bvomBbCommitSetup();
+ H.orSession(h);const before=JSON.parse(h.ls.getItem('bvom_data'));
+ if(before.bodybuilding?.onramp?.sessionsCompleted!==1||before.history?.length!==1)return ok(false,'Session 1 never completed');
+ h.S().configured=false;h.ev('save()');h.ls.setItem('bvom_data_owner','user-1');
+ const legacy=JSON.parse(h.ls.getItem('bvom_data')),savedSession=JSON.stringify(legacy.bodybuilding),savedHistory=JSON.stringify(legacy.history),savedSessionData=JSON.stringify(legacy.session);
+ const net={online:true},sup=H.mockSupabase({net,user:{id:'user-1',email:'test@example.org'},entitlement:[{status:'subscriber',user_id:'user-1'}]});
+ const reopened=await H.launch(build,{ls:h.ls,net,supabase:sup}),saved=JSON.parse(h.ls.getItem('bvom_data'));
+ const screen=reopened.els['#workout'].innerHTML||'';
+ return ok(!legacy.configured&&reopened.visible('#app')&&!reopened.visible('#setup')&&saved.configured===true&&
+  screen.includes('SESSION 2 OF 6')&&screen.includes('— B')&&
+  JSON.stringify(saved.bodybuilding)===savedSession&&JSON.stringify(saved.history)===savedHistory&&
+  JSON.stringify(saved.session)===savedSessionData,
+  JSON.stringify({opened:reopened.visible('#app'),setupVisible:reopened.visible('#setup'),configured:saved.configured,history:saved.history?.length,sessions:saved.bodybuilding?.onramp?.sessionsCompleted,workoutB:screen.includes('— B')}));
+});
+test('F91-ONRAMP-NO-FAKE-SETUP','NEGATIVE','Unstarted Bodybuilding chooser cannot masquerade as an existing On-Ramp; remains in setup after authorised sign-in',async()=>{
+ const h=H.boot(build);h.ctx.chooseProgramMode('bodybuilding');h.ls.setItem('bvom_data_owner','user-1');
+ const before=JSON.parse(h.ls.getItem('bvom_data')||'{}');
+ const net={online:true},sup=H.mockSupabase({net,user:{id:'user-1',email:'test@example.org'},entitlement:[{status:'subscriber',user_id:'user-1'}]});
+ const next=await H.launch(build,{ls:h.ls,net,supabase:sup});
+ const saved=JSON.parse(h.ls.getItem('bvom_data')||'{}');
+ return ok(before.configured===false&&next.visible('#setup')&&!next.visible('#app')&&saved.configured===false&&
+  saved.bodybuilding?.status!=='active','Still unconfigured');
+});
+
 test('F86-BB-NUMBERED-CHOOSER','DEFECT','Bodybuilding On-Ramp maintains four numeric replacements and neutral cancel/invalid with exactly one persisted selection',()=>{
  const result=[];for(let n=1;n<=4;n++){
   const h=H.boot(build);bbStart(h,{onramp:true});
