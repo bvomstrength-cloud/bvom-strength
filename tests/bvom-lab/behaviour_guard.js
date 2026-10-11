@@ -456,6 +456,48 @@ test('F10-SKIP-KEEPS-CONFIRMED','DEFECT','Skip via missing-load/manual path keep
 
 
 
+
+test('F97-SW-UPDATE-ONE-TAP','DEFECT','One update tap disables repeats and performs exactly one reload on activation',()=>{
+ const h=H.boot(build),events={};let sent=0,reloaded=0;
+ h.ctx.location.reload=()=>{reloaded++};
+ h.ctx.navigator.serviceWorker={controller:{scriptURL:'sw.js?v=2.9.4'}};
+ const candidate={state:'installed',scriptURL:'sw.js?v=2.9.5',addEventListener:(name,cb)=>{events[name]=cb},postMessage:()=>{sent++}};
+ const reg={waiting:candidate,active:{scriptURL:'sw.js?v=2.9.4'}};
+ h.ctx.bvomShowServiceWorkerUpdate(reg);
+ const btn=h.ctx.document.getElementById('bvomUpdateBanner').querySelector('[data-bvom-update]');
+ btn.onclick();btn.onclick();
+ const once=sent===1&&btn.disabled&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')==='1';
+ candidate.state='activated';reg.active=candidate;events.statechange();events.statechange();
+ return ok(once&&reloaded===1&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null,JSON.stringify({sent,once,reloaded}));
+});
+test('F98-SW-UPDATE-RETRY-AND-ACTIVE-GUARD','DEFECT','Stalled worker enables retry; activation during a newly started workout cannot force reload',()=>{
+ const h=H.boot(build);let sent=0,reloaded=0;const events=[];
+ h.ctx.location.reload=()=>{reloaded++};
+ const candidate={state:'installed',scriptURL:'sw.js?v=2.9.5',addEventListener:(_,cb)=>events.push(cb),postMessage:()=>{sent++}};
+ const reg={waiting:candidate,active:{scriptURL:'sw.js?v=2.9.4'}};
+ h.ctx.bvomShowServiceWorkerUpdate(reg);
+ const btn=h.ctx.document.getElementById('bvomUpdateBanner').querySelector('[data-bvom-update]');
+ btn.onclick();h.flush();
+ const timedOut=!btn.disabled&&sent===1&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null;
+ btn.onclick();
+ const retried=sent===2&&btn.disabled;
+ h.S().workoutStartedAt=Date.now();
+ candidate.state='activated';reg.active=candidate;
+ for(const fn of events)fn();
+ const protectedActive=reloaded===0&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null;
+ h.S().workoutStartedAt=null;
+ btn.onclick();
+ return ok(timedOut&&retried&&protectedActive&&reloaded===1,JSON.stringify({timedOut,retried,protectedActive,reloaded}));
+});
+test('F99-SW-UPDATE-NO-ACTIVE-START','DEFECT','An active workout cannot begin the service-worker update or arm a reload',()=>{
+ const h=H.boot(build);let sent=0;
+ const reg={waiting:{state:'installed',scriptURL:'sw.js?v=2.9.5',postMessage:()=>sent++}};
+ h.S().workoutStartedAt=Date.now();h.ctx.bvomShowServiceWorkerUpdate(reg);
+ const btn=h.ctx.document.getElementById('bvomUpdateBanner').querySelector('[data-bvom-update]');
+ btn.onclick();
+ return ok(sent===0&&!btn.disabled&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null,'Active workout blocked');
+});
+
 test('F92-ORDER-LP-B-ISOLATED','DEFECT','LP B reorder is persisted without changing core prescriptions, saved sets or A',()=>{
  const h=H.boot(build);configureLP(h);h.ctx.switchDay('B');
  const expected=h.ctx.program().map(x=>x[0]),rx=JSON.stringify(expected.map(x=>h.ctx.corePrescription(x))),history=JSON.stringify(h.S().history),sessions=JSON.stringify(h.S().session);
