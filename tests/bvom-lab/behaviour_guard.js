@@ -484,7 +484,7 @@ test('F98-SW-UPDATE-RETRY-AND-ACTIVE-GUARD','DEFECT','Stalled worker enables ret
  h.S().workoutStartedAt=Date.now();
  candidate.state='activated';reg.active=candidate;
  for(const fn of events)fn();
- const protectedActive=reloaded===0&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null;
+ const protectedActive=reloaded===0&&!btn.disabled&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null;
  h.S().workoutStartedAt=null;
  btn.onclick();
  return ok(timedOut&&retried&&protectedActive&&reloaded===1,JSON.stringify({timedOut,retried,protectedActive,reloaded}));

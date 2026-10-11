@@ -3578,13 +3578,13 @@ const bvomBbDev36ChangeUnitsBase=changeUnits;changeUnits=function(to,quiet=false
 let bvomSwUpdateBusy=false,bvomSwUpdateAttempt=0;
 const BVOM_SW_UPDATE_FLAG='bvom-update-reload-requested';
 function bvomSwFinishRequestedReload(){
- let requested=false;try{requested=sessionStorage.getItem(BVOM_SW_UPDATE_FLAG)==='1'}catch(e){}
+ let requested=bvomSwUpdateBusy;try{requested=requested||sessionStorage.getItem(BVOM_SW_UPDATE_FLAG)==='1'}catch(e){}
  if(!requested)return false;
  // Do not reload a live session, even if the user began one after tapping update.
  if(bvomAnyWorkoutActive()){
   try{sessionStorage.removeItem(BVOM_SW_UPDATE_FLAG)}catch(e){}
   bvomSwUpdateBusy=false;
-  const btn=document.querySelector('#bvomUpdateBanner [data-bvom-update]');
+  const btn=document.getElementById('bvomUpdateBanner')?.querySelector('[data-bvom-update]');
   if(btn){btn.disabled=false;btn.textContent=hlmTxt('RELOAD AFTER WORKOUT','ワークアウト後に再読み込み')}
   return false;
  }
