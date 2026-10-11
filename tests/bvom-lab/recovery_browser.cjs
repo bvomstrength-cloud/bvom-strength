@@ -208,20 +208,20 @@ test('exercise arrows really reorder LP B cards and warmups, survive an active s
   const names=async(sel)=>a.locator(sel).allTextContents();
   const workout='#workout > .exercise .exhead .exname';
   const warm='#warmup > .exercise .exhead .exname';
-  assert.deepEqual(await names(workout),['Squat','Overhead Press','Deadlift']);
+  assert.deepEqual(await names(workout),['Squat','Press','Deadlift']);
   assert.equal(await a.locator('#workout > .exercise .bvomOrderArrow').count(),6);
   await record(a,'Squat',0,5);
   const before=(await saved(a)).session;
   await a.locator('#workout > .exercise').nth(2).locator('.bvomOrderArrow').first().click();
-  assert.deepEqual(await names(workout),['Squat','Deadlift','Overhead Press']);
-  assert.deepEqual(await names(warm),['Squat','Deadlift','Overhead Press']);
+  assert.deepEqual(await names(workout),['Squat','Deadlift','Press']);
+  assert.deepEqual(await names(warm),['Squat','Deadlift','Press']);
   assert.deepEqual((await saved(a)).session,before,'Reordering cannot alter logged sets');
   await a.close();
   const reopened=await open(context);
-  assert.deepEqual(await reopened.locator(workout).allTextContents(),['Squat','Deadlift','Overhead Press']);
-  assert.deepEqual(await reopened.locator(warm).allTextContents(),['Squat','Deadlift','Overhead Press']);
+  assert.deepEqual(await reopened.locator(workout).allTextContents(),['Squat','Deadlift','Press']);
+  assert.deepEqual(await reopened.locator(warm).allTextContents(),['Squat','Deadlift','Press']);
   await reopened.locator('#workout .bvomOrderReset button').click();
-  assert.deepEqual(await reopened.locator(workout).allTextContents(),['Squat','Overhead Press','Deadlift']);
+  assert.deepEqual(await reopened.locator(workout).allTextContents(),['Squat','Press','Deadlift']);
   assert.deepEqual((await saved(reopened)).session,before);
  }finally{await context.close()}
 });
@@ -238,7 +238,7 @@ test('real Bodybuilding On-Ramp squat arrow moves quad before chest on screen an
   assert.match((await a.locator(warm).allTextContents())[0],/squat/i);
   const data=await saved(a);
   assert.equal(data.bodybuilding?.onramp?.sessionsCompleted,0);
-  assert.deepEqual(data.bodybuilding?.selections,prepared.S().bodybuilding.selections);
+  assert.equal(JSON.stringify(data.bodybuilding?.selections),JSON.stringify(prepared.S().bodybuilding.selections));
   await a.close();
   const reopened=await open(context);
   assert.match((await reopened.locator(sel).allTextContents())[0],/squat/i);
