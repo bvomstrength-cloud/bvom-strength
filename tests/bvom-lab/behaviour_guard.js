@@ -487,7 +487,7 @@ test('F94-ORDER-HLM-FOURDAY-RESET','DEFECT','HLM and Four-Day store independent 
  }
  return ok(findings.every(Boolean),JSON.stringify(findings));
 });
-test('F95-ORDER-READONLY-GUARD','NEGATIVE','Secondary tab cannot reorder an active workout or write changed order',()=>{
+test('F95-ORDER-READONLY-GUARD','DEFECT','Secondary tab cannot reorder an active workout or write changed order',()=>{
  const {a,b,ls}=ownershipPair(),before=ls.getItem('bvom_data'),memory=JSON.stringify(b.S());
  const invalid=b.ctx.bvomOrderChange('unknown-lift',1),blocked=b.ctx.bvomOrderChange('Squat',1);
  return ok(!invalid&&!blocked&&before===ls.getItem('bvom_data')&&memory===JSON.stringify(b.S()),'Read-only session unchanged');

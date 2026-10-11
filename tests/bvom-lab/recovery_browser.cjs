@@ -201,6 +201,50 @@ test('real v2.9.0 source workout can be archived after upgrade without changing 
   await record(upgraded,'Squat',1);
  }finally{await context.close()}
 });
+
+test('exercise arrows really reorder LP B cards and warmups, survive an active set, reopen and Reset',async()=>{
+ const {context,a}=await setup();try{
+  await a.evaluate(()=>switchDay('B'));
+  const names=async(sel)=>a.locator(sel).allTextContents();
+  const workout='#workout > .exercise .exhead .exname';
+  const warm='#warmup > .exercise .exhead .exname';
+  assert.deepEqual(await names(workout),['Squat','Overhead Press','Deadlift']);
+  assert.equal(await a.locator('#workout > .exercise .bvomOrderArrow').count(),6);
+  await record(a,'Squat',0,5);
+  const before=(await saved(a)).session;
+  await a.locator('#workout > .exercise').nth(2).locator('.bvomOrderArrow').first().click();
+  assert.deepEqual(await names(workout),['Squat','Deadlift','Overhead Press']);
+  assert.deepEqual(await names(warm),['Squat','Deadlift','Overhead Press']);
+  assert.deepEqual((await saved(a)).session,before,'Reordering cannot alter logged sets');
+  await a.close();
+  const reopened=await open(context);
+  assert.deepEqual(await reopened.locator(workout).allTextContents(),['Squat','Deadlift','Overhead Press']);
+  assert.deepEqual(await reopened.locator(warm).allTextContents(),['Squat','Deadlift','Overhead Press']);
+  await reopened.locator('#workout .bvomOrderReset button').click();
+  assert.deepEqual(await reopened.locator(workout).allTextContents(),['Squat','Overhead Press','Deadlift']);
+  assert.deepEqual((await saved(reopened)).session,before);
+ }finally{await context.close()}
+});
+test('real Bodybuilding On-Ramp squat arrow moves quad before chest on screen and warmup',async()=>{
+ const prepared=H.boot(build);H.bbStart(prepared,{onramp:true});
+ const {context,a}=await setup(JSON.parse(JSON.stringify(prepared.S())));
+ try{
+  const sel='#workout > .exercise .exhead .exname',warm='#warmup > .exercise .exhead .exname';
+  const before=await a.locator(sel).allTextContents();
+  assert.match(before[1],/squat/i,'second programmed slot must be a squat');
+  assert.equal(await a.locator('#workout > .exercise .bvomOrderArrow').count(),before.length*2);
+  await a.locator('#workout > .exercise').nth(1).locator('.bvomOrderArrow').first().click();
+  assert.match((await a.locator(sel).allTextContents())[0],/squat/i);
+  assert.match((await a.locator(warm).allTextContents())[0],/squat/i);
+  const data=await saved(a);
+  assert.equal(data.bodybuilding?.onramp?.sessionsCompleted,0);
+  assert.deepEqual(data.bodybuilding?.selections,prepared.S().bodybuilding.selections);
+  await a.close();
+  const reopened=await open(context);
+  assert.match((await reopened.locator(sel).allTextContents())[0],/squat/i);
+ }finally{await context.close()}
+});
+
 test('optional Android loopback server seeds dummy data and refuses replacement',async()=>{
  const {spawn}=require('node:child_process');const child=spawn(process.execPath,[path.join(__dirname,'recovery_phone_server.cjs'),'33331'],{stdio:['ignore','pipe','pipe']});let context;
  try{
