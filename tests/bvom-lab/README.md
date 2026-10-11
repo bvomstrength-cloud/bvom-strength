@@ -380,3 +380,28 @@ Four new mutants remove erase snapshot revalidation, cancellation invalidation H
 `recovery_browser.cjs` serves the real BVOM app on isolated loopback HTTP, uses native Chromium Web Locks and storage, drives the effective rep dialog and blocks external requests/services. The separate Actions job **BVOM real application recovery checks** executes close/reopen, duplicated sessionStorage, live/background/frozen ownership, simultaneous boots, expiry and safeguards. The existing browser primitive smoke job is preserved. F70–F76 are replayed RED against exact pre-recovery `42710195f3aef3e9d8959a8592ad92b00c88f722`; their v2.8.0 provenance is N/A because recovery is a later feature. Six new fault injections complement the earlier mutations. Stronger save fencing requires the existing ownership-boundary mutations to remove both permission checks to reproduce their original fault; their behavioural targets and assertions remain unchanged.
 
 Browser clocks, accounts, entitlement caches and workouts are synthetic. This is not Android installed-PWA/Safari evidence. Unknown older-version workout ownership fails closed rather than being automatically upgraded. See the manual matrix and optional loopback-only `recovery_phone_server.cjs` for isolated dummy-workout phone checks. No preview or production deployment is created by tests.
+
+## Monkey 018 — deferred terminal Starting Setup
+
+`starting_setup_contracts.js` adds F77–F85 to the authoritative behaviour tier.
+Its fixtures record twelve authentic Heavy workouts through `tapSet`, progressing
+Bench 5→4→3→2 without seeded failure/pending counters. The new contracts are RED
+against exact v2.9.1 `a134ef5060fdc35bb0c4eedf0861d038cf8db2e5`; they are historically
+N/A against v2.8.0. Nine new mutations protect intent-only scheduling, payload and
+comparison exclusions, Finish durability, correction/collision, draft validation,
+awaited input fencing and cloud ingress. Existing F20 mutation anchors follow the
+new deferred entry without relaxing its active-workout assertions.
+
+The intent is local to the existing training blob, account and session identity.
+The editor is ephemeral; it uses the current units/equipment, keeps all five
+program choices and discloses both intermediate driver resets. A different tab
+session loses the request but retains the unresolved decision. Cloud ingress
+strips only the new field; intent-only saves skip scheduling only when comparable
+cloud data is identical. Completed History and genuine updates follow normal sync.
+
+`starting_setup_browser.cjs` exercises native DOM/locks/storage for HLM and Four-Day
+using terminal fixtures produced by the same authentic engine journey. Services,
+account access and the entitlement response are mocked; external requests and
+service workers are blocked. The existing browser CI job runs these interactions.
+Local `spawnSync EPERM` is not a GO; independent mutation replay is diagnostic tier
+evidence only. The unchanged full v15.2 gate must actually report GO in permitted CI.

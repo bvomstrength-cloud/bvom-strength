@@ -142,3 +142,5 @@ jobs:
           node -e "const a=require('node:assert/strict'),r=require('./.bvom-red.json');a.equal(r.length,7);a.ok(r.every(t=>!t.pass));console.log('PASS: 7/7 new recovery contracts RED on exact pre-recovery source')"
       - name: Run isolated real BVOM application checks
         run: node tests/bvom-lab/recovery_browser.cjs
+      - name: Run isolated deferred Starting Setup interactions
+        run: node tests/bvom-lab/starting_setup_browser.cjs
