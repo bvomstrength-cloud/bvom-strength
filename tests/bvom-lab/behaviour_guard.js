@@ -448,11 +448,44 @@ test('F9-SAME-EXPOSURE-EDIT','DEFECT','Correcting set 1 in the same On-Ramp expo
 });
 test('F10-SKIP-KEEPS-CONFIRMED','DEFECT','Skip via missing-load/manual path keeps CONFIRMED; first main 8-rep top set progresses normally',()=>{
   const h=H.boot(build);bbStart(h,{onramp:true});orSession(h);orSession(h);orSession(h);h.flush();
-  const conf=h.ctx.bvomBbOnRampEx('machine_chest_press').state;h.ctx.prompt=()=> '1';h.ctx.bvomBbOnRampSwap('B6');h.ctx.bvomBbOnRampSkip();
+  const conf=h.ctx.bvomBbOnRampEx('machine_chest_press').state;h.ctx.bvomBbOnRampSwap('B6');{const dlg=h.lastOverlay();dlg.querySelector('[data-number]').value='1';dlg.querySelector('[data-accept]').onclick()}h.ctx.bvomBbOnRampSkip();
   const nb=h.S().bodybuilding.selections.B6;h.ctx.bvomBbSetupValue(nb,'load','15');h.ctx.bvomBbSetupValue(nb,'increment','2.5');h.ctx.bvomBbCommitSetup();
   bbSession(h,(id,i)=>id==='machine_chest_press'&&i===0?{reps:8}:{});const d=h.S().history.at(-1).bodybuilding.decisions.find(x=>x.id==='machine_chest_press');
   return ok(conf==='CONFIRMED'&&!d.calibration&&d.decision.action==='increase',`on-ramp=${conf}; first main: ${d.decision.action}${d.calibration?' (calibration path)':''}`);
 });
+
+test('F86-BB-NUMBERED-CHOOSER','DEFECT','Bodybuilding On-Ramp maintains four numeric replacements and neutral cancel/invalid with exactly one persisted selection',()=>{
+ const result=[];for(let n=1;n<=4;n++){
+  const h=H.boot(build);bbStart(h,{onramp:true});
+  const original=h.S().bodybuilding.selections.A4,opts=h.ctx.bvomBbExerciseOptions('A4').filter(x=>x.id!==original);
+  if(opts.length<4)return ok(false,'fewer than 4 options');
+  const raw=h.ls.getItem('bvom_data');h.ctx.bvomBbOnRampSwap('A4');const first=h.lastOverlay();
+  if(first.dataset.bbDialog!=='1')return ok(false,'missing themed chooser');first.querySelector('[data-cancel]').onclick();
+  if(h.ls.getItem('bvom_data')!==raw)return ok(false,'Cancel mutated data');
+  h.ctx.bvomBbOnRampSwap('A4');const dlg=h.lastOverlay();dlg.querySelector('[data-number]').value='999';dlg.querySelector('[data-accept]').onclick();
+  if(h.ls.getItem('bvom_data')!==raw)return ok(false,'Invalid entry mutated data');
+  dlg.querySelector('[data-number]').value=String(n);dlg.querySelector('[data-accept]').onclick();
+  const selected=h.S().bodybuilding.selections.A4===opts[n-1].id&&JSON.parse(h.ls.getItem('bvom_data')).bodybuilding.selections.A4===opts[n-1].id;
+  const saved=h.ls.getItem('bvom_data');dlg.querySelector('[data-accept]').onclick();result.push(selected&&saved===h.ls.getItem('bvom_data'));
+ }return ok(result.every(Boolean),JSON.stringify(result));
+});
+test('F87-BB-CHOOSER-OWNER-FENCE','NEGATIVE','Changed account while On-Ramp dialog is open cannot update exercise selection',()=>{
+ const h=H.boot(build);bbStart(h,{onramp:true});const original=h.S().bodybuilding.selections.A4,raw=h.ls.getItem('bvom_data');
+ h.ctx.bvomBbOnRampSwap('A4');const dlg=h.lastOverlay();dlg.querySelector('[data-number]').value='1';h.ls.setItem('bvom_data_owner','another-account');dlg.querySelector('[data-accept]').onclick();
+ return ok(h.S().bodybuilding.selections.A4===original&&raw===h.ls.getItem('bvom_data'),'no change');
+});
+test('F88-BB-INCOMPLETE-DIALOGS','DEFECT','Bodybuilding and On-Ramp incomplete workout cancellation is neutral; consent persists exactly one incomplete History',()=>{
+ const checks=[];for(const onramp of [false,true]){
+  const h=H.boot(build);bbStart(h,{onramp});const id=h.S().bodybuilding.selections.A1;
+  if(onramp)orSet(h,id,0,{load:60,reps:7});else bbSet(h,id,0,{load:60,reps:7});
+  const raw=h.ls.getItem('bvom_data'),count=h.S().history.length;
+  h.ctx.finishWorkout();const first=h.lastOverlay(),themed=first.dataset.bbDialog==='1';first.querySelector('[data-cancel]').onclick();
+  const neutral=h.ls.getItem('bvom_data')===raw;h.ctx.finishWorkout();const dlg=h.lastOverlay();dlg.querySelector('[data-accept]').onclick();
+  const saved=h.S().history.length===count+1&&h.S().history.at(-1).incomplete&&JSON.parse(h.ls.getItem('bvom_data')).history.length===count+1;
+  dlg.querySelector('[data-accept]').onclick();checks.push(themed&&neutral&&saved&&h.S().history.length===count+1);
+ }return ok(checks.every(Boolean),JSON.stringify(checks));
+});
+
 test('F11-BARBELL-WARMUP-FLOOR','DEFECT','Rendered BB barbell warm-ups never go below the 20 kg bar (Barbell Bench 25 kg)',()=>{
   const h=H.boot(build);bbStart(h);h.ctx.bvomBbOpenFoundationSetup();h.ctx.bvomBbSetupSelect('A1','barbell_bench_press');h.ctx.bvomBbSetupValue('barbell_bench_press','load','25');h.ctx.bvomBbSetupValue('barbell_bench_press','increment','2.5');h.ctx.bvomBbCommitSetup();
   h.ctx.renderWarm();const t=text(h.els['#warmup'].innerHTML),i=t.indexOf('Barbell Bench Press'),seg=t.slice(i,t.indexOf('Hack Squat',i));

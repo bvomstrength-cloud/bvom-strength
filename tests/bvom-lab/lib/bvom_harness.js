@@ -83,7 +83,7 @@ function boot(build,{ls=memStore(),ss=memStore(),supabase='inert',online=true,lo
 const text=html=>String(html||'').replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim();
 const LP_W={Squat:100,'Bench Press':70,'Prone Row':60,'Overhead Press':45,Deadlift:120};
 function configureLP(h,weights=LP_W){const S=h.S();Object.assign(S.weights,weights);S.configured=true;S.programMode='lprpt';S.day='A';S.session={};h.ev('ensureHLM()');h.ev('save()')}
-function finish(h){h.ctx.__bvomFinishBusy=false;h.ctx.finishWorkout();h.flush()}
+function finish(h){h.ctx.__bvomFinishBusy=false;h.ctx.finishWorkout();for(let i=0;i<5;i++){const o=h.lastOverlay();if(o?.dataset?.bbDialog==='1'&&!o.removed&&o.innerHTML.includes('data-accept'))o.querySelector('[data-accept]').onclick();h.flush()}}
 const BB_LOADS={machine_chest_press:60,hack_squat:100,chest_supported_row:50,seated_leg_curl:40,cable_lateral_raise:10,cable_pushdown:25,lat_pulldown:55,romanian_deadlift:80,incline_dumbbell_press:24,leg_extension:45,reverse_pec_deck:30,cable_curl:20};
 function bbStart(h,{loads=BB_LOADS,incs={},onramp=false}={}){
   h.S().configured=true;h.ctx.chooseProgramMode('bodybuilding');h.ctx.__bvomBbSetupDraft=null;
