@@ -469,7 +469,7 @@ test('F86-BB-NUMBERED-CHOOSER','DEFECT','Bodybuilding On-Ramp maintains four num
   const saved=h.ls.getItem('bvom_data');dlg.querySelector('[data-accept]').onclick();result.push(selected&&saved===h.ls.getItem('bvom_data'));
  }return ok(result.every(Boolean),JSON.stringify(result));
 });
-test('F87-BB-CHOOSER-OWNER-FENCE','NEGATIVE','Changed account while On-Ramp dialog is open cannot update exercise selection',()=>{
+test('F87-BB-CHOOSER-OWNER-FENCE','DEFECT','Changed account while On-Ramp dialog is open cannot update exercise selection',()=>{
  const h=H.boot(build);bbStart(h,{onramp:true});const original=h.S().bodybuilding.selections.A4,raw=h.ls.getItem('bvom_data');
  h.ctx.bvomBbOnRampSwap('A4');const dlg=h.lastOverlay();dlg.querySelector('[data-number]').value='1';h.ls.setItem('bvom_data_owner','another-account');dlg.querySelector('[data-accept]').onclick();
  return ok(h.S().bodybuilding.selections.A4===original&&raw===h.ls.getItem('bvom_data'),'no change');
