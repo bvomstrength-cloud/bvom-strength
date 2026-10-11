@@ -202,6 +202,32 @@ test('real v2.9.0 source workout can be archived after upgrade without changing 
  }finally{await context.close()}
 });
 
+
+test('update banner accepts one tap and immediately blocks repeated Chrome clicks',async()=>{
+ const {context,a}=await setup();
+ try{
+  await a.evaluate(()=>{
+   const fake={posts:0,handlers:[]};window.__fakeUpdate=fake;
+   const worker={
+    scriptURL:'http://localhost/sw.js?v=2.9.5',state:'installed',
+    addEventListener:(event,callback)=>{if(event==='statechange')fake.handlers.push(callback)},
+    postMessage:message=>{if(message.type==='SKIP_WAITING')fake.posts++}
+   };
+   fake.worker=worker;fake.reg={waiting:worker,active:{scriptURL:'http://localhost/sw.js?v=2.9.4'}};
+   bvomShowServiceWorkerUpdate(fake.reg);
+  });
+  const button=a.locator('#bvomUpdateBanner [data-bvom-update]');
+  assert.equal(await button.count(),1);
+  await button.click();
+  assert.equal(await button.isDisabled(),true);
+  assert.match(await button.textContent(),/UPDATING/i);
+  assert.match(await a.locator('#bvomUpdateBanner [data-bvom-update-status]').textContent(),/Updating BVOM/i);
+  await button.evaluate(el=>el.click()); // Native disabled button cannot be clicked twice.
+  assert.equal(await a.evaluate(()=>window.__fakeUpdate.posts),1);
+  assert.equal(await a.evaluate(()=>sessionStorage.getItem('bvom-update-reload-requested')),'1');
+ }finally{await context.close()}
+});
+
 test('exercise arrows really reorder LP B cards and warmups, survive an active set, reopen and Reset',async()=>{
  const {context,a}=await setup();try{
   await a.evaluate(()=>switchDay('B'));
