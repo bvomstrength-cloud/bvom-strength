@@ -58,6 +58,14 @@ label{display:block;margin:11px 0}select{width:100%;padding:10px;border:1px soli
 .modalActions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}.modalActions button{min-width:110px}.modalWide{width:100%}
 .dangerInput{width:100%;box-sizing:border-box;padding:12px 14px;font-size:18px;margin-top:12px;border:1px solid #ccc;border-radius:10px}
 .dangerBtn{background:#b00020!important;color:#fff!important}.successTick{font-size:48px;line-height:1;text-align:center;margin-bottom:8px}.savedStats{display:flex;justify-content:center;gap:28px;margin:18px 0;flex-wrap:wrap}.savedStats .num{font-size:28px;font-weight:950}.savedStats .lbl{font-size:12px;color:#666}
+
+/* Display-only exercise ordering; fits narrow workout cards. */
+.bvomOrderControls{display:flex;align-items:center;gap:3px;flex:0 0 auto}
+.bvomOrderArrow{min-width:34px;min-height:36px;border:1px solid var(--line,#bbb);border-radius:8px;background:transparent;color:inherit;font-size:20px;font-weight:800;cursor:pointer}
+.bvomOrderArrow:disabled{opacity:.3;cursor:default}
+.bvomOrderReset{display:flex;justify-content:flex-end;margin:3px 0 7px}
+.bvomOrderReset button{border:0;background:transparent;color:var(--muted,#555);padding:7px 4px;font-size:12px;font-weight:800;cursor:pointer}
+
 </style><link rel="icon" href="./icon-192.png"><link rel="apple-touch-icon" href="./icon-192.png"><style id="bvom-finish-disabled-v221">
 #timerbar .finish:disabled{opacity:.38;filter:grayscale(.35);cursor:not-allowed}
 </style>
@@ -3986,6 +3994,94 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 window.addEventListener('pageshow',()=>{bvomRecoveryCheck()});
 /* ===== END EXCLUSIVE DOCUMENT OWNERSHIP / RECOVERY ===== */
 
+
+
+/* ===== DAY-SPECIFIC EXERCISE DISPLAY ORDER =====
+ * Changes only the screen order. Prescriptions, set keys, progression and History
+ * stay canonical. Custom Training already supports native compound ↑ ↓ ordering.
+ */
+function bvomOrderEntries(){
+ if(isFreeTraining())return [];
+ if(isBodybuilding()){
+  const day=bvomBbOnRampActive()?bvomBbOnRampDay():bvomBbDay();
+  if(!day)return [];
+  const slots=bvomBbOnRampActive()?bvomBbOnRampSlots(day):bvomBbSlotsForDay(day);
+  return slots.map(slot=>({key:slot,label:BVOM_BB_EXERCISES[state.bodybuilding.selections[slot]]?.name||''}));
+ }
+ return program().map(([name])=>({key:name,label:liftLabel(name)}));
+}
+function bvomOrderDayKey(){
+ if(isFreeTraining())return null;
+ const mode=isBodybuilding()?'bodybuilding':isFourDay()?'fourday':isHLM()?'hlm':'lprpt';
+ const day=isBodybuilding()?(bvomBbOnRampActive()?bvomBbOnRampDay():bvomBbDay()):state.day;
+ return day==null?null:mode+':'+String(day);
+}
+function bvomOrderEffective(entries=bvomOrderEntries(),scope=bvomOrderDayKey()){
+ const canonical=entries.map(x=>x.key),record=state.exerciseDisplayOrder;
+ if(!scope||!canonical.length||new Set(canonical).size!==canonical.length)return canonical;
+ const saved=record&&typeof record==='object'&&!Array.isArray(record)?record[scope]:null;
+ if(!Array.isArray(saved)||saved.length!==canonical.length||new Set(saved).size!==saved.length||!saved.every(x=>canonical.includes(x)))return canonical;
+ return [...saved];
+}
+function bvomOrderChange(key,direction){
+ if(!bvomWorkoutActionAllowed())return false;
+ const scope=bvomOrderDayKey(),entries=bvomOrderEntries(),order=bvomOrderEffective(entries,scope);
+ const i=order.indexOf(key),d=Number(direction),j=i+d;
+ if(!scope||!(d===-1||d===1)||i<0||j<0||j>=order.length)return false;
+ const previous=state.exerciseDisplayOrder;
+ const next=previous&&typeof previous==='object'&&!Array.isArray(previous)?{...previous}:{};
+ [order[i],order[j]]=[order[j],order[i]];
+ if(order.every((x,n)=>x===entries[n].key))delete next[scope];else next[scope]=order;
+ state.exerciseDisplayOrder=next;
+ if(!save({durable:true})){if(previous===undefined)delete state.exerciseDisplayOrder;else state.exerciseDisplayOrder=previous;return false}
+ renderAll();return true;
+}
+function bvomOrderReset(){
+ if(!bvomWorkoutActionAllowed())return false;
+ const scope=bvomOrderDayKey(),previous=state.exerciseDisplayOrder;
+ if(!scope||!previous||typeof previous!=='object'||!Object.prototype.hasOwnProperty.call(previous,scope))return false;
+ const next={...previous};delete next[scope];state.exerciseDisplayOrder=next;
+ if(!save({durable:true})){state.exerciseDisplayOrder=previous;return false}
+ renderAll();return true;
+}
+function bvomOrderApply(view){
+ const scope=bvomOrderDayKey(),entries=bvomOrderEntries();
+ if(!scope||entries.length<2)return;
+ const host=document.querySelector(view==='warmup'?'#warmup':'#workout');
+ if(!host)return;
+ const cards=[...host.querySelectorAll(':scope > .exercise')].slice(0,entries.length);
+ if(cards.length!==entries.length)return;
+ // Never rearrange unidentified content, even if a future renderer changes.
+ if(cards.some((card,i)=>card.querySelector('.exname')?.textContent?.trim()!==entries[i].label))return;
+ const byKey=new Map(entries.map((e,i)=>[e.key,cards[i]])),ordered=bvomOrderEffective(entries,scope);
+ const afterLast=cards[cards.length-1].nextSibling;
+ for(const key of ordered)host.insertBefore(byKey.get(key),afterLast);
+ if(view==='warmup')return;
+ for(let i=0;i<ordered.length;i++){
+  const key=ordered[i],card=byKey.get(key),header=card.querySelector('.exhead');
+  if(!header)continue;
+  const controls=document.createElement('div');controls.className='bvomOrderControls';
+  for(const [delta,arrow,label] of [[-1,'↑','up'],[1,'↓','down']]){
+   const button=document.createElement('button');button.type='button';button.className='bvomOrderArrow';
+   button.textContent=arrow;button.title='Move '+entries.find(x=>x.key===key).label+' '+label;
+   button.setAttribute('aria-label',button.title);button.disabled=i+delta<0||i+delta>=ordered.length;
+   button.onclick=()=>bvomOrderChange(key,delta);controls.appendChild(button);
+  }
+  header.insertBefore(controls,header.querySelector('.weight')||null);
+ }
+ if(ordered.some((x,i)=>x!==entries[i].key)){
+  const row=document.createElement('div');row.className='bvomOrderReset';
+  const reset=document.createElement('button');reset.type='button';
+  reset.textContent=hlmTxt('RESET EXERCISE ORDER','種目の順番をリセット');
+  reset.onclick=()=>bvomOrderReset();row.appendChild(reset);
+  host.insertBefore(row,byKey.get(ordered[0]));
+ }
+}
+const bvomOrderBaseWorkout=renderWorkout;
+renderWorkout=function(...args){const out=bvomOrderBaseWorkout(...args);bvomOrderApply('workout');return out};
+const bvomOrderBaseWarm=renderWarm;
+renderWarm=function(...args){const out=bvomOrderBaseWarm(...args);bvomOrderApply('warmup');return out};
+/* ===== END EXERCISE DISPLAY ORDER ===== */
 
 bvomHideMainSurfaces();if("serviceWorker" in navigator){
   window.addEventListener("load", async ()=>{
