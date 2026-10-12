@@ -457,6 +457,62 @@ test('F10-SKIP-KEEPS-CONFIRMED','DEFECT','Skip via missing-load/manual path keep
 
 
 
+test('F100-SW-UPDATE-WORKOUT-VISIBILITY','DEFECT','Pending update hides for recorded, stored and GPP activity and returns only after durable resolution',()=>{
+ const h=H.boot(build);configureLP(h);
+ const candidate={state:'installed',scriptURL:'sw.js?v=next',postMessage(){}};
+ h.ctx.bvomShowServiceWorkerUpdate({waiting:candidate});
+ const el=h.ctx.document.getElementById('bvomUpdateBanner');
+ const idle=el.style.display!=='none';
+ h.S().session.Squat={0:{reps:5}};h.ctx.save();h.ctx.bvomSyncWorkoutControls();
+ const recorded=el.style.display==='none';
+ h.S().session={};h.ctx.bvomSyncWorkoutControls();const stored=el.style.display==='none';
+ h.ctx.save();h.ctx.bvomSyncWorkoutControls();const durable=el.style.display!=='none';
+ h.S().gppSession={walk:{status:'paused'}};h.ctx.save();h.ctx.bvomSyncWorkoutControls();const gpp=el.style.display==='none';
+ return ok(idle&&recorded&&stored&&durable&&gpp,JSON.stringify({idle,recorded,stored,durable,gpp}));
+});
+test('F101-SW-UPDATE-CRITICAL-GUARDS','DEFECT','Finish busy, save failure and workout dialogs suppress update and prevent reload',()=>{
+ const h=H.boot(build);configureLP(h);let posts=0,reloads=0;
+ h.ctx.location.reload=()=>reloads++;
+ const candidate={state:'installed',scriptURL:'sw.js?v=next',postMessage:()=>posts++};
+ h.ctx.bvomShowServiceWorkerUpdate({waiting:candidate});
+ const el=h.ctx.document.getElementById('bvomUpdateBanner'),btn=el.querySelector('[data-bvom-update]'),checks=[];
+ for(const mode of ['busy','dialog','blocked']){
+  h.ctx.__bvomFinishBusy=mode==='busy';
+  h.ev("bvomLocalPersistenceFailureActive="+(mode==='blocked'));
+  const o=mode==='dialog'?h.ctx.document.createElement('div'):null;if(o){o.className='bvomModalOverlay';h.ctx.document.body.appendChild(o)}
+  h.ctx.bvomSyncWorkoutControls();btn.onclick();
+  h.ctx.sessionStorage.setItem('bvom-update-reload-requested','1');h.ctx.bvomSwFinishRequestedReload();
+  checks.push(el.style.display==='none'&&posts===0&&reloads===0&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null);
+  if(o)o.remove();
+ }
+ return ok(checks.every(Boolean),JSON.stringify(checks));
+});
+test('F102-SW-UPDATE-RETAIN-ACTIVATED','DEFECT','Activation during workout keeps pending worker after reg.waiting disappears and requires a fresh safe tap',()=>{
+ const h=H.boot(build);configureLP(h);let posts=0,reloads=0;const handlers=[];
+ h.ctx.location.reload=()=>reloads++;
+ const worker={state:'installed',scriptURL:'sw.js?v=next',postMessage:()=>posts++,addEventListener:(_,fn)=>handlers.push(fn)};
+ const reg={waiting:worker,active:{scriptURL:'old'}};h.ctx.bvomShowServiceWorkerUpdate(reg);
+ const el=h.ctx.document.getElementById('bvomUpdateBanner'),btn=el.querySelector('[data-bvom-update]');btn.onclick();
+ h.S().workoutStartedAt=Date.now();h.ctx.save();h.ctx.bvomSyncWorkoutControls();
+ worker.state='activated';reg.active=worker;reg.waiting=null;handlers.forEach(fn=>fn());
+ const held=reloads===0&&el.style.display==='none'&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null;
+ h.S().workoutStartedAt=null;h.ctx.save();h.ctx.bvomSyncWorkoutControls();
+ const offered=el.style.display!=='none'&&reloads===0;btn.onclick();
+ return ok(held&&offered&&posts===1&&reloads===1,JSON.stringify({held,offered,posts,reloads}));
+});
+
+test('F103-SW-UPDATE-CONSENT-CANCELLED','DEFECT','Critical work cancels earlier reload consent even if it finishes before activation',()=>{
+ const h=H.boot(build);configureLP(h);let reloads=0;const handlers=[];
+ h.ctx.location.reload=()=>reloads++;
+ const worker={state:'installed',scriptURL:'sw.js?v=next',postMessage(){},addEventListener:(_,fn)=>handlers.push(fn)},reg={waiting:worker,active:{scriptURL:'old'}};
+ h.ctx.bvomShowServiceWorkerUpdate(reg);const el=h.ctx.document.getElementById('bvomUpdateBanner'),btn=el.querySelector('[data-bvom-update]');btn.onclick();
+ h.S().workoutStartedAt=Date.now();h.ctx.save();h.ctx.bvomSyncWorkoutControls();
+ h.S().workoutStartedAt=null;h.ctx.save();h.ctx.bvomSyncWorkoutControls();
+ worker.state='activated';reg.active=worker;reg.waiting=null;handlers.forEach(fn=>fn());h.ctx.bvomSwFinishRequestedReload();
+ const deferred=reloads===0&&el.style.display!=='none'&&!btn.disabled&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null;
+ btn.onclick();return ok(deferred&&reloads===1,JSON.stringify({deferred,reloads}));
+});
+
 test('F97-SW-UPDATE-ONE-TAP','DEFECT','One update tap disables repeats and performs exactly one reload on activation',()=>{
  const h=H.boot(build),events={};let sent=0,reloaded=0;
  h.ctx.location.reload=()=>{reloaded++};

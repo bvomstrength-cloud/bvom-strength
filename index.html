@@ -8,7 +8,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="BVOM">
 <meta name="twitter:description" content="Best Version Of Myself — strength training and progression.">
-<title>BVOM Strength v2.9.6</title><link rel="manifest" href="manifest.json">
+<title>BVOM Strength v2.9.7</title><link rel="manifest" href="manifest.json">
 <style>
 :root{--bg:#f4f4f4;--card:#fff;--ink:#111;--muted:#737373;--accent:#d91e18;--line:#ddd}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
@@ -236,7 +236,7 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
 <div id="authgate" class="setup hidden"></div>
 <div id="setup" class="setup hidden"></div>
 <div id="app" class="hidden">
-<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v2.9.6</div></header>
+<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v2.9.7</div></header>
 <div class="tabs"><div class="tab on" data-tab="workout">WORKOUT</div><div class="tab" data-tab="warmup">WARM-UP</div><div class="tab" data-tab="history">HISTORY</div><div class="tab" data-tab="info">INFO</div><div class="tab" data-tab="settings">SETTINGS</div></div>
 <main><section id="workout"></section><section id="warmup" class="hidden"></section><section id="history" class="hidden"></section><section id="info" class="hidden"></section><section id="settings" class="hidden"></section></main>
 <div class="timer idle" id="timerbar"><div class="timerin"><div><div class="clock" id="clock">0:00</div><div class="marks">DINGS 3 · 5 · 10</div></div><button class="cancel" onclick="if(bvomWorkoutActionAllowed())cancelTimer()">CANCEL</button><button class="finish" onclick="finishWorkout()">FINISH</button></div></div>
@@ -245,7 +245,7 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
 <script src="./i18n/ja.js?v=2a86f7297fa9"></script>
 <script src="./vendor/supabase-js-2.117.3.js"></script>
 <script>
-const BVOM_BUILD='2.9.6';
+const BVOM_BUILD='2.9.7';
 const programs={A:[["Squat",3,5],["Bench Press",3,5],["Prone Row",3,5]],B:[["Squat",3,5],["Overhead Press",5,5],["Deadlift",1,5]]};
 function liftLabel(n){return n==='Prone Row'?(isHLM()?'Prone Row':'Row'):n==='Overhead Press'?'Press':n;}
 const inc={Squat:2.5,"Bench Press":2.5,"Prone Row":2.5,"Overhead Press":2.5,Deadlift:5};
@@ -339,6 +339,7 @@ let bvomLocalPersistenceFailureActive=false,bvomLocalPersistenceFailureOverlaySh
 function bvomPersistenceBlocked(){return !!(bvomLocalWriteConflictActive||bvomLocalPersistenceFailureActive)}
 function bvomLocalPersistenceFailureNotice(){
  bvomLocalPersistenceFailureActive=true;
+ bvomRefreshServiceWorkerUpdate();
  if(bvomLocalPersistenceFailureOverlayShown)return;
  bvomLocalPersistenceFailureOverlayShown=true;
  const title=(typeof hlmTxt==='function')?hlmTxt('BVOM COULD NOT SAVE','BVOMを保存できませんでした'):'BVOM COULD NOT SAVE';
@@ -355,6 +356,7 @@ function bvomLocalPersistenceFailureNotice(){
 }
 function bvomLocalWriteConflictNotice(){
  bvomLocalWriteConflictActive=true;
+ bvomRefreshServiceWorkerUpdate();
  if(bvomLocalWriteConflictOverlayShown)return;
  bvomLocalWriteConflictOverlayShown=true;
  const title=(typeof hlmTxt==='function')?hlmTxt('THIS BVOM WINDOW IS OUT OF DATE','このBVOM画面は古い状態です'):'THIS BVOM WINDOW IS OUT OF DATE';
@@ -438,6 +440,7 @@ function bvomResumeRequiredCoreChoices(){
 }
 function bvomPostCommitOwnerFailureNotice(){
  bvomLocalPersistenceFailureActive=true;
+ bvomRefreshServiceWorkerUpdate();
  if(bvomLocalPersistenceFailureOverlayShown)return;bvomLocalPersistenceFailureOverlayShown=true;
  const o=document.createElement('div');o.id='bvomPostCommitOwnerFailureOverlay';o.className='bvomModalOverlay';o.style.zIndex='280000';o.setAttribute('role','alertdialog');o.setAttribute('aria-modal','true');
  o.innerHTML=`<div class="bvomModal"><h3>${hlmTxt('TRAINING SAVED — WINDOW STOPPED','トレーニングは保存済み — この画面を停止しました')}</h3><p>${hlmTxt('Your training change was saved on this device, but BVOM could not confirm the workout window marker. This window has stopped. Reload and check the saved workout before continuing. Reload does not transfer an existing owner.','トレーニングの変更はこの端末に保存されましたが、ワークアウト画面の管理情報を確認できませんでした。この画面を停止しました。再読み込みして保存済みのワークアウトを確認してください。既存の管理画面は再読み込みでは切り替わりません。')}</p><button type="button" class="primary modalWide" data-reload>${hlmTxt('RELOAD BVOM','BVOMを再読み込み')}</button></div>`;
@@ -469,6 +472,7 @@ function save(options){
  const next=JSON.stringify(state);
  try{localStorage.setItem(BVOM_DATA_KEY,next)}catch(e){if(previousActivity===undefined)delete state.workoutLastActivityAt;else state.workoutLastActivityAt=previousActivity;if(previousProtocol===undefined)delete state.workoutOwnershipVersion;else state.workoutOwnershipVersion=previousProtocol;bvomLocalPersistenceFailureNotice();return false}
  bvomLastPersistedRaw=next;
+ bvomRefreshServiceWorkerUpdate();
  try{if(window.__bvomAuthUserId)bvomSetLocalOwnerId(window.__bvomAuthUserId);
   if(bvomStateWorkoutActive(state)){
    const ownerNow=localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY);
@@ -2194,7 +2198,7 @@ function advanceAfterExercise(n){
  const r=coreResult(n),c=bvomCoreCfgForSession(n),baseWeight=bvomCoreWeightForSession(n);if(r.incomplete)return;if(r.amrapExceeded){if(r.failed)bvomRecovery(true);else bvomPraise();}if(!r.failed&&!r.close){state.weights[n]=bvomRoundForSession(n,baseWeight+c.increment);state.attempts[n]=0;save();return;}if(r.close){offerCloseMissChoice(n,baseWeight,c.increment);return;}state.attempts[n]=(state.attempts[n]||0)+1;if(state.attempts[n]>=3)offerThreeFailureChoice(n);else if(!r.strongRescue)bvomRecovery(false);save();
 }
 function bvomWorkoutDayLocked(){return bvomStrengthSessionHasActivity(state)||bvomGppSessionHasActivity(state)}
-function bvomSyncWorkoutControls(){const finish=document.querySelector('#timerbar .finish');if(finish)finish.disabled=!!window.__bvomFinishBusy||!bvomSessionHasActivity()}
+function bvomSyncWorkoutControls(){bvomRefreshServiceWorkerUpdate();const finish=document.querySelector('#timerbar .finish');if(finish)finish.disabled=!!window.__bvomFinishBusy||!bvomSessionHasActivity()}
 
 function switchDay(d){if(!bvomWorkoutActionAllowed())return;
  if(bvomWorkoutDayLocked())return;
@@ -3576,16 +3580,36 @@ const bvomBbDev36ChangeUnitsBase=changeUnits;changeUnits=function(to,quiet=false
 /* ===== END BODYBUILDING DEV3.12 ON-RAMP + WARM-UP LAYER ===== */
 
 let bvomSwUpdateBusy=false,bvomSwUpdateAttempt=0;
+// Retain the candidate even after activation clears registration.waiting.
+var bvomSwPendingUpdate;
+function bvomSwUpdateBlocked(){
+ return bvomAnyWorkoutActive()||!!window.__bvomFinishBusy||bvomPersistenceBlocked()||!!document.querySelector('.bvomModalOverlay');
+}
+function bvomRefreshServiceWorkerUpdate(){
+ if(!bvomSwPendingUpdate)return;
+ const el=document.getElementById('bvomUpdateBanner');
+ const blocked=bvomSwUpdateBlocked();
+ if(blocked&&bvomSwUpdateBusy){
+  // Starting critical work cancels reload consent, not the pending update.
+  bvomSwUpdateBusy=false;
+  try{sessionStorage.removeItem(BVOM_SW_UPDATE_FLAG)}catch(e){}
+  const btn=el?.querySelector('[data-bvom-update]'),status=el?.querySelector('[data-bvom-update-status]');
+  if(btn){btn.disabled=false;btn.textContent=hlmTxt('UPDATE & RELOAD','更新して再読み込み')}
+  if(status)status.textContent=hlmTxt('BVOM update ready. Reload when you are not in a workout.','BVOMの更新準備ができました。ワークアウト中でないときに再読み込みしてください。');
+ }
+ if(el)el.style.display=blocked?'none':'flex';
+}
 const BVOM_SW_UPDATE_FLAG='bvom-update-reload-requested';
 function bvomSwFinishRequestedReload(){
  let requested=bvomSwUpdateBusy;try{requested=requested||sessionStorage.getItem(BVOM_SW_UPDATE_FLAG)==='1'}catch(e){}
  if(!requested)return false;
  // Do not reload a live session, even if the user began one after tapping update.
- if(bvomAnyWorkoutActive()){
+ if(bvomSwUpdateBlocked()){
   try{sessionStorage.removeItem(BVOM_SW_UPDATE_FLAG)}catch(e){}
   bvomSwUpdateBusy=false;
   const btn=document.getElementById('bvomUpdateBanner')?.querySelector('[data-bvom-update]');
-  if(btn){btn.disabled=false;btn.textContent=hlmTxt('RELOAD AFTER WORKOUT','ワークアウト後に再読み込み')}
+  if(btn){btn.disabled=false;btn.textContent=hlmTxt('UPDATE & RELOAD','更新して再読み込み')}
+  bvomRefreshServiceWorkerUpdate();
   return false;
  }
  try{sessionStorage.removeItem(BVOM_SW_UPDATE_FLAG)}catch(e){}
@@ -3593,21 +3617,32 @@ function bvomSwFinishRequestedReload(){
  location.reload();return true;
 }
 function bvomShowServiceWorkerUpdate(reg){
- const waiting=reg?.waiting;if(!waiting)return;
+ const waiting=reg?.waiting||bvomSwPendingUpdate?.worker;if(!waiting)return;
+ if(reg?.waiting)bvomSwPendingUpdate={reg,worker:waiting};
+ else reg=bvomSwPendingUpdate.reg;
  let el=document.getElementById('bvomUpdateBanner');
  if(!el){
   el=document.createElement('div');el.id='bvomUpdateBanner';
   el.style.cssText='position:fixed;left:10px;right:10px;bottom:10px;z-index:260000;background:#171717;color:#fff;border:1px solid #777;border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:center;justify-content:space-between;box-shadow:0 4px 20px rgba(0,0,0,.35)';
   el.innerHTML='<span style="font-size:13px" data-bvom-update-status>'+hlmTxt('BVOM update ready. Reload when you are not in a workout.','BVOMの更新準備ができました。ワークアウト中でないときに再読み込みしてください。')+'</span><button type="button" class="primary" data-bvom-update>'+hlmTxt('UPDATE & RELOAD','更新して再読み込み')+'</button>';
   document.body.appendChild(el);
+  // Dialogs are direct body children. Observe only their arrival/dismissal while
+  // an update is pending; no polling or wrapping of unrelated UI functions.
+  if(typeof MutationObserver==='function'){
+   const observer=new MutationObserver(bvomRefreshServiceWorkerUpdate);
+   observer.observe(document.body,{childList:true});
+  }
  }
+ bvomRefreshServiceWorkerUpdate();
  const btn=el.querySelector('[data-bvom-update]'),status=el.querySelector('[data-bvom-update-status]');
  if(!btn)return;
  btn.disabled=bvomSwUpdateBusy;
  if(bvomSwUpdateBusy)btn.textContent=hlmTxt('UPDATING…','更新中…');
  btn.onclick=()=>{
   if(bvomSwUpdateBusy)return;
-  if(bvomAnyWorkoutActive()){
+  if(bvomSwUpdateBlocked()){
+   bvomRefreshServiceWorkerUpdate();
+   if(!bvomAnyWorkoutActive())return;
    bvomBeeModal(hlmTxt('FINISH THIS WORKOUT FIRST','まずこのワークアウトを終了してください'),hlmTxt('The update is ready, but BVOM will not reload while a workout is active. Finish or exit the workout, then update.','更新の準備はできていますが、ワークアウト中はBVOMを再読み込みしません。ワークアウトを終了または中止してから更新してください。'));return;
   }
   bvomSwUpdateBusy=true;const attempt=++bvomSwUpdateAttempt;
@@ -4124,7 +4159,7 @@ renderWarm=function(...args){const out=bvomOrderBaseWarm(...args);bvomOrderApply
 bvomHideMainSurfaces();if("serviceWorker" in navigator){
   window.addEventListener("load", async ()=>{
     try{
-      const reg = await navigator.serviceWorker.register("./sw.js?v=2.9.6");
+      const reg = await navigator.serviceWorker.register("./sw.js?v=2.9.7");
       bvomWatchServiceWorkerUpdate(reg);
       navigator.serviceWorker.addEventListener("controllerchange", ()=>{
         bvomSwFinishRequestedReload();
