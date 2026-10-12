@@ -243,6 +243,17 @@ It can run for up to six A/B sessions, can hand confirmed/calibrated loads into 
 
 The hand-off is a transaction. Failed validation must not partially terminate or mutate the active On-Ramp.
 
+
+### 6.6 Stage 1 bodyweight recording boundary
+
+Bodyweight accessories use the existing builder, assignment scopes, `ACC:` keys and session/History workflows. `accessoryPlan17` supplies straight recording plans, and the effective `tapAccessory` routes only explicit Bodyweight equipment to `bvomBwAccessoryModal`; all other equipment delegates to the existing engines. Shared `bvomBwFields`, validation and formatting helpers carry actual added `load`, escaped assistance (`resistance`), optional `approximateBodyweight` and the explicit actual-set marker `bodyweight: true`. There is no second editable added-load value or new progression engine.
+
+Custom/Bodybuilding builder wrappers retain program isolation. New Bodyweight saves include those assignments in the durable transaction; invalid or failed saves do not become wrapper successes. Marked set correction replaces only that recording and does not process progression. The base unit transaction converts marked sets/settings physically before persistence; the later Bodybuilding grid wrapper excludes marked actuals. Completed History is not converted or inferred from current templates.
+
+Bodybuilding/On-Ramp bodyweight set dialogs use the same field/validation helpers. Remembered actual load (`recordingLoad`) is distinct from prescription/progression state; directional engine contracts are unchanged and bodyweight added loads do not create numeric performance references. History/share/export consume the explicit set marker and snapshotted exercise names.
+
+Cloud JSON remains additive, without eager migration/default insertion or backend changes. Older clients cannot understand the marker; issue #45 explicitly accepts the limited risk for new bodyweight-specific data. Recommend updating other devices before edits, while preserving the normal conflict, live-workout exclusion and ownership guards.
+
 ## 7. Workout transaction and correction model
 
 BVOM has accumulated explicit transaction protections because progression, editing, correction, units, and future settings interact.

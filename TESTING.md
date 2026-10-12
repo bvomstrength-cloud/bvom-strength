@@ -297,6 +297,17 @@ When changing a test:
 
 If a legitimate product decision changes a behavioural contract, update the specification and tests together and make that decision explicit in the PR.
 
+
+## Stage 1 bodyweight recording checks
+
+`bodyweight_contracts.js`, loaded by the authoritative behaviour tier, covers actual accessory/Bodybuilding/On-Ramp entry, zero/arbitrary added load, RPE/effort, assistance, estimates, manual Custom settings/locks, program isolation, correction, failed/stale writes, physical unit conversion, recovery, completed History/share/export and lazy cloud comparison. All nine final forward-feature contracts were RED against unchanged v2.9.7 `dbaad6ef217769a0b028a2a1c88ba528eb67d3f8`; all nine contracts must pass. They are explicit v2.8.0 historical-provenance N/A, not changes to existing progression expectations.
+
+Run the `BW-STAGE1-*` IDs through `behaviour_guard.js`, then the documented full gate on the production candidate. Mutations cover loss of the recording-only route, zero export, exact conversion, negative-load validation and failed-save rollback. Existing accessory/Bodybuilding controls and sequence invariants remain mandatory.
+
+`node tests/bvom-lab/bodyweight_browser.cjs` exercises real Chromium DOM, callbacks, storage and Web Locks in EN/JA at 375 px, with dummy verified offline ownership and external network blocked: six scenarios covering Custom builder/actual sets/RPE/escaping/restart/secondary-window rejection/Finish/History/export, plus selected Bodybuilding Chin-Up and On-Ramp Nordic actual recording and exact unit conversion in both languages. `BVOM_CHROMIUM_PATH` optionally selects an installed Chromium executable. The existing recovery/Starting Setup browser suites remain applicable. These checks stub external services and block service workers; they do not establish real cloud interoperability, installed-PWA updates or Android/iOS behavior.
+
+Before any separately authorised release, verify Android Chrome/installed PWA and Safari/iOS keyboards/layout, offline restart, background recovery and shell updates. Test real cloud backup/restore with a separate dummy account, including completed bodyweight snapshots. The owner accepted limited older-client misinterpretation; recommend updating other devices before editing new bodyweight data. No production cloud access or migration is part of Stage 1.
+
 ## 13. Manual release checkpoint
 
 Passing automated tests means the code is eligible for the next release step; it does not itself deploy or promote anything.

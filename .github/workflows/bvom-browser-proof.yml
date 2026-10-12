@@ -144,3 +144,6 @@ jobs:
         run: node tests/bvom-lab/recovery_browser.cjs
       - name: Run isolated deferred Starting Setup interactions
         run: node tests/bvom-lab/starting_setup_browser.cjs
+
+      - name: Run isolated Stage 1 bodyweight recording interactions
+        run: node tests/bvom-lab/bodyweight_browser.cjs

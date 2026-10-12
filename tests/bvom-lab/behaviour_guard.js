@@ -25,6 +25,7 @@ function ownershipPair(){
 const readOnlyNotice=h=>h.overlays().some(o=>o.id==='bvomWorkoutReadOnlyOverlay'&&!o.removed);
 require('./monkey009_contracts')({test,ok,H,build,configureLP,ownershipPair,readOnlyNotice});
 require('./monkey011_contracts')({test,ok,H,build,configureLP});
+require('./bodyweight_contracts')({test,ok,H,build});
 require('./recovery_contracts')({test,ok,H,build});
 require('./starting_setup_contracts')({test,ok,H,build});
 test('F50-SECONDARY-PENDING-ANSWER-ATOMIC','DEFECT','Different-tab pending answers leave memory/blob/owner unchanged and explain non-persistence',()=>{
