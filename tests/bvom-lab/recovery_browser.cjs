@@ -228,6 +228,61 @@ test('update banner accepts one tap and immediately blocks repeated Chrome click
  }finally{await context.close()}
 });
 
+// Simulated waiting worker; real DOM, recorded work, pointer hit testing and Finish.
+async function offerUpdate(p){await p.evaluate(()=>{
+ const fake={posts:0,handlers:[]};window.__fakeUpdate=fake;
+ fake.worker={state:'installed',scriptURL:'http://localhost/sw.js?v=next',postMessage:()=>fake.posts++,addEventListener:(_,fn)=>fake.handlers.push(fn)};
+ fake.reg={waiting:fake.worker,active:{scriptURL:'old'}};bvomShowServiceWorkerUpdate(fake.reg);
+})}
+async function assertFinishReachable(p){
+ const finish=p.locator('#timerbar .finish');await finish.scrollIntoViewIfNeeded();
+ assert.equal(await finish.evaluate(el=>{const r=el.getBoundingClientRect();const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return hit===el||el.contains(hit)}),true,'Finish center must receive pointer input');
+ await finish.click();
+}
+for(const [width,locale] of [[390,'en'],[1280,'en'],[390,'ja']])test('update deferred: Bodybuilding incline recorded work can Finish at '+width+' '+locale,async()=>{
+ const prepared=H.boot(build);H.bbStart(prepared);prepared.S().bodybuilding.completedSessions=1;prepared.S().language=locale;prepared.ev('save()');
+ const {context,a}=await setup(JSON.parse(JSON.stringify(prepared.S())));try{
+  await a.setViewportSize({width,height:800});if(locale==='ja')await a.evaluate(()=>changeLanguage('ja'));
+  await a.evaluate(()=>bvomBbSetModal('incline_dumbbell_press',0));
+  let o=a.locator('.bvomModalOverlay').last();await o.locator('[data-load]').fill('20');await o.locator('[data-reps]').fill('10');await o.locator('[data-save]').click();
+  await offerUpdate(a);const banner=a.locator('#bvomUpdateBanner');assert.equal(await banner.isVisible(),false);
+  await a.evaluate(()=>bvomBbSetModal('incline_dumbbell_press',1));o=a.locator('.bvomModalOverlay').last();await o.locator('[data-load]').fill('20');await o.locator('[data-reps]').fill('10');await o.locator('[data-save]').click();
+  const recorded=(await saved(a)).session;await assertFinishReachable(a);
+  await a.locator('.bvomModalOverlay [data-accept]').click();
+  assert.equal(await banner.isVisible(),false);await a.locator('.bvomModalOverlay [data-skip]').click();
+  await a.locator('.bvomModalOverlay [data-ok]').waitFor();assert.equal(await banner.isVisible(),false);
+  const d=await saved(a);assert.equal(d.history.length,1);assert.equal(d.history[0].incomplete,true);assert.deepEqual(d.history[0].session,recorded);assert.equal(d.bodybuilding.completedSessions,1);
+  await a.locator('.bvomModalOverlay [data-ok]').click();await banner.waitFor({state:'visible'});
+  assert.match(await banner.locator('[data-bvom-update]').textContent(),locale==='ja'?/更新して再読み込み/:/UPDATE & RELOAD/);
+  assert.equal(await a.evaluate(()=>window.__fakeUpdate.posts),0);
+ }finally{await context.close()}
+});
+test('update deferred: visible prompt hides on set dialog, retains activated worker and reloads only on fresh idle tap',async()=>{
+ const {context,a}=await setup();try{
+  await offerUpdate(a);const banner=a.locator('#bvomUpdateBanner');assert.equal(await banner.isVisible(),true);
+  await a.evaluate(()=>tapSet('Squat',0));await banner.waitFor({state:'hidden'});
+  await a.locator('.bvomModalOverlay [data-c]').click();await banner.waitFor({state:'visible'});
+  await banner.locator('[data-bvom-update]').click();await record(a,'Squat',0);
+  await banner.waitFor({state:'hidden'});
+  await a.evaluate(()=>{const f=window.__fakeUpdate;f.worker.state='activated';f.reg.active=f.worker;f.reg.waiting=null;f.handlers.forEach(fn=>fn())});
+  assert.equal(await a.evaluate(()=>sessionStorage.getItem('bvom-update-reload-requested')),null);
+  await assertFinishReachable(a);await a.locator('.bvomModalOverlay [data-finish]').click();await a.locator('.bvomModalOverlay [data-skip]').click();
+  assert.equal(await banner.isVisible(),false);await a.locator('.bvomModalOverlay [data-ok]').click();await banner.waitFor({state:'visible'});
+  assert.equal(await a.evaluate(()=>window.__fakeUpdate.posts),1);assert.equal((await saved(a)).history.length,1);
+  await Promise.all([a.waitForEvent('load'),banner.locator('[data-bvom-update]').click()]);await a.waitForSelector('#app:not(.hidden)');
+  assert.equal((await saved(a)).history.length,1);assert.equal(await a.evaluate(()=>sessionStorage.getItem('bvom-update-reload-requested')),null);
+ }finally{await context.close()}
+});
+test('update deferred: pending On-Ramp dialog and local save failure stay above update',async()=>{
+ const prepared=H.boot(build);H.bbStart(prepared,{onramp:true});const {context,a}=await setup(JSON.parse(JSON.stringify(prepared.S())));try{
+  await offerUpdate(a);await a.evaluate(()=>bvomBbOnRampSetModal(state.bodybuilding.selections.A1,0));
+  await a.locator('#bvomUpdateBanner').waitFor({state:'hidden'});
+  await a.locator('.bvomModalOverlay [data-cancel]').click();await a.locator('#bvomUpdateBanner').waitFor({state:'visible'});
+  await a.evaluate(()=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k==='bvom_data')throw Error('fixture quota');return original.call(this,k,v)};save({durable:true})});
+  await a.locator('#bvomLocalSaveFailureOverlay').waitFor();assert.equal(await a.locator('#bvomUpdateBanner').isVisible(),false);
+ }finally{await context.close()}
+});
+
 test('exercise arrows really reorder LP B cards and warmups, survive an active set, reopen and Reset',async()=>{
  const {context,a}=await setup();try{
   await a.evaluate(()=>switchDay('B'));

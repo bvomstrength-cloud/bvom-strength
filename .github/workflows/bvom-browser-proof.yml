@@ -2,6 +2,9 @@ name: BVOM Browser Runner Proof
 
 # Test-only workflow on draft PR #39. No app code, production or real-user data.
 on:
+  push:
+    branches:
+      - "dev/issue-42-defer-workout-update"
   pull_request:
     branches:
       - main
