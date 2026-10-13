@@ -691,15 +691,17 @@ function bvomBwExtraSetIndices(a,ss){
 }
 function bvomBwNextExtraSetIndex(a){
  const ss=state.session?.['ACC:'+a.id]||{},planned=accessoryPlan17(a).length;
- const used=Object.keys(ss).filter(k=>/^[0-9]+$/.test(k)).map(Number);
- return Math.max(planned,...used.map(n=>n+1));
+ const used=new Set(Object.keys(ss).filter(k=>/^[0-9]+$/.test(k)).map(Number));
+ let next=planned;while(used.has(next))next++;
+ return next;
 }
 function bvomBwAddExtraSet(id){
  if(!bvomWorkoutActionAllowed())return;
  const a=activeAccessories().find(x=>x.id===id);
  if(!a||a.equipment!=='bodyweight'||a.style!=='straight')return;
+ const ss=state.session?.['ACC:'+a.id]||{};
+ if(bvomBwExtraSetIndices(a,ss).length>=30){alert(hlmTxt('Maximum 30 extra sets per exercise.','追加セットは種目ごとに最大30セットです。'));return}
  const next=bvomBwNextExtraSetIndex(a);
- if(next>=accessoryPlan17(a).length+30){alert(hlmTxt('Maximum 30 extra sets per exercise.','追加セットは種目ごとに最大30セットです。'));return}
  bvomBwAccessoryModal(id,next);
 }
 function bvomBwExtraSetMarkup(a,ss){
@@ -718,7 +720,7 @@ function bvomBwAccessoryModal(id,i){
  const a=(state.accessoryList||[]).find(x=>x.id===id);if(!a||a.equipment!=='bodyweight')return;
  const plan=accessoryPlan17(a),key='ACC:'+id,existing=state.session?.[key]?.[i],extra=i>=plan.length;
  if(extra&&a.style!=='straight')return;
- if(extra&&!existing&&i!==bvomBwNextExtraSetIndex(a))return;
+ if(extra&&!existing&&(i!==bvomBwNextExtraSetIndex(a)||bvomBwExtraSetIndices(a,state.session?.[key]).length>=30))return;
  const planned=plan[i]||(extra?plan.at(-1):null);if(!planned)return;const existingRaw=JSON.stringify(existing),templateRaw=JSON.stringify(a),entryUnit=unitLabel(),entryMode=state.programMode,entryDay=state.day;
  const o=document.createElement('div');o.className='bvomModalOverlay';
  o.innerHTML=`<div class="bvomModal"><h3>${bvomEsc(a.name)} · ${extra?hlmTxt('Extra set','追加セット'):bvomT('bodyweight.set')} ${i+1}</h3>${bvomBwFields(existing?.load??planned.load,existing?.resistance??a.resistance,existing?.bodyweight===true?existing.approximateBodyweight:a.approximateBodyweight)}<label>${bvomT('accessories.reps')}<input data-reps type="number" min="0" step="1" value="${existing?.reps??planned.target}"></label><label>RPE<input data-rpe type="number" min="6" max="10" step="0.5" ${i===0&&bvomBwProgressEligible(a)&&!existing?'placeholder="'+hlmTxt('Enter your effort (6–10)','主観的運動強度を入力 (6～10)')+'" value=""':'value="'+bvomEsc(existing?.rpe??8)+'"'}></label><div class="modalActions">${extra&&existing?`<button data-remove>${hlmTxt('REMOVE SET','セットを削除')}</button>`:''}<button data-cancel>${bvomT('accessories.cancel')}</button><button class="primary" data-save>${bvomT('bodyweight.record')}</button></div></div>`;
