@@ -1535,7 +1535,10 @@ function finishWorkout(){if(!bvomWorkoutActionAllowed())return;
    }
   });
  };
- if(incomplete)bvomIncompleteConfirm(()=>askNote([]),()=>{window.__bvomFinishBusy=false;bvomSyncWorkoutControls()});else bvomBwConfirmOffers(gppOnly?[]:bvomBwProgressOffers(),askNote);
+ // An incomplete core workout does not erase an earned, fully recorded accessory.
+ // Only after FINISH ANYWAY, offer that accessory's next-workout load choice.
+ const offerBodyweight=()=>bvomBwConfirmOffers(gppOnly?[]:bvomBwProgressOffers(),askNote);
+ if(incomplete)bvomIncompleteConfirm(offerBodyweight,()=>{window.__bvomFinishBusy=false;bvomSyncWorkoutControls()});else offerBodyweight();
 }
 function renderWorkout(){
  let h=`<div class="toprow"><div><b>Beginner ABA</b><div class="small">A · B · A is suggested. Choose A or B whenever needed.</div></div><div class="choiceRow"><button class="choice ${state.day==='A'?'on':''}" onclick="switchDay('A')">A</button><button class="choice ${state.day==='B'?'on':''}" onclick="switchDay('B')">B</button></div></div>`;
