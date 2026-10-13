@@ -1495,7 +1495,7 @@ function finishWorkout(){if(!bvomWorkoutActionAllowed())return;
  window.__bvomFinishBusy=true;bvomSyncWorkoutControls();
  const gppOnly=!bvomStrengthSessionHasActivity(state)&&bvomGppSessionHasActivity(state);
  const incomplete=!gppOnly&&!workoutComplete();
- const askNote=()=>{
+ const askNote=(acceptedBw=[])=>{
   const duration=bvomDuration(),volume=bvomWorkoutVolume(),workout=state.workoutStartedAt;
   bvomSessionNoteModal('',note=>{
    if(!window.__bvomFinishBusy||!bvomWorkoutActionAllowed()||state.workoutStartedAt!==workout||!bvomSessionHasActivity()||!bvomDeferredFinishReady())return;
@@ -1503,7 +1503,21 @@ function finishWorkout(){if(!bvomWorkoutActionAllowed())return;
    const lifts=gppOnly?[]:program().map(x=>x[0]);
    const pbMessages=!incomplete&&!gppOnly?lifts.map(n=>maybePB(n,state.weights[n])).filter(Boolean):[];
    if(!incomplete&&!gppOnly)progressAccessories17();
+   // Accepted offers commit alongside History in the same durable state write.
+   const acceptedDetails=[];
+   for(const x of acceptedBw){
+    const a=(state.accessoryList||[]).find(a=>a.id===x.id),now=a&&bvomBwProgressCandidate(a);
+    if(!now||now.action!==x.action||now.next!==x.next||now.load!==x.load||now.session!==x.session||x.unit!==unitLabel()||x.day!==state.day){
+     state=before;window.__bvomFinishBusy=false;bvomSyncWorkoutControls();alert(bvomT('bodyweight.changed'));return;
+    }
+    a.weight=x.next;
+    state.accessoryProgress=state.accessoryProgress||{};
+    const p=state.accessoryProgress[a.id]||(state.accessoryProgress[a.id]={attempts:0});
+    p.weight=x.next;
+    acceptedDetails.push({id:a.id,name:a.name,action:x.action,from:x.load,to:x.next,unit:x.unit});
+   }
    saveWorkoutRecord(incomplete,note,duration,volume);
+   if(acceptedDetails.length)state.history.at(-1).bodyweightProgression=acceptedDetails;
    if(!incomplete)state.backupWorkoutCount=(state.backupWorkoutCount||0)+1;
    bvomApplyPendingAccessoryFutureOverrides();
    if(state.setupAfterFinish)state.setupAfterFinish.finishedRecord=JSON.stringify(state.history.at(-1));
@@ -1521,7 +1535,7 @@ function finishWorkout(){if(!bvomWorkoutActionAllowed())return;
    }
   });
  };
- if(incomplete)bvomIncompleteConfirm(askNote,()=>{window.__bvomFinishBusy=false;bvomSyncWorkoutControls()});else askNote();
+ if(incomplete)bvomIncompleteConfirm(()=>askNote([]),()=>{window.__bvomFinishBusy=false;bvomSyncWorkoutControls()});else bvomBwConfirmOffers(gppOnly?[]:bvomBwProgressOffers(),askNote);
 }
 function renderWorkout(){
  let h=`<div class="toprow"><div><b>Beginner ABA</b><div class="small">A · B · A is suggested. Choose A or B whenever needed.</div></div><div class="choiceRow"><button class="choice ${state.day==='A'?'on':''}" onclick="switchDay('A')">A</button><button class="choice ${state.day==='B'?'on':''}" onclick="switchDay('B')">B</button></div></div>`;
