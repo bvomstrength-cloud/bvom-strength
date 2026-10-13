@@ -32,7 +32,8 @@ const MUTATIONS=[
  {id:'BW-RECORDING-ROUTE-REMOVED',why:'new bodyweight accessories enter legacy progression',targets:['BW-STAGE1-RECORD'],apply:inRegion('const bvomBbBaseTapAccessory=', "if((state.accessoryList||[]).find(a=>a.id===id)?.equipment==='bodyweight')return bvomBwAccessoryModal(id,i);", '')},
  {id:'BW-ZERO-EXPORT-REMOVED',why:'zero added load disappears from export',targets:['BW-STAGE1-HISTORY'],apply:inRegion('function bvomExportV1Set(', "||(rec.bodyweight===true&&load===0)", '')},
  {id:'BW-EXACT-CONVERSION-REMOVED',why:'bodyweight actual load is snapped to numeric equipment grid',targets:['BW-STAGE1-UNITS'],apply:inRegion('function changeUnits(to,quiet=false)', "set.bodyweight===true?v=>convertLoad(v,to):undefined", 'undefined')},
- {id:'BW-FAILED-SAVE-ROLLBACK-REMOVED',why:'unsaved bodyweight correction leaks into memory',targets:['BW-STAGE1-ATOMIC'],apply:inRegion('function bvomBwAccessoryModal(', 'if(!save({durable:true})){state=before;return}', 'if(!save({durable:true})){return}')},
+ {id:'BW-FAILED-SAVE-ROLLBACK-REMOVED',why:'unsaved bodyweight correction leaks into memory',targets:['BW-STAGE1-ATOMIC'],apply:inRegion('state.session[key][i]={...bw,reps,rpe,target:planned.target', 'if(!save({durable:true})){state=before;return}', 'if(!save({durable:true})){return}')},
+ {id:'BW-EXTRA-REMOVE-ROLLBACK-REMOVED',why:'rejected extra-set removal discards saved actuals in memory',targets:['BW-EXTRA-REMOVE-REJECT'],apply:inRegion("if(extra&&existing)o.querySelector('[data-remove]').onclick", 'if(!save({durable:true})){state=before;return}', 'if(!save({durable:true})){return}')},
  {id:'BW-NEGATIVE-LOAD-VALIDATION-REMOVED',why:'negative added weight is accepted',targets:['BW-STAGE1-ATOMIC'],apply:inRegion('function bvomBwRead(', '||load<0', '')},
 
  {id:'SW-WORKOUT-VISIBILITY-GUARD-REMOVED',why:'pending update covers recorded workout controls',targets:['F100-SW-UPDATE-WORKOUT-VISIBILITY'],apply:inRegion('function bvomSwUpdateBlocked()', 'bvomAnyWorkoutActive()||', '')},
@@ -237,6 +238,8 @@ if(knownBad){
     // Stage 1 forward-feature contracts: RED on exact v2.9.7 dbaad6ef.
     'BW-REFINE-VOLUME','BW-REFINE-HISTORY','BW-REFINE-INCREMENT','BW-REFINE-INCOMPLETE-GPP',
     'BW-STAGE1-RECORD','BW-STAGE1-HISTORY','BW-STAGE1-UNITS','BW-STAGE1-BUILDER','BW-STAGE1-BB','BW-STAGE1-ATOMIC','BW-STAGE1-CORRECTION-CLOUD','BW-STAGE1-OWNER','BW-STAGE1-ONRAMP',
+    // Issue #52 forward-feature contracts are RED/not implemented on v2.9.11, not applicable to historical v2.8.0.
+    'BW-EXTRA-MODES','BW-EXTRA-MULTIPLE','BW-EXTRA-CANCEL-CORRECT-REMOVE','BW-EXTRA-DURABLE-REJECT','BW-EXTRA-REMOVE-REJECT','BW-EXTRA-STALE-OWNER','BW-EXTRA-RELOAD','BW-EXTRA-HISTORY','BW-EXTRA-PROGRESSION-ISOLATED','BW-EXTRA-PLANNED-INCOMPLETE','BW-EXTRA-FINISH-CHOICE',
     // Monkey 019 is RED on current v2.9.10 main and cannot apply to historical v2.8.0.
     'BB-M019-REJECT-NORMAL','BB-M019-REJECT-ONRAMP','BB-M019-REJECT-SIXTH','BB-M019-REJECT-DIRECT-HANDOFF','BB-M019-SIXTH-HANDOFF-SUCCESS','BB-M019-POSTCOMMIT-OWNER-FAIL',
     // Stage 2A RED on exact v2.9.8 Stage 1 head a44991f; no Bodyweight in historical v2.8.0.
