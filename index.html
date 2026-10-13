@@ -3669,7 +3669,14 @@ function bvomRefreshServiceWorkerUpdate(){
   if(btn){btn.disabled=false;btn.textContent=hlmTxt('UPDATE & RELOAD','更新して再読み込み')}
   if(status)status.textContent=hlmTxt('BVOM update ready. Reload when you are not in a workout.','BVOMの更新準備ができました。ワークアウト中でないときに再読み込みしてください。');
  }
- if(el)el.style.display=blocked?'none':'flex';
+ if(el){
+  // Reserve the full bottom workout toolbar even before the first set.
+  // Measuring its rendered height also respects Android safe-area padding.
+  const timer=document.getElementById('timerbar');
+  const timerHeight=timer?.getBoundingClientRect?.().height||0;
+  el.style.bottom=(Math.ceil(timerHeight)+10)+'px';
+  el.style.display=blocked?'none':'flex';
+ }
 }
 const BVOM_SW_UPDATE_FLAG='bvom-update-reload-requested';
 function bvomSwFinishRequestedReload(){
@@ -3704,6 +3711,7 @@ function bvomShowServiceWorkerUpdate(reg){
    const observer=new MutationObserver(bvomRefreshServiceWorkerUpdate);
    observer.observe(document.body,{childList:true});
   }
+  window.addEventListener('resize',()=>{if(bvomSwPendingUpdate)bvomRefreshServiceWorkerUpdate()});
  }
  bvomRefreshServiceWorkerUpdate();
  const btn=el.querySelector('[data-bvom-update]'),status=el.querySelector('[data-bvom-update-status]');
