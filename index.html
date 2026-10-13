@@ -682,24 +682,67 @@ function bvomBwConfirmOffers(offers,done){
  }
  visit(0);
 }
+
+/* Bodyweight accessory extra sets are recorded work, not template edits. */
+function bvomBwExtraSetIndices(a,ss){
+ if(a?.equipment!=='bodyweight'||a?.style!=='straight')return [];
+ const planned=accessoryPlan17(a).length;
+ return Object.keys(ss||{}).filter(k=>/^[0-9]+$/.test(k)&&Number(k)>=planned&&ss[k]?.bodyweight===true&&Number.isInteger(ss[k].reps)&&ss[k].reps>=0).map(Number).sort((x,y)=>x-y);
+}
+function bvomBwNextExtraSetIndex(a){
+ const ss=state.session?.['ACC:'+a.id]||{},planned=accessoryPlan17(a).length;
+ const used=Object.keys(ss).filter(k=>/^[0-9]+$/.test(k)).map(Number);
+ return Math.max(planned,...used.map(n=>n+1));
+}
+function bvomBwAddExtraSet(id){
+ if(!bvomWorkoutActionAllowed())return;
+ const a=activeAccessories().find(x=>x.id===id);
+ if(!a||a.equipment!=='bodyweight'||a.style!=='straight')return;
+ const next=bvomBwNextExtraSetIndex(a);
+ if(next>=accessoryPlan17(a).length+30){alert(hlmTxt('Maximum 30 extra sets per exercise.','追加セットは種目ごとに最大30セットです。'));return}
+ bvomBwAccessoryModal(id,next);
+}
+function bvomBwExtraSetMarkup(a,ss){
+ return bvomBwExtraSetIndices(a,ss).map(i=>{
+  const log=ss[i];
+  return `<div class="setwrap" data-bw-extra="${i}"><button class="set done" onclick="bvomBwAccessoryModal('${a.id}',${i})">${log.reps}</button><div class="setload">${bvomEsc(bvomBwCardSetText(log,a))}<div class="extraLabel">${hlmTxt('EXTRA','追加')}</div></div></div>`;
+ }).join('');
+}
+function bvomBwExtraSetButton(a){
+ return a?.equipment==='bodyweight'&&a?.style==='straight'
+  ?`<button class="secondary" style="margin-top:12px" onclick="bvomBwAddExtraSet('${a.id}')">+ ${hlmTxt('ADD EXTRA SET','追加セットを記録')}</button>`:'';
+}
+
 function bvomBwAccessoryModal(id,i){
  if(!bvomWorkoutActionAllowed())return;
  const a=(state.accessoryList||[]).find(x=>x.id===id);if(!a||a.equipment!=='bodyweight')return;
- const key='ACC:'+id,existing=state.session?.[key]?.[i],planned=accessoryPlan17(a)[i];if(!planned)return;const existingRaw=JSON.stringify(existing),templateRaw=JSON.stringify(a),entryUnit=unitLabel(),entryMode=state.programMode,entryDay=state.day;
+ const plan=accessoryPlan17(a),key='ACC:'+id,existing=state.session?.[key]?.[i],extra=i>=plan.length;
+ if(extra&&a.style!=='straight')return;
+ if(extra&&!existing&&i!==bvomBwNextExtraSetIndex(a))return;
+ const planned=plan[i]||(extra?plan.at(-1):null);if(!planned)return;const existingRaw=JSON.stringify(existing),templateRaw=JSON.stringify(a),entryUnit=unitLabel(),entryMode=state.programMode,entryDay=state.day;
  const o=document.createElement('div');o.className='bvomModalOverlay';
- o.innerHTML=`<div class="bvomModal"><h3>${bvomEsc(a.name)} · ${bvomT('bodyweight.set')} ${i+1}</h3>${bvomBwFields(existing?.load??planned.load,existing?.resistance??a.resistance,existing?.bodyweight===true?existing.approximateBodyweight:a.approximateBodyweight)}<label>${bvomT('accessories.reps')}<input data-reps type="number" min="0" step="1" value="${existing?.reps??planned.target}"></label><label>RPE<input data-rpe type="number" min="6" max="10" step="0.5" ${i===0&&bvomBwProgressEligible(a)&&!existing?'placeholder="'+hlmTxt('Enter your effort (6–10)','主観的運動強度を入力 (6～10)')+'" value=""':'value="'+bvomEsc(existing?.rpe??8)+'"'}></label><div class="modalActions"><button data-cancel>${bvomT('accessories.cancel')}</button><button class="primary" data-save>${bvomT('bodyweight.record')}</button></div></div>`;
+ o.innerHTML=`<div class="bvomModal"><h3>${bvomEsc(a.name)} · ${extra?hlmTxt('Extra set','追加セット'):bvomT('bodyweight.set')} ${i+1}</h3>${bvomBwFields(existing?.load??planned.load,existing?.resistance??a.resistance,existing?.bodyweight===true?existing.approximateBodyweight:a.approximateBodyweight)}<label>${bvomT('accessories.reps')}<input data-reps type="number" min="0" step="1" value="${existing?.reps??planned.target}"></label><label>RPE<input data-rpe type="number" min="6" max="10" step="0.5" ${i===0&&bvomBwProgressEligible(a)&&!existing?'placeholder="'+hlmTxt('Enter your effort (6–10)','主観的運動強度を入力 (6～10)')+'" value=""':'value="'+bvomEsc(existing?.rpe??8)+'"'}></label><div class="modalActions">${extra&&existing?`<button data-remove>${hlmTxt('REMOVE SET','セットを削除')}</button>`:''}<button data-cancel>${bvomT('accessories.cancel')}</button><button class="primary" data-save>${bvomT('bodyweight.record')}</button></div></div>`;
  document.body.appendChild(o);o.querySelector('[data-cancel]').onclick=()=>o.remove();
+ const contextUnchanged=()=>activeAccessories().some(x=>x===a)&&JSON.stringify(a)===templateRaw&&unitLabel()===entryUnit&&state.programMode===entryMode&&state.day===entryDay&&a.equipment==='bodyweight'&&JSON.stringify(state.session?.[key]?.[i])===existingRaw&&(!extra||!!existing||i===bvomBwNextExtraSetIndex(a));
+ if(extra&&existing)o.querySelector('[data-remove]').onclick=()=>{
+  if(!bvomWorkoutActionAllowed())return;
+  if(!contextUnchanged()){alert(bvomT('bodyweight.changed'));return}
+  const before=JSON.parse(JSON.stringify(state));delete state.session[key][i];
+  if(!save({durable:true})){state=before;return}
+  if(bvomPersistenceBlocked())return;
+  o.remove();renderWorkout();bvomSyncWorkoutControls();
+ };
  o.querySelector('[data-save]').onclick=()=>{
   if(!bvomWorkoutActionAllowed())return;
-  const current=(state.accessoryList||[]).find(x=>x.id===id);
-  if(current!==a||JSON.stringify(a)!==templateRaw||unitLabel()!==entryUnit||state.programMode!==entryMode||state.day!==entryDay||a.equipment!=='bodyweight'||JSON.stringify(state.session?.[key]?.[i])!==existingRaw){alert(bvomT('bodyweight.changed'));return}
+  if(!contextUnchanged()){alert(bvomT('bodyweight.changed'));return}
   const bw=bvomBwRead(o),reps=Number(o.querySelector('[data-reps]').value),rpe=Number(o.querySelector('[data-rpe]').value);
   if(!bw)return;if(o.querySelector('[data-reps]').value===''||!Number.isInteger(reps)||reps<0||!Number.isFinite(rpe)||rpe<6||rpe>10||rpe*2!==Math.round(rpe*2)){alert(bvomT('bodyweight.invalid'));return}
   const before=JSON.parse(JSON.stringify(state));state.session[key]=state.session[key]||{};
-  state.session[key][i]={...bw,reps,rpe,target:planned.target,top:false,drop:false,amrap:false};
+  state.session[key][i]={...bw,reps,rpe,target:planned.target,top:false,drop:false,amrap:false,...(extra?{extra:true}:{})};
   a.approximateBodyweight=bw.approximateBodyweight;
   if(!state.workoutStartedAt)state.workoutStartedAt=Date.now();
   if(!save({durable:true})){state=before;return}
+  if(bvomPersistenceBlocked())return;
   o.remove();startTimer();renderWorkout();bvomSyncWorkoutControls();
  };
 }
@@ -1849,7 +1892,7 @@ function accessoryWarmups(a,w){
 }
 function accessoryWarmupText(a,w){let wu=accessoryWarmups(a,w);return wu.length?`<div class="small" style="margin:6px 0"><b>Warm-up:</b> ${wu.map(x=>`${fmt(x[0])}×${x[1]}`).join(' · ')} <span style="opacity:.7">(guidance)</span></div>`:''}
 function accessoryPlateText(a,total){if(a.equipment!=='barbell')return a.equipment==='dumbbell'?'per dumbbell':'';let bar=Number(a.barWeight??(isLb()?45:20)),side=(Number(total)-bar)/2;if(side<=0)return Number(total)===bar?'empty bar':'below bar weight';let rem=side,out=[],ps=(state.enabledStandard||[]).concat(state.enabledMicro||[]).sort((x,y)=>y-x);for(let p of ps)while(rem+1e-6>=p){out.push(p);rem-=p}if(rem>1e-5)return 'not loadable with selected plates';return `${fmt(side)} ${unitLabel()} ${bvomT('warmup.perSide')}${out.length?' · '+out.map(fmt).join(' + '):''}`;}
-function renderAccessories17(){let h=`<div class="card"><div class="toprow"><div><b>Accessories</b><div class="small">Optional · A, B or Both · no effect on strength balance</div></div><button class="choice on" onclick="openAccessoryBuilder()">+ ADD</button></div></div>`;for(const a of activeAccessories()){let p={weight:a.weight},ss=state.session['ACC:'+a.id]||{},plan=accessoryPlan17(a),label=a.style==='straight'?`${a.sets}×${a.reps}`:bvomT(a.style==='rpt5'?'accessories.rpt5':'accessories.rpt3'),cat=bvomT('accessories.category.'+(a.category||'Upper').toLowerCase())||a.category,assign=bvomT('accessories.assignment.'+String(a.assignment||'Both').toLowerCase())||a.assignment;h+=`<div class="accCard"><div class="accHead"><div><div class="exname">${a.name}</div><div class="accMeta">${cat} · ${label} · ${assign} · ${(a.equipment||'machine')[0].toUpperCase()+(a.equipment||'machine').slice(1)} · +${fmt(a.increment)} ${unitLabel()}</div></div><div><div class="weight">${fmt(p.weight)} ${unitLabel()}</div><div class="accRemove" onclick="openAccessoryBuilder('${a.id}')">edit</div><div class="accRemove" onclick="removeAccessory('${a.id}')">remove</div></div></div><div class="sets">`;plan.forEach((q,i)=>{let log=ss[i],cl=log?(log.reps>=q.target?'done':'fail'):'';h+=`<div class="setwrap"><button class="set ${cl}" onclick="tapAccessory('${a.id}',${i})">${log?log.reps:'✓'}</button><div class="setload">${fmt(q.load)}×${q.target}${q.amrap?'+':''}</div></div>`});h+='</div></div>'}return h}
+function renderAccessories17(){let h=`<div class="card"><div class="toprow"><div><b>Accessories</b><div class="small">Optional · A, B or Both · no effect on strength balance</div></div><button class="choice on" onclick="openAccessoryBuilder()">+ ADD</button></div></div>`;for(const a of activeAccessories()){let p={weight:a.weight},ss=state.session['ACC:'+a.id]||{},plan=accessoryPlan17(a),label=a.style==='straight'?`${a.sets}×${a.reps}`:bvomT(a.style==='rpt5'?'accessories.rpt5':'accessories.rpt3'),cat=bvomT('accessories.category.'+(a.category||'Upper').toLowerCase())||a.category,assign=bvomT('accessories.assignment.'+String(a.assignment||'Both').toLowerCase())||a.assignment;h+=`<div class="accCard"><div class="accHead"><div><div class="exname">${a.name}</div><div class="accMeta">${cat} · ${label} · ${assign} · ${(a.equipment||'machine')[0].toUpperCase()+(a.equipment||'machine').slice(1)} · +${fmt(a.increment)} ${unitLabel()}</div></div><div><div class="weight">${fmt(p.weight)} ${unitLabel()}</div><div class="accRemove" onclick="openAccessoryBuilder('${a.id}')">edit</div><div class="accRemove" onclick="removeAccessory('${a.id}')">remove</div></div></div><div class="sets">`;plan.forEach((q,i)=>{let log=ss[i],cl=log?(log.reps>=q.target?'done':'fail'):'';h+=`<div class="setwrap"><button class="set ${cl}" onclick="tapAccessory('${a.id}',${i})">${log?log.reps:'✓'}</button><div class="setload">${fmt(q.load)}×${q.target}${q.amrap?'+':''}</div></div>`});if(a.equipment==='bodyweight')h+=bvomBwExtraSetMarkup(a,ss);h+='</div>'+(a.equipment==='bodyweight'?bvomBwExtraSetButton(a):'')+'</div>'}return h}
 function progressAccessories17(){return;}
 function historyName(key){if(!key.startsWith('ACC:'))return liftLabel(key);let id=key.slice(4),a=(state.accessoryList||[]).find(x=>x.id===id);if(a)return a.name;for(const h of state.history||[]){let nm=h.accessoryNames?.[id];if(nm)return nm}return 'Accessory'}
 function exportBackup(){let blob=new Blob([JSON.stringify({app:'BVOM',version:BVOM_BUILD,exportedAt:new Date().toISOString(),data:state},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`BVOM-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);state.backupWorkoutCount=0;save()}
@@ -3365,7 +3408,8 @@ renderAccessories17=function(){
   const ss=state.session['ACC:'+a.id]||{},plan=accessoryPlan17(a),label=a.style==='straight'?`${a.sets}×${a.reps}`:bvomT(a.style==='rpt5'?'accessories.rpt5':'accessories.rpt3'),cat=bvomT('accessories.category.'+(a.category||'Upper').toLowerCase())||a.category;
   h+=`<div class="accCard"><div class="accHead"><div><div class="exname">${bvomEsc(a.name)}</div><div class="accMeta">${cat} · ${label} · ${bvomFtAccessoryEquipmentLabel(a.equipment||'machine')}</div></div><div><div class="weight">${a.equipment==='bodyweight'?bvomBwLoadText(a.weight):fmt(a.weight)+' '+unitLabel()}</div><div class="accRemove" onclick="openAccessoryBuilder('${a.id}')">${hlmTxt('edit','編集')}</div><div class="accRemove" onclick="removeAccessory('${a.id}')">${hlmTxt('remove','削除')}</div></div></div>${a.equipment==='bodyweight'?bvomBwCardContext(a):''}<div class="sets ${a.equipment==='bodyweight'?'bvomBwSets':''}">`;
   plan.forEach((q,i)=>{const log=ss[i],cl=log?'done':'';h+=`<div class="setwrap"><button class="set ${cl}" onclick="tapAccessory('${a.id}',${i})">${log?log.reps:'✓'}</button><div class="setload">${a.equipment==='bodyweight'?bvomEsc(bvomBwCardSetText(log||{load:q.load,reps:q.target,resistance:a.resistance,approximateBodyweight:a.approximateBodyweight},a)):fmt(q.load)+'×'+q.target+(q.amrap?'+':'')+(log&&Number.isFinite(Number(log.rpe))?' · RPE '+Number(log.rpe):'')}</div></div>`});
-  h+='</div></div>';
+  if(a.equipment==='bodyweight')h+=bvomBwExtraSetMarkup(a,ss);
+  h+='</div>'+(a.equipment==='bodyweight'?bvomBwExtraSetButton(a):'')+'</div>';
  }
  return h;
 };
