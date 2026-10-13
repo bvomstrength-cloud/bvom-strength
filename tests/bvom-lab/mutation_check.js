@@ -33,6 +33,9 @@ const MUTATIONS=[
  {id:'BW-ZERO-EXPORT-REMOVED',why:'zero added load disappears from export',targets:['BW-STAGE1-HISTORY'],apply:inRegion('function bvomExportV1Set(', "||(rec.bodyweight===true&&load===0)", '')},
  {id:'BW-EXACT-CONVERSION-REMOVED',why:'bodyweight actual load is snapped to numeric equipment grid',targets:['BW-STAGE1-UNITS'],apply:inRegion('function changeUnits(to,quiet=false)', "set.bodyweight===true?v=>convertLoad(v,to):undefined", 'undefined')},
  {id:'BW-FAILED-SAVE-ROLLBACK-REMOVED',why:'unsaved bodyweight correction leaks into memory',targets:['BW-STAGE1-ATOMIC'],apply:inRegion('state.session[key][i]={...bw,reps,rpe,target:planned.target', 'if(!save({durable:true})){state=before;return}', 'if(!save({durable:true})){return}')},
+ {id:'BW-M020-APPEND-ONLY-INDEX',why:'removed extra slots remain unavailable and long sessions hit a phantom cap',targets:['BW-EXTRA-M020-HOLE-REUSE','BW-EXTRA-M020-CHURN-FIVE-MODES'],apply:inRegion('function bvomBwNextExtraSetIndex(', 'let next=planned;while(used.has(next))next++;', 'let next=Math.max(planned,...[...used].map(n=>n+1));')},
+ {id:'BW-M020-CAP-BY-NEXT-INDEX',why:'30 retained sparse extras bypass the limit when an early slot is vacant',targets:['BW-EXTRA-M020-SPARSE-CAP'],apply:inRegion('function bvomBwAddExtraSet(id)', 'if(bvomBwExtraSetIndices(a,ss).length>=30)', 'if(bvomBwNextExtraSetIndex(a)>=accessoryPlan17(a).length+30)')},
+ {id:'BW-M020-DIRECT-MODAL-BYPASS',why:'direct entry opens a 31st extra despite a full retained-set limit',targets:['BW-EXTRA-M020-SPARSE-CAP'],apply:inRegion('function bvomBwAccessoryModal(id,i)', '||bvomBwExtraSetIndices(a,state.session?.[key]).length>=30', '')},
  {id:'BW-EXTRA-REMOVE-ROLLBACK-REMOVED',why:'rejected extra-set removal discards saved actuals in memory',targets:['BW-EXTRA-REMOVE-REJECT'],apply:inRegion("if(extra&&existing)o.querySelector('[data-remove]').onclick", 'if(!save({durable:true})){state=before;return}', 'if(!save({durable:true})){return}')},
  {id:'BW-NEGATIVE-LOAD-VALIDATION-REMOVED',why:'negative added weight is accepted',targets:['BW-STAGE1-ATOMIC'],apply:inRegion('function bvomBwRead(', '||load<0', '')},
 
@@ -238,6 +241,8 @@ if(knownBad){
     // Stage 1 forward-feature contracts: RED on exact v2.9.7 dbaad6ef.
     'BW-REFINE-VOLUME','BW-REFINE-HISTORY','BW-REFINE-INCREMENT','BW-REFINE-INCOMPLETE-GPP',
     'BW-STAGE1-RECORD','BW-STAGE1-HISTORY','BW-STAGE1-UNITS','BW-STAGE1-BUILDER','BW-STAGE1-BB','BW-STAGE1-ATOMIC','BW-STAGE1-CORRECTION-CLOUD','BW-STAGE1-OWNER','BW-STAGE1-ONRAMP',
+    // Monkey 020 fix contracts are RED against exact v2.9.12 e81f864, not applicable to historical v2.8.0.
+    'BW-EXTRA-M020-HOLE-REUSE','BW-EXTRA-M020-CHURN-FIVE-MODES','BW-EXTRA-M020-SPARSE-CAP','BW-EXTRA-M020-FULL-CAP',
     // Issue #52 forward-feature contracts are RED/not implemented on v2.9.11, not applicable to historical v2.8.0.
     'BW-EXTRA-MODES','BW-EXTRA-MULTIPLE','BW-EXTRA-CANCEL-CORRECT-REMOVE','BW-EXTRA-DURABLE-REJECT','BW-EXTRA-REMOVE-REJECT','BW-EXTRA-STALE-OWNER','BW-EXTRA-RELOAD','BW-EXTRA-HISTORY','BW-EXTRA-PROGRESSION-ISOLATED','BW-EXTRA-PLANNED-INCOMPLETE','BW-EXTRA-FINISH-CHOICE',
     // Monkey 019 is RED on current v2.9.10 main and cannot apply to historical v2.8.0.
