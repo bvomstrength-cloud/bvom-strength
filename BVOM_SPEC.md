@@ -639,6 +639,12 @@ A rejected On-Ramp set entry must leave the exercise object's live and persisted
 
 This includes load and practical increment.
 
+### 10.8 Bodybuilding / On-Ramp Finish must commit durably (Monkey 019)
+
+A Bodybuilding FINISH or On-Ramp FINISH must **not** clear recorded sets, consume a session, change progression, add phantom History, stop the active timer, or report success until the entire completed result is durably written. A rejected blob write restores the pre-Finish in-memory workout, including its exact recorded sets and On-Ramp calibration, and leaves the durable copy unchanged. A failure of separate owner-marker cleanup **after** the blob was written does not justify restoring the old state; the window must stop and request a reload instead of declaring an unsaved workout.
+
+For the sixth On-Ramp session, recording its History and starting the main 8-week block must be one durable transaction, not two separate saves. If initial load validation fails or the write is rejected, the original active sixth-session sets and calibration remain available. An explicit earlier handoff must follow the same save-or-rollback rule. Ordinary Bodybuilding rep thresholds, directional Bodyweight decisions, assistance/estimate metadata, Custom Training and opt-in Stage 2A accessory progression remain unchanged. New failures discovered by Monkey 019 are RED on v2.9.10 and must stay GREEN in the current maintenance gate.
+
 ## 11. Accessories
 
 Accessories are optional training items integrated with structured and Custom Training sessions.

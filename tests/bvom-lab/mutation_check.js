@@ -15,6 +15,9 @@ const guard=path.join(__dirname,'behaviour_guard.js');
 // replace exactly one occurrence of `from`, searching only inside the function/region starting at `region`
 function inRegion(region,from,to){return src=>{const r=src.indexOf(region);if(r<0)return null;const i=src.indexOf(from,r);if(i<0||i-r>20000)return null;return src.slice(0,i)+to+src.slice(i+from.length)}}
 const MUTATIONS=[
+ {id:'BB-M019-FINISH-IGNORES-REJECT',why:'Bodybuilding FINISH advances despite a rejected durable training write',targets:['BB-M019-REJECT-NORMAL'],apply:inRegion('function bvomBbFinish(approvedIncomplete=false)', 'if(!save({durable:true})){state=before;', 'if(false){state=before;')},
+ {id:'BB-M019-ONRAMP-IGNORES-REJECT',why:'On-Ramp FINISH advances despite a rejected durable training write',targets:['BB-M019-REJECT-ONRAMP'],apply:inRegion('function bvomBbOnRampFinish(approvedIncomplete=false)', 'if(!save({durable:true})){', 'if(false){')},
+
  {id:'BW-STAGE2-INCOMPLETE-CORE-SUPPRESSED',why:'FINISH ANYWAY suppresses an earned accessory increase merely because core sets are missing',targets:['BW-STAGE2-INCOMPLETE-CORE-ACCEPT'],apply:inRegion('function finishWorkout(){', 'bvomIncompleteConfirm(offerBodyweight,', 'bvomIncompleteConfirm(()=>askNote([]),')},
  {id:'BW-STAGE2-OPT-IN-IGNORED',why:'opted-out Bodyweight accessories generate progression offers',targets:['BW-STAGE2-DEFAULT-OFF'],apply:inRegion('function bvomBwProgressEligible(', '&&a?.bwProgressOptIn===true', '')},
  {id:'BW-STAGE2-RPE-VETO-REMOVED',why:'an RPE9 first set incorrectly earns more hanging weight',targets:['BW-STAGE2-HARD-HOLD'],apply:inRegion('function bvomBwProgressCandidate(', 'rpe<=8', 'rpe<=10')},
@@ -94,9 +97,9 @@ const MUTATIONS=[
  {id:'BB-BLOCK-LENGTH-23',why:'block boundary off by one',targets:['BB-24-COMPLETION'],
   apply:inRegion('function bvomBbDay(','return n>=24?null','return n>=23?null')},
  {id:'ONRAMP-HANDOFF-DELETES-REFS',why:'On-Ramp handoff discards historical performance references',targets:['BB-ONRAMP-HANDOFF'],
-  apply:inRegion('function bvomBbOnRampHandoff(',"o.status='handed_off';","o.status='handed_off';delete b.performanceRefs;")},
+  apply:inRegion('function bvomBbOnRampPrepareHandoff(',"o.status='handed_off';","o.status='handed_off';delete b.performanceRefs;")},
  {id:'ONRAMP-HANDOFF-UNCALIBRATED',why:'handoff no longer carries CONFIRMED into calibrated',targets:['BB-ONRAMP-HANDOFF'],
-  apply:inRegion('function bvomBbOnRampHandoff(',"p.calibrated=e.state==='CONFIRMED'","p.calibrated=false")},
+  apply:inRegion('function bvomBbOnRampPrepareHandoff(',"p.calibrated=e.state==='CONFIRMED'","p.calibrated=false")},
  {id:'REF-RESET-DISABLED',why:'performance-reference reset after a reduction is ignored',targets:['BB-REF-RESET-SUPPRESSION'],
   apply:inRegion('function bvomBbPerformanceRefResetPending(','{','{return false;')},
  {id:'BB-UNITS-OMITTED',why:'Bodybuilding state skipped during unit conversion',targets:['BB-UNITS-CONVERTED','F5-LB-PRACTICAL'],
@@ -234,6 +237,8 @@ if(knownBad){
     // Stage 1 forward-feature contracts: RED on exact v2.9.7 dbaad6ef.
     'BW-REFINE-VOLUME','BW-REFINE-HISTORY','BW-REFINE-INCREMENT','BW-REFINE-INCOMPLETE-GPP',
     'BW-STAGE1-RECORD','BW-STAGE1-HISTORY','BW-STAGE1-UNITS','BW-STAGE1-BUILDER','BW-STAGE1-BB','BW-STAGE1-ATOMIC','BW-STAGE1-CORRECTION-CLOUD','BW-STAGE1-OWNER','BW-STAGE1-ONRAMP',
+    // Monkey 019 is RED on current v2.9.10 main and cannot apply to historical v2.8.0.
+    'BB-M019-REJECT-NORMAL','BB-M019-REJECT-ONRAMP','BB-M019-REJECT-SIXTH','BB-M019-REJECT-DIRECT-HANDOFF','BB-M019-SIXTH-HANDOFF-SUCCESS','BB-M019-POSTCOMMIT-OWNER-FAIL',
     // Stage 2A RED on exact v2.9.8 Stage 1 head a44991f; no Bodyweight in historical v2.8.0.
     'BW-STAGE2-OPT-IN-UI','BW-STAGE2-EARNED-ACCEPT','BW-STAGE2-EARNED-HOLD','BW-STAGE2-HARD-HOLD','BW-STAGE2-SEVEN-HOLD','BW-STAGE2-BELOW-RANGE','BW-STAGE2-INCOMPLETE-CORE-ACCEPT','BW-STAGE2-INCOMPLETE-CORE-HOLD','BW-STAGE2-INCOMPLETE-CORE-BACK','BW-STAGE2-INCOMPLETE-ACCESSORY-HOLD','BW-STAGE2-DEFAULT-OFF','BW-STAGE2-CUSTOM-NEVER-AUTO',
     'BW-STAGE2-DURABLE-ROLLBACK','BW-STAGE2-STRUCTURED-MODES','BW-STAGE2-PARTIAL-ACCESSORY',
