@@ -27,8 +27,31 @@ module.exports=({test,ok,H,build})=>{
   const {h,a,logs}=run(7,8);return ok(logs.length===0&&a.weight===0&&h.S().history.length===1)});
  test('BW-STAGE2-BELOW-RANGE','CONTROL','First set below 6 offers reduction, accepts one increment, floor zero',()=>{
   const a=run(5,8,'R','lprpt',1.25),b=run(5,8,'R','lprpt',0);return ok(a.logs.length===1&&a.a.weight===0&&b.logs.length===0&&b.a.weight===0)});
- test('BW-STAGE2-INCOMPLETE-HOLD','CONTROL','Missing core sets do not trigger accessory progression on incomplete finish',()=>{
-  const {h,a,logs}=run(8,8,'R','lprpt',0,false);return ok(logs.length===0&&a.weight===0&&h.S().history.length===1&&h.S().history[0].incomplete)});
+ test('BW-STAGE2-INCOMPLETE-CORE-ACCEPT','CONTROL','FINISH ANYWAY with incomplete core but complete Chin-Ups 8/8/6 offers ACCEPT once and saves incomplete History',()=>{
+  const {h,a}=fixture('lprpt',0);a.increment=1;h.ctx.save();
+  for(const [i,reps] of [8,8,6].entries())record(h,i,reps,0,8);
+  let confirms=0;const original=h.ctx.bvomIncompleteConfirm;
+  h.ctx.bvomIncompleteConfirm=(accept,back)=>{confirms++;accept()};
+  const offers=[];h.ctx.bvomChoiceModal=(title,body,left,right,L,R)=>{offers.push({title,body,left,right});R()};
+  h.ctx.finishWorkout();
+  const recordSaved=h.S().history.at(-1);
+  return ok(confirms===1&&offers.length===1&&/ACCEPT/.test(offers[0].right)&&a.weight===1&&recordSaved?.incomplete===true&&recordSaved?.session['ACC:stage2bw']?.[0]?.reps===8&&recordSaved?.bodyweightProgression?.[0]?.to===1&&h.ctx.accessoryPlan17(a).map(x=>x.load).join(',')==='1,0,0',JSON.stringify({confirms,offers,weight:a.weight,hist:recordSaved?.incomplete}));
+ });
+ test('BW-STAGE2-INCOMPLETE-CORE-HOLD','CONTROL','FINISH ANYWAY with complete accessory still offers HOLD without changing future load',()=>{
+  const {h,a}=fixture('lprpt',0);for(const [i,reps] of [8,8,6].entries())record(h,i,reps,0,8);
+  h.ctx.bvomIncompleteConfirm=accept=>accept();let offers=0;h.ctx.bvomChoiceModal=(_t,_b,_l,_r,L)=>{offers++;L()};
+  h.ctx.finishWorkout();return ok(offers===1&&a.weight===0&&h.S().history.at(-1)?.incomplete===true);
+ });
+ test('BW-STAGE2-INCOMPLETE-CORE-BACK','CONTROL','GO BACK on incomplete main workout neither offers progression nor commits History',()=>{
+  const {h,a}=fixture('lprpt',0);for(const [i,reps] of [8,8,6].entries())record(h,i,reps,0,8);
+  let prompts=0,backs=0;h.ctx.bvomIncompleteConfirm=(_accept,onBack)=>{backs++;onBack()};h.ctx.bvomChoiceModal=()=>{prompts++};
+  h.ctx.finishWorkout();return ok(backs===1&&prompts===0&&a.weight===0&&h.S().history.length===0&&h.S().session['ACC:stage2bw'][2].reps===6);
+ });
+ test('BW-STAGE2-INCOMPLETE-ACCESSORY-HOLD','CONTROL','FINISH ANYWAY must never offer progression when accessory itself has an unrecorded set',()=>{
+  const {h,a}=fixture('lprpt',0);record(h,0,8,0,8);record(h,1,8,0,8);
+  h.ctx.bvomIncompleteConfirm=accept=>accept();let prompts=0;h.ctx.bvomChoiceModal=()=>{prompts++};
+  h.ctx.finishWorkout();return ok(prompts===0&&a.weight===0&&h.S().history.at(-1)?.incomplete===true);
+ });
  test('BW-STAGE2-DEFAULT-OFF','CONTROL','Stage 1 Bodyweight accessories remain manual without explicit opt-in',()=>{
   const {h,a}=fixture();delete a.bwProgressOptIn;h.ctx.save();core(h);for(const [i,reps] of [8,6,6].entries())record(h,i,reps,0,8);let calls=0;h.ctx.bvomChoiceModal=()=>{calls++};h.ctx.finishWorkout();return ok(calls===0&&a.weight===0&&h.S().history.length===1)});
  test('BW-STAGE2-DURABLE-ROLLBACK','CONTROL','Rejected durable Finish retains the active workout with no phantom accepted increment',()=>{
