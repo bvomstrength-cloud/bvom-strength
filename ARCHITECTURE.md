@@ -252,6 +252,10 @@ Custom/Bodybuilding builder wrappers retain program isolation. New Bodyweight sa
 
 Bodybuilding/On-Ramp bodyweight set dialogs use the same field/validation helpers. Remembered actual load (`recordingLoad`) is distinct from prescription/progression state; directional engine contracts are unchanged and bodyweight added loads do not create numeric performance references. History/share/export consume the explicit set marker and snapshotted exercise names.
 
+`bvomSetVolume` is shared by structured and Custom accessory accounting. Only an explicit actual-set marker includes the per-set `approximateBodyweight` estimate; marked sets bypass dumbbell multipliers. `bvomHistoryExportMeta` snapshots `volumeApproximate` for completed/incomplete/abandoned saves, including Custom records; History/share/export read the persisted flag and original set values, never current settings. GPP volume is unchanged. The existing additive `approximateBodyweight` key now means estimated weight moved, not total body mass; no stored field rename or legacy rewrite occurs.
+
+The builder saves arbitrary positive Bodyweight `increment` values. Selected Bodybuilding/On-Ramp save `addedWeightIncrement` separately from the numeric engine's `increment`. Both preferences use physical conversion with exact roundtrip origins and are not used by any Stage 1 progression algorithm.
+
 Cloud JSON remains additive, without eager migration/default insertion or backend changes. Older clients cannot understand the marker; issue #45 explicitly accepts the limited risk for new bodyweight-specific data. Recommend updating other devices before edits, while preserving the normal conflict, live-workout exclusion and ownership guards.
 
 ## 7. Workout transaction and correction model
