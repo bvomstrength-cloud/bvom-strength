@@ -3688,8 +3688,88 @@ function bvomBbOnRampRenderWorkout(){const day=bvomBbOnRampDay(),o=bvomBbOnRampE
 function bvomBbOnRampLoadStep(id,e=bvomBbOnRampEx(id)){const n=Number(e.increment);if(Number.isFinite(n)&&n>0)return n;return bvomBbLoadStep(id)}
 function bvomBbOnRampSetModal(id,i){if(!bvomWorkoutActionAllowed())return;const x=BVOM_BB_EXERCISES[id],e=bvomBbOnRampEx(id),range=bvomBbOnRampTarget(id),numeric=bvomBbNumericExercise(id),ss=state.session[bvomBbOnRampSessionKey(id)]||(x.equipment==='bodyweight'?{}:(state.session[bvomBbOnRampSessionKey(id)]={})),existing=ss[i],first=e.state==='UNSET';const entryUnit=unitLabel();const o=document.createElement('div');o.className='bvomModalOverlay';o.innerHTML=`<div class="bvomModal"><h3>${bvomEsc(x.name)} · ${first?'FIND':e.state==='PROVISIONAL'?'CONFIRM':'On-Ramp set '+(i+1)}</h3><div class="sub">Target ${range[0]}–${range[1]} reps · leave about two good reps. ${first?'If unsure, stop conservatively.':''}</div>${numeric?`<label>Actual load (${unitLabel()})${x.equipment==='dumbbell'?' — per dumbbell':''}<input data-load type="number" min="0.25" step=".25" value="${existing?.load??bvomBbOnRampNumericValue(id,e)??''}"></label><label>Smallest practical increase on this equipment (${unitLabel()})<input data-inc type="number" min="0.01" step=".01" value="${e.increment??bvomBbProgress(id).increment??''}" placeholder="e.g. 2.5"></label><div class="small">Enter this once for this exercise. BVOM will remember it.</div>`:(x.equipment==='bodyweight'?bvomBwFields(existing?.load??bvomBbProgress(id).recordingLoad??0,existing?.resistance??e.resistance??bvomBbProgress(id).resistance,existing?.bodyweight===true?existing.approximateBodyweight:bvomBbProgress(id).approximateBodyweight)+bvomBwIncrementField(bvomBbProgress(id).addedWeightIncrement):`<label>Assistance / resistance / variation<input data-res type="text" maxlength="80" value="${bvomEsc(existing?.resistance??e.resistance??'')}"></label>`)}<label>Reps<input data-reps type="number" min="0" step="1" value="${existing?.reps??range[1]}"></label>${e.state!=='CONFIRMED'&&i===0?`<label>How did that feel?<select data-feel><option value="about_right">About right</option><option value="too_easy">Too easy</option><option value="too_hard">Too hard</option></select></label>`:''}<div class="modalActions"><button data-cancel>CANCEL</button><button class="primary" data-save>RECORD</button></div></div>`;document.body.appendChild(o);o.querySelector('[data-cancel]').onclick=()=>o.remove();o.querySelector('[data-save]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;if(x.equipment==='bodyweight'&&unitLabel()!==entryUnit){alert(bvomT('bodyweight.changed'));return}const bw=x.equipment==='bodyweight'?bvomBwRead(o):null;if(x.equipment==='bodyweight'&&!bw)return;const bwIncrement=bw?bvomBwIncrementRead(o):null;if(bw&&bwIncrement===null)return;const before=bw?JSON.parse(JSON.stringify(state)):null;if(bw&&(o.querySelector('[data-reps]').value===''||!Number.isInteger(Number(o.querySelector('[data-reps]').value))||Number(o.querySelector('[data-reps]').value)<0)){alert(bvomT('bodyweight.invalid'));return}const reps=Math.max(0,Math.floor(Number(o.querySelector('[data-reps]').value)||0)),feel=o.querySelector('[data-feel]')?.value||'about_right',wasConfirming=!!(i===0&&e.state==='CONFIRMED'&&existing?.confirmedExposure),rec={reps,index:i,onramp:true};if(numeric){const load=Number(o.querySelector('[data-load]').value);if(!(load>0)){alert('Enter the load used.');return}rec.load=load;const inc=Number(o.querySelector('[data-inc]')?.value);if(!(inc>0)){alert('Enter the smallest practical increase for this equipment.');return}e.load=load;e.increment=inc}else{if(bw){Object.assign(rec,bw);const p=bvomBbProgress(id);p.recordingLoad=bw.load;p.approximateBodyweight=bw.approximateBodyweight;p.addedWeightIncrement=bwIncrement}else rec.load=0;rec.resistance=String(o.querySelector('[data-res]').value||'').trim();if(rec.resistance)e.resistance=rec.resistance}if(bw)state.session[bvomBbOnRampSessionKey(id)]=ss;ss[i]=rec;if(i===0&&(e.state!=='CONFIRMED'||wasConfirming)){const floor=range[0],ceiling=range[1],tooHeavy=reps<floor||feel==='too_hard';if(numeric){const step=bvomBbOnRampLoadStep(id,e);if(tooHeavy&&step>0)e.load=bvomBbRoundToStep(Number(e.load)-step,step);else if(((reps>ceiling&&feel==='about_right')||(reps>=ceiling&&feel==='too_easy'))&&step>0)e.load=bvomBbRoundToStep(Number(e.load)+step,step)}else if(tooHeavy)e.pendingDifficulty='easier';else if((reps>ceiling&&feel==='about_right')||(reps>=ceiling&&feel==='too_easy'))e.pendingDifficulty='harder';if(wasConfirming){if(!tooHeavy&&feel==='about_right'&&reps>=floor&&reps<=ceiling){e.state='CONFIRMED';rec.confirmedExposure=true}else e.state='PROVISIONAL'}else if(e.state==='UNSET')e.state='PROVISIONAL';else if(!existing&&!tooHeavy&&feel==='about_right'&&reps>=floor&&reps<=ceiling){e.state='CONFIRMED';rec.confirmedExposure=true}}if(!state.workoutStartedAt)state.workoutStartedAt=Date.now();bvomMarkThisTabAsWorkoutOwner();if(!save({durable:true})&&bw){state=before;return}o.remove();startTimer();renderWorkout();bvomSyncWorkoutControls()}}
 function bvomBbOnRampExerciseTouched(id){const ss=state.session[bvomBbOnRampSessionKey(id)]||{};return Object.values(ss).some(v=>v&&v.reps!==undefined)}
-function bvomBbOnRampFinish(approvedIncomplete=false){if(!bvomWorkoutActionAllowed())return;if(window.__bvomFinishBusy)return;const day=bvomBbOnRampDay(),ids=bvomBbOnRampSlots(day).map(s=>state.bodybuilding.selections[s]),complete=ids.every(bvomBbOnRampExerciseTouched);if(!ids.some(bvomBbOnRampExerciseTouched))return;if(!complete&&!approvedIncomplete){bvomBbUiModal('INCOMPLETE ON-RAMP SESSION','This On-Ramp session is incomplete. Save your exercise progress without consuming an On-Ramp session?',null,()=>bvomBbOnRampFinish(true),'SAVE SESSION');return;}window.__bvomFinishBusy=true;try{const duration=bvomDuration(),historySession=JSON.parse(JSON.stringify(state.session));state.history.push({date:new Date().toISOString(),...bvomHistoryExportMeta(historySession,duration),unit:unitLabel(),program:'bodybuilding',day,incomplete:!complete,session:historySession,note:'Bodybuilding On-Ramp',duration,bodybuilding:{onramp:true,sessionNumber:bvomBbOnRampEnsure().sessionsCompleted+1}});if(complete)bvomBbOnRampEnsure().sessionsCompleted=Math.min(6,bvomBbOnRampEnsure().sessionsCompleted+1);state.session={};state.gppSession={};state.workoutStartedAt=null;cancelTimer();if(complete&&bvomBbOnRampEnsure().sessionsCompleted>=6){bvomBbOnRampHandoff(false);return}save();renderAll();if(complete&&bvomBbOnRampAllConfirmed())setTimeout(()=>{bvomBbUiModal('ON-RAMP COMPLETE','All starting loads are confirmed. Start the 8-week Bodybuilding block now?',null,()=>{if(bvomBbOnRampActive()&&bvomBbOnRampAllConfirmed())bvomBbOnRampHandoff(true)},'START BLOCK')},50)}catch(err){console.error('On-Ramp finish failed',err);alert('On-Ramp session could not finish safely. Please try again.')}finally{window.__bvomFinishBusy=false}}
-function bvomBbOnRampHandoff(early=false){if(!bvomWorkoutActionAllowed())return;try{const working=JSON.parse(JSON.stringify(state));const b=bvomBbEnsure(working),o=bvomBbOnRampEnsure(working);for(const id of Object.values(b.selections)){const e=bvomBbOnRampEx(id,working),p=bvomBbProgress(id,working);if(bvomBbNumericExercise(id)){if(!(Number(e.load)>0)){alert(`A starting load is still missing for ${BVOM_BB_EXERCISES[id].name}. Use Skip On-Ramp to enter it manually.`);return}p.load=Number(e.load);p.topLoad=Number(e.load);if(Number(e.increment)>0)p.increment=Number(e.increment)}else if(e.resistance)p.resistance=e.resistance;p.calibrated=e.state==='CONFIRMED'}o.status='handed_off';b.completedSessions=0;b.status='active';state.bodybuilding=working.bodybuilding;state.day='A';state.session={};state.workoutStartedAt=null;save();renderAll()}catch(err){console.error('On-Ramp handoff failed',err);alert('Could not start the Bodybuilding block safely. Your On-Ramp data has been kept.')}}
+// Prepare the handoff on a working copy. Caller owns its single durable commit.
+function bvomBbOnRampPrepareHandoff(target){
+ const b=bvomBbEnsure(target),o=bvomBbOnRampEnsure(target);
+ for(const id of Object.values(b.selections)){
+  const e=bvomBbOnRampEx(id,target),p=bvomBbProgress(id,target);
+  if(bvomBbNumericExercise(id)){
+   if(!(Number(e.load)>0))return BVOM_BB_EXERCISES[id].name;
+   p.load=Number(e.load);p.topLoad=Number(e.load);
+   if(Number(e.increment)>0)p.increment=Number(e.increment);
+  }else if(e.resistance)p.resistance=e.resistance;
+  p.calibrated=e.state==='CONFIRMED';
+ }
+ o.status='handed_off';b.completedSessions=0;b.status='active';
+ return null;
+}
+function bvomBbOnRampFinish(approvedIncomplete=false){
+ if(!bvomWorkoutActionAllowed()||window.__bvomFinishBusy)return;
+ const day=bvomBbOnRampDay(),ids=bvomBbOnRampSlots(day).map(s=>state.bodybuilding.selections[s]),complete=ids.every(bvomBbOnRampExerciseTouched);
+ if(!ids.some(bvomBbOnRampExerciseTouched))return;
+ if(!complete&&!approvedIncomplete){
+  bvomBbUiModal('INCOMPLETE ON-RAMP SESSION','This On-Ramp session is incomplete. Save your exercise progress without consuming an On-Ramp session?',null,()=>bvomBbOnRampFinish(true),'SAVE SESSION');return;
+ }
+ window.__bvomFinishBusy=true;bvomSyncWorkoutControls();
+ const before=JSON.parse(JSON.stringify(state)),oldDefer=bvomCloud.deferWorkoutCommit;let committed=false;
+ try{
+  const duration=bvomDuration(),historySession=JSON.parse(JSON.stringify(state.session));
+  state.history.push({date:new Date().toISOString(),...bvomHistoryExportMeta(historySession,duration),unit:unitLabel(),program:'bodybuilding',day,incomplete:!complete,session:historySession,note:'Bodybuilding On-Ramp',duration,bodybuilding:{onramp:true,sessionNumber:bvomBbOnRampEnsure().sessionsCompleted+1}});
+  if(complete)bvomBbOnRampEnsure().sessionsCompleted=Math.min(6,bvomBbOnRampEnsure().sessionsCompleted+1);
+  state.session={};state.gppSession={};state.workoutStartedAt=null;
+  const finalHandoff=complete&&bvomBbOnRampEnsure().sessionsCompleted>=6;
+  if(finalHandoff){
+   const working=JSON.parse(JSON.stringify(state)),missing=bvomBbOnRampPrepareHandoff(working);
+   if(missing){
+    state=before;
+    alert('A starting load is still missing for '+missing+'. Use Skip On-Ramp to enter it manually.');
+    return;
+   }
+   // Sixth session and handoff are ONE transaction. Never consume it if save fails.
+   state.bodybuilding=working.bodybuilding;state.day='A';
+  }
+  if(window.__bvomCloudBooted)bvomCloud.deferWorkoutCommit=true;
+  if(!save({durable:true})){
+   state=before;bvomCloud.deferWorkoutCommit=oldDefer;return;
+  }
+  committed=true;
+  // A committed blob with failed owner bookkeeping stops the window; don't revert it.
+  if(bvomPersistenceBlocked())return;
+  cancelTimer();renderAll();
+  if(!finalHandoff&&complete&&bvomBbOnRampAllConfirmed())setTimeout(()=>{
+   bvomBbUiModal('ON-RAMP COMPLETE','All starting loads are confirmed. Start the 8-week Bodybuilding block now?',null,()=>{
+    if(bvomBbOnRampActive()&&bvomBbOnRampAllConfirmed())bvomBbOnRampHandoff(true)
+   },'START BLOCK');
+  },50);
+ }catch(err){
+  if(!committed){state=before;bvomCloud.deferWorkoutCommit=oldDefer}
+  console.error('On-Ramp finish failed',err);
+  alert(committed?'On-Ramp was saved, but the screen could not refresh. Reload BVOM to verify your workout.':'On-Ramp session could not finish safely. Please try again.');
+ }finally{window.__bvomFinishBusy=false;bvomSyncWorkoutControls()}
+}
+function bvomBbOnRampHandoff(early=false){
+ if(!bvomWorkoutActionAllowed()||window.__bvomFinishBusy)return;
+ const before=JSON.parse(JSON.stringify(state)),oldDefer=bvomCloud.deferWorkoutCommit;let committed=false;
+ try{
+  const working=JSON.parse(JSON.stringify(state)),missing=bvomBbOnRampPrepareHandoff(working);
+  if(missing){
+   alert('A starting load is still missing for '+missing+'. Use Skip On-Ramp to enter it manually.');
+   return;
+  }
+  state.bodybuilding=working.bodybuilding;state.day='A';state.session={};state.workoutStartedAt=null;
+  if(window.__bvomCloudBooted)bvomCloud.deferWorkoutCommit=true;
+  if(!save({durable:true})){
+   state=before;bvomCloud.deferWorkoutCommit=oldDefer;return;
+  }
+  committed=true;
+  if(bvomPersistenceBlocked())return;
+  cancelTimer();renderAll();
+ }catch(err){
+  if(!committed){state=before;bvomCloud.deferWorkoutCommit=oldDefer}
+  console.error('On-Ramp handoff failed',err);
+  alert(committed?'On-Ramp handoff was saved, but the screen could not refresh. Reload BVOM to verify.':'Could not start the Bodybuilding block safely. Your On-Ramp data has been kept.');
+ }
+}
 function bvomBbOnRampSkip(){const missing=Object.values(state.bodybuilding.selections).filter(id=>bvomBbNumericExercise(id)&&!(bvomBbOnRampNumericValue(id)>0));if(missing.length){alert('Enter the remaining starting loads before skipping the On-Ramp. Your loads already found will be kept.');const d=bvomBbSetupDraft();for(const id of Object.values(state.bodybuilding.selections)){const e=bvomBbOnRampEx(id),p=d.progression[id]||(d.progression[id]={});if(Number(e.load)>0)p.load=e.load;if(Number(e.increment)>0)p.increment=e.increment;p.calibrated=e.state==='CONFIRMED'}window.__bvomBbSetupMode='manual';bvomBbRenderFoundationSetup();return}bvomBbOnRampHandoff(true)}
 function bvomBbOnRampSwap(slot){if(!bvomWorkoutActionAllowed()||!bvomBbOnRampActive())return;
  const original=state.bodybuilding.selections[slot],opts=bvomBbExerciseOptions(slot).filter(o=>o.id!==original);if(!opts.length)return;
