@@ -45,6 +45,13 @@ module.exports=({test,ok,H,build})=>{
   o.querySelector('[data-save]').onclick();h.ls.setItem=put;
   return ok(raw===h.ls.getItem('bvom_data')&&JSON.stringify(h.S())===before&&!o.removed&&!h.S().session['ACC:ex52']);
  });
+ test('BW-EXTRA-REMOVE-REJECT','CONTROL','Rejected extra-set removal restores memory and leaves the original set and modal recoverable',()=>{
+  const {h,a}=fixture();extra(h,{reps:6,load:1.25});
+  h.ctx.bvomBwAccessoryModal(a.id,3);const o=h.lastOverlay(),before=JSON.stringify(h.S()),raw=h.ls.getItem('bvom_data'),put=h.ls.setItem;
+  h.ls.setItem=(k,v)=>{if(k==='bvom_data')throw Error('synthetic quota');return put(k,v)};
+  o.querySelector('[data-remove]').onclick();h.ls.setItem=put;
+  return ok(!o.removed&&JSON.stringify(h.S())===before&&h.ls.getItem('bvom_data')===raw&&h.S().session['ACC:ex52'][3].reps===6);
+ });
  test('BW-EXTRA-STALE-OWNER','NEGATIVE','Stale owner may not append, alter or remove extra workout data',()=>{
   const {h,a}=fixture();planned(h,0);extra(h,{reps:6});
   const raw=h.ls.getItem('bvom_data'),before=JSON.stringify(h.S());h.ls.setItem('bvom_workout_tab_owner','another-tab');
