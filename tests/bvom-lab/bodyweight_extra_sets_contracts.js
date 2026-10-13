@@ -89,4 +89,57 @@ module.exports=({test,ok,H,build})=>{
   }
   return ok(out.every(x=>x.pass),JSON.stringify(out));
  });
+
+ test('BW-EXTRA-M020-HOLE-REUSE','CONTROL','Monkey 020: after removal, ADD EXTRA SET reuses the empty actual-set slot without overwriting a surviving set',()=>{
+  const {h,a}=fixture();extra(h,{reps:7});extra(h,{reps:5,load:1.25});
+  h.ctx.bvomBwAccessoryModal(a.id,3);const rm=h.lastOverlay();rm.querySelector('[data-remove]').onclick();
+  const firstFree=h.ctx.bvomBwNextExtraSetIndex(a),survivor=JSON.stringify(h.S().session['ACC:ex52'][4]);
+  extra(h,{reps:11,load:2.5});
+  const ss=h.S().session['ACC:ex52']||{};
+  return ok(firstFree===3&&ss[3]?.reps===11&&ss[4]?.reps===5&&JSON.stringify(ss[4])===survivor&&a.sets===3&&h.ctx.bvomBwExtraSetIndices(a,ss).length===2,JSON.stringify({firstFree,recorded:Object.keys(ss),survivorIntact:JSON.stringify(ss[4])===survivor}));
+ });
+ test('BW-EXTRA-M020-CHURN-FIVE-MODES','CONTROL','Monkey 020: 30 add/remove cycles in all five modes must not exhaust capacity with only one retained extra',()=>{
+  const results=[];
+  for(const mode of ['lprpt','hlm','fourday','bodybuilding','free']){
+   const {h,a}=fixture(mode);
+   extra(h,{reps:6,load:0});extra(h,{reps:7,load:1.25});
+   let current=3,good=true;
+   const remove=i=>{h.ctx.bvomBwAccessoryModal(a.id,i);const o=h.lastOverlay();const b=o?.querySelector('[data-remove]');if(!b)return false;b.onclick();return !!o.removed};
+   if(!remove(current))good=false;current=4;
+   for(let k=0;k<28&&good;k++){
+    const before=h.ctx.bvomBwExtraSetIndices(a,h.S().session['ACC:ex52']);
+    const old=JSON.stringify(h.S().session['ACC:ex52'][current]);
+    extra(h,{reps:10+k,load:0});
+    const next=h.ctx.bvomBwExtraSetIndices(a,h.S().session['ACC:ex52']).find(i=>i!==current);
+    if(next==null||JSON.stringify(h.S().session['ACC:ex52'][current])!==old||!remove(current)){good=false;break}
+    current=next;
+   }
+   const remaining=h.ctx.bvomBwExtraSetIndices(a,h.S().session['ACC:ex52']);
+   const survivor=JSON.stringify(h.S().session['ACC:ex52'][current]);
+   const slot=h.ctx.bvomBwNextExtraSetIndex(a);
+   if(good)extra(h,{reps:19,load:2.5,rpe:8.5});
+   const final=h.S().session['ACC:ex52']||{},all=h.ctx.bvomBwExtraSetIndices(a,final);
+   const pass=good&&remaining.length===1&&slot>=3&&slot!==current&&all.length===2&&final[slot]?.reps===19&&final[slot]?.load===2.5&&JSON.stringify(final[current])===survivor&&a.sets===3;
+   results.push({mode,pass,slot,current,retained:all.length});
+  }
+  return ok(results.every(x=>x.pass),JSON.stringify(results));
+ });
+ test('BW-EXTRA-M020-FULL-CAP','CONTROL','Exactly 30 retained extras block the 31st; removing one frees capacity without erasing History candidates',()=>{
+  const {h,a}=fixture(),ids=[];
+  for(let n=0;n<30;n++){
+   extra(h,{reps:n+1,load:n%2?1.25:0});
+   const now=h.ctx.bvomBwExtraSetIndices(a,h.S().session['ACC:ex52']);
+   ids.push(now.length);
+   if(now.length!==n+1)break;
+  }
+  const complete=ids.length===30&&ids.every((x,i)=>x===i+1);
+  const before=JSON.stringify(h.S().session['ACC:ex52']||{});
+  h.ctx.bvomBwAddExtraSet(a.id);
+  const refused=JSON.stringify(h.S().session['ACC:ex52']||{})===before&&h.ctx.bvomBwExtraSetIndices(a,h.S().session['ACC:ex52']).length===30&&(!h.lastOverlay()||h.lastOverlay().removed);
+  h.ctx.bvomBwAccessoryModal(a.id,13);const rm=h.lastOverlay();rm.querySelector('[data-remove]').onclick();
+  const survivor=JSON.stringify(h.S().session['ACC:ex52'][32]),free=h.ctx.bvomBwNextExtraSetIndex(a);
+  extra(h,{reps:42,load:0});
+  const ss=h.S().session['ACC:ex52']||{};
+  return ok(complete&&refused&&free===13&&ss[13]?.reps===42&&JSON.stringify(ss[32])===survivor&&h.ctx.bvomBwExtraSetIndices(a,ss).length===30&&a.sets===3,JSON.stringify({complete,refused,free,count:h.ctx.bvomBwExtraSetIndices(a,ss).length}));
+ });
 };
