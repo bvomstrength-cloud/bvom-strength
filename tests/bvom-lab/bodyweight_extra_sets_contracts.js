@@ -107,7 +107,6 @@ module.exports=({test,ok,H,build})=>{
    const remove=i=>{h.ctx.bvomBwAccessoryModal(a.id,i);const o=h.lastOverlay();const b=o?.querySelector('[data-remove]');if(!b)return false;b.onclick();return !!o.removed};
    if(!remove(current))good=false;current=4;
    for(let k=0;k<28&&good;k++){
-    const before=h.ctx.bvomBwExtraSetIndices(a,h.S().session['ACC:ex52']);
     const old=JSON.stringify(h.S().session['ACC:ex52'][current]);
     extra(h,{reps:10+k,load:0});
     const next=h.ctx.bvomBwExtraSetIndices(a,h.S().session['ACC:ex52']).find(i=>i!==current);
@@ -123,6 +122,21 @@ module.exports=({test,ok,H,build})=>{
    results.push({mode,pass,slot,current,retained:all.length});
   }
   return ok(results.every(x=>x.pass),JSON.stringify(results));
+ });
+ test('BW-EXTRA-M020-SPARSE-CAP','CONTROL','30 retained legacy extras with a low empty index still block a 31st, including a direct modal call',()=>{
+  const {h,a}=fixture(),records={};
+  for(let i=4;i<=33;i++)records[i]={bodyweight:true,extra:true,reps:6,load:0,rpe:8,approximateBodyweight:90,resistance:'',target:8,top:false,drop:false,amrap:false};
+  h.S().session['ACC:ex52']=records;h.ctx.save();h.ctx.renderWorkout();
+  const count=h.ctx.bvomBwExtraSetIndices(a,records).length,firstFree=h.ctx.bvomBwNextExtraSetIndex(a),before=JSON.stringify(records);
+  h.ctx.bvomBwAddExtraSet(a.id);
+  const blocked=!h.lastOverlay()||h.lastOverlay().removed;
+  h.ctx.bvomBwAccessoryModal(a.id,3);
+  const blockedDirect=!h.lastOverlay()||h.lastOverlay().removed;
+  const unchanged=JSON.stringify(h.S().session['ACC:ex52'])===before;
+  delete records[33];h.ctx.save();
+  extra(h,{reps:17,load:1.25});
+  const current=h.S().session['ACC:ex52'];
+  return ok(count===30&&firstFree===3&&blocked&&blockedDirect&&unchanged&&current[3]?.reps===17&&current[4]?.reps===6&&h.ctx.bvomBwExtraSetIndices(a,current).length===30,JSON.stringify({count,firstFree,blocked,blockedDirect,unchanged,after:h.ctx.bvomBwExtraSetIndices(a,current).length}));
  });
  test('BW-EXTRA-M020-FULL-CAP','CONTROL','Exactly 30 retained extras block the 31st; removing one frees capacity without erasing History candidates',()=>{
   const {h,a}=fixture(),ids=[];
