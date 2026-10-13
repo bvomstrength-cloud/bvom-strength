@@ -684,6 +684,18 @@ Selected Bodybuilding bodyweight exercises and On-Ramp gain these recording fiel
 
 Normal cloud backup is retained; new fields are additive and introduced only through explicit recording/settings. The owner accepted limited older-version misinterpretation on 12 October 2026 in issue #45. Update BVOM on other devices before editing bodyweight exercises: v2.9.7 can replace zero with a positive load, apply legacy accessory progression, omit zero on export or lose bodyweight context. This acceptance does not relax ownership, recovery, unrelated-workout or cloud conflict protections; no backend change is required by Stage 1.
 
+### 11.5 Stage 2A — opt-in, user-approved Bodyweight added-weight progression
+
+**Scope:** Only explicitly opted-in Bodyweight straight-set **accessories** in LP/RPT, HLM and 4-Day programs. Custom Training remains manual; existing Bodybuilding selected Chin-Up/Pull-Up directional rules, On-Ramp and Bodybuilding optional accessories remain unchanged until separate owner sign-off. Old/new Bodyweight templates default to progression **off** unless the lifter turns it on.
+
+The accessory builder offers **Offer added-weight progression**, a first-set rep goal (6–30, default **8**), and the existing user-selected positive increment (no barbell/paired-plate rounding). Estimated weight moved is for approximate volume only and never influences progression or personal records. Under this opt-in, future prescribed added weight applies to **set 1 only**; later straight sets prescribe **BW + 0**, though their actual external load remains independently editable and accurately recorded. Do not silently change the accessory's saved set/repetition prescription.
+
+Only completed actual sets qualify. **The whole workout must be complete** before a next-time change can be offered. The first set is the sole decision gate: at least the saved rep goal with explicitly entered RPE **8 or easier** offers +1 user increment; 6–7 reps (or successful reps harder than RPE 8) hold; fewer than 6 reps offers −1 increment, to floor BW+0, unless already at zero. The recorded first-set *external load* is the source of the next proposed load (not a guessed barbell-grid target). Sets 2+ do not independently gate earned progression. In any cancelled or incomplete session, nothing advances.
+
+**Owner-approved UX:** At Finish, BVOM offers **HOLD** or **ACCEPT** for each eligible next-time change. It does not automatically change the training plan. A pending choice is not a saved progression: the choice is used only if the subsequent workout Finish is committed successfully. ACCEPT updates the future accessory load together with the saved workout record in one durable transaction; HOLD leaves it unchanged. Cancelled, unsuccessful or stale finishes must not silently advance. Finished History retains the actual per-set external loads/estimated volumes, not the future load. Reopening an unfinished workout allows the earned decision to be recalculated from current recordings.
+
+Builder inputs and prompts must be translated EN/JA, escaped, and usable in a narrow phone viewport. Existing recovery, cloud-conflict, older-client compatibility, other accessories, selected Bodybuilding engine and Custom manual contracts still apply. New persistence fields are additive (`bwProgressOptIn`, `bwProgressGoal`) and contain no derived bodyweight calculations or backend migrations.
+
 ## 12. GPP / conditioning
 
 GPP activities may have timers and additional result metrics.
