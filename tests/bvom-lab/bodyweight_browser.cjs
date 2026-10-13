@@ -43,6 +43,88 @@ let browser,origin;let passed=0;
    }finally{await context.close()}
   }
 
+  // Stage 2A: real mobile-width opt-in / Finish decision on a completed LP session.
+  for(const [lang,accept] of [['en',true],['ja',false]]){
+   const h=H.boot(build);H.configureLP(h);h.S().language=lang;
+   for(const [name] of h.ctx.program()){
+    const plan=h.ctx.getSetPlan(name);
+    h.S().session[name]=Object.fromEntries(plan.map((q,i)=>[i,{reps:q.target,load:q.load,target:q.target,top:q.top,drop:q.drop,amrap:q.amrap}]));
+   }
+   h.S().accessoryList=[{id:'s2bw',name:'Chin-Ups',category:'Upper',equipment:'bodyweight',style:'straight',sets:3,reps:8,
+    weight:0,increment:1.25,bwProgressOptIn:true,bwProgressGoal:8,approximateBodyweight:90,resistance:'',
+    assignment:'A',hlmAssignment:'Any',fourDayAssignment:'Any',bbAssignment:'Any'}];
+   h.S().workoutStartedAt=Date.now();h.ctx.save();
+   const context=await browser.newContext({serviceWorkers:'block',viewport:{width:375,height:812}});
+   context.setDefaultTimeout(6000);
+   await context.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
+   await context.addInitScript(()=>Object.defineProperty(navigator,'onLine',{get:()=>false}));
+   try{
+    const p=await context.newPage();await p.goto(origin+'/seed');
+    await p.evaluate(d=>{localStorage.setItem('bvom_data',JSON.stringify(d));localStorage.setItem('bvom_data_owner','dummy-owner');localStorage.setItem('bvom_entitlement_cache_dummy-owner',JSON.stringify({userId:'dummy-owner',verifiedAt:new Date().toISOString(),record:{user_id:'dummy-owner',status:'complimentary'}}))},JSON.parse(JSON.stringify(h.S())));
+    await p.goto(origin+'/index.html');await p.waitForSelector('#app:not(.hidden)');
+    for(const [i,reps] of [[0,8],[1,6],[2,6]]){
+     await p.evaluate(i=>tapAccessory('s2bw',i),i);const o=p.locator('.bvomModalOverlay').last();
+     if(i===0)assert.equal(await o.locator('[data-rpe]').inputValue(),'','first set requires explicit effort');
+     await o.locator('[data-rpe]').fill('8');await o.locator('[data-load]').fill('0');
+     await o.locator('[data-reps]').fill(String(reps));await o.locator('[data-save]').click();
+    }
+    await p.evaluate(()=>finishWorkout());const prompt=p.locator('.bvomModalOverlay').last();
+    assert.match(await prompt.textContent(),/1.25/);
+    await prompt.locator(accept?'[data-r]':'[data-l]').click();
+    await p.locator('.bvomModalOverlay [data-skip]').last().click();
+    const d=await saved(p);
+    assert.equal(d.accessoryList[0].weight,accept?1.25:0,'only approved increment saved');
+    assert.equal(d.history.length,1);assert.equal(d.history[0].session['ACC:s2bw'][0].load,0);
+    assert.equal(d.history[0].volumeApproximate,true);
+    const loads=await p.evaluate(()=>accessoryPlan17(state.accessoryList[0]).map(q=>q.load));
+    assert.deepEqual(loads,[accept?1.25:0,0,0],'only first prescribed set adds weight');
+    assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    console.log('PASS:',lang,'375px Stage 2A',accept?'ACCEPT +1.25':'HOLD at zero');passed++;
+   }finally{await context.close()}
+  }
+
+  // Owner Samsung repro: opt-in Chin-Ups 8/8/6 while all main exercises remain undone.
+  // FINISH ANYWAY must offer progression; GO BACK may not.
+  for(const [lang,choice] of [['en','accept'],['ja','hold'],['en','back']]){
+   const h=H.boot(build);H.configureLP(h);h.S().language=lang;
+   h.S().accessoryList=[{id:'s2-incomplete',name:'Chin Ups',category:'Upper',equipment:'bodyweight',style:'straight',
+    sets:3,reps:5,weight:0,increment:1,bwProgressOptIn:true,bwProgressGoal:8,approximateBodyweight:90,
+    resistance:'',assignment:'A',hlmAssignment:'Any',fourDayAssignment:'Any',bbAssignment:'Any'}];
+   h.S().workoutStartedAt=Date.now();h.ctx.save();
+   const context=await browser.newContext({serviceWorkers:'block',viewport:{width:375,height:812}});
+   context.setDefaultTimeout(6000);
+   await context.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
+   await context.addInitScript(()=>Object.defineProperty(navigator,'onLine',{get:()=>false}));
+   try{
+    const p=await context.newPage();await p.goto(origin+'/seed');
+    await p.evaluate(d=>{localStorage.setItem('bvom_data',JSON.stringify(d));localStorage.setItem('bvom_data_owner','dummy-owner');localStorage.setItem('bvom_entitlement_cache_dummy-owner',JSON.stringify({userId:'dummy-owner',verifiedAt:new Date().toISOString(),record:{user_id:'dummy-owner',status:'complimentary'}}))},JSON.parse(JSON.stringify(h.S())));
+    await p.goto(origin+'/index.html');await p.waitForSelector('#app:not(.hidden)');
+    for(const [i,reps] of [[0,8],[1,8],[2,6]]){
+     await p.evaluate(i=>tapAccessory('s2-incomplete',i),i);const o=p.locator('.bvomModalOverlay').last();
+     await o.locator('[data-load]').fill('0');await o.locator('[data-reps]').fill(String(reps));
+     await o.locator('[data-rpe]').fill('8');await o.locator('[data-save]').click();
+    }
+    await p.evaluate(()=>finishWorkout());
+    const confirmation=p.locator('.bvomModalOverlay').last();
+    assert.equal(await confirmation.locator(choice==='back'?'[data-back]':'[data-finish]').count(),1,'unfinished core requires FINISH ANYWAY');
+    await confirmation.locator(choice==='back'?'[data-back]':'[data-finish]').click();
+    if(choice!=='back'){
+     const offer=p.locator('.bvomModalOverlay').last();
+     assert.match(await offer.textContent(),/1(?:\.0)?\s*kg/i,'exact 1 kg increase must be offered');
+     await offer.locator(choice==='accept'?'[data-r]':'[data-l]').click();
+     await p.locator('.bvomModalOverlay [data-skip]').last().click();
+    }
+    const d=await saved(p);assert.equal(d.accessoryList[0].weight,choice==='accept'?1:0);
+    assert.equal(d.history.length,choice==='back'?0:1);
+    if(choice!=='back'){
+     assert.equal(d.history[0].incomplete,true,'overall workout still marked incomplete');
+     assert.equal(d.history[0].session['ACC:s2-incomplete'][0].reps,8);
+     assert.deepEqual(await p.evaluate(()=>accessoryPlan17(state.accessoryList[0]).map(q=>q.load)),[choice==='accept'?1:0,0,0]);
+    }else assert.equal(d.session['ACC:s2-incomplete'][2].reps,6,'GO BACK preserves actual unfinished workout');
+    console.log('PASS:',lang,'375px Stage 2A incomplete-core 8/8/6',choice);passed++;
+   }finally{await context.close()}
+  }
+
   for(const lang of ['en','ja'])for(const onramp of [false,true]){
    const h=H.boot(build);H.bbStart(h,{onramp});h.S().language=lang;
    const id=onramp?'nordic_curl':'chin_up',key=(onramp?'BBOR:':'BB:')+id;
@@ -58,5 +140,5 @@ let browser,origin;let passed=0;
    }finally{await context.close()}
   }
  }finally{if(browser)await browser.close();await new Promise(r=>server.close(r))}
- console.log(`Bodyweight browser proof: ${passed}/6 PASS`);
+ assert.equal(passed,11,'all 11 Bodyweight browser scenarios completed');console.log(`Bodyweight browser proof: ${passed}/11 PASS`);
 })().catch(e=>{console.error(e);process.exitCode=1});
