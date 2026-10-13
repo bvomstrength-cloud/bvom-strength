@@ -14,9 +14,11 @@ const near=(a,b)=>Math.abs(a-b)<1e-7;
 for(const lang of ['en','ja'])for(const mode of modes){
  const h=H.boot(build);H.configureLP(h);if(mode==='bodybuilding')H.bbStart(h);
  h.S().programMode=mode;h.S().language=lang;
+ if(mode==='hlm')h.S().day='H';
+ if(mode==='fourday')h.S().day='1';
  if(mode==='free')h.ctx.bvomFtEnsure();
  const a={id:'monkey018',name:'Chin-Up <script>alert(1)</script>',category:'Upper',
-  assignment:'A',hlmAssignment:'Any',fourDayAssignment:'Any',
+  assignment:'A',hlmAssignment:'H',fourDayAssignment:'1',
   freeAssignment:h.ctx.bvomFtDayId(),bbAssignment:'Any',
   equipment:'bodyweight',style:'straight',sets:3,reps:8,topReps:8,
   weight:0,increment:1.25,drop:10,approximateBodyweight:90,resistance:''};
