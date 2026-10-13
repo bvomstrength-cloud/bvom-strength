@@ -203,6 +203,29 @@ test('real v2.9.0 source workout can be archived after upgrade without changing 
 });
 
 
+test('update prompt stays clear of disabled Finish bar before first set on mobile',async()=>{
+ for(const [width,locale] of [[375,'en'],[390,'ja']]){
+  const {context,a}=await setup();try{
+   await a.setViewportSize({width,height:812});
+   if(locale==='ja')await a.evaluate(()=>changeLanguage('ja'));
+   await offerUpdate(a);const banner=a.locator('#bvomUpdateBanner');
+   assert.equal(await banner.isVisible(),true,'update remains available between workouts');
+   const layout=await a.evaluate(()=>{
+    const banner=document.getElementById('bvomUpdateBanner').getBoundingClientRect();
+    const bar=document.getElementById('timerbar').getBoundingClientRect();
+    const finish=document.querySelector('#timerbar .finish'),r=finish.getBoundingClientRect();
+    const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
+    return {gap:bar.top-banner.bottom,hitFinish:hit===finish||finish.contains(hit)};
+   });
+   assert.ok(layout.gap>=8,'update banner must clear bottom workout toolbar: '+JSON.stringify({width,locale,...layout}));
+   assert.equal(layout.hitFinish,true,'Finish center is not physically covered');
+   await record(a,'Squat',0);
+   await banner.waitFor({state:'hidden'});
+   await assertFinishReachable(a);
+  }finally{await context.close()}
+ }
+});
+
 test('update banner accepts one tap and immediately blocks repeated Chrome clicks',async()=>{
  const {context,a}=await setup();
  try{
