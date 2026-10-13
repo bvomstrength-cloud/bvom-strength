@@ -129,6 +129,7 @@ module.exports=({test,ok,H,build})=>{
   h.S().session['ACC:ex52']=records;h.ctx.save();h.ctx.renderWorkout();
   const count=h.ctx.bvomBwExtraSetIndices(a,records).length,firstFree=h.ctx.bvomBwNextExtraSetIndex(a),before=JSON.stringify(records);
   h.ctx.bvomBwAddExtraSet(a.id);
+  const warned=h.log.some(x=>x[0]==='alert'&&x[1].includes('Maximum 30 extra sets'));
   const blocked=!h.lastOverlay()||h.lastOverlay().removed;
   h.ctx.bvomBwAccessoryModal(a.id,3);
   const blockedDirect=!h.lastOverlay()||h.lastOverlay().removed;
@@ -136,7 +137,7 @@ module.exports=({test,ok,H,build})=>{
   delete records[33];h.ctx.save();
   extra(h,{reps:17,load:1.25});
   const current=h.S().session['ACC:ex52'];
-  return ok(count===30&&firstFree===3&&blocked&&blockedDirect&&unchanged&&current[3]?.reps===17&&current[4]?.reps===6&&h.ctx.bvomBwExtraSetIndices(a,current).length===30,JSON.stringify({count,firstFree,blocked,blockedDirect,unchanged,after:h.ctx.bvomBwExtraSetIndices(a,current).length}));
+  return ok(count===30&&firstFree===3&&warned&&blocked&&blockedDirect&&unchanged&&current[3]?.reps===17&&current[4]?.reps===6&&h.ctx.bvomBwExtraSetIndices(a,current).length===30,JSON.stringify({count,firstFree,warned,blocked,blockedDirect,unchanged,after:h.ctx.bvomBwExtraSetIndices(a,current).length}));
  });
  test('BW-EXTRA-M020-FULL-CAP','CONTROL','Exactly 30 retained extras block the 31st; removing one frees capacity without erasing History candidates',()=>{
   const {h,a}=fixture(),ids=[];
