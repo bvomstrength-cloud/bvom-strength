@@ -140,5 +140,5 @@ let browser,origin;let passed=0;
    }finally{await context.close()}
   }
  }finally{if(browser)await browser.close();await new Promise(r=>server.close(r))}
- console.log(`Bodyweight browser proof: ${passed}/6 PASS`);
+ assert.equal(passed,11,'all 11 Bodyweight browser scenarios completed');console.log(`Bodyweight browser proof: ${passed}/11 PASS`);
 })().catch(e=>{console.error(e);process.exitCode=1});
