@@ -18,16 +18,18 @@ module.exports=({test,ok,H,build})=>{
  };
  const rampFixture=(session=1)=>{
   const h=H.boot(build);H.bbStart(h,{onramp:true});
+  if(session===6){
+   const o=h.ctx.bvomBbOnRampEnsure();o.sessionsCompleted=5;
+   for(const id of Object.values(h.S().bodybuilding.selections)){
+    const e=h.ctx.bvomBbOnRampEx(id);
+    e.state='CONFIRMED';e.load=H.BB_LOADS[id]??40;e.increment=2.5;e.resistance='assistance set';
+   }
+   h.S().day='B';h.ev('save()');
+  }
   const day=h.ctx.bvomBbOnRampDay();
   for(const id of H.bbDayIds(h)){
    const n=h.ctx.bvomBbOnRampSetCount(id),e=h.ctx.bvomBbOnRampEx(id),first=e.state==='UNSET';
    for(let i=0;i<n;i++){const r=h.ctx.bvomBbOnRampTarget(id);H.orSet(h,id,i,{load:first&&i===0?H.BB_LOADS[id]:undefined,reps:Math.min(r[1],r[0]+1)})}
-  }
-  if(session===6){
-   const o=h.ctx.bvomBbOnRampEnsure();
-   o.sessionsCompleted=5;
-   h.S().day='B';
-   h.ev('save()');
   }
   return h;
  };
@@ -47,6 +49,21 @@ module.exports=({test,ok,H,build})=>{
   const h=rampFixture(6),before=snapshot(h),restore=failsave(h);
   try{h.ctx.bvomBbOnRampFinish()}finally{restore()}
   const s=h.S();return ok(unchanged(h,before)&&s.bodybuilding.onramp.sessionsCompleted===5&&s.bodybuilding.onramp.status==='active'&&s.history.length===0&&Object.keys(s.session).length>0,{count:s.bodybuilding.onramp.sessionsCompleted,status:s.bodybuilding.onramp.status,history:s.history.length});
+ });
+ test('BB-M019-SIXTH-HANDOFF-SUCCESS','CONTROL','Sixth On-Ramp finish commits exactly one History plus the full handoff, not a second save',()=>{
+  const h=rampFixture(6);
+  const before=h.S().history.length;
+  h.ctx.bvomBbOnRampFinish();
+  const a=h.S(),disk=JSON.parse(h.ls.getItem('bvom_data'));
+  return ok(a.bodybuilding.onramp.status==='handed_off'&&a.bodybuilding.completedSessions===0&&a.bodybuilding.onramp.sessionsCompleted===6&&a.history.length===before+1&&disk.history.length===before+1&&disk.bodybuilding.onramp.status==='handed_off'&&Object.keys(a.session).length===0,{status:a.bodybuilding.onramp.status,count:a.bodybuilding.onramp.sessionsCompleted,history:a.history.length});
+ });
+ test('BB-M019-POSTCOMMIT-OWNER-FAIL','CONTROL','Owner-marker cleanup failing AFTER committed normal BB blob must not roll back durable History; window stops',()=>{
+  const h=normalFixture(),owner=h.ev('bvomTabId()'),remove=h.ls.removeItem,prior=successDialogs(h);
+  h.ls.setItem('bvom_workout_tab_owner',owner);
+  h.ls.removeItem=key=>{if(key==='bvom_workout_tab_owner')throw Error('mock owner cleanup failed');return remove(key)};
+  try{h.ctx.bvomBbFinish()}finally{h.ls.removeItem=remove}
+  const a=h.S(),disk=JSON.parse(h.ls.getItem('bvom_data'));
+  return ok(a.history.length===1&&disk.history.length===1&&a.bodybuilding.completedSessions===1&&disk.bodybuilding.completedSessions===1&&h.ev('bvomPersistenceBlocked()')&&successDialogs(h)===prior,{saved:a.history.length,ownerFailed:h.ev('bvomPersistenceBlocked()'),successDialogs:successDialogs(h)});
  });
  test('BB-M019-REJECT-DIRECT-HANDOFF','CONTROL','Rejected manual early On-Ramp handoff must preserve pending starting loads and workout session',()=>{
   const h=rampFixture(),before=snapshot(h),restore=failsave(h);
