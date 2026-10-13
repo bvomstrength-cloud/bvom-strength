@@ -96,6 +96,7 @@ const attr=(html,sel)=>(html.match(new RegExp('<input '+sel+'[^>]*value="([^"]*)
 function bbSet(h,id,i,{reps,load,hard=false,cal='about_right'}={}){
   h.ctx.bvomBbSetModal(id,i);const o=h.lastOverlay(),html=o.innerHTML;
   o.querySelector('[data-load]').value=String(load??attr(html,'data-load'));
+  if(html.includes('data-bw-inc'))o.querySelector('[data-bw-inc]').value=attr(html,'data-bw-inc');
   o.querySelector('[data-reps]').value=String(reps??attr(html,'data-reps'));
   o.querySelector('[data-hard]').checked=hard;
   o.querySelector('[data-res]').value=attr(html,'data-res')||'green band';
@@ -107,6 +108,7 @@ function bbSet(h,id,i,{reps,load,hard=false,cal='about_right'}={}){
 function orSet(h,id,i,{reps,load,feel='about_right',inc='2.5'}={}){
   h.ctx.bvomBbOnRampSetModal(id,i);const o=h.lastOverlay(),html=o.innerHTML;
   o.querySelector('[data-load]').value=String(load??attr(html,'data-load'));
+  if(html.includes('data-bw-inc'))o.querySelector('[data-bw-inc]').value=attr(html,'data-bw-inc');
   o.querySelector('[data-inc]').value=String(attr(html,'data-inc')||inc);
   o.querySelector('[data-reps]').value=String(reps??attr(html,'data-reps'));
   o.querySelector('[data-res]').value='green band';

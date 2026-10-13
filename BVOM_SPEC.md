@@ -669,6 +669,21 @@ If the user explicitly changes an accessory's future template after the old work
 
 Changing only the future increment must not retroactively recalculate a previously earned next load when the old performance itself is unchanged.
 
+
+### 11.4 Stage 1 bodyweight recording
+
+Bodyweight is an explicit accessory equipment choice; exercise names never determine load semantics. New bodyweight accessories use straight-set recording only in every program, with no automatic progression, failure counting, RPT/rescue, plate recommendation or earned-weight prompt. Existing Barbell/Dumbbell/Machine progression and rescue rules are unchanged. Custom remains **Record -> remember -> you decide**: users manually edit future sets, reps and added weight, with the existing recorded-work template locks.
+
+New actual bodyweight sets carry `bodyweight: true`. Their sole `load` is nonnegative external added weight, including zero; `resistance` records actual assistance/variation, and optional `approximateBodyweight` is the user-defined estimated weight moved for this exercise, not necessarily total body mass. The UI says “Estimated weight moved (optional)” and displays `~`. Users can enter 90 kg for Pull-Ups, their own 55 kg estimate for Push-Ups, or leave assisted Nordic Curls blank. No exercise-name percentage or bodyweight inference is allowed. The estimate never drives progression or PBs. Exercise defaults can be overridden per set; History snapshots retain actual context after template changes/deletion. History/share/export distinguish BW, added weight and assistance; export explicitly retains zero. Unit changes convert marked actual loads and estimates physically without equipment-grid rounding, while History retains its original units. Unmarked legacy sets are not reinterpreted.
+
+When a marked actual set has an estimate, volume is `(estimate + actual external load) × actual reps`, exactly once, without two-sided doubling or plate maths. A blank estimate counts only actual external load; blank assisted work fabricates no tonnage. New History/export records carry `volumeApproximate: true` only when an estimate contributes, and saved/History/shared totals display `~`. Per-set snapshots, correction, incomplete/abandoned saves, original History units and unrelated GPP remain intact. Existing unmarked legacy records and their saved totals remain unchanged.
+
+Bodyweight accessories save any positive user-chosen added-weight `increment` (e.g. 1.25 or 2.5), without snapping to a plate grid. Selected Bodybuilding and On-Ramp dialogs save a separate `addedWeightIncrement` preference on the exercise progression record. These preferences convert physically in kg/lb roundtrips and never alter prescriptions or earned decisions in Stage 1. Automatic earned-success/failure progression remains Stage 2, pending independent owner review.
+
+Selected Bodybuilding bodyweight exercises and On-Ramp gain these recording fields while retaining their current exercise-specific prescriptions, directional decisions, calibration states and handoff. Chin-Up/Pull-Up remain 6–10 with the existing gating rule; no Stage 2 first-set trigger is introduced. Actual added weight does not activate numeric performance-reference logic. Bodybuilding optional accessories remain progression-neutral (§9.8).
+
+Normal cloud backup is retained; new fields are additive and introduced only through explicit recording/settings. The owner accepted limited older-version misinterpretation on 12 October 2026 in issue #45. Update BVOM on other devices before editing bodyweight exercises: v2.9.7 can replace zero with a positive load, apply legacy accessory progression, omit zero on export or lose bodyweight context. This acceptance does not relax ownership, recovery, unrelated-workout or cloud conflict protections; no backend change is required by Stage 1.
+
 ## 12. GPP / conditioning
 
 GPP activities may have timers and additional result metrics.

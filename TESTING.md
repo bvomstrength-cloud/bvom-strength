@@ -297,6 +297,21 @@ When changing a test:
 
 If a legitimate product decision changes a behavioural contract, update the specification and tests together and make that decision explicit in the PR.
 
+
+## Stage 1 bodyweight recording checks
+
+`bodyweight_contracts.js`, loaded by the authoritative behaviour tier, covers actual accessory/Bodybuilding/On-Ramp entry, zero/arbitrary added load, RPE/effort, assistance, estimates, manual Custom settings/locks, program isolation, correction, failed/stale writes, physical unit conversion, recovery, completed History/share/export and lazy cloud comparison. All nine final forward-feature contracts were RED against unchanged v2.9.7 `dbaad6ef217769a0b028a2a1c88ba528eb67d3f8`; all nine contracts must pass. They are explicit v2.8.0 historical-provenance N/A, not changes to existing progression expectations.
+
+Owner-approved PR #46 refinements add `BW-REFINE-VOLUME`, `BW-REFINE-HISTORY`, `BW-REFINE-INCREMENT`, and `BW-REFINE-INCOMPLETE-GPP`. All four were RED on the exact original PR #46 source (`09d0f571faaefe6c071662a8d90bb5d46e689dbf`) before implementation. They cover 90+0/90+2.5 Pull-Ups, user-entered 55 Push-Up resistance, blank assisted Nordic work, exactly-once mixed accounting, correction, immutable approximate History/share/export, arbitrary positive increments with physical unit roundtrips and cloud JSON, partial records and zero-load GPP export. Their historical v2.8.0 provenance is N/A. The original Stage 1 History assertion intentionally changes from 10 external-load-only volume to ~1200 including recorded estimates; other original contracts remain mandatory.
+
+Run the `BW-STAGE1-*` and `BW-REFINE-*` IDs through `behaviour_guard.js`, then the documented full gate on the production candidate. Mutations cover loss of the recording-only route, zero export, exact conversion, negative-load validation and failed-save rollback. Existing accessory/Bodybuilding controls and sequence invariants remain mandatory.
+
+`node tests/bvom-lab/bodyweight_browser.cjs` exercises real Chromium DOM, callbacks, storage and Web Locks in EN/JA at 375 px, with dummy verified offline ownership and external network blocked: six scenarios covering the refined EN/JA labels, 1.25/2.5 saved increments, Pull-Up/Push-Up/Nordic estimated volume (~2010), per-set correction, no mobile overflow, full export and Custom builder/actual sets/RPE/escaping/restart/secondary-window rejection/Finish/History/export, plus selected Bodybuilding Chin-Up and On-Ramp Nordic actual recording and exact unit conversion in both languages. `BVOM_CHROMIUM_PATH` optionally selects an installed Chromium executable. The existing recovery/Starting Setup browser suites remain applicable. These checks stub external services and block service workers; they do not establish real cloud interoperability, installed-PWA updates or Android/iOS behavior.
+
+Refinement validation (13 October 2026): the explicit 13-file shipped candidate passed **29/29 static, 154/154 behavior, 14/14 sequence, 113/113 mutations killed, 68/68 applicable known-bad DEFECT contracts failing; VERDICT: GO**. All 13 Bodyweight contracts pass, including actual abandoned-session expiry in Custom/LP/Bodybuilding and selected exercise preferences. Chromium passed **6/6** refined EN/JA mobile scenarios, **26/26** existing recovery scenarios, the HLM/4-Day deferred Starting Setup journeys and the existing isolated two-window infrastructure proof. The recovery suite now accepts the same optional `BVOM_CHROMIUM_PATH` test-only executable selection. No live backend or physical-device release checks were performed.
+
+Before any separately authorised release, verify Android Chrome/installed PWA and Safari/iOS keyboards/layout, offline restart, background recovery and shell updates. Test real cloud backup/restore with a separate dummy account, including completed bodyweight snapshots. The owner accepted limited older-client misinterpretation; recommend updating other devices before editing new bodyweight data. No production cloud access or migration is part of Stage 1.
+
 ## 13. Manual release checkpoint
 
 Passing automated tests means the code is eligible for the next release step; it does not itself deploy or promote anything.

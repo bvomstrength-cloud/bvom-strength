@@ -15,6 +15,16 @@ const guard=path.join(__dirname,'behaviour_guard.js');
 // replace exactly one occurrence of `from`, searching only inside the function/region starting at `region`
 function inRegion(region,from,to){return src=>{const r=src.indexOf(region);if(r<0)return null;const i=src.indexOf(from,r);if(i<0||i-r>20000)return null;return src.slice(0,i)+to+src.slice(i+from.length)}}
 const MUTATIONS=[
+ {id:'BW-ESTIMATE-VOLUME-REMOVED',why:'estimated weight moved disappears from volume',targets:['BW-REFINE-VOLUME'],apply:inRegion('function bvomSetVolume(', 'load+(Number.isFinite(estimate)&&estimate>0?estimate:0)', 'load')},
+ {id:'BW-ESTIMATE-DOUBLED',why:'bodyweight volume incorrectly uses two-sided maths',targets:['BW-REFINE-VOLUME'],apply:inRegion('function bvomSetVolume(', '))*reps;', '))*reps*2;')},
+ {id:'BW-APPROXIMATE-FLAG-REMOVED',why:'estimated volume is presented as measured tonnage',targets:['BW-REFINE-HISTORY'],apply:inRegion('function bvomHistoryExportMeta(', 'bvomVolumeApproximate(session)?{volumeApproximate:true}:{}', 'false?{volumeApproximate:true}:{}')},
+ {id:'BW-ARBITRARY-INCREMENT-LOST',why:'bodyweight user increment replaced by numeric selector',targets:['BW-REFINE-INCREMENT'],apply:inRegion("function updateEquip(){let e=equipment.value,bw=e==='bodyweight'", 'increment:bw?bwIncrement:', 'increment:bw?5:')},
+ {id:'BW-RECORDING-ROUTE-REMOVED',why:'new bodyweight accessories enter legacy progression',targets:['BW-STAGE1-RECORD'],apply:inRegion('const bvomBbBaseTapAccessory=', "if((state.accessoryList||[]).find(a=>a.id===id)?.equipment==='bodyweight')return bvomBwAccessoryModal(id,i);", '')},
+ {id:'BW-ZERO-EXPORT-REMOVED',why:'zero added load disappears from export',targets:['BW-STAGE1-HISTORY'],apply:inRegion('function bvomExportV1Set(', "||(rec.bodyweight===true&&load===0)", '')},
+ {id:'BW-EXACT-CONVERSION-REMOVED',why:'bodyweight actual load is snapped to numeric equipment grid',targets:['BW-STAGE1-UNITS'],apply:inRegion('function changeUnits(to,quiet=false)', "set.bodyweight===true?v=>convertLoad(v,to):undefined", 'undefined')},
+ {id:'BW-FAILED-SAVE-ROLLBACK-REMOVED',why:'unsaved bodyweight correction leaks into memory',targets:['BW-STAGE1-ATOMIC'],apply:inRegion('function bvomBwAccessoryModal(', 'if(!save({durable:true})){state=before;return}', 'if(!save({durable:true})){return}')},
+ {id:'BW-NEGATIVE-LOAD-VALIDATION-REMOVED',why:'negative added weight is accepted',targets:['BW-STAGE1-ATOMIC'],apply:inRegion('function bvomBwRead(', '||load<0', '')},
+
  {id:'SW-WORKOUT-VISIBILITY-GUARD-REMOVED',why:'pending update covers recorded workout controls',targets:['F100-SW-UPDATE-WORKOUT-VISIBILITY'],apply:inRegion('function bvomSwUpdateBlocked()', 'bvomAnyWorkoutActive()||', '')},
  {id:'SW-CRITICAL-GUARDS-REMOVED',why:'Finish, dialogs or rejected saves allow update reload',targets:['F101-SW-UPDATE-CRITICAL-GUARDS'],apply:inRegion('function bvomSwUpdateBlocked()', "||!!window.__bvomFinishBusy||bvomPersistenceBlocked()||!!document.querySelector('.bvomModalOverlay')", '')},
  {id:'SW-PENDING-UPDATE-RETENTION-REMOVED',why:'hidden update cannot return when registration.waiting clears',targets:['F102-SW-UPDATE-RETAIN-ACTIVATED'],apply:inRegion('function bvomShowServiceWorkerUpdate(reg)', 'if(reg?.waiting)bvomSwPendingUpdate={reg,worker:waiting};', 'if(reg?.waiting){}')},
@@ -214,6 +224,9 @@ if(knownBad){
   // These defects were introduced by later hardening, so passing them on v2.8.0 does not make the
   // contracts toothless. Keep provenance exceptions explicit instead of weakening the contracts.
   const notApplicableToV280=new Set([
+    // Stage 1 forward-feature contracts: RED on exact v2.9.7 dbaad6ef.
+    'BW-REFINE-VOLUME','BW-REFINE-HISTORY','BW-REFINE-INCREMENT','BW-REFINE-INCOMPLETE-GPP',
+    'BW-STAGE1-RECORD','BW-STAGE1-HISTORY','BW-STAGE1-UNITS','BW-STAGE1-BUILDER','BW-STAGE1-BB','BW-STAGE1-ATOMIC','BW-STAGE1-CORRECTION-CLOUD','BW-STAGE1-OWNER','BW-STAGE1-ONRAMP',
     'F23-NOOP-POSTCOMPLETE-SETTINGS-PRESERVE-ROLLBACK',
     'F25-ONRAMP-UNIT-ROUNDTRIP-HANDOFF-REVERSIBLE',
     // Forward feature contract added after v2.8.0; the old reference is not expected to implement it.

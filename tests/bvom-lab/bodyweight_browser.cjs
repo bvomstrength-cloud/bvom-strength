@@ -1,0 +1,61 @@
+'use strict';
+// Real application DOM, storage and Web Locks; external services blocked, dummy offline owner only.
+const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
+const {chromium}=require('playwright'),H=require('./lib/bvom_harness');
+const root=path.resolve(__dirname,'../..'),build=H.loadBuild(root);
+const data=lang=>{const h=H.boot(build);H.configureLP(h);h.S().programMode='free';h.S().language=lang;h.ctx.bvomFtEnsure();h.ctx.save();return JSON.parse(JSON.stringify(h.S()))};
+const saved=p=>p.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
+let browser,origin;let passed=0;
+(async()=>{
+ const server=http.createServer((req,res)=>{const u=new URL(req.url,'http://local');if(u.pathname==='/seed'){res.end('<!doctype html>seed');return}if(u.pathname.startsWith('/vendor/')){res.writeHead(200,{'Content-Type':'text/javascript'});res.end('// isolated external service unavailable');return}const f=path.join(root,u.pathname);if(!f.startsWith(root+path.sep)||!fs.existsSync(f)){res.writeHead(404);res.end();return}res.writeHead(200,{'Content-Type':f.endsWith('.html')?'text/html':f.endsWith('.js')?'text/javascript':'image/png','Cache-Control':'no-store'});res.end(fs.readFileSync(f))});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));origin='http://127.0.0.1:'+server.address().port;
+ try{
+  browser=await chromium.launch({headless:true,...(process.env.BVOM_CHROMIUM_PATH?{executablePath:process.env.BVOM_CHROMIUM_PATH}:{})});
+  for(const lang of ['en','ja']){
+   const context=await browser.newContext({serviceWorkers:'block',viewport:{width:375,height:812}});context.setDefaultTimeout(6000);
+   await context.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());await context.addInitScript(()=>Object.defineProperty(navigator,'onLine',{get:()=>false}));
+   try{
+    const seed=await context.newPage();await seed.goto(origin+'/seed');await seed.evaluate(d=>{localStorage.setItem('bvom_data',JSON.stringify(d));localStorage.setItem('bvom_data_owner','dummy-owner');localStorage.setItem('bvom_entitlement_cache_dummy-owner',JSON.stringify({userId:'dummy-owner',verifiedAt:new Date().toISOString(),record:{user_id:'dummy-owner',status:'complimentary'}}))},data(lang));await seed.close();
+    const p=await context.newPage();await p.goto(origin+'/index.html');await p.waitForSelector('#app:not(.hidden)');
+    await p.evaluate(l=>{state.language=l;renderAll()},lang);
+    await p.evaluate(()=>openAccessoryBuilder());const b=p.locator('.beeCoachOverlay').last();
+    await b.locator('#accName').selectOption('Custom');await b.locator('#accCustom').fill('Pull-Ups <fixture>');await b.locator('#accEquipment').selectOption('bodyweight');
+    assert.equal(await b.locator('#accStyle').inputValue(),'straight');assert.equal(await b.locator('#accStyle').isDisabled(),true);assert.equal(await b.locator('#accWeight').inputValue(),'0');
+    await b.locator('#accSets').fill('2');await b.locator('#accReps').fill('8');await b.locator('#accBwEstimate').fill('90');await b.locator('#accBwInc').fill('1.25');await b.locator('#accBwResistance').fill('hands <img src=x onerror=alert(1)>');assert.ok((await b.textContent()).includes(lang==='ja'?'動かす重量の推定値（任意）':'Estimated weight moved (optional)'));assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'builder horizontal overflow');await p.screenshot({path:'/tmp/bvom-stage1-'+lang+'-builder.png'});await b.locator('#accSave').click();
+    const a=(await saved(p)).accessoryList[0];assert.equal(a.weight,0);assert.equal(a.increment,1.25);assert.equal(a.freeAssignment,'ft1');assert.equal(a.assignment,'__FREE__');
+    assert.equal(await p.locator('#workout .accCard').count(),1);assert.ok((await p.locator('#workout').textContent()).includes('BW'));assert.equal(await p.locator('#workout img[src=x]').count(),0);
+    const record=async(i,load,res)=>{await p.evaluate(({id,i})=>tapAccessory(id,i),{id:a.id,i});const o=p.locator('.bvomModalOverlay').last();assert.equal(await o.locator('[data-res]').inputValue(),i===0?'hands <img src=x onerror=alert(1)>':'hands <img src=x onerror=alert(1)>');await o.locator('[data-load]').fill(String(load));await o.locator('[data-reps]').fill('8');await o.locator('[data-rpe]').fill('8.5');await o.locator('[data-res]').fill(res);await o.locator('[data-save]').click()};
+    await record(0,0,'hands <script>');await record(1,2.5,'no hands');let d=await saved(p);assert.equal(d.accessoryList[0].weight,0);assert.equal(d.session['ACC:'+a.id][0].bodyweight,true);assert.equal(d.session['ACC:'+a.id][1].load,2.5);assert.equal(d.session['ACC:'+a.id][0].rpe,8.5);
+    // Correct one actual set without rewriting the other set's resistance snapshot.
+    await p.evaluate(id=>tapAccessory(id,1),a.id);let edit=p.locator('.bvomModalOverlay').last();await edit.locator('[data-bw-estimate]').fill('80');await edit.locator('[data-save]').click();assert.equal(await p.evaluate(()=>bvomFtVolume()),1380);assert.equal((await saved(p)).session['ACC:'+a.id][0].approximateBodyweight,90);
+    await p.evaluate(id=>tapAccessory(id,1),a.id);edit=p.locator('.bvomModalOverlay').last();await edit.locator('[data-bw-estimate]').fill('90');await edit.locator('[data-save]').click();
+    for(const [name,estimate,reps] of [['Push-Ups','55','10'],['Nordic Curls','','6']]){await p.evaluate(()=>openAccessoryBuilder());const extra=p.locator('.beeCoachOverlay').last();await extra.locator('#accName').selectOption('Custom');await extra.locator('#accCustom').fill(name);await extra.locator('#accEquipment').selectOption('bodyweight');await extra.locator('#accSets').fill('1');await extra.locator('#accBwEstimate').fill(estimate);await extra.locator('#accBwInc').fill('2.5');await extra.locator('#accSave').click();const id=(await saved(p)).accessoryList.at(-1).id;await p.evaluate(id=>tapAccessory(id,0),id);const set=p.locator('.bvomModalOverlay').last();await set.locator('[data-load]').fill('0');await set.locator('[data-reps]').fill(reps);await set.locator('[data-res]').fill(name==='Nordic Curls'?'assisted with hands':'');await set.locator('[data-save]').click()}
+    assert.equal(await p.evaluate(()=>bvomFtVolume()),2010);await p.evaluate(()=>changeUnits('lb',true));assert.ok(Math.abs((await saved(p)).accessoryList[0].increment-1.25*2.2046226218)<1e-9);await p.evaluate(()=>changeUnits('kg',true));assert.equal((await saved(p)).accessoryList[0].increment,1.25);
+
+    assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'workout horizontal overflow');
+    const secondary=await context.newPage();await secondary.goto(origin+'/index.html');await secondary.waitForSelector('#app:not(.hidden)');const raw=await p.evaluate(()=>localStorage.getItem('bvom_data'));await secondary.evaluate(id=>tapAccessory(id,0),a.id);assert.equal(await secondary.evaluate(()=>localStorage.getItem('bvom_data')),raw);await secondary.close();
+    await p.close();const reopened=await context.newPage();await reopened.goto(origin+'/index.html');await reopened.waitForSelector('#app:not(.hidden)');assert.equal((await saved(reopened)).session['ACC:'+a.id][1].load,2.5);
+    await reopened.evaluate(()=>finishWorkout());await reopened.locator('.bvomModalOverlay [data-skip]').last().click();d=await saved(reopened);assert.equal(d.history.at(-1).volumeApproximate,true);assert.ok((await reopened.locator('.savedStats').textContent()).includes('~2010'));assert.equal(d.history.at(-1).session['ACC:'+a.id][0].load,0);assert.equal(d.history.at(-1).volume,2010);
+    await reopened.evaluate(()=>{state.accessoryList=[];save();toggleHistoryWorkout(state.history.length-1)});assert.ok((await reopened.locator('#history').textContent()).includes('BW + 2.5 kg × 8'));assert.equal(await reopened.locator('#history script').count(),0);assert.equal(await reopened.locator('#history img[src=x]').count(),0);
+    assert.ok((await reopened.locator('#history').textContent()).includes('~2010'));assert.equal(await reopened.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'History overflow');const full=await reopened.evaluate(()=>bvomBuildExportV1(state.history.at(-1)));assert.equal(full.volume,2010);assert.equal(full.volumeApproximate,true);assert.ok((await reopened.evaluate(()=>bvomShareWorkoutText(state.history.at(-1)))).includes('~2010'));await reopened.screenshot({path:'/tmp/bvom-stage1-'+lang+'-history.png'});const ex=await reopened.evaluate(id=>bvomExportV1Set(state.history.at(-1).session['ACC:'+id][0],1,'kg'),a.id);assert.equal(ex.load,0);assert.equal(ex.approximateBodyweight,90);
+    console.log('PASS:',lang,'375px builder, record, escaping, RPE, offline close/reopen, two-window lock, Finish/History/export');passed++;
+   }finally{await context.close()}
+  }
+
+  for(const lang of ['en','ja'])for(const onramp of [false,true]){
+   const h=H.boot(build);H.bbStart(h,{onramp});h.S().language=lang;
+   const id=onramp?'nordic_curl':'chin_up',key=(onramp?'BBOR:':'BB:')+id;
+   if(onramp)h.S().bodybuilding.selections.A4=id;else{h.S().bodybuilding.selections.B1=id;h.S().bodybuilding.completedSessions=1;h.S().bodybuilding.progression[id]={calibrated:true}}
+   h.ctx.save();const context=await browser.newContext({serviceWorkers:'block',viewport:{width:375,height:812}});context.setDefaultTimeout(6000);
+   await context.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());await context.addInitScript(()=>Object.defineProperty(navigator,'onLine',{get:()=>false}));
+   try{
+    const p=await context.newPage();await p.goto(origin+'/seed');await p.evaluate(d=>{localStorage.setItem('bvom_data',JSON.stringify(d));localStorage.setItem('bvom_data_owner','dummy-owner');localStorage.setItem('bvom_entitlement_cache_dummy-owner',JSON.stringify({userId:'dummy-owner',verifiedAt:new Date().toISOString(),record:{user_id:'dummy-owner',status:'complimentary'}}))},JSON.parse(JSON.stringify(h.S())));
+    await p.goto(origin+'/index.html');await p.waitForSelector('#app:not(.hidden)');await p.evaluate(({id,onramp})=>onramp?bvomBbOnRampSetModal(id,0):bvomBbSetModal(id,0),{id,onramp});const o=p.locator('.bvomModalOverlay').last();assert.ok((await o.textContent()).includes(lang==='ja'?'追加する外部重量':'External added weight'));await o.locator('[data-bw-inc]').fill('1.25');await o.locator('[data-load]').fill('2.3');await o.locator('[data-res]').fill('hands <script>');await o.locator('[data-bw-estimate]').fill('85');await o.locator('[data-reps]').fill(onramp?'6':'8');await o.locator('[data-save]').click();
+    let d=await saved(p);assert.equal(d.session[key][0].load,2.3);assert.equal(d.session[key][0].bodyweight,true);assert.equal(d.session[key][0].approximateBodyweight,85);assert.equal(d.bodybuilding.performanceRefs[id],undefined);assert.equal(d.bodybuilding.progression[id].addedWeightIncrement,1.25);await p.evaluate(()=>changeUnits('lb',true));d=await saved(p);assert.ok(Math.abs(d.session[key][0].load-2.3*2.2046226218)<1e-9);await p.evaluate(()=>changeUnits('kg',true));d=await saved(p);assert.equal(d.session[key][0].load,2.3);assert.equal(d.bodybuilding.progression[id].addedWeightIncrement,1.25);await p.reload();await p.waitForSelector('#app:not(.hidden)');assert.ok((await p.locator('#workout').textContent()).includes('BW + 2.3 kg'));assert.equal(await p.locator('#workout script').count(),0);
+    if(!onramp){await p.evaluate(()=>openAccessoryBuilder());const b=p.locator('.beeCoachOverlay').last();await b.locator('#accName').selectOption('Custom');await b.locator('#accCustom').fill('BB bodyweight accessory');await b.locator('#accEquipment').selectOption('bodyweight');await b.locator('#accSave').click();d=await saved(p);const a=d.accessoryList.at(-1);assert.equal(a.bbAssignment,'Any');assert.equal(a.assignment,'__BODYBUILDING__');assert.equal(a.freeAssignment,'__BODYBUILDING__');assert.equal(d.programMode,'bodybuilding');}
+    console.log('PASS:',lang,onramp?'On-Ramp Nordic':'Bodybuilding Chin-Up and scoped builder','actual added load/assistance, exact units and reload');passed++;
+   }finally{await context.close()}
+  }
+ }finally{if(browser)await browser.close();await new Promise(r=>server.close(r))}
+ console.log(`Bodyweight browser proof: ${passed}/6 PASS`);
+})().catch(e=>{console.error(e);process.exitCode=1});
