@@ -15,6 +15,12 @@ const guard=path.join(__dirname,'behaviour_guard.js');
 // replace exactly one occurrence of `from`, searching only inside the function/region starting at `region`
 function inRegion(region,from,to){return src=>{const r=src.indexOf(region);if(r<0)return null;const i=src.indexOf(from,r);if(i<0||i-r>20000)return null;return src.slice(0,i)+to+src.slice(i+from.length)}}
 const MUTATIONS=[
+ {id:'BW-STAGE2-OPT-IN-IGNORED',why:'opted-out Bodyweight accessories generate progression offers',targets:['BW-STAGE2-DEFAULT-OFF'],apply:inRegion('function bvomBwProgressEligible(', '&&a?.bwProgressOptIn===true', '')},
+ {id:'BW-STAGE2-RPE-VETO-REMOVED',why:'an RPE9 first set incorrectly earns more hanging weight',targets:['BW-STAGE2-HARD-HOLD'],apply:inRegion('function bvomBwProgressCandidate(', 'rpe<=8', 'rpe<=10')},
+ {id:'BW-STAGE2-DOUBLE-INCREMENT',why:'one earned set applies two increments',targets:['BW-STAGE2-EARNED-ACCEPT'],apply:inRegion('function bvomBwProgressCandidate(', "next=load+step;", "next=load+step*2;")},
+ {id:'BW-STAGE2-HOLD-BECOMES-ACCEPT',why:'HOLD silently increases next weight',targets:['BW-STAGE2-EARNED-HOLD'],apply:inRegion('function bvomBwConfirmOffers(', '()=>visit(i+1),()=>{accepted.push(x);visit(i+1)}', '()=>{accepted.push(x);visit(i+1)},()=>{accepted.push(x);visit(i+1)}')},
+ {id:'BW-STAGE2-ALL-SETS-WEIGHTED',why:'back-off sets incorrectly inherit the top set belt load',targets:['BW-STAGE2-EARNED-ACCEPT'],apply:inRegion('const bvomFtBaseAccessoryPlan17=accessoryPlan17;', "i>0&&bvomBwProgressEligible(a)?0", "false?0")},
+
  {id:'BW-ESTIMATE-VOLUME-REMOVED',why:'estimated weight moved disappears from volume',targets:['BW-REFINE-VOLUME'],apply:inRegion('function bvomSetVolume(', 'load+(Number.isFinite(estimate)&&estimate>0?estimate:0)', 'load')},
  {id:'BW-ESTIMATE-DOUBLED',why:'bodyweight volume incorrectly uses two-sided maths',targets:['BW-REFINE-VOLUME'],apply:inRegion('function bvomSetVolume(', '))*reps;', '))*reps*2;')},
  {id:'BW-APPROXIMATE-FLAG-REMOVED',why:'estimated volume is presented as measured tonnage',targets:['BW-REFINE-HISTORY'],apply:inRegion('function bvomHistoryExportMeta(', 'bvomVolumeApproximate(session)?{volumeApproximate:true}:{}', 'false?{volumeApproximate:true}:{}')},
@@ -229,6 +235,7 @@ if(knownBad){
     'BW-STAGE1-RECORD','BW-STAGE1-HISTORY','BW-STAGE1-UNITS','BW-STAGE1-BUILDER','BW-STAGE1-BB','BW-STAGE1-ATOMIC','BW-STAGE1-CORRECTION-CLOUD','BW-STAGE1-OWNER','BW-STAGE1-ONRAMP',
     // Stage 2A RED on exact v2.9.8 Stage 1 head a44991f; no Bodyweight in historical v2.8.0.
     'BW-STAGE2-OPT-IN-UI','BW-STAGE2-EARNED-ACCEPT','BW-STAGE2-EARNED-HOLD','BW-STAGE2-HARD-HOLD','BW-STAGE2-SEVEN-HOLD','BW-STAGE2-BELOW-RANGE','BW-STAGE2-INCOMPLETE-HOLD','BW-STAGE2-DEFAULT-OFF','BW-STAGE2-CUSTOM-NEVER-AUTO',
+    'BW-STAGE2-DURABLE-ROLLBACK','BW-STAGE2-STRUCTURED-MODES','BW-STAGE2-PARTIAL-ACCESSORY',
     'F23-NOOP-POSTCOMPLETE-SETTINGS-PRESERVE-ROLLBACK',
     'F25-ONRAMP-UNIT-ROUNDTRIP-HANDOFF-REVERSIBLE',
     // Forward feature contract added after v2.8.0; the old reference is not expected to implement it.
