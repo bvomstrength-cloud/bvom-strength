@@ -27,6 +27,7 @@ require('./monkey009_contracts')({test,ok,H,build,configureLP,ownershipPair,read
 require('./monkey011_contracts')({test,ok,H,build,configureLP});
 require('./bodyweight_contracts')({test,ok,H,build});
 require('./bodyweight_stage2_contracts')({test,ok,H,build});
+require('./bodyweight_extra_sets_contracts')({test,ok,H,build});
 require('./monkey019_durable_finish_contracts')({test,ok,H,build});
 require('./recovery_contracts')({test,ok,H,build});
 require('./starting_setup_contracts')({test,ok,H,build});

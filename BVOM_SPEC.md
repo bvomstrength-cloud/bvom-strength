@@ -702,6 +702,14 @@ Only completed **accessory** actual sets qualify. If the main workout is incompl
 
 Builder inputs and prompts must be translated EN/JA, escaped, and usable in a narrow phone viewport. Existing recovery, cloud-conflict, older-client compatibility, other accessories, selected Bodybuilding engine and Custom manual contracts still apply. New persistence fields are additive (`bwProgressOptIn`, `bwProgressGoal`) and contain no derived bodyweight calculations or backend migrations.
 
+### 11.6 Bodyweight accessory extra sets (Issue #52)
+
+A Bodyweight straight-set accessory in LP/RPT, HLM, 4-Day, Custom or an optional Bodybuilding accessory can record **additional actual sets during an active workout**, without editing the prescribed set count or future exercise template. The user chooses **ADD EXTRA SET**; the recording modal uses existing per-set bodyweight fields: actual reps, effort/RPE, external added weight (zero allowed), optional estimated weight moved, and actual assistance/variation. Additional sets are individually correctable/removable, require durable local writes and the active document owner, and survive reload, incomplete History, sharing, export and approximate-volume calculations.
+
+Extra sets are identified by an actual set index beyond the planned set count and additive `extra: true` on new actual records. A saved History entry retains the actual results even when the future template is later edited. No extra set silently modifies the exercise prescription for the next workout.
+
+The Stage 2A progression decision continues to require every **planned** accessory set recorded, and relies only on planned **set 1** for its rep/RPE gate. Additional sets must never create, suppress or amplify a pending offer. ACCEPT/HOLD remains owner-approved and durable; Custom and optional Bodybuilding accessories remain progression-neutral. Selected built-in Bodybuilding exercises and On-Ramp are unchanged. Existing active-workout template locks, failed-save rollback, Web Lock/cloud safeguards and EN/JA accessibility remain in force.
+
 ## 12. GPP / conditioning
 
 GPP activities may have timers and additional result metrics.
