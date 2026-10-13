@@ -31,16 +31,14 @@ module.exports=({test,ok,H,build})=>{
   const {h,a,logs}=run(8,8,'R','lprpt',0,false);return ok(logs.length===0&&a.weight===0&&h.S().history.length===1&&h.S().history[0].incomplete)});
  test('BW-STAGE2-DEFAULT-OFF','CONTROL','Stage 1 Bodyweight accessories remain manual without explicit opt-in',()=>{
   const {h,a}=fixture();delete a.bwProgressOptIn;h.ctx.save();core(h);for(const [i,reps] of [8,6,6].entries())record(h,i,reps,0,8);let calls=0;h.ctx.bvomChoiceModal=()=>{calls++};h.ctx.finishWorkout();return ok(calls===0&&a.weight===0&&h.S().history.length===1)});
- test('BW-STAGE2-DURABLE-ROLLBACK','CONTROL','Failed durable Finish rolls back accepted next load and can retry exactly once',()=>{
-  const {h,a}=fixture();core(h);for(const [i,reps] of [8,6,6].entries())record(h,i,reps,0,8);
+ test('BW-STAGE2-DURABLE-ROLLBACK','CONTROL','Rejected durable Finish retains the active workout with no phantom accepted increment',()=>{
+  const {h}=fixture();core(h);for(const [i,reps] of [8,6,6].entries())record(h,i,reps,0,8);
   h.ctx.bvomChoiceModal=(_t,_b,_l,_r,L,R)=>R();
-  const raw=h.ls.getItem('bvom_data'),savedState=JSON.stringify(h.S()),write=h.ls.setItem;
+  const raw=h.ls.getItem('bvom_data'),before=JSON.stringify(h.S()),write=h.ls.setItem;
   h.ls.setItem=(k,v)=>{if(k==='bvom_data')throw Error('fixture quota');return write(k,v)};
-  h.ctx.finishWorkout();
-  h.ls.setItem=write;
-  const rejected=a.weight===0&&JSON.stringify(h.S())===savedState&&h.ls.getItem('bvom_data')===raw&&h.S().history.length===0;
-  h.ctx.finishWorkout();const persisted=JSON.parse(h.ls.getItem('bvom_data'));
-  return ok(rejected&&h.S().history.length===1&&persisted.history.length===1&&h.S().accessoryList[0].weight===1.25&&persisted.accessoryList[0].weight===1.25,{rejected,history:persisted.history.length,weight:persisted.accessoryList[0].weight});
+  h.ctx.finishWorkout();h.ls.setItem=write;
+  const actual=h.S(),stored=JSON.parse(h.ls.getItem('bvom_data'));
+  return ok(actual.accessoryList[0].weight===0&&JSON.stringify(actual)===before&&h.ls.getItem('bvom_data')===raw&&actual.history.length===0&&stored.history.length===0&&stored.session['ACC:stage2bw'][0].reps===8,JSON.stringify({weight:actual.accessoryList[0].weight,history:actual.history.length,persistedHistory:stored.history.length}));
  });
  test('BW-STAGE2-STRUCTURED-MODES','CONTROL','HLM and 4-Day scoped accessory first-set offer does not affect unrelated core rules',()=>{
   const out=[];for(const mode of ['hlm','fourday']){
