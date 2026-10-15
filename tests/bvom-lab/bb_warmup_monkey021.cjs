@@ -92,11 +92,15 @@ async function testMain(lang){
   pass(lang+' duplicate opening sets are distinct');
 
   await page.evaluate(()=>activateTab('workout'));
-  await page.locator('#workout #work-bb-A2 .bvomOrderArrow').first().click();
   let ordered=await cardNames(page,'workout');
-  assert.match(ordered[0],/Squat/,'order arrow must move squat before bench');
-  await beginWarm(page);ordered=await cardNames(page,'warmup');
-  assert.match(ordered[0],/Squat/,'warm-up cards must follow changed workout order');
+  assert.match(ordered[0],/Squat/,'Workout A defaults to squat before bench');
+  assert.match(ordered[1],/Bench/,'bench follows squat');
+  await page.locator('#workout #work-bb-A2 .bvomOrderArrow').nth(1).click();
+  ordered=await cardNames(page,'workout');
+  assert.match(ordered[0],/Bench/,'down-arrow moves squat below bench');
+  assert.match(ordered[1],/Squat/,'squat remains second after manual down-arrow');
+  await beginWarm(page);
+  assert.deepEqual(await cardNames(page,'warmup'),ordered,'warm-up cards follow changed workout order');
   assert.equal(await page.locator('#warm-bb-A2 button.set.done').count(),2,'marks survive exercise reorder');
   pass(lang+' real exercise arrows preserve warm-up order and marks');
   await page.reload();await wait(page);await beginWarm(page);
