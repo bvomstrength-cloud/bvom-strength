@@ -85,10 +85,12 @@ module.exports=({test,ok,H,build})=>{
    bul.kind==='short'&&bul.sets.length>0&&ramp.kind==='guidance'&&ramp.sets.length===0&&ramp.finding===true&&
    unknown.kind==='none'&&accessory.kind==='none',JSON.stringify({db:db.sets,bulgarian:bul.sets,or:ramp}));
  });
- test('BB-STAGE-A-IMPERIAL','CONTROL','Imperial ramps are increasing, below working load, and no false 45 lb machine bar is prescribed',()=>{
+ test('BB-STAGE-A-IMPERIAL','CONTROL','Imperial machine opens at scaled advisory weight (not an assumed bar); all loads remain below work',()=>{
   const h=H.boot(build);h.S().unit='lb';h.S().bar=45;h.S().barByLift=Object.fromEntries(['Squat','Bench Press','Prone Row','Supine Row','Overhead Press','Deadlift'].map(x=>[x,45]));
   const sq=example(h,'high_bar_squat',225),machine=example(h,'leg_press',225);
   return ok(sq.kind==='full'&&sq.sets.some(([w])=>w===45)&&stable(sq.sets)&&sq.sets.every(([w])=>w<225)&&
-   machine.kind==='full'&&stable(machine.sets)&&machine.sets.every(([w])=>w>45&&w<225),JSON.stringify({squat:sq.sets,machine:machine.sets}));
+   machine.kind==='full'&&machine.equipmentNote==='nearest_available_weight'&&
+   JSON.stringify(machine.sets.slice(0,2))===JSON.stringify([[45,5],[45,5]])&&
+   stable(machine.sets)&&machine.sets.every(([w])=>w>0&&w<225),JSON.stringify({squat:sq.sets,machine:machine.sets}));
  });
 };
