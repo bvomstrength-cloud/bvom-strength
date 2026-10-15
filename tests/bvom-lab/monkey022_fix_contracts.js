@@ -465,4 +465,29 @@ module.exports=({test,ok,H,build})=>{
     return ok(Object.values(checks).every(Boolean),JSON.stringify(checks));
    });
  }
+
+ // Monkey 026: screenshot field test exposed canonical A1-A6 still used as
+ // visible defaults despite the established Squat-first, Triceps-before-Laterals
+ // Workout A user preference. Only visual order may change, never slots/sets.
+ for(const [mode,onramp] of [['ONRAMP',true],['BLOCK',false]]){
+  test('BB-M026-DEFAULT-A-'+mode,'DEFECT',
+   'Fresh Bodybuilding A display puts quad before chest, triceps before lateral delt; saved manual override and reset retain semantics',()=>{
+    const h=H.boot(build);H.bbStart(h,{onramp});
+    const canonical=h.ctx.bvomOrderEntries().map(x=>x.key);
+    const expected=['A2','A1','A3','A4','A6','A5'];
+    const beforeData=JSON.stringify(h.S().bodybuilding),beforeSession=JSON.stringify(h.S().session),beforeHistory=JSON.stringify(h.S().history);
+    const preferred=h.ctx.bvomOrderEffective();
+    const swapped=h.ctx.bvomOrderChange('A2',1),manual=h.ctx.bvomOrderEffective();
+    const saved=h.S().exerciseDisplayOrder?.['bodybuilding:A']?.join('|')===manual.join('|');
+    const other=h.ctx.bvomOrderEffective(h.ctx.bvomOrderEntries(),'bodybuilding:B').join('|')===canonical.join('|');
+    const reopened=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage,online:false,supabase:null});
+    const reloadMatches=reopened.ctx.bvomOrderEffective().join('|')===manual.join('|');
+    const reset=reopened.ctx.bvomOrderReset(),restored=reopened.ctx.bvomOrderEffective().join('|')===expected.join('|');
+    const changesOnlyOrder=beforeData===JSON.stringify(h.S().bodybuilding)&&
+     beforeSession===JSON.stringify(h.S().session)&&beforeHistory===JSON.stringify(h.S().history);
+    const assertions={default:preferred.join('|')===expected.join('|'),canonicalSlots:canonical.join('|')==='A1|A2|A3|A4|A5|A6',
+     swapped,custom:manual[0]==='A1'&&manual[1]==='A2'&&saved,other,reloadMatches,reset,restored,changesOnlyOrder};
+    return ok(Object.values(assertions).every(Boolean),JSON.stringify(assertions));
+   });
+ }
 };
