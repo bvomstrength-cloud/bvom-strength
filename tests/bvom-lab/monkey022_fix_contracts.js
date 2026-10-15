@@ -561,4 +561,33 @@ module.exports=({test,ok,H,build})=>{
     JSON.stringify({beforeOrder,afterOrder,stable,swapped:b.selections.B2,
      setsPreserved:JSON.stringify(h.S().session)===beforeSet}));
   });
+
+ // Codex P2: a truthy but invalid stored preference is already ignored by
+ // bvomOrderEffective. It must not prevent pinning the visible order during a
+ // live On-Ramp swap, otherwise cards jump around already-recorded work.
+ for(const [kind,bad] of [['STRING','B1|B2|B3'],['DUPLICATE',['B2','B2','B1','B3','B4','B5']],['PARTIAL',['B2','B1']]]){
+  test('BB-M028-MALFORMED-ACTIVE-SWAP-'+kind,'DEFECT',
+   'Malformed truthy saved B order cannot defeat active On-Ramp order pinning',()=>{
+    const h=H.boot(build);H.bbStart(h,{onramp:true});
+    const b=h.S().bodybuilding;b.onramp.sessionsCompleted=1;b.selections.B2='romanian_deadlift';
+    h.S().exerciseDisplayOrder={'bodybuilding:B':bad};h.ev('save()');
+    const beforeOrder=h.ctx.bvomOrderEffective().join('|'),first=b.selections.B1;
+    H.orSet(h,first,0,{reps:8,load:50});
+    const beforeSet=JSON.stringify(h.S().session),beforeHistory=JSON.stringify(h.S().history);
+    const opts=h.ctx.bvomBbExerciseOptions('B2').filter(o=>o.id!=='romanian_deadlift');
+    const n=opts.findIndex(x=>x.id==='back_extension_45')+1;
+    h.ctx.bvomBbOnRampSwap('B2');const dlg=h.lastOverlay();
+    if(!dlg)return ok(false,'Replacement modal missing');
+    dlg.querySelector('[data-number]').value=String(n);dlg.querySelector('[data-accept]').onclick();
+    const order=h.ctx.bvomOrderEffective().join('|'),stored=JSON.parse(h.ls.getItem('bvom_data'));
+    const frozen=stored.exerciseDisplayOrder?.['bodybuilding:B'];
+    const stable=Array.isArray(frozen)&&frozen.join('|')===beforeOrder;
+    const correct=stored.bodybuilding?.selections?.B2==='back_extension_45';
+    const untouched=JSON.stringify(h.S().session)===beforeSet&&JSON.stringify(h.S().history)===beforeHistory;
+    const reread=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage,supabase:null,online:false});
+    return ok(n>0&&beforeOrder==='B2|B1|B3|B4|B5|B6'&&correct&&stable&&
+     order===beforeOrder&&untouched&&reread.ctx.bvomOrderEffective().join('|')===beforeOrder,
+     JSON.stringify({kind,beforeOrder,order,correct,stable,untouched,frozen}));
+   });
+ }
 };
