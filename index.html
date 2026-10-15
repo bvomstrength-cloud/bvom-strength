@@ -3793,8 +3793,16 @@ function bvomBbOnRampFinish(approvedIncomplete=false){
   alert(committed?'On-Ramp was saved, but the screen could not refresh. Reload BVOM to verify your workout.':'On-Ramp session could not finish safely. Please try again.');
  }finally{window.__bvomFinishBusy=false;bvomSyncWorkoutControls()}
 }
+function bvomBbOnRampHandoffBlocked(){
+ // No handoff route may silently clear unsaved live training, including GPP.
+ if(!bvomStateWorkoutActive(state)&&!bvomSessionHasActivity())return false;
+ bvomBeeModal(hlmTxt('FINISH WORKOUT FIRST','先にワークアウトを終了してください'),
+  hlmTxt('Finish the current On-Ramp session to preserve your recorded sets in History. Then start the 8-week block.','現在のオンランプを終了して、記録したセットを履歴に保存してください。その後、8週間のブロックを始めてください。'));
+ return true;
+}
 function bvomBbOnRampHandoff(early=false){
- if(!bvomWorkoutActionAllowed()||window.__bvomFinishBusy)return;
+ if(!bvomWorkoutActionAllowed()||window.__bvomFinishBusy||!bvomBbOnRampActive())return;
+ if(bvomBbOnRampHandoffBlocked())return;
  const before=JSON.parse(JSON.stringify(state)),oldDefer=bvomCloud.deferWorkoutCommit;let committed=false;
  try{
   const working=JSON.parse(JSON.stringify(state)),missing=bvomBbOnRampPrepareHandoff(working);
@@ -3816,7 +3824,7 @@ function bvomBbOnRampHandoff(early=false){
   alert(committed?'On-Ramp handoff was saved, but the screen could not refresh. Reload BVOM to verify.':'Could not start the Bodybuilding block safely. Your On-Ramp data has been kept.');
  }
 }
-function bvomBbOnRampSkip(){const missing=Object.values(state.bodybuilding.selections).filter(id=>bvomBbNumericExercise(id)&&!(bvomBbOnRampNumericValue(id)>0));if(missing.length){alert('Enter the remaining starting loads before skipping the On-Ramp. Your loads already found will be kept.');const d=bvomBbSetupDraft();for(const id of Object.values(state.bodybuilding.selections)){const e=bvomBbOnRampEx(id),p=d.progression[id]||(d.progression[id]={});if(Number(e.load)>0)p.load=e.load;if(Number(e.increment)>0)p.increment=e.increment;p.calibrated=e.state==='CONFIRMED'}window.__bvomBbSetupMode='manual';bvomBbRenderFoundationSetup();return}bvomBbOnRampHandoff(true)}
+function bvomBbOnRampSkip(){if(!bvomWorkoutActionAllowed()||!bvomBbOnRampActive()||bvomBbOnRampHandoffBlocked())return;const missing=Object.values(state.bodybuilding.selections).filter(id=>bvomBbNumericExercise(id)&&!(bvomBbOnRampNumericValue(id)>0));if(missing.length){alert('Enter the remaining starting loads before skipping the On-Ramp. Your loads already found will be kept.');const d=bvomBbSetupDraft();for(const id of Object.values(state.bodybuilding.selections)){const e=bvomBbOnRampEx(id),p=d.progression[id]||(d.progression[id]={});if(Number(e.load)>0)p.load=e.load;if(Number(e.increment)>0)p.increment=e.increment;p.calibrated=e.state==='CONFIRMED'}window.__bvomBbSetupMode='manual';bvomBbRenderFoundationSetup();return}bvomBbOnRampHandoff(true)}
 function bvomBbOnRampSwap(slot){if(!bvomWorkoutActionAllowed()||!bvomBbOnRampActive())return;
  const original=state.bodybuilding.selections[slot],opts=bvomBbExerciseOptions(slot).filter(o=>o.id!==original);if(!opts.length)return;
  bvomBbUiModal('Choose a replacement for '+BVOM_BB_SLOT_LABELS[slot]+':','',opts,n=>{
