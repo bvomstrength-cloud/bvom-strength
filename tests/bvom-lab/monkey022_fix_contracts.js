@@ -630,8 +630,9 @@ module.exports=({test,ok,H,build})=>{
      B5:'dumbbell_rear_delt_raise',B6:'dumbbell_curl'});
     h.ev('save()');
     const preferred=h.ctx.bvomOrderEffective().join('|'),want='B2|B4|B3|B1|B6|B5';
+    const catalog=h.ev('BVOM_BB_WARMUP_STAGE_A_PROFILES');
     const profiles=['B2','B4','B3','B1','B6','B5'].map(slot=>({
-     slot,kind:h.ctx.BVOM_BB_WARMUP_STAGE_A_PROFILES[b.selections[slot]]?.kind
+     slot,kind:catalog[b.selections[slot]]?.kind
     }));
     const chinPlan=h.ctx.bvomBbStageAWarmupPlan('chin_up',80,onramp);
     return ok(preferred===want&&
