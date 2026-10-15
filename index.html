@@ -3682,7 +3682,7 @@ function bvomBbOpenFoundationSetup(){if(!bvomWorkoutActionAllowed())return;
 function bvomBbSessionKey(id){return 'BB:'+id}
 function bvomBbSetCount(rx){return Array.isArray(rx?.sets)?rx.sets.length:0}
 function bvomBbSetTarget(rx,i){const q=rx?.sets?.[i];if(!q)return '';return q.minReps?`${q.minReps}–${q.maxReps}`:`≤${q.maxReps}`}
-function bvomBbLoadText(q,id){if(q?.load!=null)return `${fmt(q.load)} ${unitLabel()}`;const p=bvomBbProgress(id);return p.resistance?bvomEsc(p.resistance):'Bodyweight / resistance'}
+function bvomBbLoadText(q,id){const p=bvomBbProgress(id);if(q?.type==='bodyweight'){const assist=q.assistance??p.resistance??'Bodyweight';const added=Number(q.load);return bvomEsc(assist)+(Number.isFinite(added)&&added>0?' + '+fmt(added)+' '+unitLabel():'')}if(q?.load!=null)return `${fmt(q.load)} ${unitLabel()}`;return p.resistance?bvomEsc(p.resistance):'Bodyweight / resistance'}
 // An earned bodyweight/assistance direction is advisory until the user
 // explicitly accepts a real equipment/variation change or chooses HOLD.
 // It must never invent a band force, assistance load, or numerical step.
