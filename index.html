@@ -3835,15 +3835,16 @@ function bvomBbOnRampPrepareHandoff(target){
 function bvomBbOnRampFinish(approvedIncomplete=false){
  if(!bvomWorkoutActionAllowed()||window.__bvomFinishBusy)return;
  const day=bvomBbOnRampDay(),ids=bvomBbOnRampSlots(day).map(s=>state.bodybuilding.selections[s]),complete=ids.every(bvomBbOnRampExerciseTouched);
- if(!ids.some(bvomBbOnRampExerciseTouched))return;
+ // Accessory-only and GPP-only sessions are legitimate incomplete workouts.
+ if(!bvomSessionHasActivity())return;
  if(!complete&&!approvedIncomplete){
   bvomBbUiModal('INCOMPLETE ON-RAMP SESSION','This On-Ramp session is incomplete. Save your exercise progress without consuming an On-Ramp session?',null,()=>bvomBbOnRampFinish(true),'SAVE SESSION');return;
  }
  window.__bvomFinishBusy=true;bvomSyncWorkoutControls();
  const before=JSON.parse(JSON.stringify(state)),oldDefer=bvomCloud.deferWorkoutCommit;let committed=false;
  try{
-  const duration=bvomDuration(),historySession=JSON.parse(JSON.stringify(state.session));
-  state.history.push({date:new Date().toISOString(),...bvomHistoryExportMeta(historySession,duration),unit:unitLabel(),program:'bodybuilding',day,incomplete:!complete,session:historySession,note:'Bodybuilding On-Ramp',duration,bodybuilding:{onramp:true,sessionNumber:bvomBbOnRampEnsure().sessionsCompleted+1}});
+  const duration=bvomDuration(),gpp=bvomGppResultSnapshot(),historySession=JSON.parse(JSON.stringify(state.session));
+  state.history.push({date:new Date().toISOString(),...bvomHistoryExportMeta(historySession,duration),unit:unitLabel(),program:'bodybuilding',day,incomplete:!complete,session:historySession,gpp,note:'Bodybuilding On-Ramp',duration,bodybuilding:{onramp:true,sessionNumber:bvomBbOnRampEnsure().sessionsCompleted+1}});
   if(complete)bvomBbOnRampEnsure().sessionsCompleted=Math.min(6,bvomBbOnRampEnsure().sessionsCompleted+1);
   state.session={};state.gppSession={};state.workoutStartedAt=null;
   const finalHandoff=complete&&bvomBbOnRampEnsure().sessionsCompleted>=6;
@@ -3864,7 +3865,7 @@ function bvomBbOnRampFinish(approvedIncomplete=false){
   committed=true;
   // A committed blob with failed owner bookkeeping stops the window; don't revert it.
   if(bvomPersistenceBlocked())return;
-  cancelTimer();renderAll();
+  cancelTimer();bvomStopGppRuntime();renderAll();
   if(!finalHandoff&&complete&&bvomBbOnRampAllConfirmed())setTimeout(()=>{
    bvomBbUiModal('ON-RAMP COMPLETE','All starting loads are confirmed. Start the 8-week Bodybuilding block now?',null,()=>{
     if(bvomBbOnRampActive()&&bvomBbOnRampAllConfirmed())bvomBbOnRampHandoff(true)
