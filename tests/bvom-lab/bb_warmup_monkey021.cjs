@@ -10,12 +10,13 @@ const root=path.resolve(__dirname,'../..'),build=H.loadBuild(root);
 const started=Date.now();
 let checks=0;const pass=s=>{console.log('PASS M021: '+s);checks++};
 
-function fixture({onramp=false,lang='en'}={}){
+function fixture({onramp=false,lang='en',day='A'}={}){
  const h=H.boot(build);H.bbStart(h,{onramp});
  const s=h.S(),b=s.bodybuilding;
  b.selections.A1='barbell_bench_press';b.selections.A2='high_bar_squat';b.selections.A3='barbell_row';
  b.selections.B2='romanian_deadlift';b.selections.B4='bulgarian_split_squat';
  s.language=lang;s.accessoryList=[];s.gppList=[];
+ if(!onramp&&day==='B'){b.completedSessions=1;s.day='B'}
  const loads={barbell_bench_press:85,high_bar_squat:100,barbell_row:50,romanian_deadlift:100,bulgarian_split_squat:20};
  for(const [id,load] of Object.entries(loads)){
   const p=b.progression[id]||(b.progression[id]={});Object.assign(p,{load,topLoad:load,increment:2.5,calibrated:true});
@@ -142,6 +143,32 @@ async function testMain(lang){
   assert.deepEqual(exceptions,[],'no uncaught browser JS errors');
  }finally{await context.close()}
 }
+async function testBDay(){
+ const {context,page,exceptions}=await openScenario(fixture({day:'B'}));
+ try{
+  await beginWarm(page);
+  assert.equal(await page.locator('#warm-bb-B4 button.set').count(),2,'Bulgarian split squat uses short per-hand compound prep');
+  assert.match(await page.locator('#warm-bb-B4').textContent(),/Dumbbell weight per hand/);
+  assert.ok((await page.locator('#warm-bb-B2 button.set').count())>2,'RDL should show a progressive compound ramp');
+  assert.equal(await page.locator('#warm-bb-B5 button.set').count(),0,'rear delt accessory does not need numeric warm-up');
+  assert.equal(await page.locator('#warm-bb-B6 button.set').count(),0,'curl accessory does not need numeric warm-up');
+  pass('Workout B hinge and split-squat prep, no rear-delt or biceps warm-up');
+  await page.evaluate(()=>activateTab('workout'));
+  await page.locator('#work-bb-B2 .bvomOrderArrow').first().click();
+  await page.locator('#work-bb-B4 .bvomOrderArrow').first().click();
+  await page.locator('#work-bb-B4 .bvomOrderArrow').first().click();
+  assert.deepEqual((await cardNames(page,'workout')).slice(0,2),['Romanian Deadlift','Bulgarian Split Squat']);
+  await beginWarm(page);
+  assert.deepEqual((await cardNames(page,'warmup')).slice(0,2),['Romanian Deadlift','Bulgarian Split Squat']);
+  await page.locator('#warm-bb-B4 button.set').first().click();
+  await page.reload();await wait(page);await beginWarm(page);
+  assert.equal(await page.locator('#warm-bb-B4 button.set.done').count(),1,'B-day warm-up mark survives reload');
+  const s=await read(page);assert.equal(s.bodybuilding.completedSessions,1);
+  assert.equal(Object.keys(s.session).length,0);
+  pass('Workout B user arrows and split-squat tick persist without advancing Bodybuilding');
+  assert.deepEqual(exceptions,[]);
+ }finally{await context.close()}
+}
 async function testOnRamp(){
  const {context,page,exceptions}=await openScenario(fixture({onramp:true}));
  try{
@@ -168,7 +195,7 @@ async function testOnRamp(){
  await new Promise(r=>server.listen(0,'127.0.0.1',r));origin='http://127.0.0.1:'+server.address().port;
  try{
   browser=await chromium.launch({headless:true,args:['--no-sandbox']});
-  await testMain('en');await testMain('ja');await testOnRamp();
+  await testMain('en');await testMain('ja');await testBDay();await testOnRamp();
   console.log('MONKEY 021 PASS '+checks+' checks; isolated real Chromium, no live data; '+(Date.now()-started)+'ms');
  }finally{if(browser)await browser.close();await new Promise(r=>server.close(r))}
 })().catch(e=>{console.error('MONKEY 021 FAIL',e);process.exitCode=1});
