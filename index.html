@@ -3919,7 +3919,9 @@ function bvomBbStageAWarmupPlan(id,workingLoad,onramp=false){
  }
  for(const [unrounded,reps] of raw){
   let w=unrounded;
-  if(proxyLift!==lift)w=roundWarmupLoad(w,lift);
+  // A Row/RDL may use a 10/15/25 kg real bar unlike the proxy lift.
+  // Remap only its two opening bar exposures; do not change global settings.
+  if(proxyLift!==lift)w=Math.abs(unrounded-proxyBar)<1e-6?actualBar:roundWarmupLoad(w,lift);
   if(w<actualBar-1e-6||!(w>0&&w<work))continue;
   // Preserve two genuine bar exposures; dedupe all other repeated loads.
   if(w!==actualBar){if(seen.has(w))continue;seen.add(w)}
