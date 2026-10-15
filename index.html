@@ -3996,7 +3996,7 @@ function bvomBbWarmStageBTap(slot,index,token){
 function bvomBbWarmStageBRest(){
  // A qualitative On-Ramp prep set can use the normal rest clock, but never
  // creates a phantom calibration attempt or completed warm-up set.
- if(!isBodybuilding()||!bvomBbOnRampActive()||!bvomWorkoutActionAllowed())return false;
+ if(!isBodybuilding()||!bvomWorkoutActionAllowed())return false;
  const previous=state.timerStart;state.timerStart=Date.now();
  if(!save({durable:true})){state.timerStart=previous;return false}
  if(bvomPersistenceBlocked())return true;
@@ -4020,7 +4020,10 @@ function bvomBbWarmStageBRender(){
    html+='<p class="small">'+hlmTxt('Start very easy. Increase gradually until you find a weight you can use for the prescribed reps with about two good reps left. Only record the actual On-Ramp sets as calibration.','軽い重量から始め、余裕を持って指定回数ができる重量まで少しずつ上げましょう。開始重量の確認として記録するのは実際のオンランプのセットだけです。')+'</p>';
    html+='<button type="button" class="secondary" onclick="bvomBbWarmStageBRest()">'+hlmTxt('START REST TIMER','休憩タイマー開始')+'</button>';
   }else if(plan.kind==='guidance'){
-   html+='<p class="small">'+hlmTxt('Use an easier variation or more assistance for a few controlled preparation reps.','軽いバリエーションや補助を使い、数回の丁寧な準備運動を行ってください。')+'</p>';
+   html+='<p class="small">'+(plan.equipmentNote==='nearest_available_weight'?
+    hlmTxt('Start with the lightest comfortable setting on this equipment; use a few easy reps before working sets. Do not assume a standard machine starting weight.','このマシンで無理のない軽い重量から始め、ワーキングセットの前に数回ゆっくり動かしてください。マシンの初期重量は機種によって異なります。'):
+    hlmTxt('Use an easier variation or more assistance for a few controlled preparation reps.','軽いバリエーションや補助を使い、数回の丁寧な準備運動を行ってください。'))+'</p>';
+   html+='<button type="button" class="secondary" onclick="bvomBbWarmStageBRest()">'+hlmTxt('START REST TIMER','休憩タイマー開始')+'</button>';
   }else if(!plan.sets.length){
    html+='<p class="small">'+hlmTxt('No dedicated warm-up required.','専用のウォームアップは必要ありません。')+'</p>';
   }else{
