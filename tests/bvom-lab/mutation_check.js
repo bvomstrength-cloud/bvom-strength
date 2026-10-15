@@ -15,6 +15,9 @@ const guard=path.join(__dirname,'behaviour_guard.js');
 // replace exactly one occurrence of `from`, searching only inside the function/region starting at `region`
 function inRegion(region,from,to){return src=>{const r=src.indexOf(region);if(r<0)return null;const i=src.indexOf(from,r);if(i<0||i-r>20000)return null;return src.slice(0,i)+to+src.slice(i+from.length)}}
 const MUTATIONS=[
+ // Monkey 026: default A is a view-only preference; canonical workout slots
+ // remain unchanged for prescription and History compatibility.
+ {id:'BB-M026-A-DEFAULT-REVERTS-CANONICAL',why:'New Bodybuilding A starts Bench before Squat and Laterals before Triceps again',targets:['BB-M026-DEFAULT-A-ONRAMP','BB-M026-DEFAULT-A-BLOCK'],apply:inRegion('function bvomOrderDefault(', "return ['A2','A1','A3','A4','A6','A5'];", "return canonical;")},
  // Monkey 025: the weight-moved explanation must sit under its input,
  // not under the unrelated Assistance / variation field.
  {id:'BB-M025-ESTIMATE-HELP-AFTER-ASSISTANCE',why:'Builder places estimated-weight explanation under Assistance again',targets:['BB-M025-ESTIMATED-WEIGHT-HELP-EN','BB-M025-ESTIMATED-WEIGHT-HELP-JA'],apply:inRegion('function openAccessoryBuilder(editId=null){if(!bvomWorkoutActionAllowed())return;ensureAccessories();', "</label><div class=\"small\">${bvomT('bodyweight.estimateHelp')}</div><label>${bvomT('bodyweight.assistance')}<input id=\"accBwResistance\" type=\"text\" maxlength=\"80\" value=\"${bvomEsc(existing?.resistance??'')}\"></label>", "</label><label>${bvomT('bodyweight.assistance')}<input id=\"accBwResistance\" type=\"text\" maxlength=\"80\" value=\"${bvomEsc(existing?.resistance??'')}\"></label><div class=\"small\">${bvomT('bodyweight.estimateHelp')}</div>")},
@@ -280,6 +283,7 @@ if(knownBad){
     'BB-M023-GPP-ONRAMP-REJECT-ATOMIC','BB-M023-GPP-BLOCK-REJECT-ATOMIC',
     'BB-M024-BW-INLINE-ERROR-ONRAMP','BB-M024-BW-INLINE-ERROR-BLOCK',
     'BB-M025-ESTIMATED-WEIGHT-HELP-EN','BB-M025-ESTIMATED-WEIGHT-HELP-JA',
+    'BB-M026-DEFAULT-A-ONRAMP','BB-M026-DEFAULT-A-BLOCK',
     // Stage 1 forward-feature contracts: RED on exact v2.9.7 dbaad6ef.
     'BW-REFINE-VOLUME','BW-REFINE-HISTORY','BW-REFINE-INCREMENT','BW-REFINE-INCOMPLETE-GPP',
     'BW-STAGE1-RECORD','BW-STAGE1-HISTORY','BW-STAGE1-UNITS','BW-STAGE1-BUILDER','BW-STAGE1-BB','BW-STAGE1-ATOMIC','BW-STAGE1-CORRECTION-CLOUD','BW-STAGE1-OWNER','BW-STAGE1-ONRAMP',
