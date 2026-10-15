@@ -3824,6 +3824,93 @@ function bvomBbOnRampSwap(slot){if(!bvomWorkoutActionAllowed()||!bvomBbOnRampAct
   const id=opts[n-1].id;state.bodybuilding.selections[slot]=id;
   const ramp=bvomBbOnRampEnsure();delete ramp.exercises[original];bvomBbOnRampResetExercise(id);save();renderAll()
  },'REPLACE')}
+/* ===== ISSUE #55: BODYBUILDING PROGRESSIVE WARM-UP ADAPTER — STAGE A (NOT YET WIRED TO UI) =====
+ * The established strength warmups()/warmupsLb() remain untouched.
+ * This read-only adapter is deliberately not called by Bodybuilding render or On-Ramp
+ * until the candidate plans and equipment limitations have been reviewed.
+ * 'freebar' means a verified regular barbell, NOT Smith/landmine equipment.
+ */
+const BVOM_BB_WARMUP_STAGE_A_GROUPS=Object.freeze([
+ [['high_bar_squat','heel_elevated_barbell_squat'],'Squat','freebar'],
+ [['hack_squat','leg_press','smith_squat'],'Squat','machine'],
+ [['barbell_bench_press'],'Bench Press','freebar'],
+ [['machine_chest_press','smith_bench_press'],'Bench Press','machine'],
+ [['dumbbell_bench_press'],'Bench Press','dumbbell'],
+ [['barbell_row'],'Prone Row','freebar'],
+ [['chest_supported_row','seated_cable_row','machine_row','landmine_row'],'Prone Row','machine'],
+ [['chest_supported_dumbbell_row'],'Prone Row','dumbbell'],
+ [['romanian_deadlift','good_morning'],'Deadlift','freebar'],
+ [['machine_hip_hinge'],'Deadlift','machine'],
+ [['incline_barbell_press'],'Bench Press','freebar'],
+ [['incline_machine_press','incline_smith_press'],'Bench Press','machine'],
+ [['incline_dumbbell_press'],'Bench Press','dumbbell'],
+ [['lat_pulldown','machine_vertical_pull'],'Prone Row','machine'],
+ [['bulgarian_split_squat','split_squat'],'Squat','dumbbell']
+]);
+const BVOM_BB_WARMUP_STAGE_A_QUALITATIVE=Object.freeze(['chin_up','pull_up','back_extension_45','nordic_curl']);
+const BVOM_BB_WARMUP_STAGE_A_NONE=Object.freeze([
+ 'seated_leg_curl','lying_leg_curl','slider_leg_curl','band_leg_curl',
+ 'cable_lateral_raise','machine_lateral_raise','dumbbell_lateral_raise','band_lateral_raise',
+ 'cable_pushdown','cable_overhead_extension','lying_barbell_triceps_extension',
+ 'lying_dumbbell_triceps_extension','band_pushdown','leg_extension',
+ 'reverse_pec_deck','cable_rear_delt_fly','dumbbell_rear_delt_raise','band_rear_delt_fly',
+ 'rear_delt_row','cable_curl','preacher_machine_curl','dumbbell_curl','barbell_curl'
+]);
+const BVOM_BB_WARMUP_STAGE_A_PROFILES=Object.freeze((()=>{
+ const p=Object.create(null);
+ for(const [ids,lift,equipment] of BVOM_BB_WARMUP_STAGE_A_GROUPS)
+  for(const id of ids){if(p[id])throw Error('Duplicate BB warm-up role: '+id);p[id]=Object.freeze({lift,equipment,kind:'compound'})}
+ for(const id of BVOM_BB_WARMUP_STAGE_A_QUALITATIVE){if(p[id])throw Error('Duplicate BB warm-up role: '+id);p[id]=Object.freeze({kind:'qualitative'})}
+ for(const id of BVOM_BB_WARMUP_STAGE_A_NONE){if(p[id])throw Error('Duplicate BB warm-up role: '+id);p[id]=Object.freeze({kind:'none'})}
+ return p;
+})());
+function bvomBbStageAWarmupPlan(id,workingLoad,onramp=false){
+ const profile=BVOM_BB_WARMUP_STAGE_A_PROFILES[id];
+ if(!profile||profile.kind==='none')return {kind:'none',sets:[]};
+ if(profile.kind==='qualitative'||onramp)return {kind:'guidance',sets:[],finding:!!onramp};
+ const work=Number(workingLoad);
+ if(!(Number.isFinite(work)&&work>0))return {kind:'guidance',sets:[],finding:true};
+ // No on-ramp state, bodyweight estimate or future progression is inferred.
+ const step=Number(state.bodybuilding?.progression?.[id]?.increment);
+ const actualStep=Number.isFinite(step)&&step>0?step:null;
+ if(profile.equipment==='dumbbell'){
+  // Weights are PER HAND. The barbell's fixed absolute-weight milestones
+  // cannot sensibly represent a 10–40 kg dumbbell.
+  const a=[],seen=new Set();
+  for(const [fraction,reps] of [[.6,5],[.8,2]]){
+   const w=bvomBbRoundToStep(work*fraction,actualStep);
+   if(w>0&&w<work&&!seen.has(w)){a.push([w,reps]);seen.add(w)}
+  }
+  return {kind:'short',sets:a,unitBasis:'per_hand',source:'equipment_fallback'};
+ }
+ const lift=profile.lift;
+ // The core Row/Deadlift engine normally STARTS at 60 kg / 135 lb;
+ // at beginner working loads that can yield no preparation. Use its
+ // established lighter-lift ramp instead, never a 50/70/85 replacement.
+ const lightLimit=isLb()?165:75;
+ const proxyLift=(lift==='Prone Row'&&work<=lightLimit)?'Bench Press':
+                 (lift==='Deadlift'&&work<=lightLimit)?'Squat':lift;
+ const raw=warmups(work,proxyLift);
+ const actualBar=Number(state.barByLift?.[lift]??state.bar??(isLb()?45:20));
+ const proxyBar=Number(state.barByLift?.[proxyLift]??state.bar??(isLb()?45:20));
+ const a=[],seen=new Set();
+ for(const [unrounded,reps] of raw){
+  // An unspecified machine/Smith/landmine has no known 20 kg bar or sled.
+  // Remove proxy-bar exposures; show only plausible ramp weights as advisory.
+  if(profile.equipment!=='freebar'&&unrounded<=proxyBar+1e-6)continue;
+  let w=unrounded;
+  if(profile.equipment==='freebar'&&proxyLift!==lift)w=roundWarmupLoad(w,lift);
+  if(profile.equipment==='machine'&&actualStep)w=bvomBbRoundToStep(w,actualStep);
+  if(profile.equipment==='freebar'&&w<actualBar-1e-6)continue;
+  if(!(w>0&&w<work))continue;
+  // Intentionally retain repeated true-bar exposures from the strength engine.
+  if(profile.equipment!=='freebar'||w!==actualBar){if(seen.has(w))continue;seen.add(w)}
+  a.push([w,reps]);
+ }
+ return {kind:'full',sets:a,source:'strength_engine',unitBasis:'total',
+  equipmentNote:profile.equipment==='freebar'?'verified_bar':'nearest_available_weight'};
+}
+/* ===== END ISSUE #55 STAGE A ===== */
 function bvomBbWarmClass(slot){if(['A1','A2','A3','B1','B2','B3'].includes(slot))return 'full';if(['A4','B4'].includes(slot))return 'feeder';return 'none'}
 function bvomBbWarmRound(id,v){const step=bvomBbOnRampActive()?bvomBbOnRampLoadStep(id):bvomBbLoadStep(id),x=BVOM_BB_EXERCISES[id];if(x?.equipment==='dumbbell'||x?.equipment==='machine')return bvomBbRoundToStep(v,step);return bvomBbRoundToStep(v,step)}
 function bvomBbWarmPlan(slot,id){const x=BVOM_BB_EXERCISES[id],cl=bvomBbWarmClass(slot),load=bvomBbOnRampActive()?bvomBbOnRampNumericValue(id):Number(bvomBbProgress(id).load??bvomBbProgress(id).topLoad);if(cl==='none')return {kind:'none',sets:[]};if(!bvomBbNumericExercise(id)){if(x?.equipment==='band')return {kind:cl,sets:[['Lighter band',5]]};if(id==='back_extension_45')return {kind:cl,sets:[['Bodyweight',5]]};return {kind:cl,sets:[['Easier variation / more assistance',3]]}}if(!(load>0))return {kind:cl,sets:[],finding:true};const ps=cl==='feeder'?[[.65,5]]:(['machine','dumbbell'].includes(x.equipment)?[[.60,5],[.80,2]]:[[.50,5],[.70,3],[.85,2]]),standardBar=['barbell_bench_press','high_bar_squat','heel_elevated_barbell_squat','barbell_row','romanian_deadlift','good_morning','incline_barbell_press'].includes(id),barFloor=standardBar?(isLb()?45:20):0,seen=new Set(),sets=[];for(const [pct,reps] of ps){let w=bvomBbWarmRound(id,load*pct);if(barFloor>0)w=Math.max(w,barFloor);if(!(w>0)||w>=load)continue;const k=String(w);if(seen.has(k))continue;seen.add(k);sets.push([w,reps])}return {kind:cl,sets,load}}
