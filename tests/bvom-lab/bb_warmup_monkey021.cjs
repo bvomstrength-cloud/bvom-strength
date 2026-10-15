@@ -143,6 +143,48 @@ async function testMain(lang){
   assert.deepEqual(exceptions,[],'no uncaught browser JS errors');
  }finally{await context.close()}
 }
+async function testBeginnerWarmups(){
+ const data=fixture(),b=data.bodybuilding;
+ b.selections.A1='machine_chest_press';b.selections.A2='leg_press';b.selections.A3='barbell_row';
+ for(const id of ['machine_chest_press','leg_press'])b.progression[id]={load:50,topLoad:50,increment:5,calibrated:true};
+ b.progression.barbell_row={load:75,topLoad:75,increment:2.5,calibrated:true};
+ const {context,page,exceptions}=await openScenario(data);
+ try{
+  await beginWarm(page);
+  const change=async(id,w)=>{
+   await page.evaluate(({id,w})=>{
+    state.bodybuilding.progression[id].load=w;
+    state.bodybuilding.progression[id].topLoad=w;
+    save();renderWarm();
+   },{id,w});
+  };
+  const numbers=async slot=>(await page.locator('#warm-bb-'+slot+' .warmrow b').allTextContents()).map(x=>Number(x.trim().split(' ')[0])).filter(Number.isFinite);
+  for(const work of [25,30,40,60]){
+   await change('machine_chest_press',work);
+   const loads=(await numbers('A1')).filter(w=>w<work);
+   assert.ok(loads.length>=2,'machine press '+work+'kg needs progressive preparation');
+   assert.ok(loads[0]<=work*.6,'machine press '+work+'kg must not start near its working weight');
+   assert.ok(loads.every(w=>w>0&&w<work),'all proposed machine weights below work');
+  }
+  pass('real mobile DOM shows low-weight 25/30/40/60kg machine pressing preparation');
+  for(const work of [50,100,150]){
+   await change('leg_press',work);
+   const loads=(await numbers('A2')).filter(w=>w<work);
+   assert.ok(loads.length>=3&&loads[0]<=work*.5,'leg press '+work+'kg must start easy');
+   assert.ok(loads.every(w=>w%5===0),'machine increment must be applied');
+  }
+  pass('real mobile DOM shows practical 50/100/150kg leg press preparation');
+  for(const work of [65,70,75,77.5,80]){
+   await change('barbell_row',work);
+   const loads=(await numbers('A3')).filter(w=>w<work);
+   assert.deepEqual(loads.slice(0,2),[20,20],'row '+work+'kg must not lose real bar prep after adding 2.5kg');
+  }
+  pass('real mobile DOM row progression has no 75→77.5kg opening-set cliff');
+  assert.equal(await page.evaluate(()=>bvomSessionHasActivity()),false);
+  assert.equal((await read(page)).history.length,0);
+  assert.deepEqual(exceptions,[]);
+ }finally{await context.close()}
+}
 async function testBDay(){
  const {context,page,exceptions}=await openScenario(fixture({day:'B'}));
  try{
@@ -150,6 +192,14 @@ async function testBDay(){
   assert.equal(await page.locator('#warm-bb-B4 button.set').count(),2,'Bulgarian split squat uses short per-hand compound prep');
   assert.match(await page.locator('#warm-bb-B4').textContent(),/Dumbbell weight per hand/);
   assert.ok((await page.locator('#warm-bb-B2 button.set').count())>2,'RDL should show a progressive compound ramp');
+  const firstRdl=await page.locator('#warm-bb-B2 .warmrow b').allTextContents();
+  assert.deepEqual(firstRdl.slice(0,2).map(x=>Number(x.split(' ')[0])),[20,20],'first-exercise 100kg RDL needs light bar preparation');
+  for(const work of [75,77.5]){
+   await page.evaluate(w=>{state.bodybuilding.progression.romanian_deadlift.load=w;state.bodybuilding.progression.romanian_deadlift.topLoad=w;save();renderWarm()},work);
+   const warm=await page.locator('#warm-bb-B2 .warmrow b').allTextContents();
+   assert.deepEqual(warm.slice(0,2).map(x=>Number(x.split(' ')[0])),[20,20],'RDL '+work+' kg must not lose light prep');
+  }
+  pass('RDL 75→77.5kg and 100kg first-exercise warm-ups retain actual empty-bar sets');
   assert.equal(await page.locator('#warm-bb-B5 button.set').count(),0,'rear delt accessory does not need numeric warm-up');
   assert.equal(await page.locator('#warm-bb-B6 button.set').count(),0,'curl accessory does not need numeric warm-up');
   pass('Workout B hinge and split-squat prep, no rear-delt or biceps warm-up');
@@ -195,7 +245,7 @@ async function testOnRamp(){
  await new Promise(r=>server.listen(0,'127.0.0.1',r));origin='http://127.0.0.1:'+server.address().port;
  try{
   browser=await chromium.launch({headless:true,args:['--no-sandbox']});
-  await testMain('en');await testMain('ja');await testBDay();await testOnRamp();
+  await testMain('en');await testMain('ja');await testBeginnerWarmups();await testBDay();await testOnRamp();
   console.log('MONKEY 021 PASS '+checks+' checks; isolated real Chromium, no live data; '+(Date.now()-started)+'ms');
  }finally{if(browser)await browser.close();await new Promise(r=>server.close(r))}
 })().catch(e=>{console.error('MONKEY 021 FAIL',e);process.exitCode=1});
