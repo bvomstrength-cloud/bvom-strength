@@ -192,4 +192,40 @@ module.exports=({test,ok,H,build})=>{
   return ok(noPhantom&&restored&&rejectedWrites>0,
    JSON.stringify({noPhantom,checks,rejectedWrites,storedHistory:persisted(h).history.length,differingKeys}));
  });
+
+ // Monkey 023 P2: the existing GPP entry path is usable only when a real
+ // workout card exposes it. Both Bodybuilding screens must display the
+ // existing GPP + ADD control and currently assigned set-entry cards.
+ for(const [mode,onramp] of [['ONRAMP',true],['BLOCK',false]]){
+  test('BB-M023-GPP-'+mode+'-VISIBLE','DEFECT',
+   'Bodybuilding '+(onramp?'On-Ramp':'block')+' screen exposes + ADD GPP and assigned GPP set controls without leaking the other day',()=>{
+    const h=H.boot(build);H.bbStart(h,{onramp});
+    h.S().gppList=[
+     {id:'m023a',name:'Monkey 023 Rowing',assignment:'__BODYBUILDING__',
+      hlmAssignment:'__BODYBUILDING__',fourDayAssignment:'__BODYBUILDING__',
+      bbAssignment:'Any',metrics:{sets:true,reps:true,load:false,distance:false,time:false,rounds:false},
+      planned:{sets:2,reps:10}},
+     {id:'m023b',name:'Monkey 023 Day B Only',assignment:'__BODYBUILDING__',
+      hlmAssignment:'__BODYBUILDING__',fourDayAssignment:'__BODYBUILDING__',
+      bbAssignment:'B',metrics:{sets:true,reps:true,load:false,distance:false,time:false,rounds:false},
+      planned:{sets:1,reps:10}}
+    ];
+    h.ev('save()');h.ctx.renderWorkout();
+    const html=h.els['#workout'].innerHTML;
+    const checks={
+     correctScreen:html.includes(onramp?'BODYBUILDING ON-RAMP':'BODYBUILDING · WORKOUT'),
+     header:html.includes('GPP / '),
+     add:html.includes('onclick="openGppBuilder()"'),
+     card:html.includes('Monkey 023 Rowing'),
+     entry:html.includes("bvomGppSetModal('m023a',0)")&&html.includes("bvomGppSetModal('m023a',1)"),
+     noWrongDay:!html.includes('Monkey 023 Day B Only'),
+     existingAccessories:html.includes('ADD ACCESSORY')||html.includes('ADD')
+    };
+    if(checks.entry){
+     h.ctx.bvomGppSetModal('m023a',0);
+     checks.dialog=!!h.lastOverlay()?.innerHTML.includes('data-s');
+    }else checks.dialog=false;
+    return ok(Object.values(checks).every(Boolean),JSON.stringify(checks));
+   });
+ }
 };
