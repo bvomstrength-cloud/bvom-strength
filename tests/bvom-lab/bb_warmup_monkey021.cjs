@@ -262,6 +262,67 @@ async function testRecoveryClock(){
   pass('unticking refreshes active workout safely, no false History or progression');
  }finally{await context.close()}
 }
+async function testMonkey022Bodyweight(){
+ const d=fixture({day:'B'});
+ d.bodybuilding.selections.B1='chin_up';
+ d.bodybuilding.progression.chin_up={calibrated:true,resistance:'green band',assistance:'green band',addedLoad:0,pendingDifficulty:'harder',lastDecision:'harder'};
+ const {context,page,exceptions}=await openScenario(d);
+ try{
+  await page.evaluate(()=>activateTab('workout'));
+  const card=page.locator('#work-bb-B1');
+  assert.match(await card.textContent(),/HARDER DIFFICULTY EARNED/);
+  assert.match(await card.textContent(),/green band/);
+  const rawBefore=await raw(page);
+  await card.locator('[data-bb-difficulty] button').filter({hasText:'ACCEPT'}).click();
+  const inp=page.locator('.bvomModalOverlay [data-difficulty-value]');
+  await inp.fill('red band');
+  await page.locator('.bvomModalOverlay [data-accept]').click();
+  const saved=await read(page);
+  assert.equal(saved.bodybuilding.progression.chin_up.pendingDifficulty,null);
+  assert.equal(saved.bodybuilding.progression.chin_up.resistance,'red band');
+  assert.match(await card.locator('.setload').first().textContent(),/red band/);
+  assert.equal(await card.locator('[data-bb-difficulty]').count(),0,'resolved acceptance disappears');
+  assert.ok((await raw(page))!==rawBefore);
+  await page.reload();await wait(page);
+  await page.evaluate(()=>activateTab('workout'));
+  assert.match(await page.locator('#work-bb-B1 .setload').first().textContent(),/red band/);
+  pass('Bodybuilding real mobile ACCEPT dialog saves changed band and next prescription through reload');
+  assert.deepEqual(exceptions,[]);
+ }finally{await context.close()}
+ const hold=fixture({day:'B'});
+ hold.bodybuilding.selections.B1='chin_up';
+ hold.bodybuilding.progression.chin_up={calibrated:true,resistance:'green band',assistance:'green band',addedLoad:0,pendingDifficulty:'easier',lastDecision:'easier'};
+ const second=await openScenario(hold);
+ try{
+  await second.page.evaluate(()=>activateTab('workout'));
+  const card=second.page.locator('#work-bb-B1');
+  assert.match(await card.textContent(),/EASIER DIFFICULTY ADVISED/);
+  await card.locator('[data-bb-difficulty] button').filter({hasText:'HOLD'}).click();
+  const data=await read(second.page);
+  assert.equal(data.bodybuilding.progression.chin_up.pendingDifficulty,null);
+  assert.equal(data.bodybuilding.progression.chin_up.resistance,'green band');
+  assert.match(await card.locator('.setload').first().textContent(),/green band/);
+  assert.deepEqual(second.exceptions,[]);
+  pass('Bodybuilding real mobile HOLD retains previous resistance without phantom set');
+ }finally{await second.context.close()}
+}
+async function testMonkey022Handoff(){
+ const d=fixture({onramp:true});
+ d.session={'BBOR:machine_chest_press':{'0':{reps:7,index:0,load:60,onramp:true}}};
+ d.workoutStartedAt=Date.now();d.workoutLastActivityAt=Date.now();
+ d.workoutOwnershipVersion=1;
+ const {context,page,exceptions}=await openScenario(d);
+ try{
+  await page.evaluate(()=>activateTab('workout'));
+  await page.locator('#workout button').filter({hasText:'START 8-WEEK BLOCK NOW'}).click();
+  const s=await read(page);
+  assert.equal(s.bodybuilding.onramp.status,'active');
+  assert.equal(s.session['BBOR:machine_chest_press']['0'].reps,7);
+  assert.equal(s.history.length,0);
+  pass('real mobile early handoff button cannot discard existing On-Ramp set');
+  assert.deepEqual(exceptions,[]);
+ }finally{await context.close()}
+}
 async function testOnRamp(){
  const {context,page,exceptions}=await openScenario(fixture({onramp:true}));
  try{
@@ -288,7 +349,7 @@ async function testOnRamp(){
  await new Promise(r=>server.listen(0,'127.0.0.1',r));origin='http://127.0.0.1:'+server.address().port;
  try{
   browser=await chromium.launch({headless:true,args:['--no-sandbox']});
-  await testMain('en');await testMain('ja');await testBeginnerWarmups();await testRecoveryClock();await testBDay();await testOnRamp();
+  await testMain('en');await testMain('ja');await testBeginnerWarmups();await testRecoveryClock();await testBDay();await testOnRamp();await testMonkey022Bodyweight();await testMonkey022Handoff();
   console.log('MONKEY 021 PASS '+checks+' checks; isolated real Chromium, no live data; '+(Date.now()-started)+'ms');
  }finally{if(browser)await browser.close();await new Promise(r=>server.close(r))}
 })().catch(e=>{console.error('MONKEY 021 FAIL',e);process.exitCode=1});
