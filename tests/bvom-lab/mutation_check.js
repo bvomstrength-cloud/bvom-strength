@@ -15,6 +15,10 @@ const guard=path.join(__dirname,'behaviour_guard.js');
 // replace exactly one occurrence of `from`, searching only inside the function/region starting at `region`
 function inRegion(region,from,to){return src=>{const r=src.indexOf(region);if(r<0)return null;const i=src.indexOf(from,r);if(i<0||i-r>20000)return null;return src.slice(0,i)+to+src.slice(i+from.length)}}
 const MUTATIONS=[
+ // Monkey 024: invalid bodyweight set-entry values must be shown inside the
+ // existing workout modal, never by the browser's native site-says alert.
+ {id:'BB-M024-ONRAMP-NATIVE-ALERT-RESTORED',why:'Nordic Curl On-Ramp invalid input again triggers a browser alert',targets:['BB-M024-BW-INLINE-ERROR-ONRAMP'],apply:inRegion('function bvomBbOnRampSetModal(', 'bvomBwRead(o,(message,field)=>bvomBbInputNotice(o,message,field))', 'bvomBwRead(o)')},
+ {id:'BB-M024-BLOCK-NATIVE-ALERT-RESTORED',why:'Nordic Curl Bodybuilding invalid input again triggers a browser alert',targets:['BB-M024-BW-INLINE-ERROR-BLOCK'],apply:inRegion('function bvomBbSetModal(', 'bvomBwRead(o,(message,field)=>bvomBbInputNotice(o,message,field))', 'bvomBwRead(o)')},
  // Codex PR57 P1: GPP scope and program mode must be durably committed together.
  {id:'BB-M023-GPP-INTERMEDIATE-LP-MODE',why:'A GPP owner change persists a temporary LP/RPT mode',targets:['BB-M023-GPP-ONRAMP-POSTCOMMIT-CREATE','BB-M023-GPP-BLOCK-POSTCOMMIT-EDIT'],apply:inRegion('function openGppBuilder(id=null)', "if(!save({durable:true})){state=before;return false}", "state.programMode='lprpt';if(!save({durable:true})){state=before;return false}")},
  {id:'BB-M023-GPP-CREATE-SCOPE-LEAK',why:'A new Bodybuilding GPP activity is assigned to unrelated programs',targets:['BB-M023-GPP-ONRAMP-POSTCOMMIT-CREATE','BB-M023-GPP-BLOCK-POSTCOMMIT-CREATE'],apply:inRegion('function openGppBuilder(id=null)', "for(const field of fields)item[field]=g?g[field]:BVOM_BB_SENTINEL;", "for(const field of fields)item[field]=g?g[field]:'Any';")},
@@ -271,6 +275,7 @@ if(knownBad){
     'BB-M023-GPP-ONRAMP-POSTCOMMIT-CREATE','BB-M023-GPP-ONRAMP-POSTCOMMIT-EDIT',
     'BB-M023-GPP-BLOCK-POSTCOMMIT-CREATE','BB-M023-GPP-BLOCK-POSTCOMMIT-EDIT',
     'BB-M023-GPP-ONRAMP-REJECT-ATOMIC','BB-M023-GPP-BLOCK-REJECT-ATOMIC',
+    'BB-M024-BW-INLINE-ERROR-ONRAMP','BB-M024-BW-INLINE-ERROR-BLOCK',
     // Stage 1 forward-feature contracts: RED on exact v2.9.7 dbaad6ef.
     'BW-REFINE-VOLUME','BW-REFINE-HISTORY','BW-REFINE-INCREMENT','BW-REFINE-INCOMPLETE-GPP',
     'BW-STAGE1-RECORD','BW-STAGE1-HISTORY','BW-STAGE1-UNITS','BW-STAGE1-BUILDER','BW-STAGE1-BB','BW-STAGE1-ATOMIC','BW-STAGE1-CORRECTION-CLOUD','BW-STAGE1-OWNER','BW-STAGE1-ONRAMP',
