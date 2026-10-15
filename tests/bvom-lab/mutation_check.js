@@ -15,6 +15,44 @@ const guard=path.join(__dirname,'behaviour_guard.js');
 // replace exactly one occurrence of `from`, searching only inside the function/region starting at `region`
 function inRegion(region,from,to){return src=>{const r=src.indexOf(region);if(r<0)return null;const i=src.indexOf(from,r);if(i<0||i-r>20000)return null;return src.slice(0,i)+to+src.slice(i+from.length)}}
 const MUTATIONS=[
+ // Monkey 030: a qualitative Chin-Up must never steal an early slot
+ // from a loaded compound that needs progressive ramp sets.
+ {id:'BB-M030-CHINUP-STEALS-PREP-SLOT',why:'Bodyweight Chin-Up is placed ahead of progressive RDL and DB preparations',targets:['BB-M030-WARMUP-FIRST-B-ONRAMP','BB-M030-WARMUP-FIRST-B-BLOCK'],apply:inRegion('function bvomBbOrderPriority(', "const tier=kind==='compound'?0:kind==='qualitative'?1:2;", "const tier=kind==='compound'?0:kind==='qualitative'&&slot==='B1'?-1:kind==='qualitative'?1:2;")},
+ // Monkey 029: set-entry dialogs must explain the estimated bodyweight
+ // immediately below the field; the builder-only helper is insufficient.
+ {id:'BB-M029-SET-HELP-MISSING',why:'On-Ramp FIND and Block set-entry dialogs no longer explain estimated bodyweight moved',targets:['BB-M029-BW-SET-ESTIMATE-HELP-FIND-EN','BB-M029-BW-SET-ESTIMATE-HELP-FIND-JA','BB-M029-BW-SET-ESTIMATE-HELP-BLOCK-EN','BB-M029-BW-SET-ESTIMATE-HELP-BLOCK-JA'],apply:inRegion('function bvomBwFields(', "<div id=\"bvomBwEstimateExplanation\" class=\"small bvomBwEstimateHelp\">${bvomT('bodyweight.estimateHelp')}</div>", '')},
+ // Monkey 028 / current Codex P2: invalid truthy saved orders must not
+ // prevent freezing the effective order during an active On-Ramp replacement.
+ {id:'BB-M028-MALFORMED-OVERRIDE-ACCEPTED',why:'Malformed saved order bypasses active-session order pin',targets:['BB-M028-MALFORMED-ACTIVE-SWAP-STRING','BB-M028-MALFORMED-ACTIVE-SWAP-DUPLICATE','BB-M028-MALFORMED-ACTIVE-SWAP-PARTIAL'],apply:inRegion('function bvomBbOnRampSwap(', '!bvomOrderSavedValid(recordObject[scope],canonical)', '!recordObject[scope]')},
+ {id:'BB-M027-ACTIVE-SWAP-RESHUFFLES',why:'Active On-Ramp session loses its visible order when replacement changes compound warm-up role',targets:['BB-M027-ACTIVE-ONRAMP-SWAP-STABLE'],apply:inRegion('function bvomBbOnRampSwap(', "if(bvomSessionHasActivity()&&scope&&!bvomOrderSavedValid(recordObject[scope],canonical))", "if(false&&scope&&!bvomOrderSavedValid(recordObject[scope],canonical))")},
+ // Monkey 027: distinguish an RDL primary from a qualitative back extension,
+ // and recognize B4 split-squat compound preparation instead of fixed slot order.
+ {id:'BB-M027-B2-ALWAYS-LEADS',why:'Back extension incorrectly gets RDL-first priority',targets:['BB-M027-ADAPTIVE-B-ONRAMP','BB-M027-ADAPTIVE-B-BLOCK'],apply:inRegion('function bvomBbOrderPriority(', "const tier=kind==='compound'?0:kind==='qualitative'?1:2;", "const tier=slot==='B2'?0:kind==='compound'?0:kind==='qualitative'?1:2;")},
+ {id:'BB-M027-B4-COMPOUND-IGNORED',why:'Split squat compound is buried behind other compound preparations',targets:['BB-M027-ADAPTIVE-B-ONRAMP','BB-M027-ADAPTIVE-B-BLOCK'],apply:inRegion('function bvomBbOrderPriority(', "const heavy={B2:0,B4:1,B3:2,B1:3,B6:4,B5:5};", "const heavy={B2:0,B4:7,B3:2,B1:3,B6:4,B5:5};")},
+ // Monkey 026: default A is a view-only preference; canonical workout slots
+ // remain unchanged for prescription and History compatibility.
+ {id:'BB-M026-A-DEFAULT-REVERTS-CANONICAL',why:'New Bodybuilding A starts Bench before Squat and Laterals before Triceps again',targets:['BB-M026-DEFAULT-A-ONRAMP','BB-M026-DEFAULT-A-BLOCK'],apply:inRegion('function bvomBbOrderPriority(', "const rank={A2:0,A1:1,A3:2,A4:3,A6:4,A5:5};", "const rank={A1:0,A2:1,A3:2,A4:3,A5:4,A6:5};")},
+ // Monkey 025: the weight-moved explanation must sit under its input,
+ // not under the unrelated Assistance / variation field.
+ {id:'BB-M025-ESTIMATE-HELP-AFTER-ASSISTANCE',why:'Builder places estimated-weight explanation under Assistance again',targets:['BB-M025-ESTIMATED-WEIGHT-HELP-EN','BB-M025-ESTIMATED-WEIGHT-HELP-JA'],apply:inRegion('function openAccessoryBuilder(editId=null){if(!bvomWorkoutActionAllowed())return;ensureAccessories();', "</label><div class=\"small\">${bvomT('bodyweight.estimateHelp')}</div><label>${bvomT('bodyweight.assistance')}<input id=\"accBwResistance\" type=\"text\" maxlength=\"80\" value=\"${bvomEsc(existing?.resistance??'')}\"></label>", "</label><label>${bvomT('bodyweight.assistance')}<input id=\"accBwResistance\" type=\"text\" maxlength=\"80\" value=\"${bvomEsc(existing?.resistance??'')}\"></label><div class=\"small\">${bvomT('bodyweight.estimateHelp')}</div>")},
+ // Monkey 024: invalid bodyweight set-entry values must be shown inside the
+ // existing workout modal, never by the browser's native site-says alert.
+ {id:'BB-M024-ONRAMP-NATIVE-ALERT-RESTORED',why:'Nordic Curl On-Ramp invalid input again triggers a browser alert',targets:['BB-M024-BW-INLINE-ERROR-ONRAMP'],apply:inRegion('function bvomBbOnRampSetModal(', 'bvomBwRead(o,(message,field)=>bvomBbInputNotice(o,message,field))', 'bvomBwRead(o)')},
+ {id:'BB-M024-BLOCK-NATIVE-ALERT-RESTORED',why:'Nordic Curl Bodybuilding invalid input again triggers a browser alert',targets:['BB-M024-BW-INLINE-ERROR-BLOCK'],apply:inRegion('function bvomBbSetModal(', 'bvomBwRead(o,(message,field)=>bvomBbInputNotice(o,message,field))', 'bvomBwRead(o)')},
+ // Codex PR57 P1: GPP scope and program mode must be durably committed together.
+ {id:'BB-M023-GPP-INTERMEDIATE-LP-MODE',why:'A GPP owner change persists a temporary LP/RPT mode',targets:['BB-M023-GPP-ONRAMP-POSTCOMMIT-CREATE','BB-M023-GPP-BLOCK-POSTCOMMIT-EDIT'],apply:inRegion('function openGppBuilder(id=null)', "if(!save({durable:true})){state=before;return false}", "state.programMode='lprpt';if(!save({durable:true})){state=before;return false}")},
+ {id:'BB-M023-GPP-CREATE-SCOPE-LEAK',why:'A new Bodybuilding GPP activity is assigned to unrelated programs',targets:['BB-M023-GPP-ONRAMP-POSTCOMMIT-CREATE','BB-M023-GPP-BLOCK-POSTCOMMIT-CREATE'],apply:inRegion('function openGppBuilder(id=null)', "for(const field of fields)item[field]=g?g[field]:BVOM_BB_SENTINEL;", "for(const field of fields)item[field]=g?g[field]:'Any';")},
+ {id:'BB-M023-GPP-REJECT-LEAK',why:'Rejected single-blob GPP save leaves phantom assignment in live state',targets:['BB-M023-GPP-ONRAMP-REJECT-ATOMIC','BB-M023-GPP-BLOCK-REJECT-ATOMIC'],apply:inRegion('function openGppBuilder(id=null)', "if(!save({durable:true})){state=before;return false}", "if(!save({durable:true})){return false}")},
+ // Monkey 023 follow-up: the On-Ramp's computed A/B day differs from state.day.
+ {id:'BB-M023-GPP-ONRAMP-USES-BLOCK-DAY',why:'On-Ramp B incorrectly uses Bodybuilding day A to select GPP',targets:['BB-M023-GPP-ONRAMP-DAY-FILTER'],apply:inRegion('const bvomBbBaseGppAssigned=bvomGppAssigned;', 'const day=bvomBbOnRampActive()?bvomBbOnRampDay():bvomBbDay();', 'const day=bvomBbDay();')},
+ {id:'BB-M023-GPP-EDITOR-HIDDEN-AGAIN',why:'GPP editor hides its Bodybuilding A/B selector again',targets:['BB-M023-GPP-ONRAMP-EDITOR','BB-M023-GPP-BLOCK-EDITOR'],apply:inRegion('function bvomGppBuilderAssignments(g)', 'const bbField=isBodybuilding()?', 'const bbField=false?')},
+ {id:'BB-M023-GPP-EDITOR-RESETS-ANY',why:'Bodybuilding GPP editor discards selected A/B and saves Any',targets:['BB-M023-GPP-ONRAMP-EDITOR','BB-M023-GPP-BLOCK-EDITOR','BB-M023-GPP-ONRAMP-NEW-ASSIGNMENT','BB-M023-GPP-BLOCK-NEW-ASSIGNMENT'],apply:inRegion('function openGppBuilder(id=null)', "bbAssignment:bodybuild?(o.querySelector('[data-bb]')?.value||'Any'):(g?.bbAssignment??null)", "bbAssignment:'Any'")},
+ // Monkey 023: both Bodybuilding modes must expose their existing GPP entry UI.
+ {id:'BB-M023-GPP-ONRAMP-HIDDEN',why:'On-Ramp workout drops the GPP section again',targets:['BB-M023-GPP-ONRAMP-VISIBLE'],apply:inRegion('function bvomBbOnRampRenderWorkout(){', "h+=renderAccessories17();h+=renderGpp17();document.querySelector('#workout').innerHTML=h}", "h+=renderAccessories17();document.querySelector('#workout').innerHTML=h}")},
+ {id:'BB-M023-GPP-BLOCK-HIDDEN',why:'24-session Bodybuilding workout drops the GPP section again',targets:['BB-M023-GPP-BLOCK-VISIBLE'],apply:inRegion('function bvomBbRenderFoundationWorkout(){bvomBbEnsure();', "h+=renderAccessories17();h+=renderGpp17();el.innerHTML=h}", "h+=renderAccessories17();el.innerHTML=h}")},
+ // Codex PR57 P1: optional On-Ramp sets/GPP must remain finishable and archived.
+ {id:'BB-M022-OPTIONAL-TRAP-RESTORED',why:'On-Ramp Finish again refuses accessory-only or GPP-only work',targets:['BB-M022-ONRAMP-ACCESSORY-ONLY','BB-M022-ONRAMP-GPP-ONLY'],apply:inRegion('function bvomBbOnRampFinish(approvedIncomplete=false)', 'if(!bvomSessionHasActivity())return;', 'if(!ids.some(bvomBbOnRampExerciseTouched))return;')},
+ {id:'BB-M022-GPP-HISTORY-DROPPED',why:'On-Ramp Finish discards GPP results while clearing the live session',targets:['BB-M022-ONRAMP-GPP-ONLY'],apply:inRegion('function bvomBbOnRampFinish(approvedIncomplete=false)', "session:historySession,gpp,note:'Bodybuilding On-Ramp'", "session:historySession,note:'Bodybuilding On-Ramp'")},
  {id:'BB-M019-FINISH-IGNORES-REJECT',why:'Bodybuilding FINISH advances despite a rejected durable training write',targets:['BB-M019-REJECT-NORMAL'],apply:inRegion('function bvomBbFinish(approvedIncomplete=false)', 'if(!save({durable:true})){state=before;', 'if(false){state=before;')},
  {id:'BB-M019-ONRAMP-IGNORES-REJECT',why:'On-Ramp FINISH advances despite a rejected durable training write',targets:['BB-M019-REJECT-ONRAMP'],apply:inRegion('function bvomBbOnRampFinish(approvedIncomplete=false)', 'if(!save({durable:true})){', 'if(false){')},
 
@@ -177,7 +215,7 @@ const MUTATIONS=[
  {id:'F31-ONRAMP-CONFIRMATION-PROVENANCE-GUARD-REMOVED',why:'correction of the exact exposure that established On-Ramp confirmation is treated like an ordinary confirmed-set edit, leaving stale calibration in place',targets:['F31-ONRAMP-CORRECTION-REVOKES-SUPERSEDED-CONFIRMATION'],
   apply:inRegion('function bvomBbOnRampSetModal(',"if(i===0&&(e.state!=='CONFIRMED'||wasConfirming)){","if(i===0&&e.state!=='CONFIRMED'){")},
  {id:'F32-ONRAMP-FAILED-VALIDATION-LIVE-MUTATION-RESTORED',why:'a rejected numeric On-Ramp entry mutates the live exercise load before increment validation succeeds, allowing rejected input to leak into a later save',targets:['F32-ONRAMP-FAILED-SET-VALIDATION-ATOMIC'],
-  apply:inRegion('function bvomBbOnRampSetModal(',"rec.load=load;const inc=Number(o.querySelector('[data-inc]')?.value);if(!(inc>0)){alert('Enter the smallest practical increase for this equipment.');return}e.load=load;e.increment=inc","rec.load=load;e.load=load;const inc=Number(o.querySelector('[data-inc]')?.value);if(!(inc>0)){alert('Enter the smallest practical increase for this equipment.');return}e.increment=inc")},
+  apply:inRegion('function bvomBbOnRampSetModal(',"rec.load=load;const inc=Number(o.querySelector('[data-inc]')?.value);if(!(inc>0)){bvomBbInputNotice(o,'Enter the smallest practical increase for this equipment.','[data-inc]');return}e.load=load;e.increment=inc","rec.load=load;e.load=load;const inc=Number(o.querySelector('[data-inc]')?.value);if(!(inc>0)){bvomBbInputNotice(o,'Enter the smallest practical increase for this equipment.','[data-inc]');return}e.increment=inc")},
  {id:'F33-LOAD-ROUNDTRIP-ORIGIN-RESTORE-REMOVED',why:'unchanged converted loads no longer restore their exact original physical value on the reverse unit change',targets:['F33-NO-TRAINING-UNIT-ROUNDTRIP-PRESERVES-LEGITIMATE-ARBITRARY-STATE'],
   apply:inRegion('function bvomConvertLoadRoundTripField(',"if(m&&m.unit===to","if(false&&m&&m.unit===to")},
  {id:'F33-ARBITRARY-INCREMENT-ORIGIN-RESTORE-RESTRICTED',why:'round-trip metadata only restores increments on the predefined policy grid, so legitimate arbitrary equipment increments drift',targets:['F33-NO-TRAINING-UNIT-ROUNDTRIP-PRESERVES-LEGITIMATE-ARBITRARY-STATE'],
@@ -242,6 +280,29 @@ if(knownBad){
     // Candidate still MUST pass each test; historical reference can only be N/A.
     'BB-STAGE-A-CATALOGUE','BB-STAGE-A-CORE-UNCHANGED','BB-STAGE-A-FREEBAR',
     'BB-STAGE-A-MACHINE','BB-STAGE-A-LIGHT-ROWS-HINGES','BB-STAGE-A-DB-ONRAMP-ACCESSORY','BB-STAGE-A-IMPERIAL',
+    'BB-STAGE-A-BEGINNER-MACHINES','BB-STAGE-A-NO-ROW-RDL-CLIFF','BB-STAGE-A-CUSTOM-BAR',
+    // Stage B post-v2.9.12 feature contracts do not exist on historical v2.8.0.
+    'BB-STAGE-B-RENDER','BB-STAGE-B-TAP-ATOMIC','BB-STAGE-B-UNDO-AND-LAST',
+    'BB-STAGE-B-RELOAD-FINGERPRINT','BB-STAGE-B-FAILED-SAVE','BB-STAGE-B-SECONDARY',
+    'BB-STAGE-B-ONRAMP-GUIDANCE','BB-STAGE-B-ORDER-COMPAT',
+    'BB-STAGE-B-RECOVERY-CLOCK','BB-STAGE-B-RECOVERY-FAILED-SAVE',
+    'BB-M022-ONRAMP-HANDOFF-PRESERVES-SETS','BB-M022-ONRAMP-EMPTY-HANDOFF','BB-M022-BODYWEIGHT-HOLD',
+    'BB-M022-BODYWEIGHT-ACCEPT','BB-M022-BODYWEIGHT-EASIER','BB-M022-BODYWEIGHT-FAIL-SAVE',
+    'BB-M022-ONRAMP-ACCESSORY-ONLY','BB-M022-ONRAMP-GPP-ONLY','BB-M022-ONRAMP-OPTIONAL-ATOMIC-EMPTY',
+    'BB-M023-GPP-ONRAMP-VISIBLE','BB-M023-GPP-BLOCK-VISIBLE',
+    'BB-M023-GPP-ONRAMP-DAY-FILTER','BB-M023-GPP-BLOCK-DAY-FILTER','BB-M023-GPP-ONRAMP-EDITOR','BB-M023-GPP-BLOCK-EDITOR',
+    'BB-M023-GPP-ONRAMP-NEW-ASSIGNMENT','BB-M023-GPP-BLOCK-NEW-ASSIGNMENT',
+    'BB-M023-GPP-ONRAMP-POSTCOMMIT-CREATE','BB-M023-GPP-ONRAMP-POSTCOMMIT-EDIT',
+    'BB-M023-GPP-BLOCK-POSTCOMMIT-CREATE','BB-M023-GPP-BLOCK-POSTCOMMIT-EDIT',
+    'BB-M023-GPP-ONRAMP-REJECT-ATOMIC','BB-M023-GPP-BLOCK-REJECT-ATOMIC',
+    'BB-M024-BW-INLINE-ERROR-ONRAMP','BB-M024-BW-INLINE-ERROR-BLOCK',
+    'BB-M025-ESTIMATED-WEIGHT-HELP-EN','BB-M025-ESTIMATED-WEIGHT-HELP-JA',
+    'BB-M029-BW-SET-ESTIMATE-HELP-FIND-EN','BB-M029-BW-SET-ESTIMATE-HELP-FIND-JA','BB-M029-BW-SET-ESTIMATE-HELP-BLOCK-EN','BB-M029-BW-SET-ESTIMATE-HELP-BLOCK-JA',
+    'BB-M026-DEFAULT-A-ONRAMP','BB-M026-DEFAULT-A-BLOCK',
+    'BB-M027-ADAPTIVE-B-ONRAMP','BB-M027-ADAPTIVE-B-BLOCK','BB-M027-OVERRIDE-B-ONRAMP','BB-M027-OVERRIDE-B-BLOCK',
+    'BB-M027-ACTIVE-ONRAMP-SWAP-STABLE',
+    'BB-M028-MALFORMED-ACTIVE-SWAP-STRING','BB-M028-MALFORMED-ACTIVE-SWAP-DUPLICATE','BB-M028-MALFORMED-ACTIVE-SWAP-PARTIAL',
+    'BB-M030-WARMUP-FIRST-B-ONRAMP','BB-M030-WARMUP-FIRST-B-BLOCK',
     // Stage 1 forward-feature contracts: RED on exact v2.9.7 dbaad6ef.
     'BW-REFINE-VOLUME','BW-REFINE-HISTORY','BW-REFINE-INCREMENT','BW-REFINE-INCOMPLETE-GPP',
     'BW-STAGE1-RECORD','BW-STAGE1-HISTORY','BW-STAGE1-UNITS','BW-STAGE1-BUILDER','BW-STAGE1-BB','BW-STAGE1-ATOMIC','BW-STAGE1-CORRECTION-CLOUD','BW-STAGE1-OWNER','BW-STAGE1-ONRAMP',

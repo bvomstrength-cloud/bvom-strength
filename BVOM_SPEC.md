@@ -514,6 +514,8 @@ The current engine includes three main progression families:
 
 Bodyweight/assistance exercises use directional difficulty progression rather than pretending a precise external load always exists.
 
+**Selected Bodybuilding bodyweight/band movements (Monkey 022):** Finishing the relevant completed B/A workout may earn a *harder* or *easier* direction, but never guesses the change in kilograms or band assistance. The earned `pendingDifficulty` remains visible until the *next exposure to that exercise*. The working-set entry is blocked until the lifter explicitly chooses **ACCEPT** or **HOLD**. HOLD retains existing assistance/resistance and clears the pending direction. ACCEPT asks for an **explicit changed assistance, resistance or variation**; the saved next prescription displays that change, including for unweighted chin-ups (not a misleading "0 kg" label). The decision is durably owner-guarded with rollback on failure, does not count as a working set, does not change earned session numbers or On-Ramp calibration, and never applies automatically. This is distinct from the numeric **accessory** opt-in in §11.5.
+
 ### 9.4 Stable / Demanding primary rule
 
 For the primary top set, the working range is 6–8 reps.
@@ -633,11 +635,21 @@ A failed hand-off/manual-setup validation must not:
 
 Only a valid successful hand-off changes On-Ramp status to handed off and activates the main block.
 
+**Monkey 022 preservation rule:** Both **START 8-WEEK BLOCK NOW** and **SKIP ON-RAMP**, including any direct hand-off call, refuse transition while a live On-Ramp session has recorded sets, active training or GPP activity. The user must first **FINISH WORKOUT**, saving the partial session as incomplete History if necessary; then an empty-session hand-off may proceed. Rejected attempts must not clear sets, consume a session or alter History, cloud/owner metadata or calibrated loads. No silent archiving or implicit early hand-off.
+
+**Optional-only Finish (Codex P1):** A session with recorded accessories or GPP but no `BBOR:` calibration sets must still offer Finish and archive as **incomplete** History, including both any accessory sets and a snapshot of recorded GPP results. This must not consume an On-Ramp exposure or trigger handoff. An entirely empty session does not create a History entry. A failed durable write keeps all recorded work and the active On-Ramp session intact.
+
 ### 10.7 Set-entry validation is atomic
 
 A rejected On-Ramp set entry must leave the exercise object's live and persisted state unchanged.
 
 This includes load and practical increment.
+
+**Bodyweight set-entry validation presentation (Monkey 024):** Within Bodybuilding and On-Ramp set modals, invalid added weight, estimate, added-weight increment and repetitions, plus a unit-changed warning, are displayed inline in the existing form with accessible alert text and the affected field identified. Never show the browser's native `site says` alert for these form errors; keep the entered values and modal open, and do not mutate or persist an invalid training set. This is a presentation-only change, not a change to allowed values or progression.
+
+**Bodyweight accessory estimate help (Monkey 025):** The optional "Estimated weight moved" field in the accessory builder has its own immediately following localized EN/JA help text, placed **before** "Assistance / variation." Explain chin-up bodyweight and the approximate moving portion for push-ups/Nordic curls, that blank is allowed, and that this estimate affects approximate training-volume calculations only—not earned progression. This is a text/layout change only: validation, records, and progression calculations remain unchanged.
+
+**Bodyweight set-entry estimate help (Monkey 029):** The same existing EN/JA training-volume-only explanation must appear **directly below Estimated weight moved (optional)** in every bodyweight set-entry modal, including Nordic Curl On-Ramp FIND/CONFIRM and regular Bodybuilding working sets (and accessory bodyweight set entry). This reuses the shared `bvomBwFields()` generator and localized `bodyweight.estimateHelp`, with an accessible field-to-help association. It must not change validation, set storage, volume arithmetic or progression.
 
 ### 10.8 Bodybuilding / On-Ramp Finish must commit durably (Monkey 019)
 
@@ -692,7 +704,7 @@ Normal cloud backup is retained; new fields are additive and introduced only thr
 
 ### 11.5 Stage 2A — opt-in, user-approved Bodyweight added-weight progression
 
-**Scope:** Only explicitly opted-in Bodyweight straight-set **accessories** in LP/RPT, HLM and 4-Day programs. Custom Training remains manual; existing Bodybuilding selected Chin-Up/Pull-Up directional rules, On-Ramp and Bodybuilding optional accessories remain unchanged until separate owner sign-off. Old/new Bodyweight templates default to progression **off** unless the lifter turns it on.
+**Scope:** Only explicitly opted-in Bodyweight straight-set **accessories** in LP/RPT, HLM and 4-Day programs. Custom Training remains manual; selected Bodybuilding Chin-Up/Pull-Up now use their separately approved **directional ACCEPT/HOLD** flow in §9.3 rather than this numeric accessory opt-in. Bodybuilding On-Ramp and optional accessories remain separate.  Old/new Bodyweight templates default to progression **off** unless the lifter turns it on.
 
 The accessory builder offers **Offer added-weight progression**, a first-set rep goal (6–30, default **8**), and the existing user-selected positive increment (no barbell/paired-plate rounding). Estimated weight moved is for approximate volume only and never influences progression or personal records. Under this opt-in, future prescribed added weight applies to **set 1 only**; later straight sets prescribe **BW + 0**, though their actual external load remains independently editable and accurately recorded. Do not silently change the accessory's saved set/repetition prescription.
 
@@ -713,6 +725,12 @@ The Stage 2A progression decision continues to require every **planned** accesso
 ## 12. GPP / conditioning
 
 GPP activities may have timers and additional result metrics.
+
+**Bodybuilding / On-Ramp visibility (Monkey 023 P2):** Both the optional On-Ramp workout and the 24-session Bodybuilding workout must render the existing GPP section, including **+ ADD** even when no activity has been configured. Each assigned GPP activity shows its normal set-entry or timer/recording controls. Respect the active A/B day assignment; unrelated-day activity cards must not leak into the current workout. Rendering GPP must not itself create training sets, consume On-Ramp exposures, change Bodybuilding progression or alter History. GPP results recorded through those controls retain their existing Finish/History and recovery protections.
+
+**Bodybuilding A/B GPP assignments (Monkey 023 follow-up):** GPP has its own persisted `bbAssignment` (`Any`, `A` or `B`), independent of LP/RPT `assignment`, HLM `hlmAssignment`, 4-Day `fourDayAssignment` and Custom day scope. Both On-Ramp and the 24-session block display a labelled Bodybuilding A/B selector when GPP is added or edited. Opening and saving without changing the selector must preserve an existing A-only/B-only choice. The chosen value must persist over reload, while assignments to other programs remain unchanged. A newly created Bodybuilding GPP must be scoped only to Bodybuilding, not leaked to the other programs. On-Ramp filters GPP by its *current computed* alternating A/B session, even if legacy `state.day` remains A; the Bodybuilding block uses its own current A/B day. No assignment editing is allowed to silently widen scope to Any.
+
+**GPP edit commit atomicity (Codex PR57 P1):** Bodybuilding and On-Ramp GPP add/edit must durably commit the final `programMode='bodybuilding'`, selected `bbAssignment`, the other programs' preserved/sentinel assignments, and all existing live training state **in one blob write**. Never temporarily commit LP/RPT mode or use a subsequent cleanup save. A rejected blob write must leave in-memory state and recorded work exactly as before, retain the editor for retry and not create phantom GPP; a post-blob ownership-marker failure must stop the window but preserve the **already-complete** Bodybuilding/GPP state for reload, with no second attempted blob write.
 
 ### 12.1 Pause / resume
 
@@ -766,17 +784,34 @@ Bodybuilding classifies exercise slots as:
 - Feeder
 - None
 
-For ordinary numeric barbell-style primary work, the full warm-up is approximately:
+### 13.2.1 Bodybuilding progressive preparation (Issue #55)
 
-- 50% × 5
-- 70% × 3
-- 85% × 1–2
+The **main 24-session Bodybuilding block** offers **optional** progressive preparation for selected major compound movements based on their working load, the existing strength lift-family warm-up engine and suitable equipment treatment. The existing core engine's outcomes for LP/RPT, HLM, 4-Day and Custom Training remain unchanged.
 
-A Feeder slot uses a lighter single feeder set rather than the full sequence.
+- Free-bar squat, press, row and hinge families may use the configured bar and existing strength warm-up calculations.
+- Machine / Smith / landmine examples are **advisory weights** snapped to the exercise's practical increment where available, not fictitious 20 kg or 45 lb bars or per-side plate calculations. Actual machine minimum resistance and increments are equipment-specific.
+- Compound dumbbell exercises use short preparation expressed **per hand**; a dumbbell does not inherit a free-bar starting weight.
+- Other accessory movements have no dedicated numerical warm-up; bodyweight exercises may show qualitative preparation advice.
+- The actual user-selected movement determines the preparation classification; Bulgarian and split squats are treated as compound dumbbell preparation. This does not change their **working-set progression**.
+- All preparation is optional. A user may proceed straight to working sets.
 
-Equipment-specific plans may use different percentages/representations.
+The **On-Ramp** exists to discover the starting loads. Its warm-up screen gives **qualitative start-easy guidance without numerical prescriptions**, even while provisional or confirmed calibration loads exist; optional rest timing does not record calibration work.
 
-A barbell warm-up must never prescribe a load below the actual bar floor.
+Warm-up completion ticks for main-block numeric preparations are **durably saved, session/slot/exercise/plan-scoped**, and restart the normal rest clock only on an accepted write. Ticks may be undone; rejected writes must roll back. No warm-up tap may change workout activity status, required working sets, progression, History, On-Ramp calibration, or Finish eligibility. Save/reload should preserve current-session marks but never transfer them to a subsequent session.
+
+The exercise order shown on the warm-up and workout screens follows the existing saved user ordering. The exercise order is **presentation-only** and never changes underlying exercise slots, progression, session keys, warm-up prescription, or History.
+
+**Adaptive Bodybuilding order (Monkey 030, owner phone acceptance; supersedes earlier compound-first fallback):** Exercise display ordering is **warm-up-first, not simply compound-first**. The user's actual selection determines its preparation category through the same `BVOM_BB_WARMUP_STAGE_A_PROFILES` used by the Bodybuilding warm-up adapter. Progressively loaded compound movements (free bar, machine or dumbbell) come first; bodyweight Chin-Up, Nordic Curl and Back Extension are *qualitative guidance*, **not** numerical warm-up sequences, and appear **after** loaded compounds that require ramp preparation. Movements with no dedicated warm-up come last. This classification is about the movement's *potential main-block* warm-up; the 6-session **On-Ramp remains deliberately qualitative for finding starting loads**, but uses the same future-ready workout order.
+
+The verified owner's B selection must default to **B2 Romanian Deadlift → B4 Bulgarian Split Squat → B3 Incline Dumbbell Press → B1 Chin-Up → B6 Dumbbell Curl → B5 Dumbbell Rear-Delt Raise**, on **both Workout and Warm-up** screens, in both On-Ramp and main block. When B1 is a loaded Lat Pulldown rather than a Chin-Up, it gets its own progressive prep and stays with the numerical-preparation tier, after the preferred hinge, split squat and press. Replacing a loaded B2 hinge with a qualitative 45° Back Extension moves it behind remaining loaded compounds when no manual order was saved; a qualitative Chin-Up must not leapfrog a loaded split squat or incline dumbbell press. Among no-warm-up B accessories, curls precede rear-delt raises as chosen by the owner. Workout A continues Squat A2 → Bench A1 → Row A3 → hamstring/Nordic A4 → Triceps A6 → Lateral A5 where those selected movements have their normal preparation classifications.
+
+These are **display-only defaults**; each warm-up prescription or qualitative hint remains tied to its actual selected exercise/slot, and the existing numerical warm-up engine itself is unchanged. A valid saved manual arrow order still wins, and Reset restores the selected-exercise warm-up-first recommendation without affecting work, History, calibration, progression, ownership or the other programs.
+
+**Manual precedence:** A saved valid order for the applicable `bodybuilding:A` or `bodybuilding:B` display scope wins over the default and survives reload/On-Ramp handoff. Workout and Warm-up show exactly the same effective ordering. The arrows remain display-only, and RESET restores the *current adaptive recommendation* for the selected exercises; no order change may alter set data, prescriptions, calibration, History or progression. Already-recorded work must not be silently moved or discarded when exercise selections are modified. In particular, a truthy but malformed saved display order (wrong type, duplicated slots, wrong length or unknown slots) is *not* a valid user override: when an unstarted On-Ramp exercise is replaced after other work is recorded, pin the effective pre-replacement order durably even in this recovery case. Otherwise later selected-movement reclassification could unexpectedly reshuffle existing active-workout cards. LP/RPT, HLM, Four-Day, Custom Training are unaffected.
+
+### 13.2.2 Historical behaviour
+
+Before Issue #55, numeric Bodybuilding warm-ups used a fixed 50/70/85% approximation (and simpler equipment-specific percentages) with a 65% Feeder category. These old percentages are **not** the contract for the new main-block progressive compound suggestions.
 
 ## 14. History
 

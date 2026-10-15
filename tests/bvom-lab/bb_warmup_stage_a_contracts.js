@@ -28,13 +28,50 @@ module.exports=({test,ok,H,build})=>{
   return ok(a.kind==='full'&&b.kind==='full'&&JSON.stringify(a.sets)===JSON.stringify(sq)&&JSON.stringify(b.sets)===JSON.stringify(bp)&&sq.filter(x=>x[0]===20).length===2&&stable(a.sets)&&stable(b.sets),
    JSON.stringify({squat:a.sets,bench:b.sets}));
  });
- test('BB-STAGE-A-MACHINE','CONTROL','Leg press has progressive advisory loads, with no invented empty-bar exposure or plate advice',()=>{
+ test('BB-STAGE-A-MACHINE','CONTROL','Leg press offers light advisory loads on entered machine increment, no fictional plate maths',()=>{
   const h=H.boot(build);
   h.S().bodybuilding={progression:{leg_press:{increment:5}}};
   const a=example(h,'leg_press',100),b=example(h,'leg_press',150);
-  const valid=p=>p.kind==='full'&&p.equipmentNote==='nearest_available_weight'&&p.sets.length>=2&&p.sets.every(([w])=>w>20&&w%5===0&&w<p.targetW)&&stable(p.sets);
-  return ok(valid({...a,targetW:100})&&valid({...b,targetW:150}),
+  const valid=(p,target)=>p.kind==='full'&&p.equipmentNote==='nearest_available_weight'&&
+   p.sets.length>=4&&p.sets.every(([w])=>w>0&&w%5===0&&w<target)&&stable(p.sets);
+  return ok(valid(a,100)&&valid(b,150)&&
+   JSON.stringify(a.sets.slice(0,2))===JSON.stringify([[20,5],[20,5]])&&
+   JSON.stringify(b.sets.slice(0,2))===JSON.stringify([[30,5],[30,5]]),
    JSON.stringify({legPress100:a.sets,legPress150:b.sets}));
+ });
+ test('BB-STAGE-A-BEGINNER-MACHINES','CONTROL','25–40 kg machine press and 50 kg leg press offer genuinely light preparation without assumed machine floor',()=>{
+  const h=H.boot(build);
+  h.S().bodybuilding={progression:{
+   machine_chest_press:{increment:5},
+   leg_press:{increment:5}
+  }};
+  const loads=[25,30,40],r=loads.map(w=>({work:w,plan:example(h,'machine_chest_press',w)}));
+  const leg=example(h,'leg_press',50);
+  return ok(r.every(({work,plan})=>
+   plan.kind==='full'&&plan.equipmentNote==='nearest_available_weight'&&
+   plan.sets.length>=2&&plan.sets[0][0]<=work*.6&&
+   plan.sets.every(([w])=>w>0&&w<work&&w%5===0)&&stable(plan.sets))&&
+   leg.sets.length>=2&&leg.sets[0][0]<=30&&stable(leg.sets),
+   JSON.stringify({machineChest:r,legPress50:leg.sets}));
+ });
+ test('BB-STAGE-A-NO-ROW-RDL-CLIFF','CONTROL','Rows and first-of-day RDL use stable standalone ramps through 75→77.5 kg',()=>{
+  const h=H.boot(build),weights=[65,70,75,77.5,80,100];
+  const rows=weights.map(w=>({w,p:example(h,'barbell_row',w)})),
+        rdls=weights.map(w=>({w,p:example(h,'romanian_deadlift',w)}));
+  const stableLight=series=>series.every(({w,p})=>p.kind==='full'&&
+   JSON.stringify(p.sets.slice(0,2))===JSON.stringify([[20,5],[20,5]])&&
+   p.sets.length>=3&&p.sets.every(([x])=>x<w)&&stable(p.sets));
+  return ok(stableLight(rows)&&stableLight(rdls),JSON.stringify({rows:rows.map(({w,p})=>[w,p.sets]),rdls:rdls.map(({w,p})=>[w,p.sets])}));
+ });
+ test('BB-STAGE-A-CUSTOM-BAR','CONTROL','10/15/25 kg real row and RDL bars replace proxy opening bars, without altering saved bar settings',()=>{
+  const h=H.boot(build),out=[];
+  for(const [id,lift,bar] of [['barbell_row','Prone Row',15],['romanian_deadlift','Deadlift',10],['barbell_row','Prone Row',25]]){
+   h.S().barByLift=h.S().barByLift||{};h.S().barByLift[lift]=bar;
+   const before=JSON.stringify(h.S().barByLift),p=example(h,id,100);
+   out.push({id,bar,sets:p.sets,unchanged:before===JSON.stringify(h.S().barByLift)});
+  }
+  return ok(out.every(x=>x.unchanged&&x.sets.length>2&&x.sets[0][0]===x.bar&&x.sets[1][0]===x.bar),
+   JSON.stringify(out));
  });
  test('BB-STAGE-A-LIGHT-ROWS-HINGES','CONTROL','Light barbell rows and hinges still receive nonempty preparation below core 60 kg floor',()=>{
   const h=H.boot(build),row=example(h,'barbell_row',50),hinge=example(h,'romanian_deadlift',55);
@@ -48,10 +85,12 @@ module.exports=({test,ok,H,build})=>{
    bul.kind==='short'&&bul.sets.length>0&&ramp.kind==='guidance'&&ramp.sets.length===0&&ramp.finding===true&&
    unknown.kind==='none'&&accessory.kind==='none',JSON.stringify({db:db.sets,bulgarian:bul.sets,or:ramp}));
  });
- test('BB-STAGE-A-IMPERIAL','CONTROL','Imperial ramps are increasing, below working load, and no false 45 lb machine bar is prescribed',()=>{
+ test('BB-STAGE-A-IMPERIAL','CONTROL','Imperial machine opens at scaled advisory weight (not an assumed bar); all loads remain below work',()=>{
   const h=H.boot(build);h.S().unit='lb';h.S().bar=45;h.S().barByLift=Object.fromEntries(['Squat','Bench Press','Prone Row','Supine Row','Overhead Press','Deadlift'].map(x=>[x,45]));
   const sq=example(h,'high_bar_squat',225),machine=example(h,'leg_press',225);
   return ok(sq.kind==='full'&&sq.sets.some(([w])=>w===45)&&stable(sq.sets)&&sq.sets.every(([w])=>w<225)&&
-   machine.kind==='full'&&stable(machine.sets)&&machine.sets.every(([w])=>w>45&&w<225),JSON.stringify({squat:sq.sets,machine:machine.sets}));
+   machine.kind==='full'&&machine.equipmentNote==='nearest_available_weight'&&
+   JSON.stringify(machine.sets.slice(0,2))===JSON.stringify([[45,5],[45,5]])&&
+   stable(machine.sets)&&machine.sets.every(([w])=>w>0&&w<225),JSON.stringify({squat:sq.sets,machine:machine.sets}));
  });
 };

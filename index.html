@@ -8,7 +8,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="BVOM">
 <meta name="twitter:description" content="Best Version Of Myself — strength training and progression.">
-<title>BVOM Strength v2.9.12</title><link rel="manifest" href="manifest.json">
+<title>BVOM Strength v2.9.13</title><link rel="manifest" href="manifest.json">
 <style>
 :root{--bg:#f4f4f4;--card:#fff;--ink:#111;--muted:#737373;--accent:#d91e18;--line:#ddd}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
@@ -59,6 +59,8 @@ label{display:block;margin:11px 0}select{width:100%;padding:10px;border:1px soli
 .bvomModal{width:min(430px,100%);max-height:calc(100dvh - 36px);overflow-y:auto;overscroll-behavior:contain;background:#fff;color:#111;border-radius:22px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.35);box-sizing:border-box}
 .bvomModal h3{margin:0 0 8px;font-size:24px}.bvomModal .sub{color:#666;margin-bottom:14px}
 .repRow{display:flex;align-items:center;justify-content:center;gap:26px;margin:18px 0}.repBtn{width:60px;height:60px;border-radius:14px;border:1px solid #ddd;background:#fafafa;font-size:30px;font-weight:900}.repValue{font-size:46px;font-weight:950;min-width:72px;text-align:center}
+.bvomBbValidationNotice{border:1px solid #daa557;border-radius:12px;background:#fff7e7;color:#6a4305;font-size:14px;line-height:1.45;font-weight:600;padding:12px 14px;margin-top:14px}
+.bvomBbValidationNotice[hidden]{display:none}
 .modalActions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}.modalActions button{min-width:110px}.modalWide{width:100%}
 .dangerInput{width:100%;box-sizing:border-box;padding:12px 14px;font-size:18px;margin-top:12px;border:1px solid #ccc;border-radius:10px}
 .dangerBtn{background:#b00020!important;color:#fff!important}.successTick{font-size:48px;line-height:1;text-align:center;margin-bottom:8px}.savedStats{display:flex;justify-content:center;gap:28px;margin:18px 0;flex-wrap:wrap}.savedStats .num{font-size:28px;font-weight:950}.savedStats .lbl{font-size:12px;color:#666}
@@ -240,16 +242,16 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
 <div id="authgate" class="setup hidden"></div>
 <div id="setup" class="setup hidden"></div>
 <div id="app" class="hidden">
-<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v2.9.12</div></header>
+<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v2.9.13</div></header>
 <div class="tabs"><div class="tab on" data-tab="workout">WORKOUT</div><div class="tab" data-tab="warmup">WARM-UP</div><div class="tab" data-tab="history">HISTORY</div><div class="tab" data-tab="info">INFO</div><div class="tab" data-tab="settings">SETTINGS</div></div>
 <main><section id="workout"></section><section id="warmup" class="hidden"></section><section id="history" class="hidden"></section><section id="info" class="hidden"></section><section id="settings" class="hidden"></section></main>
 <div class="timer idle" id="timerbar"><div class="timerin"><div><div class="clock" id="clock">0:00</div><div class="marks">DINGS 3 · 5 · 10</div></div><button class="cancel" onclick="if(bvomWorkoutActionAllowed())cancelTimer()">CANCEL</button><button class="finish" onclick="finishWorkout()">FINISH</button></div></div>
 </div>
-<script src="./i18n/en.js?v=a4ce9e4a09e3"></script>
-<script src="./i18n/ja.js?v=f001bb9e9ab5"></script>
+<script src="./i18n/en.js?v=6090d2f48f09"></script>
+<script src="./i18n/ja.js?v=326ff8e97bb8"></script>
 <script src="./vendor/supabase-js-2.117.3.js"></script>
 <script>
-const BVOM_BUILD='2.9.12';
+const BVOM_BUILD='2.9.13';
 const programs={A:[["Squat",3,5],["Bench Press",3,5],["Prone Row",3,5]],B:[["Squat",3,5],["Overhead Press",5,5],["Deadlift",1,5]]};
 function liftLabel(n){return n==='Prone Row'?(isHLM()?'Prone Row':'Row'):n==='Overhead Press'?'Press':n;}
 const inc={Squat:2.5,"Bench Press":2.5,"Prone Row":2.5,"Overhead Press":2.5,Deadlift:5};
@@ -629,15 +631,23 @@ function bvomBwCardContext(a){
  return details.length?'<div class="bvomBwContext">'+details.map(bvomEsc).join(' · ')+'</div>':'';
 }
 function bvomBwFields(load,resistance,estimate,estimateAttr='data-bw-estimate'){
- return `<label>${bvomT('bodyweight.added')} (${unitLabel()})<input data-load type="number" min="0" step="any" value="${bvomEsc(load??0)}"></label><label>${bvomT('bodyweight.assistance')}<input data-res type="text" maxlength="80" value="${bvomEsc(resistance??'')}"></label><label>${bvomT('bodyweight.approximate')} (${unitLabel()})<input ${estimateAttr} type="number" min="0" step="any" value="${bvomEsc(estimate??'')}"></label>`;
+ return `<label>${bvomT('bodyweight.added')} (${unitLabel()})<input data-load type="number" min="0" step="any" value="${bvomEsc(load??0)}"></label><label>${bvomT('bodyweight.assistance')}<input data-res type="text" maxlength="80" value="${bvomEsc(resistance??'')}"></label><label>${bvomT('bodyweight.approximate')} (${unitLabel()})<input ${estimateAttr} type="number" min="0" step="any" value="${bvomEsc(estimate??'')}" aria-describedby="bvomBwEstimateExplanation"></label><div id="bvomBwEstimateExplanation" class="small bvomBwEstimateHelp">${bvomT('bodyweight.estimateHelp')}</div>`;
 }
-function bvomBwRead(o){
+function bvomBwRead(o,onInvalid=null){
  const raw=o.querySelector('[data-load]').value,load=Number(raw),estimateRaw=o.querySelector('[data-bw-estimate]').value,estimate=estimateRaw===''?null:Number(estimateRaw);
- if(raw===''||!Number.isFinite(load)||load<0||(estimate!==null&&(!Number.isFinite(estimate)||estimate<=0))){alert(bvomT('bodyweight.invalid'));return null}
+ const invalidField=raw===''||!Number.isFinite(load)||load<0?'[data-load]':
+  estimate!==null&&(!Number.isFinite(estimate)||estimate<=0)?'[data-bw-estimate]':null;
+ if(invalidField){if(onInvalid)onInvalid(bvomT('bodyweight.invalid'),invalidField);else alert(bvomT('bodyweight.invalid'));return null}
  return {bodyweight:true,load,resistance:String(o.querySelector('[data-res]').value||'').trim().slice(0,80),approximateBodyweight:estimate};
 }
+function bvomBbInputNotice(o,message,selector){
+ const notice=o.querySelector('[data-bb-validation]');
+ if(!notice){alert(message);return}
+ notice.textContent=String(message);notice.hidden=false;
+ if(selector){const field=o.querySelector(selector);field?.setAttribute('aria-invalid','true');field?.focus()}
+}
 function bvomBwIncrementField(value){return `<label>${bvomT('bodyweight.increment')} (${unitLabel()})<input data-bw-inc type="number" min="0" step="any" value="${bvomEsc(value??(isLb()?5:2.5))}"></label><div class="small">${bvomT('bodyweight.incrementHelp')}</div>`}
-function bvomBwIncrementRead(o){const raw=o.querySelector('[data-bw-inc]').value,n=Number(raw);if(raw===''||!Number.isFinite(n)||n<=0){alert(bvomT('bodyweight.invalid'));return null}return n}
+function bvomBwIncrementRead(o,onInvalid=null){const raw=o.querySelector('[data-bw-inc]').value,n=Number(raw);if(raw===''||!Number.isFinite(n)||n<=0){if(onInvalid)onInvalid(bvomT('bodyweight.invalid'),'[data-bw-inc]');else alert(bvomT('bodyweight.invalid'));return null}return n}
 // Only explicit actual-set markers opt into estimated volume; never infer from names or settings.
 function bvomSetVolume(set,mult=1){
  if(!set||set.reps===undefined)return 0;
@@ -2045,7 +2055,7 @@ async function shareHistoryWorkout(i){const h=state.history?.[i];if(!h)return;co
 /* ===== v1.7.36 torture-pass i18n edge-path overrides ===== */
 function bvomEquipmentLabel(e){if(e==='bodyweight')return bvomT('bodyweight.equipment');return bvomT('accessories.'+(e==='barbell'?'barbell':e==='dumbbell'?'dumbbell':'machine'))}
 function renderAccessories17(){let help=isFourDay()?`Optional · ${(state.day==='1'||state.day==='3')?'Upper':'Lower'} accessories suggested first · choose anything you like`:bvomT('accessories.help');let h=`<div class="card"><div class="toprow"><div><b>${bvomT('accessories.title')}</b><div class="small">${help}</div></div><button class="choice on" onclick="openAccessoryBuilder()">${bvomT('accessories.add')}</button></div></div>`;for(const a of activeAccessories()){let p={weight:a.weight},ss=state.session['ACC:'+a.id]||{},plan=accessoryPlan17(a),label=a.style==='straight'?`${a.sets}×${a.reps}`:bvomT(a.style==='rpt5'?'accessories.rpt5':'accessories.rpt3'),cat=bvomT('accessories.category.'+(a.category||'Upper').toLowerCase())||a.category,slot=isBodybuilding()?a.bbAssignment:isFourDay()?a.fourDayAssignment:isHLM()?a.hlmAssignment:a.assignment,assign=bvomT('accessories.assignment.'+String(slot||'Both').toLowerCase())||slot,assignMeta=(isFourDay()||isBodybuilding())?'':` · ${assign}`;h+=`<div class="accCard"><div class="accHead"><div><div class="exname">${bvomEsc(a.name)}</div><div class="accMeta">${cat} · ${label}${assignMeta} · ${bvomEquipmentLabel(a.equipment||'machine')}${a.equipment==='bodyweight'?'':' · +'+fmt(a.increment)+' '+unitLabel()}</div></div><div><div class="weight">${a.equipment==='bodyweight'?bvomBwLoadText(p.weight):fmt(p.weight)+' '+unitLabel()}</div><div class="accRemove" onclick="openAccessoryBuilder('${a.id}')">${bvomT('common.edit')}</div><div class="accRemove" onclick="removeAccessory('${a.id}')">${bvomT('common.remove')}</div></div></div>${a.equipment==='bodyweight'?bvomBwCardContext(a):''}<div class="sets ${a.equipment==='bodyweight'?'bvomBwSets':''}">`;plan.forEach((q,i)=>{let log=ss[i],cl=log?(log.reps>=q.target?'done':'fail'):'';h+=`<div class="setwrap"><button class="set ${cl}" onclick="tapAccessory('${a.id}',${i})">${log?log.reps:'✓'}</button><div class="setload">${a.equipment==='bodyweight'?bvomEsc(bvomBwCardSetText(log||{load:q.load,reps:q.target,resistance:a.resistance,approximateBodyweight:a.approximateBodyweight},a)):fmt(q.load)+'×'+q.target+(q.amrap?'+':'')+(log&&Number.isFinite(Number(log.rpe))?' · RPE '+Number(log.rpe):'')}</div></div>`});if(a.equipment==='bodyweight')h+=bvomBwExtraSetMarkup(a,ss);h+='</div>'+(a.equipment==='bodyweight'?bvomBwExtraSetButton(a):'')+'</div>'}return h}
-function openAccessoryBuilder(editId=null){if(!bvomWorkoutActionAllowed())return;ensureAccessories();let existing=editId?(state.accessoryList||[]).find(a=>a.id===editId):null,cat0=existing?.category||(isFourDay()&&!(state.day==='1'||state.day==='3')?'Lower':'Upper');let wrap=document.createElement('div');wrap.className='beeCoachOverlay';let title=existing?bvomT('accessories.editTitle'):bvomT('accessories.addTitle');let opts=cat=>accessoryLibrary[cat].map(n=>`<option value="${n}">${n}</option>`).join('');wrap.innerHTML=`<div class="beeCoach accBuilder"><h2>${title}</h2><label>${bvomT('accessories.upperLower')}<select id="accCat"><option value="Upper" ${cat0==='Upper'?'selected':''}>${bvomT('accessories.category.upper')}</option><option value="Lower" ${cat0==='Lower'?'selected':''}>${bvomT('accessories.category.lower')}</option></select></label><label>${bvomT('accessories.exercise')}<select id="accName">${opts(cat0)}<option value="Custom">${bvomT('accessories.customExercise')}</option></select></label><label id="customWrap" class="hidden">${bvomT('accessories.customExercise')}<input id="accCustom" type="text" maxlength="50"></label>${isIntermediate()?`<input id="accAssign" type="hidden" value="${state.day}">`:`<label>${bvomT('accessories.workout')}<select id="accAssign"><option value="A">A</option><option value="B">B</option><option value="Both">${bvomT('accessories.assignment.both')}</option></select></label>`}<label>${bvomT('accessories.equipment')}<select id="accEquipment"><option value="barbell">${bvomT('accessories.barbell')}</option><option value="dumbbell">${bvomT('accessories.dumbbell')}</option><option value="machine">${bvomT('accessories.machine')}</option><option value="bodyweight">${bvomT('bodyweight.equipment')}</option></select></label><label>Plate loading<select id="accPlateMode"><option value="standard">Standard</option><option value="micro" ${!microAvailable()?'disabled':''}>Microplates${!microAvailable()?' — unavailable':''}</option></select></label><label id="accBarWrap">${bvomT('accessories.barWeight')} (${unitLabel()})<input id="accBar" type="number" min="0.25" step=".25" value="${existing?.barWeight??(isLb()?45:20)}"></label><div id="accEquipHint" class="small" style="margin:-4px 0 10px">${bvomT('accessories.barHint')}</div><label>${bvomT('accessories.progression')}<select id="accStyle"><option value="straight">${bvomT('accessories.straightSets')}</option><option value="rpt3">${bvomT('accessories.rpt3')}</option><option value="rpt5">${bvomT('accessories.rpt5')}</option></select></label><div id="straightFields"><label>${bvomT('accessories.sets')}<input id="accSets" type="number" min="1" value="${existing?.sets||3}"></label><label>${bvomT('accessories.reps')}<input id="accReps" type="number" min="1" value="${existing?.reps||8}"></label></div><div id="rptFields" class="hidden"><label>${bvomT('accessories.topReps')}<input id="accTopReps" type="number" min="1" value="${existing?.topReps||existing?.reps||8}"></label></div><label>${bvomT('accessories.topWeight')} (${unitLabel()})<input id="accWeight" type="number" min="0.25" step=".25" value="${existing?.weight??(isLb()?45:20)}"></label><label>${bvomT('accessories.increment')} (${unitLabel()})<select id="accInc">${(isLb()?[1,2.5,5,10]:[.5,1,1.5,2,2.5,5]).map(x=>`<option ${x===(existing?.increment??(isLb()?5:2.5))?'selected':''}>${x}</option>`).join('')}</select></label><div id="accBwFields" class="hidden">${!isFreeTraining()&&!isBodybuilding()?'<label class="toggle"><input id="accBwProgress" type="checkbox" '+(existing?.bwProgressOptIn===true?'checked':'')+'>'+hlmTxt('Offer added-weight progression','追加重量の進行を提案')+'</label><label>'+hlmTxt('First-set rep goal','最初のセットの目標回数')+'<input id="accBwGoal" type="number" min="6" max="30" step="1" value="'+bvomEsc(existing?.bwProgressGoal??8)+'"></label><div class="small">'+hlmTxt('When your first set meets this goal at RPE 8 or easier, BVOM offers the next increase after you finish. You choose ACCEPT or HOLD.','最初のセットがRPE 8以下で目標を達成すると、ワークアウト終了時に増量を提案します。承認または維持を選べます。')+'</div>':''}<label>${bvomT('bodyweight.increment')} (${unitLabel()})<input id="accBwInc" type="number" min="0" step="any" value="${bvomEsc(existing?.increment??(isLb()?5:2.5))}"></label><div class="small">${bvomT('bodyweight.incrementHelp')}</div><label>${bvomT('bodyweight.approximate')} (${unitLabel()})<input id="accBwEstimate" type="number" min="0" step="any" value="${bvomEsc(existing?.approximateBodyweight??'')}"></label><label>${bvomT('bodyweight.assistance')}<input id="accBwResistance" type="text" maxlength="80" value="${bvomEsc(existing?.resistance??'')}"></label><div class="small">${bvomT('bodyweight.estimateHelp')}</div></div><div class="choiceRow"><button class="choice on" id="accSave">${existing?bvomT('accessories.save'):bvomT('accessories.addAction')}</button><button class="secondary" id="accCancel">${bvomT('accessories.cancel')}</button></div></div>`;document.body.appendChild(wrap);
+function openAccessoryBuilder(editId=null){if(!bvomWorkoutActionAllowed())return;ensureAccessories();let existing=editId?(state.accessoryList||[]).find(a=>a.id===editId):null,cat0=existing?.category||(isFourDay()&&!(state.day==='1'||state.day==='3')?'Lower':'Upper');let wrap=document.createElement('div');wrap.className='beeCoachOverlay';let title=existing?bvomT('accessories.editTitle'):bvomT('accessories.addTitle');let opts=cat=>accessoryLibrary[cat].map(n=>`<option value="${n}">${n}</option>`).join('');wrap.innerHTML=`<div class="beeCoach accBuilder"><h2>${title}</h2><label>${bvomT('accessories.upperLower')}<select id="accCat"><option value="Upper" ${cat0==='Upper'?'selected':''}>${bvomT('accessories.category.upper')}</option><option value="Lower" ${cat0==='Lower'?'selected':''}>${bvomT('accessories.category.lower')}</option></select></label><label>${bvomT('accessories.exercise')}<select id="accName">${opts(cat0)}<option value="Custom">${bvomT('accessories.customExercise')}</option></select></label><label id="customWrap" class="hidden">${bvomT('accessories.customExercise')}<input id="accCustom" type="text" maxlength="50"></label>${isIntermediate()?`<input id="accAssign" type="hidden" value="${state.day}">`:`<label>${bvomT('accessories.workout')}<select id="accAssign"><option value="A">A</option><option value="B">B</option><option value="Both">${bvomT('accessories.assignment.both')}</option></select></label>`}<label>${bvomT('accessories.equipment')}<select id="accEquipment"><option value="barbell">${bvomT('accessories.barbell')}</option><option value="dumbbell">${bvomT('accessories.dumbbell')}</option><option value="machine">${bvomT('accessories.machine')}</option><option value="bodyweight">${bvomT('bodyweight.equipment')}</option></select></label><label>Plate loading<select id="accPlateMode"><option value="standard">Standard</option><option value="micro" ${!microAvailable()?'disabled':''}>Microplates${!microAvailable()?' — unavailable':''}</option></select></label><label id="accBarWrap">${bvomT('accessories.barWeight')} (${unitLabel()})<input id="accBar" type="number" min="0.25" step=".25" value="${existing?.barWeight??(isLb()?45:20)}"></label><div id="accEquipHint" class="small" style="margin:-4px 0 10px">${bvomT('accessories.barHint')}</div><label>${bvomT('accessories.progression')}<select id="accStyle"><option value="straight">${bvomT('accessories.straightSets')}</option><option value="rpt3">${bvomT('accessories.rpt3')}</option><option value="rpt5">${bvomT('accessories.rpt5')}</option></select></label><div id="straightFields"><label>${bvomT('accessories.sets')}<input id="accSets" type="number" min="1" value="${existing?.sets||3}"></label><label>${bvomT('accessories.reps')}<input id="accReps" type="number" min="1" value="${existing?.reps||8}"></label></div><div id="rptFields" class="hidden"><label>${bvomT('accessories.topReps')}<input id="accTopReps" type="number" min="1" value="${existing?.topReps||existing?.reps||8}"></label></div><label>${bvomT('accessories.topWeight')} (${unitLabel()})<input id="accWeight" type="number" min="0.25" step=".25" value="${existing?.weight??(isLb()?45:20)}"></label><label>${bvomT('accessories.increment')} (${unitLabel()})<select id="accInc">${(isLb()?[1,2.5,5,10]:[.5,1,1.5,2,2.5,5]).map(x=>`<option ${x===(existing?.increment??(isLb()?5:2.5))?'selected':''}>${x}</option>`).join('')}</select></label><div id="accBwFields" class="hidden">${!isFreeTraining()&&!isBodybuilding()?'<label class="toggle"><input id="accBwProgress" type="checkbox" '+(existing?.bwProgressOptIn===true?'checked':'')+'>'+hlmTxt('Offer added-weight progression','追加重量の進行を提案')+'</label><label>'+hlmTxt('First-set rep goal','最初のセットの目標回数')+'<input id="accBwGoal" type="number" min="6" max="30" step="1" value="'+bvomEsc(existing?.bwProgressGoal??8)+'"></label><div class="small">'+hlmTxt('When your first set meets this goal at RPE 8 or easier, BVOM offers the next increase after you finish. You choose ACCEPT or HOLD.','最初のセットがRPE 8以下で目標を達成すると、ワークアウト終了時に増量を提案します。承認または維持を選べます。')+'</div>':''}<label>${bvomT('bodyweight.increment')} (${unitLabel()})<input id="accBwInc" type="number" min="0" step="any" value="${bvomEsc(existing?.increment??(isLb()?5:2.5))}"></label><div class="small">${bvomT('bodyweight.incrementHelp')}</div><label>${bvomT('bodyweight.approximate')} (${unitLabel()})<input id="accBwEstimate" type="number" min="0" step="any" value="${bvomEsc(existing?.approximateBodyweight??'')}"></label><div class="small">${bvomT('bodyweight.estimateHelp')}</div><label>${bvomT('bodyweight.assistance')}<input id="accBwResistance" type="text" maxlength="80" value="${bvomEsc(existing?.resistance??'')}"></label></div><div class="choiceRow"><button class="choice on" id="accSave">${existing?bvomT('accessories.save'):bvomT('accessories.addAction')}</button><button class="secondary" id="accCancel">${bvomT('accessories.cancel')}</button></div></div>`;document.body.appendChild(wrap);
  let cat=wrap.querySelector('#accCat'),name=wrap.querySelector('#accName'),style=wrap.querySelector('#accStyle'),equipment=wrap.querySelector('#accEquipment');
  function updateStyle(){wrap.querySelector('#straightFields').classList.toggle('hidden',style.value!=='straight');wrap.querySelector('#rptFields').classList.toggle('hidden',style.value==='straight')}
  function updateEquip(){let e=equipment.value,bw=e==='bodyweight';if(bw){style.value='straight';updateStyle()}style.disabled=bw;for(const id of ['accInc','accPlateMode']){const lab=wrap.querySelector('#'+id)?.closest('label');if(lab)lab.style.display=bw?'none':''}wrap.querySelector('#accBwFields').classList.toggle('hidden',!bw);const weight=wrap.querySelector('#accWeight');weight.min=bw?'0':'0.25';weight.step=bw?'any':'.25';if(bw&&!existing)weight.value='0';const lab=weight.closest('label');if(lab&&lab.firstChild?.nodeType===3)lab.firstChild.nodeValue=(bw?bvomT('bodyweight.added'):bvomT('accessories.topWeight'))+' ('+unitLabel()+')';wrap.querySelector('#accBarWrap').classList.toggle('hidden',e!=='barbell');wrap.querySelector('#accEquipHint').textContent=bw?bvomT('bodyweight.recordingOnly'):e==='barbell'?bvomT('accessories.barHint'):e==='dumbbell'?bvomT('accessories.dbHint'):bvomT('accessories.machineHint')}
@@ -3251,8 +3261,9 @@ function bvomStrengthSessionHasActivity(s=state){for(const obj of Object.values(
 function bvomSessionHasActivity(){return bvomStrengthSessionHasActivity(state)||bvomGppSessionHasActivity(state)}
 function bvomGppMarkStarted(){if(!bvomWorkoutActionAllowed({training:true}))return;if(!state.workoutStartedAt)state.workoutStartedAt=Date.now();bvomMarkThisTabAsWorkoutOwner?.()}
 function bvomGppBuilderAssignments(g){
- const lp=g?.assignment||'Any',hlm=g?.hlmAssignment||'Any',fd=String(g?.fourDayAssignment||'Any');
- return `<label>${hlmTxt('LP / RPT availability','LP / RPTで表示')}<select data-lp>${[['A','A'],['B','B'],['Both',hlmTxt('Both','両方')],['Any',hlmTxt('Any day','いつでも')]].map(([v,t])=>`<option value="${v}" ${lp===v?'selected':''}>${t}</option>`).join('')}</select></label><label>${hlmTxt('HLM availability','HLMで表示')}<select data-hlm>${[['H',hlmTxt('Heavy','ヘビー')],['L',hlmTxt('Light','ライト')],['M',hlmTxt('Medium','ミディアム')],['Any',hlmTxt('Any day','いつでも')]].map(([v,t])=>`<option value="${v}" ${hlm===v?'selected':''}>${t}</option>`).join('')}</select></label><label>${hlmTxt('4-Day availability','4-Dayで表示')}<select data-fd>${[['1',hlmTxt('Day 1','1日目')],['2',hlmTxt('Day 2','2日目')],['3',hlmTxt('Day 3','3日目')],['4',hlmTxt('Day 4','4日目')],['Any',hlmTxt('Any day','いつでも')]].map(([v,t])=>`<option value="${v}" ${fd===v?'selected':''}>${t}</option>`).join('')}</select></label>`;
+ const lp=g?.assignment||'Any',hlm=g?.hlmAssignment||'Any',fd=String(g?.fourDayAssignment||'Any'),bb=String(g?.bbAssignment||'Any');
+ const bbField=isBodybuilding()?`<label>${hlmTxt('Bodybuilding availability','ボディビルディングで表示')}<select data-bb>${[['Any',hlmTxt('Any day','いつでも')],['A','A'],['B','B']].map(([v,t])=>`<option value="${v}" ${bb===v?'selected':''}>${t}</option>`).join('')}</select></label>`:'';
+ return `<label>${hlmTxt('LP / RPT availability','LP / RPTで表示')}<select data-lp>${[['A','A'],['B','B'],['Both',hlmTxt('Both','両方')],['Any',hlmTxt('Any day','いつでも')]].map(([v,t])=>`<option value="${v}" ${lp===v?'selected':''}>${t}</option>`).join('')}</select></label><label>${hlmTxt('HLM availability','HLMで表示')}<select data-hlm>${[['H',hlmTxt('Heavy','ヘビー')],['L',hlmTxt('Light','ライト')],['M',hlmTxt('Medium','ミディアム')],['Any',hlmTxt('Any day','いつでも')]].map(([v,t])=>`<option value="${v}" ${hlm===v?'selected':''}>${t}</option>`).join('')}</select></label><label>${hlmTxt('4-Day availability','4-Dayで表示')}<select data-fd>${[['1',hlmTxt('Day 1','1日目')],['2',hlmTxt('Day 2','2日目')],['3',hlmTxt('Day 3','3日目')],['4',hlmTxt('Day 4','4日目')],['Any',hlmTxt('Any day','いつでも')]].map(([v,t])=>`<option value="${v}" ${fd===v?'selected':''}>${t}</option>`).join('')}</select></label>${bbField}`;
 }
 function openGppBuilder(id=null){if(!bvomWorkoutActionAllowed())return;
  bvomGppEnsure();const g=id?state.gppList.find(x=>x.id===id):null,m=Object.assign({sets:false,reps:false,load:false,distance:false,time:false,rounds:false},g?.metrics||{}),p=Object.assign({},g?.planned||{}),o=document.createElement('div');o.className='bvomModalOverlay';
@@ -3262,7 +3273,22 @@ function openGppBuilder(id=null){if(!bvomWorkoutActionAllowed())return;
  function captureValues(){for(const el of vals.querySelectorAll('[data-v]')){let v=el.value;if(el.dataset.v==='distanceUnit')p.distanceUnit=v;else if(el.dataset.v==='timeMinutes')p.timeSeconds=Math.round(Number(v)*60);else p[el.dataset.v]=Number(v)}}
  function draw(){const on=k=>o.querySelector(`[data-metric="${k}"]`)?.checked;let h='';if(on('sets'))h+=`<label>${hlmTxt('Planned sets','予定セット数')}<input data-v="sets" type="number" min="1" step="1" value="${p.sets??3}"></label>`;if(on('reps'))h+=`<label>${hlmTxt('Planned reps','予定回数')}${on('sets')?' '+hlmTxt('per set','セットごと'):''}<input data-v="reps" type="number" min="1" step="1" value="${p.reps??10}"></label>`;if(on('load'))h+=`<label>${hlmTxt('Load','重量')} (${unitLabel()})<input data-v="load" type="number" min="0" step=".25" value="${p.load??0}"></label>`;if(on('distance'))h+=`<label>${hlmTxt('Distance','距離')}<input data-v="distance" type="number" min="0" step=".01" value="${p.distance??1}"></label><label>${hlmTxt('Distance unit','距離の単位')}<select data-v="distanceUnit">${(isLb()?['ft','yd','mi','m','km']:['m','km','ft','yd','mi']).map(x=>`<option ${String(p.distanceUnit||bvomGppDefaultDistanceUnit())===x?'selected':''}>${x}</option>`).join('')}</select></label>`;if(on('time')&&!on('rounds'))h+=`<label>${on('sets')?hlmTxt('Time per set','セットごとの時間'):hlmTxt('Planned time','予定時間')} (${hlmTxt('minutes','分')})<input data-v="timeMinutes" type="number" min="0" step=".1" value="${p.timeSeconds!=null?Number(p.timeSeconds)/60:10}"></label>`;if(on('rounds'))h+=`<label>${hlmTxt('Rounds','ラウンド')}<input data-v="rounds" type="number" min="1" step="1" value="${p.rounds??10}"></label>`;if(on('rounds')&&on('time')){const every=Number(p.everySeconds)>0;h+=`<label>${hlmTxt('Timing','タイミング')}<select data-timing-mode><option value="workrest" ${every?'':'selected'}>${hlmTxt('Work / Rest','運動 / 休憩')}</option><option value="every" ${every?'selected':''}>${hlmTxt('Every','間隔')}</option></select></label>`;if(every)h+=`<label>${hlmTxt('Every (seconds)','間隔（秒）')}<input data-v="everySeconds" type="number" min="1" step="1" value="${p.everySeconds??60}"></label>`;else h+=`<label>${hlmTxt('Work (seconds)','運動（秒）')}<input data-v="workSeconds" type="number" min="1" step="1" value="${p.workSeconds??60}"></label><label>${hlmTxt('Rest (seconds)','休憩（秒）')}<input data-v="restSeconds" type="number" min="0" step="1" value="${p.restSeconds??60}"></label>`;h+=`<label class="toggle"><input data-cue type="checkbox" ${g?.intervalCue!==false?'checked':''}><span>${hlmTxt('Interval sound cue','インターバル音')}</span></label>`}vals.innerHTML=h;const tm=vals.querySelector('[data-timing-mode]');if(tm)tm.onchange=()=>{captureValues();p.everySeconds=tm.value==='every'?(Number(p.everySeconds)>0?p.everySeconds:60):null;draw()}}
  o.querySelectorAll('[data-metric]').forEach(x=>x.onchange=()=>{captureValues();draw()});draw();o.querySelector('[data-c]').onclick=()=>o.remove();
- o.querySelector('[data-s]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;const metrics={};o.querySelectorAll('[data-metric]').forEach(x=>metrics[x.dataset.metric]=x.checked);if(!o.querySelector('[data-name]').value.trim()||!Object.values(metrics).some(Boolean))return;const q={sets:null,reps:null,load:null,distance:null,distanceUnit:null,timeSeconds:null,rounds:null,workSeconds:null,restSeconds:null,everySeconds:null};for(const el of vals.querySelectorAll('[data-v]')){let v=el.value;if(el.dataset.v==='distanceUnit')q.distanceUnit=v;else if(el.dataset.v==='timeMinutes')q.timeSeconds=Math.round(Number(v)*60);else q[el.dataset.v]=Number(v)};const item={id:g?.id||bvomGppId(),name:o.querySelector('[data-name]').value.trim(),assignment:o.querySelector('[data-lp]').value,hlmAssignment:o.querySelector('[data-hlm]').value,fourDayAssignment:o.querySelector('[data-fd]').value,metrics,planned:q,intervalCue:vals.querySelector('[data-cue]')?.checked!==false};if(g)Object.assign(g,item);else state.gppList.push(item);o.remove();save();renderAll()};
+ o.querySelector('[data-s]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;const metrics={};o.querySelectorAll('[data-metric]').forEach(x=>metrics[x.dataset.metric]=x.checked);if(!o.querySelector('[data-name]').value.trim()||!Object.values(metrics).some(Boolean))return;const q={sets:null,reps:null,load:null,distance:null,distanceUnit:null,timeSeconds:null,rounds:null,workSeconds:null,restSeconds:null,everySeconds:null};for(const el of vals.querySelectorAll('[data-v]')){let v=el.value;if(el.dataset.v==='distanceUnit')q.distanceUnit=v;else if(el.dataset.v==='timeMinutes')q.timeSeconds=Math.round(Number(v)*60);else q[el.dataset.v]=Number(v)};const bodybuild=isBodybuilding(),before=bodybuild?JSON.parse(JSON.stringify(state)):null;
+ const item={id:g?.id||bvomGppId(),name:o.querySelector('[data-name]').value.trim(),assignment:o.querySelector('[data-lp]').value,hlmAssignment:o.querySelector('[data-hlm]').value,fourDayAssignment:o.querySelector('[data-fd]').value,bbAssignment:bodybuild?(o.querySelector('[data-bb]')?.value||'Any'):(g?.bbAssignment??null),metrics,planned:q,intervalCue:vals.querySelector('[data-cue]')?.checked!==false};
+ if(bodybuild){
+  const fields=['assignment','hlmAssignment','fourDayAssignment','freeAssignment'];
+  for(const field of fields)item[field]=g?g[field]:BVOM_BB_SENTINEL;
+ }
+ const existing=g?state.gppList.find(x=>x.id===g.id):null;
+ if(existing)Object.assign(existing,item);else state.gppList.push(item);
+ if(bodybuild){
+  // Persist the complete Bodybuilding mode + GPP scope ONCE. Never publish a
+  // temporary LP/RPT program before the post-write ownership check.
+  if(!save({durable:true})){state=before;return false}
+  if(bvomPersistenceBlocked())return true; // Blob committed; window requests reload.
+  o.remove();renderAll();return true;
+ }
+ o.remove();save();renderAll()};
 }
 function removeGpp(id){if(!bvomWorkoutActionAllowed())return;const g=state.gppList.find(x=>x.id===id);if(!g)return;const x=state.gppSession?.[id],live=!!(x&&(x.started||x.status==='running'||x.status==='paused'||x.status==='stopped'||x.actual||(x.sets&&x.sets.some(Boolean))||x.timing));if(live){bvomBeeModal(hlmTxt('FINISH WORKOUT FIRST','先にワークアウトを終了してください'),hlmTxt(`Today's recorded ${bvomEsc(g.name)} result must stay with this workout. Finish or exit the workout before removing this GPP activity from the program.`,`今日記録した ${bvomEsc(g.name)} の結果はこのワークアウトに残す必要があります。プログラムからこのGPPアクティビティを削除する前に、ワークアウトを終了または退出してください。`));return}bvomChoiceModal(hlmTxt('REMOVE GPP ACTIVITY?','GPPアクティビティを削除しますか？'),hlmTxt(`Remove <b>${bvomEsc(g.name)}</b> from your saved GPP list?<br><br>Existing History will be kept.`,`保存済みGPPリストから<b>${bvomEsc(g.name)}</b>を削除しますか？<br><br>既存の履歴は残ります。`),hlmTxt('CANCEL','キャンセル'),hlmTxt('REMOVE','削除'),()=>{},()=>{if(!bvomWorkoutActionAllowed())return;state.gppList=state.gppList.filter(x=>x.id!==id);delete state.gppSession[id];save();renderAll()})}
 function bvomGppImprove(id){if(!bvomWorkoutActionAllowed())return;const g=state.gppList.find(x=>x.id===id);if(!g)return;const o=document.createElement('div');o.className='bvomModalOverlay';let h=`<div class="bvomModal"><h3>${hlmTxt('MAKE AN IMPROVEMENT','内容を変更')}</h3><div class="sub">${hlmTxt('Optional. Change whichever planned metric you want, or cancel and repeat the previous performance.','任意です。変更したい予定値だけを調整できます。変更せず前回と同じ内容を繰り返しても構いません。')}</div>`;const m=g.metrics,p=g.planned;if(m.sets)h+=`<label>${hlmTxt('Sets','セット')}<input data-k="sets" type="number" min="1" value="${p.sets??1}"></label>`;if(m.reps)h+=`<label>${hlmTxt('Reps','回数')}<input data-k="reps" type="number" min="1" value="${p.reps??1}"></label>`;if(m.load)h+=`<label>${hlmTxt('Load','重量')} (${unitLabel()})<input data-k="load" type="number" step=".25" min="0" value="${p.load??0}"></label>`;if(m.distance)h+=`<label>${hlmTxt('Distance','距離')}<input data-k="distance" type="number" step=".01" min="0" value="${p.distance??0}"></label>`;if(m.time&&!m.rounds)h+=`<label>${m.sets?hlmTxt('Time per set','セットごとの時間'):hlmTxt('Time','時間')} (${hlmTxt('minutes','分')})<input data-k="timeSeconds" data-minutes type="number" step=".1" min="0" value="${(p.timeSeconds||0)/60}"></label>`;if(m.rounds)h+=`<label>${hlmTxt('Rounds','ラウンド')}<input data-k="rounds" type="number" min="1" value="${p.rounds??1}"></label>`;if(m.rounds&&m.time){if(Number(p.everySeconds)>0)h+=`<label>${hlmTxt('Every (seconds)','間隔（秒）')}<input data-k="everySeconds" type="number" min="1" value="${p.everySeconds??60}"></label>`;else h+=`<label>${hlmTxt('Work (seconds)','運動（秒）')}<input data-k="workSeconds" type="number" min="1" value="${p.workSeconds??60}"></label><label>${hlmTxt('Rest (seconds)','休憩（秒）')}<input data-k="restSeconds" type="number" min="0" value="${p.restSeconds??60}"></label>`};h+=`<div class="modalActions"><button data-c>${hlmTxt('CANCEL','キャンセル')}</button><button class="primary" data-s>${hlmTxt('SAVE','保存')}</button></div></div>`;o.innerHTML=h;document.body.appendChild(o);o.querySelector('[data-c]').onclick=()=>o.remove();o.querySelector('[data-s]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;o.querySelectorAll('[data-k]').forEach(el=>g.planned[el.dataset.k]=el.dataset.minutes?Math.round(Number(el.value)*60):Number(el.value));o.remove();save();renderWorkout()}}
@@ -3594,9 +3620,17 @@ const bvomBbBaseRenderWorkout=renderWorkout;renderWorkout=function(){if(isBodybu
 const bvomBbBaseRenderWarm=renderWarm;renderWarm=function(){if(isBodybuilding())return bvomBbRenderFoundationWarm();return bvomBbBaseRenderWarm()};
 const bvomBbBaseActiveAccessories=activeAccessories;activeAccessories=function(){if(!isBodybuilding())return bvomBbBaseActiveAccessories();const d=bvomBbDay();return (state.accessoryList||[]).filter(a=>a.bbAssignment===d||a.bbAssignment==='Both'||a.bbAssignment==='Any')};
 const bvomBbBaseTapAccessory=tapAccessory;tapAccessory=function(id,i){if(!bvomWorkoutActionAllowed())return;if((state.accessoryList||[]).find(a=>a.id===id)?.equipment==='bodyweight')return bvomBwAccessoryModal(id,i);if(!isBodybuilding())return bvomBbBaseTapAccessory(id,i);const a=(state.accessoryList||[]).find(x=>x.id===id);if(!a)return;const key='ACC:'+id,ss=state.session[key]||(state.session[key]={}),plan=accessoryPlan17(a),q=plan[i];if(!q)return;bvomRepModal(`${a.name} · ${hlmTxt('Set ','セット ')}${i+1}`,ss[i]?.load??q.load,q.target,ss[i]?.reps??q.target,(reps,rpe)=>{if(!bvomWorkoutActionAllowed())return;if(!state.workoutStartedAt)state.workoutStartedAt=Date.now();bvomMarkThisTabAsWorkoutOwner();ss[i]={reps:Math.max(0,Math.floor(reps)),load:ss[i]?.load??q.load,target:q.target,top:!!q.top,drop:!!q.drop,amrap:!!q.amrap,rpe:Number(rpe??8)};save();startTimer();renderWorkout();bvomSyncWorkoutControls()},ss[i]?.rpe??8)};
-const bvomBbBaseGppAssigned=bvomGppAssigned;bvomGppAssigned=function(g){if(isBodybuilding())return g.bbAssignment==='Any'||g.bbAssignment==='Both'||g.bbAssignment===bvomBbDay();return bvomBbBaseGppAssigned(g)};
+const bvomBbBaseGppAssigned=bvomGppAssigned;bvomGppAssigned=function(g){if(isBodybuilding()){const day=bvomBbOnRampActive()?bvomBbOnRampDay():bvomBbDay();return g.bbAssignment==='Any'||g.bbAssignment==='Both'||g.bbAssignment===day}return bvomBbBaseGppAssigned(g)};
 const bvomBbBaseOpenAccessoryBuilder=openAccessoryBuilder;openAccessoryBuilder=function(editId=null){if(!bvomWorkoutActionAllowed())return;if(!isBodybuilding())return bvomBbBaseOpenAccessoryBuilder(editId);const before=new Set((state.accessoryList||[]).map(a=>a.id)),existing=editId?(state.accessoryList||[]).find(a=>a.id===editId):null,scope=existing?{assignment:existing.assignment,hlmAssignment:existing.hlmAssignment,fourDayAssignment:existing.fourDayAssignment,freeAssignment:existing.freeAssignment}:null,oldMode=state.programMode,oldDay=state.day;state.programMode='lprpt';state.day=bvomBbDay();bvomBbBaseOpenAccessoryBuilder(editId);state.programMode=oldMode;state.day=oldDay;const o=[...document.querySelectorAll('.beeCoachOverlay')].at(-1);if(!o)return;const assign=o.querySelector('#accAssign');if(assign){assign.value='Both';const lab=assign.closest('label');if(lab)lab.style.display='none'}const saveBtn=o.querySelector('#accSave');if(saveBtn){const orig=saveBtn.onclick;saveBtn.onclick=()=>{if(!bvomWorkoutActionAllowed())return;const om=state.programMode,od=state.day;state.programMode='lprpt';state.day=bvomBbDay();globalThis.__bvomBbAccessorySave=true;globalThis.__bvomBbAccessoryScope=existing?.bbAssignment||'Any';let accepted=false;try{accepted=orig?.()===true}finally{delete globalThis.__bvomBbAccessorySave;delete globalThis.__bvomBbAccessoryScope;state.programMode=om;state.day=od}if(!accepted)return;const arr=state.accessoryList||[],target=editId?arr.find(a=>a.id===editId):arr.find(a=>!before.has(a.id));if(target?.equipment==='bodyweight'){renderWorkout();return}if(target){target.bbAssignment='Any';if(scope)Object.assign(target,scope);else{target.assignment=BVOM_BB_SENTINEL;target.hlmAssignment=BVOM_BB_SENTINEL;target.fourDayAssignment=BVOM_BB_SENTINEL;target.freeAssignment=BVOM_BB_SENTINEL}}save();renderWorkout()}}};
-const bvomBbBaseOpenGppBuilder=openGppBuilder;openGppBuilder=function(id=null){if(!bvomWorkoutActionAllowed())return;if(!isBodybuilding())return bvomBbBaseOpenGppBuilder(id);const before=new Set((state.gppList||[]).map(g=>g.id)),existing=id?(state.gppList||[]).find(g=>g.id===id):null,scope=existing?{assignment:existing.assignment,hlmAssignment:existing.hlmAssignment,fourDayAssignment:existing.fourDayAssignment,freeAssignment:existing.freeAssignment}:null,oldMode=state.programMode,oldDay=state.day;state.programMode='lprpt';state.day='A';bvomBbBaseOpenGppBuilder(id);state.programMode=oldMode;state.day=oldDay;const o=[...document.querySelectorAll('.bvomModalOverlay')].at(-1);if(!o)return;for(const sel of o.querySelectorAll('[data-lp],[data-hlm],[data-fd]')){const lab=sel.closest('label');if(lab)lab.style.display='none'}const saveBtn=o.querySelector('[data-s]');if(saveBtn){const orig=saveBtn.onclick;saveBtn.onclick=()=>{if(!bvomWorkoutActionAllowed())return;const om=state.programMode,od=state.day;state.programMode='lprpt';state.day='A';orig?.();state.programMode=om;state.day=od;const arr=state.gppList||[],target=id?arr.find(g=>g.id===id):arr.find(g=>!before.has(g.id));if(target){target.bbAssignment='Any';if(scope)Object.assign(target,scope);else{target.assignment=BVOM_BB_SENTINEL;target.hlmAssignment=BVOM_BB_SENTINEL;target.fourDayAssignment=BVOM_BB_SENTINEL;target.freeAssignment=BVOM_BB_SENTINEL}}save();renderWorkout()}}};
+const bvomBbBaseOpenGppBuilder=openGppBuilder;openGppBuilder=function(id=null){
+ if(!bvomWorkoutActionAllowed())return;
+ bvomBbBaseOpenGppBuilder(id);
+ if(!isBodybuilding())return;
+ const o=[...document.querySelectorAll('.bvomModalOverlay')].at(-1);if(!o)return;
+ for(const sel of o.querySelectorAll('[data-lp],[data-hlm],[data-fd]')){
+  const lab=sel.closest('label');if(lab)lab.style.display='none';
+ }
+};
 const bvomBbBaseCloudPayload=bvomCloudPayload;bvomCloudPayload=function(){const d=bvomBbBaseCloudPayload();bvomBbEnsure(d);return d};
 const bvomBbBaseCloudNormalize=bvomCloudNormalizeForCompare;bvomCloudNormalizeForCompare=function(v){const d=bvomBbBaseCloudNormalize(v);bvomBbEnsure(d);if(d.programMode==='bodybuilding')d.day=bvomBbDay(d);return d};
 function bvomBbConvertPracticalIncrement(x,to){return convertIncrement(Number(x||0),to)}
@@ -3682,9 +3716,92 @@ function bvomBbOpenFoundationSetup(){if(!bvomWorkoutActionAllowed())return;
 function bvomBbSessionKey(id){return 'BB:'+id}
 function bvomBbSetCount(rx){return Array.isArray(rx?.sets)?rx.sets.length:0}
 function bvomBbSetTarget(rx,i){const q=rx?.sets?.[i];if(!q)return '';return q.minReps?`${q.minReps}–${q.maxReps}`:`≤${q.maxReps}`}
-function bvomBbLoadText(q,id){if(q?.load!=null)return `${fmt(q.load)} ${unitLabel()}`;const p=bvomBbProgress(id);return p.resistance?bvomEsc(p.resistance):'Bodyweight / resistance'}
-function bvomBbRenderFoundationWorkout(){bvomBbEnsure();const day=bvomBbDay();const el=document.querySelector('#workout');if(!day){el.innerHTML=`<div class="card"><b>BODYBUILDING COMPLETE</b><div class="small" style="margin-top:8px">24 of 24 workouts completed. Nice work. Your next step is a return-to-strength re-entry rather than an immediate max test.</div></div>`;return}const n=state.bodybuilding.completedSessions+1;let h=`<div class="toprow"><div><b>BODYBUILDING · WORKOUT ${n} OF 24 — ${day}</b><div class="small">${day==='A'?'Push + quad emphasis':'Pull + posterior emphasis'} · stop with about two good reps left</div></div></div>`;for(const slot of bvomBbSlotsForDay(day)){const id=state.bodybuilding.selections[slot],x=BVOM_BB_EXERCISES[id],rx=bvomBbPrescription(id),ss=state.session[bvomBbSessionKey(id)]||{};h+=`<div class="exercise"><div class="exhead"><div><div class="exname">${bvomEsc(x.name)}</div><div class="small">${BVOM_BB_SLOT_LABELS[slot]} · ${rx?.method?.replaceAll('_',' ')||''}</div></div></div><div class="sets">`;for(let i=0;i<bvomBbSetCount(rx);i++){const q=rx.sets[i],log=ss[i],cl=log?'done':'';h+=`<div class="setwrap"><button class="set ${cl}" onclick="bvomBbSetModal('${id}',${i})">${log?log.reps:'✓'}</button><div class="setload">${log?.bodyweight===true?bvomEsc(bvomBwSetText(log)):bvomBbLoadText(q,id)+' × '+bvomBbSetTarget(rx,i)}</div>${log?.harderThanIntended?'<div class="extraLabel">HARD</div>':''}</div>`}h+=`</div></div>`}h+=renderAccessories17();el.innerHTML=h}
-function bvomBbSetModal(id,i){if(!bvomWorkoutActionAllowed())return;const x=BVOM_BB_EXERCISES[id],rx=bvomBbPrescription(id),q=rx?.sets?.[i];if(!x||!q)return;const key=bvomBbSessionKey(id),ss=state.session[key]||(x.equipment==='bodyweight'?{}:(state.session[key]={})),existing=ss[i],defaultReps=existing?.reps??q.maxReps??x.repRange?.[0]??8;const entryUnit=unitLabel();const o=document.createElement('div');o.className='bvomModalOverlay';const numeric=bvomBbNumericExercise(id);o.innerHTML=`<div class="bvomModal"><h3>${bvomEsc(x.name)} · Set ${i+1}</h3><div class="sub">Target: ${bvomBbSetTarget(rx,i)} reps · stop with about two good reps left</div>${numeric?`<label>Actual load (${unitLabel()})<input data-load type="number" min="0.25" step=".25" value="${existing?.load??q.load??bvomBbProgress(id).load??''}"></label>`:(x.equipment==='bodyweight'?bvomBwFields(existing?.load??bvomBbProgress(id).recordingLoad??0,existing?.resistance??bvomBbProgress(id).resistance??bvomBbProgress(id).resistance,existing?.bodyweight===true?existing.approximateBodyweight:bvomBbProgress(id).approximateBodyweight)+bvomBwIncrementField(bvomBbProgress(id).addedWeightIncrement):`<label>Resistance / variation<input data-res type="text" maxlength="80" value="${bvomEsc(existing?.resistance??bvomBbProgress(id).resistance??'')}"></label>`)}<label>Reps<input data-reps type="number" min="0" step="1" value="${defaultReps}"></label><label style="display:flex;gap:10px;align-items:center;margin-top:12px"><input data-hard type="checkbox" ${existing?.harderThanIntended?'checked':''}> Harder than intended / fewer than ~2 good reps left</label>${!bvomBbProgress(id).calibrated&&i===0?`<label>First-exposure check<select data-cal><option value="about_right">About right</option><option value="too_easy">Too easy</option><option value="too_hard">Too hard</option></select></label>`:''}<div class="modalActions">${existing?'<button data-remove>REMOVE</button>':''}<button data-cancel>CANCEL</button><button class="primary" data-save>RECORD</button></div></div>`;document.body.appendChild(o);o.querySelector('[data-cancel]').onclick=()=>o.remove();if(existing)o.querySelector('[data-remove]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;delete ss[i];o.remove();save();renderWorkout()};o.querySelector('[data-save]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;if(x.equipment==='bodyweight'&&unitLabel()!==entryUnit){alert(bvomT('bodyweight.changed'));return}const bw=x.equipment==='bodyweight'?bvomBwRead(o):null;if(x.equipment==='bodyweight'&&!bw)return;const bwIncrement=bw?bvomBwIncrementRead(o):null;if(bw&&bwIncrement===null)return;const before=bw?JSON.parse(JSON.stringify(state)):null;if(bw&&(o.querySelector('[data-reps]').value===''||!Number.isInteger(Number(o.querySelector('[data-reps]').value))||Number(o.querySelector('[data-reps]').value)<0)){alert(bvomT('bodyweight.invalid'));return}const reps=Math.max(0,Math.floor(Number(o.querySelector('[data-reps]').value)||0)),hard=!!o.querySelector('[data-hard]').checked,rec={reps,harderThanIntended:hard,target:q.maxReps,index:i};if(numeric){const load=Number(o.querySelector('[data-load]').value);if(!(load>0)){alert('Enter the load used.');return}rec.load=load;const p=bvomBbProgress(id);if(!(Number(p.load)>0)){p.load=load;p.topLoad=load}}else{if(bw){Object.assign(rec,bw);const p=bvomBbProgress(id);p.recordingLoad=bw.load;p.approximateBodyweight=bw.approximateBodyweight;p.addedWeightIncrement=bwIncrement}else rec.load=0;rec.resistance=String(o.querySelector('[data-res]').value||'').trim();const p=bvomBbProgress(id);if(rec.resistance)p.resistance=rec.resistance}const cal=o.querySelector('[data-cal]');if(cal)rec.calibrationFeedback=cal.value;if(bw)state.session[key]=ss;ss[i]=rec;if(!state.workoutStartedAt)state.workoutStartedAt=Date.now();bvomMarkThisTabAsWorkoutOwner();if(!save({durable:true})&&bw){state=before;return}o.remove();startTimer();renderWorkout();bvomSyncWorkoutControls()}}
+function bvomBbLoadText(q,id){const p=bvomBbProgress(id);if(q?.type==='bodyweight'){const assist=q.assistance??p.resistance??'Bodyweight';const added=Number(q.load);return bvomEsc(assist)+(Number.isFinite(added)&&added>0?' + '+fmt(added)+' '+unitLabel():'')}if(q?.load!=null)return `${fmt(q.load)} ${unitLabel()}`;return p.resistance?bvomEsc(p.resistance):'Bodyweight / resistance'}
+// An earned bodyweight/assistance direction is advisory until the user
+// explicitly accepts a real equipment/variation change or chooses HOLD.
+// It must never invent a band force, assistance load, or numerical step.
+function bvomBbDifficultyPending(id){
+ const p=state.bodybuilding?.progression?.[id],d=p?.pendingDifficulty;
+ return (d==='harder'||d==='easier')&&['bodyweight','band'].includes(BVOM_BB_EXERCISES[id]?.equipment)?d:null;
+}
+function bvomBbDifficultyDecisionAllowed(id,direction){
+ return isBodybuilding()&&!bvomBbOnRampActive()&&bvomBbSlotsForDay(bvomBbDay()).some(slot=>state.bodybuilding?.selections?.[slot]===id)&&
+  bvomBbDifficultyPending(id)===direction&&!Object.values(state.session?.[bvomBbSessionKey(id)]||{}).some(x=>x?.reps!==undefined);
+}
+function bvomBbDifficultyCommit(id,direction,choice,resistance){
+ if(!bvomWorkoutActionAllowed()||!bvomBbDifficultyDecisionAllowed(id,direction))return false;
+ if(choice!=='accept'&&choice!=='hold')return false;
+ const p=bvomBbProgress(id),old=String(p.resistance??p.assistance??'').trim();
+ const next=String(resistance??'').trim();
+ if(choice==='accept'&&(!next||next===old))return false;
+ const before=JSON.parse(JSON.stringify(state));
+ p.pendingDifficulty=null;p.lastDifficultyResolution=choice;
+ if(choice==='accept'){
+  p.resistance=next;
+  if(bvomBbLoadingMethod(id)==='bodyweight_assistance')p.assistance=next;
+ }
+ // Explicit difficulty decisions count as activity only in an already-active
+ // workout. No fake sets, History, On-Ramp calibration, or program advancement.
+ if(!save({durable:true,activity:true})){state=before;return false}
+ if(bvomPersistenceBlocked())return true; // committed but unsafe window stopped
+ renderWorkout();return true;
+}
+function bvomBbDifficultyAccept(id){
+ if(!bvomWorkoutActionAllowed())return false;
+ const direction=bvomBbDifficultyPending(id);
+ if(!direction||!bvomBbDifficultyDecisionAllowed(id,direction))return false;
+ if(document.querySelector('.bvomModalOverlay'))return false;
+ const p=bvomBbProgress(id),old=String(p.resistance??p.assistance??'');
+ const owner=localStorage.getItem(BVOM_DATA_OWNER_KEY)||'';
+ const o=document.createElement('div');o.className='bvomModalOverlay';
+ o.innerHTML='<div class="bvomModal" role="dialog" aria-modal="true"><h3>'+
+  hlmTxt('ACCEPT DIFFICULTY CHANGE','難易度の変更を承認')+'</h3><p class="small">'+
+  (direction==='harder'?hlmTxt('Choose less assistance, more resistance, or a harder variation.','補助を減らす、負荷を増やす、または難しいバリエーションを選んでください。'):
+    hlmTxt('Choose more assistance, less resistance, or an easier variation.','補助を増やす、負荷を減らす、または易しいバリエーションを選んでください。'))+
+  '</p><label>'+hlmTxt('New assistance / resistance / variation','新しい補助・負荷・バリエーション')+
+  '<input data-difficulty-value type="text" maxlength="80" value="'+bvomEsc(old)+'"></label>'+
+  '<p class="small">'+hlmTxt('Enter the actual change you choose. BVOM cannot calculate your band assistance. Added weight, if any, is recorded in each working set.','実際に選んだ変更を入力してください。バンドの補助量は自動計算できません。追加重量はワーキングセットに記録してください。')+'</p>'+
+  '<div class="modalActions"><button type="button" data-cancel>'+hlmTxt('CANCEL','キャンセル')+
+  '</button><button type="button" class="primary" data-accept>'+hlmTxt('ACCEPT','承認')+'</button></div></div>';
+ document.body.appendChild(o);
+ const input=o.querySelector('[data-difficulty-value]'),cancel=()=>o.remove();
+ o.querySelector('[data-cancel]').onclick=cancel;
+ o.querySelector('[data-accept]').onclick=()=>{
+  if(!bvomWorkoutActionAllowed()||(localStorage.getItem(BVOM_DATA_OWNER_KEY)||'')!==owner||
+    !bvomBbDifficultyDecisionAllowed(id,direction)){cancel();return}
+  const value=input.value.trim();
+  if(!value||value===old.trim()){
+   input.setCustomValidity(hlmTxt('Enter a different variation or assistance first.','変更した補助やバリエーションを入力してください。'));
+   input.reportValidity();return;
+  }
+  if(bvomBbDifficultyCommit(id,direction,'accept',value)&&!bvomPersistenceBlocked())cancel();
+ };
+ input.addEventListener('input',()=>input.setCustomValidity(''));
+ o.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();cancel()}});
+ input.focus();return true;
+}
+function bvomBbDifficultyHold(id){
+ const direction=bvomBbDifficultyPending(id);
+ return direction?bvomBbDifficultyCommit(id,direction,'hold'):false;
+}
+function bvomBbDifficultyCallout(id){
+ const dir=bvomBbDifficultyPending(id);if(!dir)return '';
+ return '<div class="card" data-bb-difficulty="'+bvomEsc(id)+'"><b>'+
+  (dir==='harder'?hlmTxt('HARDER DIFFICULTY EARNED','難易度を上げる条件を達成'):
+    hlmTxt('EASIER DIFFICULTY ADVISED','難易度を下げることを推奨'))+
+  '</b><p class="small">'+hlmTxt('Before recording this exercise, ACCEPT to choose a different assistance / resistance / variation, or HOLD to keep your current setup. No change is made automatically.','この種目を記録する前に、承認して補助・負荷・バリエーションを変更するか、維持して現在の設定を使ってください。自動変更は行いません。')+
+  '</p><div class="modalActions"><button type="button" class="primary" onclick="bvomBbDifficultyAccept(\''+id+'\')">'+
+  hlmTxt('ACCEPT','承認')+'</button><button type="button" onclick="bvomBbDifficultyHold(\''+id+'\')">'+
+  hlmTxt('HOLD','維持')+'</button></div></div>';
+}
+function bvomBbRenderFoundationWorkout(){bvomBbEnsure();const day=bvomBbDay();const el=document.querySelector('#workout');if(!day){el.innerHTML=`<div class="card"><b>BODYBUILDING COMPLETE</b><div class="small" style="margin-top:8px">24 of 24 workouts completed. Nice work. Your next step is a return-to-strength re-entry rather than an immediate max test.</div></div>`;return}const n=state.bodybuilding.completedSessions+1;let h=`<div class="toprow"><div><b>BODYBUILDING · WORKOUT ${n} OF 24 — ${day}</b><div class="small">${day==='A'?'Push + quad emphasis':'Pull + posterior emphasis'} · stop with about two good reps left</div></div></div>`;for(const slot of bvomBbSlotsForDay(day)){const id=state.bodybuilding.selections[slot],x=BVOM_BB_EXERCISES[id],rx=bvomBbPrescription(id),ss=state.session[bvomBbSessionKey(id)]||{};h+=`<div class="exercise" id="work-bb-${slot}"><div class="exhead"><div><div class="exname">${bvomEsc(x.name)}</div><div class="small">${BVOM_BB_SLOT_LABELS[slot]} · ${rx?.method?.replaceAll('_',' ')||''}</div></div></div><div class="sets">`;for(let i=0;i<bvomBbSetCount(rx);i++){const q=rx.sets[i],log=ss[i],cl=log?'done':'';h+=`<div class="setwrap"><button class="set ${cl}" onclick="bvomBbSetModal('${id}',${i})">${log?log.reps:'✓'}</button><div class="setload">${log?.bodyweight===true?bvomEsc(bvomBwSetText(log)):bvomBbLoadText(q,id)+' × '+bvomBbSetTarget(rx,i)}</div>${log?.harderThanIntended?'<div class="extraLabel">HARD</div>':''}</div>`}h+=`</div>${bvomBbDifficultyCallout(id)}</div>`}h+=renderAccessories17();h+=renderGpp17();el.innerHTML=h}
+function bvomBbSetModal(id,i){if(!bvomWorkoutActionAllowed())return;
+ if(bvomBbDifficultyPending(id)){
+  bvomBeeModal(hlmTxt('CHOOSE ACCEPT OR HOLD FIRST','先に承認または維持を選んでください。'),
+   hlmTxt('Resolve the earned bodyweight difficulty change above this exercise before recording its next working set.','この種目の次のセットを記録する前に、上の難易度変更を選択してください。'));
+  return;
+ }
+ const x=BVOM_BB_EXERCISES[id],rx=bvomBbPrescription(id),q=rx?.sets?.[i];if(!x||!q)return;const key=bvomBbSessionKey(id),ss=state.session[key]||(x.equipment==='bodyweight'?{}:(state.session[key]={})),existing=ss[i],defaultReps=existing?.reps??q.maxReps??x.repRange?.[0]??8;const entryUnit=unitLabel();const o=document.createElement('div');o.className='bvomModalOverlay';const numeric=bvomBbNumericExercise(id);o.innerHTML=`<div class="bvomModal"><h3>${bvomEsc(x.name)} · Set ${i+1}</h3><div class="sub">Target: ${bvomBbSetTarget(rx,i)} reps · stop with about two good reps left</div>${numeric?`<label>Actual load (${unitLabel()})<input data-load type="number" min="0.25" step=".25" value="${existing?.load??q.load??bvomBbProgress(id).load??''}"></label>`:(x.equipment==='bodyweight'?bvomBwFields(existing?.load??bvomBbProgress(id).recordingLoad??0,existing?.resistance??bvomBbProgress(id).resistance??bvomBbProgress(id).resistance,existing?.bodyweight===true?existing.approximateBodyweight:bvomBbProgress(id).approximateBodyweight)+bvomBwIncrementField(bvomBbProgress(id).addedWeightIncrement):`<label>Resistance / variation<input data-res type="text" maxlength="80" value="${bvomEsc(existing?.resistance??bvomBbProgress(id).resistance??'')}"></label>`)}<label>Reps<input data-reps type="number" min="0" step="1" value="${defaultReps}"></label><label style="display:flex;gap:10px;align-items:center;margin-top:12px"><input data-hard type="checkbox" ${existing?.harderThanIntended?'checked':''}> Harder than intended / fewer than ~2 good reps left</label>${!bvomBbProgress(id).calibrated&&i===0?`<label>First-exposure check<select data-cal><option value="about_right">About right</option><option value="too_easy">Too easy</option><option value="too_hard">Too hard</option></select></label>`:''}<div class="bvomBbValidationNotice" data-bb-validation role="alert" aria-live="polite" hidden></div><div class="modalActions">${existing?'<button data-remove>REMOVE</button>':''}<button data-cancel>CANCEL</button><button class="primary" data-save>RECORD</button></div></div>`;document.body.appendChild(o);o.querySelector('[data-cancel]').onclick=()=>o.remove();if(existing)o.querySelector('[data-remove]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;delete ss[i];o.remove();save();renderWorkout()};o.querySelector('[data-save]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;if(x.equipment==='bodyweight'&&unitLabel()!==entryUnit){bvomBbInputNotice(o,bvomT('bodyweight.changed'),'[data-load]');return}const bw=x.equipment==='bodyweight'?bvomBwRead(o,(message,field)=>bvomBbInputNotice(o,message,field)):null;if(x.equipment==='bodyweight'&&!bw)return;const bwIncrement=bw?bvomBwIncrementRead(o,(message,field)=>bvomBbInputNotice(o,message,field)):null;if(bw&&bwIncrement===null)return;const before=bw?JSON.parse(JSON.stringify(state)):null;if(bw&&(o.querySelector('[data-reps]').value===''||!Number.isInteger(Number(o.querySelector('[data-reps]').value))||Number(o.querySelector('[data-reps]').value)<0)){bvomBbInputNotice(o,bvomT('bodyweight.invalid'),'[data-reps]');return}const reps=Math.max(0,Math.floor(Number(o.querySelector('[data-reps]').value)||0)),hard=!!o.querySelector('[data-hard]').checked,rec={reps,harderThanIntended:hard,target:q.maxReps,index:i};if(numeric){const load=Number(o.querySelector('[data-load]').value);if(!(load>0)){bvomBbInputNotice(o,'Enter the load used.','[data-load]');return}rec.load=load;const p=bvomBbProgress(id);if(!(Number(p.load)>0)){p.load=load;p.topLoad=load}}else{if(bw){Object.assign(rec,bw);const p=bvomBbProgress(id);p.recordingLoad=bw.load;p.approximateBodyweight=bw.approximateBodyweight;p.addedWeightIncrement=bwIncrement}else rec.load=0;rec.resistance=String(o.querySelector('[data-res]').value||'').trim();const p=bvomBbProgress(id);if(rec.resistance)p.resistance=rec.resistance}const cal=o.querySelector('[data-cal]');if(cal)rec.calibrationFeedback=cal.value;if(bw)state.session[key]=ss;ss[i]=rec;if(!state.workoutStartedAt)state.workoutStartedAt=Date.now();bvomMarkThisTabAsWorkoutOwner();if(!save({durable:true})&&bw){state=before;return}o.remove();startTimer();renderWorkout();bvomSyncWorkoutControls()}}
 function bvomBbExerciseComplete(id){const rx=bvomBbPrescription(id),ss=state.session[bvomBbSessionKey(id)]||{};return Array.from({length:bvomBbSetCount(rx)},(_,i)=>ss[i]&&ss[i].reps!==undefined).every(Boolean)}
 function bvomBbFinish(approvedIncomplete=false){if(!bvomWorkoutActionAllowed())return;if(window.__bvomFinishBusy||!bvomSessionHasActivity())return;const day=bvomBbDay(),ids=bvomBbSlotsForDay(day).map(s=>state.bodybuilding.selections[s]),complete=ids.every(bvomBbExerciseComplete);if(!complete&&!approvedIncomplete){bvomBbUiModal('INCOMPLETE BODYBUILDING WORKOUT','This Bodybuilding workout is incomplete. Save it without advancing to the next workout?',null,()=>bvomBbFinish(true),'SAVE WORKOUT');return;}window.__bvomFinishBusy=true;const duration=bvomDuration(),volume=bvomWorkoutVolume();bvomSessionNoteModal('',note=>{if(!bvomWorkoutActionAllowed()){window.__bvomFinishBusy=false;bvomSyncWorkoutControls();return}const before=JSON.parse(JSON.stringify(state)),oldDefer=bvomCloud.deferWorkoutCommit;let committed=false;try{const decisions=[],working=JSON.parse(JSON.stringify(state));bvomBbEnsure(working);if(complete){for(const id of ids){const key=bvomBbSessionKey(id),sets=Object.values(state.session[key]||{}).sort((a,b)=>a.index-b.index),p=bvomBbProgress(id,working),load=Number(sets[0]?.load??p.load);const drop=bvomBbNumericExercise(id)&&Number.isFinite(load)&&load>0?bvomBbPerformanceDrop(id,load,sets[0]?.reps,working):null;const wasCalibrated=!!p.calibrated;if(wasCalibrated&&bvomBbNumericExercise(id)&&Number.isFinite(load)&&load>0){const prescribed=Number(p.load??p.topLoad);if(!Number.isFinite(prescribed)||Math.abs(load-prescribed)>1e-9){p.load=load;p.topLoad=load;delete p.previousSuccessfulLoad}}const d=wasCalibrated?bvomBbDecide(id,sets,working):bvomBbCalibrationDecision(id,sets[0]?.calibrationFeedback||'about_right',{load:Number.isFinite(load)&&load>0?load:null,reps:sets[0]?.reps,resistance:sets[0]?.resistance},working);decisions.push({id,decision:d,drop,calibration:!wasCalibrated});bvomBbApplyDecision(id,d,working);if(bvomBbNumericExercise(id)&&Number.isFinite(load)&&load>0)bvomBbRecordPerformanceRef(id,load,sets[0]?.reps,working)}}state.bodybuilding=working.bodybuilding;const gpp=bvomGppResultSnapshot(),historySession=JSON.parse(JSON.stringify(state.session));state.history.push({date:new Date().toISOString(),...bvomHistoryExportMeta(historySession,duration),unit:unitLabel(),program:'bodybuilding',day,incomplete:!complete,session:historySession,gpp,note:note||'',duration,volume:Number.isFinite(volume)?volume:null,bodybuilding:{workoutNumber:state.bodybuilding.completedSessions+1,decisions}});if(complete){state.bodybuilding.completedSessions=Math.min(24,state.bodybuilding.completedSessions+1);state.bodybuilding.status=state.bodybuilding.completedSessions>=24?'completed':'active'}state.backupWorkoutCount=(state.backupWorkoutCount||0)+1;state.session={};state.gppSession={};state.sessionOverrides={};state.processed={};state.processedSnapshots={};state.warmupDone={};state.warmupPlans={};state.workoutStartedAt=null;state.day=bvomBbDay();if(window.__bvomCloudBooted)bvomCloud.deferWorkoutCommit=true;
  if(!save({durable:true})){state=before;bvomCloud.deferWorkoutCommit=oldDefer;return}
@@ -3730,9 +3847,9 @@ function bvomBbOnRampTarget(id){const x=BVOM_BB_EXERCISES[id],m=bvomBbLoadingMet
 function bvomBbOnRampSetCount(id){const e=bvomBbOnRampEx(id);if(e.state!=='CONFIRMED')return 1;return bvomBbSetCount(bvomBbPrescription(id))||Number(BVOM_BB_EXERCISES[id]?.sets)||2}
 function bvomBbOnRampLoadLabel(id,i){const e=bvomBbOnRampEx(id),x=BVOM_BB_EXERCISES[id],rx=bvomBbPrescription(id),q=rx?.sets?.[i];if(bvomBbNumericExercise(id)){const v=i===0?bvomBbOnRampNumericValue(id,e):q?.load??bvomBbOnRampNumericValue(id,e);return v?`${fmt(v)} ${unitLabel()}${x.equipment==='dumbbell'?' each':''}`:'Find load'}return e.resistance||bvomBbProgress(id).resistance||'Choose assistance / variation'}
 function bvomBbOnRampStatusText(e){return e.state==='CONFIRMED'?'Starting load confirmed ✓':e.state==='PROVISIONAL'?'Provisional — confirm this exposure':'Find your starting load'}
-function bvomBbOnRampRenderWorkout(){const day=bvomBbOnRampDay(),o=bvomBbOnRampEnsure(),n=o.sessionsCompleted+1;let h=`<div class="toprow"><div><b>BODYBUILDING ON-RAMP · SESSION ${n} OF 6 — ${day}</b><div class="small">Low-stress familiarisation · if unsure, stop earlier rather than later</div></div></div><div class="card"><div class="small">Stop when you believe you could perform about two more good reps with the same technique. First exposure is for finding the neighbourhood, not testing your limit.</div><button class="secondary wide" style="margin-top:8px" onclick="bvomBbOnRampSkip()">SKIP ON-RAMP</button>${bvomBbOnRampAllConfirmed()?'<button class="primary wide" onclick="bvomBbOnRampHandoff(true)">START 8-WEEK BLOCK NOW</button>':''}</div>`;for(const slot of bvomBbOnRampSlots(day)){const id=state.bodybuilding.selections[slot],x=BVOM_BB_EXERCISES[id],e=bvomBbOnRampEx(id),range=bvomBbOnRampTarget(id),ss=state.session[bvomBbOnRampSessionKey(id)]||{},count=bvomBbOnRampSetCount(id);h+=`<div class="exercise"><div class="exhead"><div><div class="exname">${bvomEsc(x.name)}</div><div class="small">${slot} · ${BVOM_BB_SLOT_LABELS[slot]} · ${bvomBbOnRampStatusText(e)}</div></div></div><div class="sets">`;for(let i=0;i<count;i++){const log=ss[i];h+=`<div class="setwrap"><button class="set ${log?'done':''}" onclick="bvomBbOnRampSetModal('${id}',${i})">${log?log.reps:'✓'}</button><div class="setload">${log?.bodyweight===true?bvomEsc(bvomBwSetText(log)):bvomBbOnRampLoadLabel(id,i)+' × '+range[0]+'–'+range[1]}</div></div>`}h+=`</div><button class="secondary" style="margin-top:8px" onclick="bvomBbOnRampSwap('${slot}')">THIS EXERCISE DOESN'T FEEL RIGHT</button></div>`}h+=renderAccessories17();document.querySelector('#workout').innerHTML=h}
+function bvomBbOnRampRenderWorkout(){const day=bvomBbOnRampDay(),o=bvomBbOnRampEnsure(),n=o.sessionsCompleted+1;let h=`<div class="toprow"><div><b>BODYBUILDING ON-RAMP · SESSION ${n} OF 6 — ${day}</b><div class="small">Low-stress familiarisation · if unsure, stop earlier rather than later</div></div></div><div class="card"><div class="small">Stop when you believe you could perform about two more good reps with the same technique. First exposure is for finding the neighbourhood, not testing your limit.</div><button class="secondary wide" style="margin-top:8px" onclick="bvomBbOnRampSkip()">SKIP ON-RAMP</button>${bvomBbOnRampAllConfirmed()?'<button class="primary wide" onclick="bvomBbOnRampHandoff(true)">START 8-WEEK BLOCK NOW</button>':''}</div>`;for(const slot of bvomBbOnRampSlots(day)){const id=state.bodybuilding.selections[slot],x=BVOM_BB_EXERCISES[id],e=bvomBbOnRampEx(id),range=bvomBbOnRampTarget(id),ss=state.session[bvomBbOnRampSessionKey(id)]||{},count=bvomBbOnRampSetCount(id);h+=`<div class="exercise" id="work-bb-${slot}"><div class="exhead"><div><div class="exname">${bvomEsc(x.name)}</div><div class="small">${slot} · ${BVOM_BB_SLOT_LABELS[slot]} · ${bvomBbOnRampStatusText(e)}</div></div></div><div class="sets">`;for(let i=0;i<count;i++){const log=ss[i];h+=`<div class="setwrap"><button class="set ${log?'done':''}" onclick="bvomBbOnRampSetModal('${id}',${i})">${log?log.reps:'✓'}</button><div class="setload">${log?.bodyweight===true?bvomEsc(bvomBwSetText(log)):bvomBbOnRampLoadLabel(id,i)+' × '+range[0]+'–'+range[1]}</div></div>`}h+=`</div><button class="secondary" style="margin-top:8px" onclick="bvomBbOnRampSwap('${slot}')">THIS EXERCISE DOESN'T FEEL RIGHT</button></div>`}h+=renderAccessories17();h+=renderGpp17();document.querySelector('#workout').innerHTML=h}
 function bvomBbOnRampLoadStep(id,e=bvomBbOnRampEx(id)){const n=Number(e.increment);if(Number.isFinite(n)&&n>0)return n;return bvomBbLoadStep(id)}
-function bvomBbOnRampSetModal(id,i){if(!bvomWorkoutActionAllowed())return;const x=BVOM_BB_EXERCISES[id],e=bvomBbOnRampEx(id),range=bvomBbOnRampTarget(id),numeric=bvomBbNumericExercise(id),ss=state.session[bvomBbOnRampSessionKey(id)]||(x.equipment==='bodyweight'?{}:(state.session[bvomBbOnRampSessionKey(id)]={})),existing=ss[i],first=e.state==='UNSET';const entryUnit=unitLabel();const o=document.createElement('div');o.className='bvomModalOverlay';o.innerHTML=`<div class="bvomModal"><h3>${bvomEsc(x.name)} · ${first?'FIND':e.state==='PROVISIONAL'?'CONFIRM':'On-Ramp set '+(i+1)}</h3><div class="sub">Target ${range[0]}–${range[1]} reps · leave about two good reps. ${first?'If unsure, stop conservatively.':''}</div>${numeric?`<label>Actual load (${unitLabel()})${x.equipment==='dumbbell'?' — per dumbbell':''}<input data-load type="number" min="0.25" step=".25" value="${existing?.load??bvomBbOnRampNumericValue(id,e)??''}"></label><label>Smallest practical increase on this equipment (${unitLabel()})<input data-inc type="number" min="0.01" step=".01" value="${e.increment??bvomBbProgress(id).increment??''}" placeholder="e.g. 2.5"></label><div class="small">Enter this once for this exercise. BVOM will remember it.</div>`:(x.equipment==='bodyweight'?bvomBwFields(existing?.load??bvomBbProgress(id).recordingLoad??0,existing?.resistance??e.resistance??bvomBbProgress(id).resistance,existing?.bodyweight===true?existing.approximateBodyweight:bvomBbProgress(id).approximateBodyweight)+bvomBwIncrementField(bvomBbProgress(id).addedWeightIncrement):`<label>Assistance / resistance / variation<input data-res type="text" maxlength="80" value="${bvomEsc(existing?.resistance??e.resistance??'')}"></label>`)}<label>Reps<input data-reps type="number" min="0" step="1" value="${existing?.reps??range[1]}"></label>${e.state!=='CONFIRMED'&&i===0?`<label>How did that feel?<select data-feel><option value="about_right">About right</option><option value="too_easy">Too easy</option><option value="too_hard">Too hard</option></select></label>`:''}<div class="modalActions"><button data-cancel>CANCEL</button><button class="primary" data-save>RECORD</button></div></div>`;document.body.appendChild(o);o.querySelector('[data-cancel]').onclick=()=>o.remove();o.querySelector('[data-save]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;if(x.equipment==='bodyweight'&&unitLabel()!==entryUnit){alert(bvomT('bodyweight.changed'));return}const bw=x.equipment==='bodyweight'?bvomBwRead(o):null;if(x.equipment==='bodyweight'&&!bw)return;const bwIncrement=bw?bvomBwIncrementRead(o):null;if(bw&&bwIncrement===null)return;const before=bw?JSON.parse(JSON.stringify(state)):null;if(bw&&(o.querySelector('[data-reps]').value===''||!Number.isInteger(Number(o.querySelector('[data-reps]').value))||Number(o.querySelector('[data-reps]').value)<0)){alert(bvomT('bodyweight.invalid'));return}const reps=Math.max(0,Math.floor(Number(o.querySelector('[data-reps]').value)||0)),feel=o.querySelector('[data-feel]')?.value||'about_right',wasConfirming=!!(i===0&&e.state==='CONFIRMED'&&existing?.confirmedExposure),rec={reps,index:i,onramp:true};if(numeric){const load=Number(o.querySelector('[data-load]').value);if(!(load>0)){alert('Enter the load used.');return}rec.load=load;const inc=Number(o.querySelector('[data-inc]')?.value);if(!(inc>0)){alert('Enter the smallest practical increase for this equipment.');return}e.load=load;e.increment=inc}else{if(bw){Object.assign(rec,bw);const p=bvomBbProgress(id);p.recordingLoad=bw.load;p.approximateBodyweight=bw.approximateBodyweight;p.addedWeightIncrement=bwIncrement}else rec.load=0;rec.resistance=String(o.querySelector('[data-res]').value||'').trim();if(rec.resistance)e.resistance=rec.resistance}if(bw)state.session[bvomBbOnRampSessionKey(id)]=ss;ss[i]=rec;if(i===0&&(e.state!=='CONFIRMED'||wasConfirming)){const floor=range[0],ceiling=range[1],tooHeavy=reps<floor||feel==='too_hard';if(numeric){const step=bvomBbOnRampLoadStep(id,e);if(tooHeavy&&step>0)e.load=bvomBbRoundToStep(Number(e.load)-step,step);else if(((reps>ceiling&&feel==='about_right')||(reps>=ceiling&&feel==='too_easy'))&&step>0)e.load=bvomBbRoundToStep(Number(e.load)+step,step)}else if(tooHeavy)e.pendingDifficulty='easier';else if((reps>ceiling&&feel==='about_right')||(reps>=ceiling&&feel==='too_easy'))e.pendingDifficulty='harder';if(wasConfirming){if(!tooHeavy&&feel==='about_right'&&reps>=floor&&reps<=ceiling){e.state='CONFIRMED';rec.confirmedExposure=true}else e.state='PROVISIONAL'}else if(e.state==='UNSET')e.state='PROVISIONAL';else if(!existing&&!tooHeavy&&feel==='about_right'&&reps>=floor&&reps<=ceiling){e.state='CONFIRMED';rec.confirmedExposure=true}}if(!state.workoutStartedAt)state.workoutStartedAt=Date.now();bvomMarkThisTabAsWorkoutOwner();if(!save({durable:true})&&bw){state=before;return}o.remove();startTimer();renderWorkout();bvomSyncWorkoutControls()}}
+function bvomBbOnRampSetModal(id,i){if(!bvomWorkoutActionAllowed())return;const x=BVOM_BB_EXERCISES[id],e=bvomBbOnRampEx(id),range=bvomBbOnRampTarget(id),numeric=bvomBbNumericExercise(id),ss=state.session[bvomBbOnRampSessionKey(id)]||(x.equipment==='bodyweight'?{}:(state.session[bvomBbOnRampSessionKey(id)]={})),existing=ss[i],first=e.state==='UNSET';const entryUnit=unitLabel();const o=document.createElement('div');o.className='bvomModalOverlay';o.innerHTML=`<div class="bvomModal"><h3>${bvomEsc(x.name)} · ${first?'FIND':e.state==='PROVISIONAL'?'CONFIRM':'On-Ramp set '+(i+1)}</h3><div class="sub">Target ${range[0]}–${range[1]} reps · leave about two good reps. ${first?'If unsure, stop conservatively.':''}</div>${numeric?`<label>Actual load (${unitLabel()})${x.equipment==='dumbbell'?' — per dumbbell':''}<input data-load type="number" min="0.25" step=".25" value="${existing?.load??bvomBbOnRampNumericValue(id,e)??''}"></label><label>Smallest practical increase on this equipment (${unitLabel()})<input data-inc type="number" min="0.01" step=".01" value="${e.increment??bvomBbProgress(id).increment??''}" placeholder="e.g. 2.5"></label><div class="small">Enter this once for this exercise. BVOM will remember it.</div>`:(x.equipment==='bodyweight'?bvomBwFields(existing?.load??bvomBbProgress(id).recordingLoad??0,existing?.resistance??e.resistance??bvomBbProgress(id).resistance,existing?.bodyweight===true?existing.approximateBodyweight:bvomBbProgress(id).approximateBodyweight)+bvomBwIncrementField(bvomBbProgress(id).addedWeightIncrement):`<label>Assistance / resistance / variation<input data-res type="text" maxlength="80" value="${bvomEsc(existing?.resistance??e.resistance??'')}"></label>`)}<label>Reps<input data-reps type="number" min="0" step="1" value="${existing?.reps??range[1]}"></label>${e.state!=='CONFIRMED'&&i===0?`<label>How did that feel?<select data-feel><option value="about_right">About right</option><option value="too_easy">Too easy</option><option value="too_hard">Too hard</option></select></label>`:''}<div class="bvomBbValidationNotice" data-bb-validation role="alert" aria-live="polite" hidden></div><div class="modalActions"><button data-cancel>CANCEL</button><button class="primary" data-save>RECORD</button></div></div>`;document.body.appendChild(o);o.querySelector('[data-cancel]').onclick=()=>o.remove();o.querySelector('[data-save]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;if(x.equipment==='bodyweight'&&unitLabel()!==entryUnit){bvomBbInputNotice(o,bvomT('bodyweight.changed'),'[data-load]');return}const bw=x.equipment==='bodyweight'?bvomBwRead(o,(message,field)=>bvomBbInputNotice(o,message,field)):null;if(x.equipment==='bodyweight'&&!bw)return;const bwIncrement=bw?bvomBwIncrementRead(o,(message,field)=>bvomBbInputNotice(o,message,field)):null;if(bw&&bwIncrement===null)return;const before=bw?JSON.parse(JSON.stringify(state)):null;if(bw&&(o.querySelector('[data-reps]').value===''||!Number.isInteger(Number(o.querySelector('[data-reps]').value))||Number(o.querySelector('[data-reps]').value)<0)){bvomBbInputNotice(o,bvomT('bodyweight.invalid'),'[data-reps]');return}const reps=Math.max(0,Math.floor(Number(o.querySelector('[data-reps]').value)||0)),feel=o.querySelector('[data-feel]')?.value||'about_right',wasConfirming=!!(i===0&&e.state==='CONFIRMED'&&existing?.confirmedExposure),rec={reps,index:i,onramp:true};if(numeric){const load=Number(o.querySelector('[data-load]').value);if(!(load>0)){bvomBbInputNotice(o,'Enter the load used.','[data-load]');return}rec.load=load;const inc=Number(o.querySelector('[data-inc]')?.value);if(!(inc>0)){bvomBbInputNotice(o,'Enter the smallest practical increase for this equipment.','[data-inc]');return}e.load=load;e.increment=inc}else{if(bw){Object.assign(rec,bw);const p=bvomBbProgress(id);p.recordingLoad=bw.load;p.approximateBodyweight=bw.approximateBodyweight;p.addedWeightIncrement=bwIncrement}else rec.load=0;rec.resistance=String(o.querySelector('[data-res]').value||'').trim();if(rec.resistance)e.resistance=rec.resistance}if(bw)state.session[bvomBbOnRampSessionKey(id)]=ss;ss[i]=rec;if(i===0&&(e.state!=='CONFIRMED'||wasConfirming)){const floor=range[0],ceiling=range[1],tooHeavy=reps<floor||feel==='too_hard';if(numeric){const step=bvomBbOnRampLoadStep(id,e);if(tooHeavy&&step>0)e.load=bvomBbRoundToStep(Number(e.load)-step,step);else if(((reps>ceiling&&feel==='about_right')||(reps>=ceiling&&feel==='too_easy'))&&step>0)e.load=bvomBbRoundToStep(Number(e.load)+step,step)}else if(tooHeavy)e.pendingDifficulty='easier';else if((reps>ceiling&&feel==='about_right')||(reps>=ceiling&&feel==='too_easy'))e.pendingDifficulty='harder';if(wasConfirming){if(!tooHeavy&&feel==='about_right'&&reps>=floor&&reps<=ceiling){e.state='CONFIRMED';rec.confirmedExposure=true}else e.state='PROVISIONAL'}else if(e.state==='UNSET')e.state='PROVISIONAL';else if(!existing&&!tooHeavy&&feel==='about_right'&&reps>=floor&&reps<=ceiling){e.state='CONFIRMED';rec.confirmedExposure=true}}if(!state.workoutStartedAt)state.workoutStartedAt=Date.now();bvomMarkThisTabAsWorkoutOwner();if(!save({durable:true})&&bw){state=before;return}o.remove();startTimer();renderWorkout();bvomSyncWorkoutControls()}}
 function bvomBbOnRampExerciseTouched(id){const ss=state.session[bvomBbOnRampSessionKey(id)]||{};return Object.values(ss).some(v=>v&&v.reps!==undefined)}
 // Prepare the handoff on a working copy. Caller owns its single durable commit.
 function bvomBbOnRampPrepareHandoff(target){
@@ -3752,15 +3869,16 @@ function bvomBbOnRampPrepareHandoff(target){
 function bvomBbOnRampFinish(approvedIncomplete=false){
  if(!bvomWorkoutActionAllowed()||window.__bvomFinishBusy)return;
  const day=bvomBbOnRampDay(),ids=bvomBbOnRampSlots(day).map(s=>state.bodybuilding.selections[s]),complete=ids.every(bvomBbOnRampExerciseTouched);
- if(!ids.some(bvomBbOnRampExerciseTouched))return;
+ // Accessory-only and GPP-only sessions are legitimate incomplete workouts.
+ if(!bvomSessionHasActivity())return;
  if(!complete&&!approvedIncomplete){
   bvomBbUiModal('INCOMPLETE ON-RAMP SESSION','This On-Ramp session is incomplete. Save your exercise progress without consuming an On-Ramp session?',null,()=>bvomBbOnRampFinish(true),'SAVE SESSION');return;
  }
  window.__bvomFinishBusy=true;bvomSyncWorkoutControls();
  const before=JSON.parse(JSON.stringify(state)),oldDefer=bvomCloud.deferWorkoutCommit;let committed=false;
  try{
-  const duration=bvomDuration(),historySession=JSON.parse(JSON.stringify(state.session));
-  state.history.push({date:new Date().toISOString(),...bvomHistoryExportMeta(historySession,duration),unit:unitLabel(),program:'bodybuilding',day,incomplete:!complete,session:historySession,note:'Bodybuilding On-Ramp',duration,bodybuilding:{onramp:true,sessionNumber:bvomBbOnRampEnsure().sessionsCompleted+1}});
+  const duration=bvomDuration(),gpp=bvomGppResultSnapshot(),historySession=JSON.parse(JSON.stringify(state.session));
+  state.history.push({date:new Date().toISOString(),...bvomHistoryExportMeta(historySession,duration),unit:unitLabel(),program:'bodybuilding',day,incomplete:!complete,session:historySession,gpp,note:'Bodybuilding On-Ramp',duration,bodybuilding:{onramp:true,sessionNumber:bvomBbOnRampEnsure().sessionsCompleted+1}});
   if(complete)bvomBbOnRampEnsure().sessionsCompleted=Math.min(6,bvomBbOnRampEnsure().sessionsCompleted+1);
   state.session={};state.gppSession={};state.workoutStartedAt=null;
   const finalHandoff=complete&&bvomBbOnRampEnsure().sessionsCompleted>=6;
@@ -3781,7 +3899,7 @@ function bvomBbOnRampFinish(approvedIncomplete=false){
   committed=true;
   // A committed blob with failed owner bookkeeping stops the window; don't revert it.
   if(bvomPersistenceBlocked())return;
-  cancelTimer();renderAll();
+  cancelTimer();bvomStopGppRuntime();renderAll();
   if(!finalHandoff&&complete&&bvomBbOnRampAllConfirmed())setTimeout(()=>{
    bvomBbUiModal('ON-RAMP COMPLETE','All starting loads are confirmed. Start the 8-week Bodybuilding block now?',null,()=>{
     if(bvomBbOnRampActive()&&bvomBbOnRampAllConfirmed())bvomBbOnRampHandoff(true)
@@ -3793,8 +3911,16 @@ function bvomBbOnRampFinish(approvedIncomplete=false){
   alert(committed?'On-Ramp was saved, but the screen could not refresh. Reload BVOM to verify your workout.':'On-Ramp session could not finish safely. Please try again.');
  }finally{window.__bvomFinishBusy=false;bvomSyncWorkoutControls()}
 }
+function bvomBbOnRampHandoffBlocked(){
+ // No handoff route may silently clear unsaved live training, including GPP.
+ if(!bvomStateWorkoutActive(state)&&!bvomSessionHasActivity())return false;
+ bvomBeeModal(hlmTxt('FINISH WORKOUT FIRST','先にワークアウトを終了してください'),
+  hlmTxt('Finish the current On-Ramp session to preserve your recorded sets in History. Then start the 8-week block.','現在のオンランプを終了して、記録したセットを履歴に保存してください。その後、8週間のブロックを始めてください。'));
+ return true;
+}
 function bvomBbOnRampHandoff(early=false){
- if(!bvomWorkoutActionAllowed()||window.__bvomFinishBusy)return;
+ if(!bvomWorkoutActionAllowed()||window.__bvomFinishBusy||!bvomBbOnRampActive())return;
+ if(bvomBbOnRampHandoffBlocked())return;
  const before=JSON.parse(JSON.stringify(state)),oldDefer=bvomCloud.deferWorkoutCommit;let committed=false;
  try{
   const working=JSON.parse(JSON.stringify(state)),missing=bvomBbOnRampPrepareHandoff(working);
@@ -3816,13 +3942,26 @@ function bvomBbOnRampHandoff(early=false){
   alert(committed?'On-Ramp handoff was saved, but the screen could not refresh. Reload BVOM to verify.':'Could not start the Bodybuilding block safely. Your On-Ramp data has been kept.');
  }
 }
-function bvomBbOnRampSkip(){const missing=Object.values(state.bodybuilding.selections).filter(id=>bvomBbNumericExercise(id)&&!(bvomBbOnRampNumericValue(id)>0));if(missing.length){alert('Enter the remaining starting loads before skipping the On-Ramp. Your loads already found will be kept.');const d=bvomBbSetupDraft();for(const id of Object.values(state.bodybuilding.selections)){const e=bvomBbOnRampEx(id),p=d.progression[id]||(d.progression[id]={});if(Number(e.load)>0)p.load=e.load;if(Number(e.increment)>0)p.increment=e.increment;p.calibrated=e.state==='CONFIRMED'}window.__bvomBbSetupMode='manual';bvomBbRenderFoundationSetup();return}bvomBbOnRampHandoff(true)}
+function bvomBbOnRampSkip(){if(!bvomWorkoutActionAllowed()||!bvomBbOnRampActive()||bvomBbOnRampHandoffBlocked())return;const missing=Object.values(state.bodybuilding.selections).filter(id=>bvomBbNumericExercise(id)&&!(bvomBbOnRampNumericValue(id)>0));if(missing.length){alert('Enter the remaining starting loads before skipping the On-Ramp. Your loads already found will be kept.');const d=bvomBbSetupDraft();for(const id of Object.values(state.bodybuilding.selections)){const e=bvomBbOnRampEx(id),p=d.progression[id]||(d.progression[id]={});if(Number(e.load)>0)p.load=e.load;if(Number(e.increment)>0)p.increment=e.increment;p.calibrated=e.state==='CONFIRMED'}window.__bvomBbSetupMode='manual';bvomBbRenderFoundationSetup();return}bvomBbOnRampHandoff(true)}
 function bvomBbOnRampSwap(slot){if(!bvomWorkoutActionAllowed()||!bvomBbOnRampActive())return;
  const original=state.bodybuilding.selections[slot],opts=bvomBbExerciseOptions(slot).filter(o=>o.id!==original);if(!opts.length)return;
  bvomBbUiModal('Choose a replacement for '+BVOM_BB_SLOT_LABELS[slot]+':','',opts,n=>{
   if(!bvomBbOnRampActive()||state.bodybuilding.selections[slot]!==original)return;
-  const id=opts[n-1].id;state.bodybuilding.selections[slot]=id;
-  const ramp=bvomBbOnRampEnsure();delete ramp.exercises[original];bvomBbOnRampResetExercise(id);save();renderAll()
+  const id=opts[n-1].id,before=JSON.parse(JSON.stringify(state));
+  // If other sets have already been recorded, preserve the user's current
+  // screen order. Reclassifying a hinge as a qualitative back extension
+  // must not jump cards around midway through an active On-Ramp workout.
+  const scope=bvomOrderDayKey(),record=state.exerciseDisplayOrder;
+  const entries=bvomOrderEntries(),canonical=entries.map(x=>x.key);
+  const recordObject=record&&typeof record==='object'&&!Array.isArray(record)?record:{};
+  if(bvomSessionHasActivity()&&scope&&!bvomOrderSavedValid(recordObject[scope],canonical)){
+   state.exerciseDisplayOrder={...recordObject,[scope]:bvomOrderEffective(entries,scope)};
+  }
+  state.bodybuilding.selections[slot]=id;
+  const ramp=bvomBbOnRampEnsure();delete ramp.exercises[original];bvomBbOnRampResetExercise(id);
+  if(!save({durable:true})){state=before;return}
+  if(bvomPersistenceBlocked())return;
+  renderAll()
  },'REPLACE')}
 /* ===== ISSUE #55: BODYBUILDING PROGRESSIVE WARM-UP ADAPTER — STAGE A (NOT YET WIRED TO UI) =====
  * The established strength warmups()/warmupsLb() remain untouched.
@@ -3884,37 +4023,170 @@ function bvomBbStageAWarmupPlan(id,workingLoad,onramp=false){
   return {kind:'short',sets:a,unitBasis:'per_hand',source:'equipment_fallback'};
  }
  const lift=profile.lift;
- // The core Row/Deadlift engine normally STARTS at 60 kg / 135 lb;
- // at beginner working loads that can yield no preparation. Use its
- // established lighter-lift ramp instead, never a 50/70/85 replacement.
- const lightLimit=isLb()?165:75;
- const proxyLift=(lift==='Prone Row'&&work<=lightLimit)?'Bench Press':
-                 (lift==='Deadlift'&&work<=lightLimit)?'Squat':lift;
+ // Bodybuilding exercises are independent selections and can move to the
+ // first slot. Use ONE stable standalone ramp family for rows and hinges:
+ // no cliff between 75 and 77.5 kg, and the first RDL gets light preparation.
+ // The core LP/RPT/HLM/4-Day/Custom warmups() remain byte-identical.
+ const proxyLift=lift==='Prone Row'?'Bench Press':lift==='Deadlift'?'Squat':lift;
  const raw=warmups(work,proxyLift);
  const actualBar=Number(state.barByLift?.[lift]??state.bar??(isLb()?45:20));
  const proxyBar=Number(state.barByLift?.[proxyLift]??state.bar??(isLb()?45:20));
  const a=[],seen=new Set();
+ if(profile.equipment==='machine'){
+  // No assumed Smith bar weight, machine floor, sled weight or plate maths.
+  // These are ADVISORY targets, snapped to the entered machine increment.
+  // A very light machine load cannot safely inherit a 20 kg barbell floor.
+  const addMachine=(w,reps,repeat=false)=>{
+   w=bvomBbRoundToStep(w,actualStep);
+   if(!(Number.isFinite(w)&&w>0&&w<work))return;
+   if(!repeat&&seen.has(w))return;
+   seen.add(w);a.push([w,reps]);
+  };
+  if(work<(isLb()?135:65)){
+   for(const [fraction,reps] of [[.4,5],[.65,3],[.8,2]])
+    addMachine(work*fraction,reps);
+  }else{
+   const light=bvomBbRoundToStep(work*.2,actualStep);
+   const firstCore=raw.find(([w])=>w>proxyBar+1e-6)?.[0]??work;
+   if(light>0&&light<firstCore&&light<work){
+    addMachine(light,5,true);addMachine(light,5,true);
+   }
+   for(const [w,reps] of raw)if(w>proxyBar+1e-6)addMachine(w,reps);
+  }
+  return {kind:a.length?'full':'guidance',sets:a,source:'machine_advisory',
+   unitBasis:'total',equipmentNote:'nearest_available_weight',finding:!a.length};
+ }
  for(const [unrounded,reps] of raw){
-  // An unspecified machine/Smith/landmine has no known 20 kg bar or sled.
-  // Remove proxy-bar exposures; show only plausible ramp weights as advisory.
-  if(profile.equipment!=='freebar'&&unrounded<=proxyBar+1e-6)continue;
   let w=unrounded;
-  if(profile.equipment==='freebar'&&proxyLift!==lift)w=roundWarmupLoad(w,lift);
-  if(profile.equipment==='machine'&&actualStep)w=bvomBbRoundToStep(w,actualStep);
-  if(profile.equipment==='freebar'&&w<actualBar-1e-6)continue;
-  if(!(w>0&&w<work))continue;
-  // Intentionally retain repeated true-bar exposures from the strength engine.
-  if(profile.equipment!=='freebar'||w!==actualBar){if(seen.has(w))continue;seen.add(w)}
+  // A Row/RDL may use a 10/15/25 kg real bar unlike the proxy lift.
+  // Remap only its two opening bar exposures; do not change global settings.
+  if(proxyLift!==lift)w=Math.abs(unrounded-proxyBar)<1e-6?actualBar:roundWarmupLoad(w,lift);
+  if(w<actualBar-1e-6||!(w>0&&w<work))continue;
+  // Preserve two genuine bar exposures; dedupe all other repeated loads.
+  if(w!==actualBar){if(seen.has(w))continue;seen.add(w)}
   a.push([w,reps]);
  }
  return {kind:'full',sets:a,source:'strength_engine',unitBasis:'total',
-  equipmentNote:profile.equipment==='freebar'?'verified_bar':'nearest_available_weight'};
+  equipmentNote:'verified_bar'};
 }
 /* ===== END ISSUE #55 STAGE A ===== */
+/* ===== ISSUE #55 STAGE B: OPTIONAL BODYBUILDING WARM-UP INTERACTION =====
+ * Warm-up completion is preparation only. It never records a working set,
+ * starts workout activity/calibration, or changes Bodybuilding progression.
+ */
+function bvomBbWarmStageBPlan(slot,id){
+ if(bvomBbOnRampActive())return bvomBbStageAWarmupPlan(id,null,true);
+ const p=state.bodybuilding?.progression?.[id]||{};
+ const w=Number(p.load??p.topLoad);
+ return bvomBbStageAWarmupPlan(id,w,false);
+}
+function bvomBbWarmStageBKey(slot,id){
+ const b=state.bodybuilding||{},o=b.onramp||{},phase=bvomBbOnRampActive()?'onramp':'block';
+ const number=phase==='onramp'?Number(o.sessionsCompleted)||0:Number(b.completedSessions)||0;
+ return 'BBW|'+String(b.startedAt||'new')+'|'+phase+'|'+number+'|'+slot+'|'+id;
+}
+function bvomBbWarmStageBFingerprint(slot,id,plan){
+ const p=state.bodybuilding?.progression?.[id]||{};
+ // Exact plan + loading context invalidate stale ticks if loads or settings change.
+ return JSON.stringify([slot,id,unitLabel(),plan.kind,plan.sets,plan.source||'',
+  Number(p.load??p.topLoad)||null,Number(p.increment)||null,
+  state.barByLift||{},state.bar,state.enabledStandard,state.enabledMicro]);
+}
+function bvomBbWarmStageBToken(str){
+ let h=2166136261;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)}
+ return (h>>>0).toString(36);
+}
+function bvomBbWarmStageBClock(){
+ // Timer state was included in the SAME durable warm-up save; never call
+ // startTimer() here because that would create a second, fallible commit.
+ clearInterval(timerInt);dinged={};
+ const bar=document.querySelector('#timerbar');if(bar)bar.classList.remove('idle');
+ tick();timerInt=setInterval(tick,250);
+}
+function bvomBbWarmStageBTap(slot,index,token){
+ if(!isBodybuilding()||!bvomWorkoutActionAllowed())return false;
+ const slots=bvomBbOnRampActive()?bvomBbOnRampSlots(bvomBbOnRampDay()):bvomBbSlotsForDay(bvomBbDay());
+ if(!slots.includes(slot))return false;
+ const id=state.bodybuilding?.selections?.[slot],plan=bvomBbWarmStageBPlan(slot,id);
+ if(bvomBbOnRampActive()||!plan||!Number.isInteger(index)||index<0||index>=plan.sets.length)return false;
+ const fingerprint=bvomBbWarmStageBFingerprint(slot,id,plan);
+ if(token!==bvomBbWarmStageBToken(fingerprint))return false; // stale screen
+ const key=bvomBbWarmStageBKey(slot,id),priorMap=state.warmupDone,priorTimer=state.timerStart;
+ const previous=priorMap?.[key],done=previous?.fingerprint===fingerprint?{...previous.done}:{};
+ const removing=!!done[index];
+ if(removing)delete done[index];else done[index]=true;
+ const next={...(priorMap||{})};
+ if(!Object.keys(done).length)delete next[key];else next[key]={fingerprint,done};
+ state.warmupDone=next;
+ if(!removing)state.timerStart=Date.now();
+ // A saved warm-up tick counts as meaningful activity only if real workout
+ // activity already exists. Rest-timer-only actions remain passive.
+ if(!save({durable:true,activity:true})){
+  if(priorMap===undefined)delete state.warmupDone;else state.warmupDone=priorMap;
+  state.timerStart=priorTimer;
+  return false;
+ }
+ if(bvomPersistenceBlocked())return true; // committed but window stopped
+ if(!removing)bvomBbWarmStageBClock();
+ renderWarm();
+ if(!removing&&index===plan.sets.length-1){
+  activateTab('workout');scrollExercise('work-bb-',slot);
+ }
+ return true;
+}
+function bvomBbWarmStageBRest(){
+ // A qualitative On-Ramp prep set can use the normal rest clock, but never
+ // creates a phantom calibration attempt or completed warm-up set.
+ if(!isBodybuilding()||!bvomWorkoutActionAllowed())return false;
+ const previous=state.timerStart;state.timerStart=Date.now();
+ if(!save({durable:true})){state.timerStart=previous;return false}
+ if(bvomPersistenceBlocked())return true;
+ bvomBbWarmStageBClock();return true;
+}
+function bvomBbWarmStageBRender(){
+ const onramp=bvomBbOnRampActive(),day=onramp?bvomBbOnRampDay():bvomBbDay();
+ if(!day)return;
+ const slots=onramp?bvomBbOnRampSlots(day):bvomBbSlotsForDay(day);
+ let html='<div class="toprow"><div><b>'+hlmTxt('BODYBUILDING WARM-UP','ボディビルディング・ウォームアップ')+' — '+day+'</b><div class="small">'+hlmTxt('Optional preparation. Warm-ups do not count as working sets or calibration.','準備運動は任意です。ウォームアップはワーキングセットや開始重量の確認には含まれません。')+'</div></div></div>';
+ for(const slot of slots){
+  const id=state.bodybuilding.selections[slot],ex=BVOM_BB_EXERCISES[id],plan=bvomBbWarmStageBPlan(slot,id);
+  const key=bvomBbWarmStageBKey(slot,id),fingerprint=bvomBbWarmStageBFingerprint(slot,id,plan),token=bvomBbWarmStageBToken(fingerprint);
+  const marks=state.warmupDone?.[key],done=marks?.fingerprint===fingerprint?marks.done||{}:{};
+  const title=plan.kind==='full'?hlmTxt('Progressive warm-up','段階的なウォームアップ'):
+              plan.kind==='short'?hlmTxt('Short preparation','短い準備運動'):
+              plan.kind==='guidance'?hlmTxt('Prepare for your working sets','ワーキングセットの準備'):
+              hlmTxt('No prescribed warm-up','指定ウォームアップなし');
+  html+='<div class="exercise" id="warm-bb-'+slot+'"><div class="exhead"><div><div class="exname">'+bvomEsc(ex.name)+'</div><div class="small">'+title+'</div></div></div>';
+  if(onramp&&plan.kind!=='none'){
+   html+='<p class="small">'+hlmTxt('Start very easy. Increase gradually until you find a weight you can use for the prescribed reps with about two good reps left. Only record the actual On-Ramp sets as calibration.','軽い重量から始め、余裕を持って指定回数ができる重量まで少しずつ上げましょう。開始重量の確認として記録するのは実際のオンランプのセットだけです。')+'</p>';
+   html+='<button type="button" class="secondary" onclick="bvomBbWarmStageBRest()">'+hlmTxt('START REST TIMER','休憩タイマー開始')+'</button>';
+  }else if(plan.kind==='guidance'){
+   html+='<p class="small">'+(plan.equipmentNote==='nearest_available_weight'?
+    hlmTxt('Start with the lightest comfortable setting on this equipment; use a few easy reps before working sets. Do not assume a standard machine starting weight.','このマシンで無理のない軽い重量から始め、ワーキングセットの前に数回ゆっくり動かしてください。マシンの初期重量は機種によって異なります。'):
+    hlmTxt('Use an easier variation or more assistance for a few controlled preparation reps.','軽いバリエーションや補助を使い、数回の丁寧な準備運動を行ってください。'))+'</p>';
+   html+='<button type="button" class="secondary" onclick="bvomBbWarmStageBRest()">'+hlmTxt('START REST TIMER','休憩タイマー開始')+'</button>';
+  }else if(!plan.sets.length){
+   html+='<p class="small">'+hlmTxt('No dedicated warm-up required.','専用のウォームアップは必要ありません。')+'</p>';
+  }else{
+   for(let i=0;i<plan.sets.length;i++){
+    const [weight,reps]=plan.sets[i],checked=!!done[i];
+    html+='<div class="warmrow"><button type="button" class="set '+(checked?'done':'')+'" aria-label="'+hlmTxt('Mark warm-up set','ウォームアップセットを記録')+' '+(i+1)+'" onclick="bvomBbWarmStageBTap(\''+slot+'\','+i+',\''+token+'\')">✓</button><b>'+fmt(weight)+' '+unitLabel()+' × '+reps+'</b><span class="plates">'+hlmTxt('warm-up only','ウォームアップのみ')+'</span></div>';
+   }
+   if(plan.unitBasis==='per_hand')html+='<p class="small">'+hlmTxt('Dumbbell weight per hand.','ダンベルは片手あたりの重量です。')+'</p>';
+   if(plan.equipmentNote==='nearest_available_weight')html+='<p class="small">'+hlmTxt('Machine or Smith: use the nearest practical available weight. Equipment resistance varies.','マシンやスミスは使用できる近い重量に調整してください。機器によって負荷が異なります。')+'</p>';
+   const working=Number(state.bodybuilding?.progression?.[id]?.load??state.bodybuilding?.progression?.[id]?.topLoad);
+   if(working>0)html+='<div class="warmrow"><span></span><b>'+hlmTxt('Working weight','ワーキング重量')+': '+fmt(working)+' '+unitLabel()+'</b><span class="plates">'+hlmTxt('Follow the workout prescription','ワークアウトの指示に従ってください')+'</span></div>';
+  }
+  html+='</div>';
+ }
+ document.querySelector('#warmup').innerHTML=html;
+}
+/* ===== END ISSUE #55 STAGE B ===== */
+
 function bvomBbWarmClass(slot){if(['A1','A2','A3','B1','B2','B3'].includes(slot))return 'full';if(['A4','B4'].includes(slot))return 'feeder';return 'none'}
 function bvomBbWarmRound(id,v){const step=bvomBbOnRampActive()?bvomBbOnRampLoadStep(id):bvomBbLoadStep(id),x=BVOM_BB_EXERCISES[id];if(x?.equipment==='dumbbell'||x?.equipment==='machine')return bvomBbRoundToStep(v,step);return bvomBbRoundToStep(v,step)}
 function bvomBbWarmPlan(slot,id){const x=BVOM_BB_EXERCISES[id],cl=bvomBbWarmClass(slot),load=bvomBbOnRampActive()?bvomBbOnRampNumericValue(id):Number(bvomBbProgress(id).load??bvomBbProgress(id).topLoad);if(cl==='none')return {kind:'none',sets:[]};if(!bvomBbNumericExercise(id)){if(x?.equipment==='band')return {kind:cl,sets:[['Lighter band',5]]};if(id==='back_extension_45')return {kind:cl,sets:[['Bodyweight',5]]};return {kind:cl,sets:[['Easier variation / more assistance',3]]}}if(!(load>0))return {kind:cl,sets:[],finding:true};const ps=cl==='feeder'?[[.65,5]]:(['machine','dumbbell'].includes(x.equipment)?[[.60,5],[.80,2]]:[[.50,5],[.70,3],[.85,2]]),standardBar=['barbell_bench_press','high_bar_squat','heel_elevated_barbell_squat','barbell_row','romanian_deadlift','good_morning','incline_barbell_press'].includes(id),barFloor=standardBar?(isLb()?45:20):0,seen=new Set(),sets=[];for(const [pct,reps] of ps){let w=bvomBbWarmRound(id,load*pct);if(barFloor>0)w=Math.max(w,barFloor);if(!(w>0)||w>=load)continue;const k=String(w);if(seen.has(k))continue;seen.add(k);sets.push([w,reps])}return {kind:cl,sets,load}}
-function bvomBbRenderFoundationWarm(){const day=bvomBbOnRampActive()?bvomBbOnRampDay():bvomBbDay(),slots=bvomBbOnRampActive()?bvomBbOnRampSlots(day):bvomBbSlotsForDay(day);let h=`<div class="toprow"><div><b>BODYBUILDING WARM-UP — ${day}</b><div class="small">Preparation only — warm-ups never count toward progression or calibration.</div></div></div>`;for(const slot of slots){const id=state.bodybuilding.selections[slot],x=BVOM_BB_EXERCISES[id],p=bvomBbWarmPlan(slot,id);h+=`<div class="exercise"><div class="exhead"><div><div class="exname">${bvomEsc(x.name)}</div><div class="small">${p.kind==='full'?'Full warm-up':p.kind==='feeder'?'Feeder set':'No prescribed warm-up'}</div></div></div>`;if(p.finding)h+=`<div class="small">Working load not known yet. Start clearly easy and use a few low-fatigue ramp reps to approach a plausible calibration load. Ramp sets are not calibration attempts.</div>`;else if(!p.sets.length)h+=`<div class="small">No dedicated warm-up needed.</div>`;else for(const [w,r] of p.sets)h+=`<div class="warmrow"><span></span><b>${typeof w==='number'?fmt(w)+' '+unitLabel():w} × ${r}</b><span class="plates">warm-up only</span></div>`;h+=`</div>`}document.querySelector('#warmup').innerHTML=h}
+function bvomBbRenderFoundationWarm(){return bvomBbWarmStageBRender()}
 const bvomBbDev36WorkoutBase=bvomBbRenderFoundationWorkout;bvomBbRenderFoundationWorkout=function(){if(bvomBbOnRampActive())return bvomBbOnRampRenderWorkout();return bvomBbDev36WorkoutBase()}
 const bvomBbDev36FinishBase=bvomBbFinish;bvomBbFinish=function(...args){if(!bvomWorkoutActionAllowed())return;if(bvomBbOnRampActive())return bvomBbOnRampFinish(...args);return bvomBbDev36FinishBase(...args)}
 const bvomBbDev36ChangeUnitsBase=changeUnits;changeUnits=function(to,quiet=false){if(!bvomWorkoutActionAllowed())return;const before=state.unit||'kg',activeBbLoads=[];for(const [key,ss] of Object.entries(state.session||{})){if(!key.startsWith('BB:')&&!key.startsWith('BBOR:'))continue;for(const [i,set] of Object.entries(ss||{}))if(set&&set.load!=null&&set.bodyweight!==true){const m=set._unitLoadOrigins?.load,load=Number(set.load),roundTrip=!!(m&&m.unit===to&&m.convertedUnit===before&&Math.abs(Number(m.converted)-load)<1e-9&&Number.isFinite(Number(m.value)));activeBbLoads.push({key,i,load,roundTrip})}}bvomBbDev36ChangeUnitsBase(to,quiet);if(before===state.unit||!state.bodybuilding)return;if(state.bodybuilding.onramp){for(const e of Object.values(state.bodybuilding.onramp.exercises||{})){if(!e)continue;const step=bvomConvertIncrementRoundTrip(e,e.increment??2.5,before,to);if(e.load!=null)e.load=bvomBbConvertLoadRoundTrip(e,e.load,before,to,step);e.increment=step}}for(const x of activeBbLoads){const ss=state.session?.[x.key],set=ss?.[x.i];if(!set)continue;if(x.roundTrip)continue;if(!(x.load>0)){set.load=x.load;continue}const id=x.key.startsWith('BBOR:')?x.key.slice(5):x.key.slice(3),step=x.key.startsWith('BBOR:')?bvomBbOnRampLoadStep(id):bvomBbLoadStep(id),converted=bvomBbConvertLoadToStep(x.load,to,step);set.load=converted;const m=set._unitLoadOrigins?.load;if(m&&m.unit===before&&m.convertedUnit===to&&Math.abs(Number(m.value)-x.load)<1e-9)m.converted=converted}save();if(state.configured)renderAll()}
@@ -4438,11 +4710,50 @@ function bvomOrderDayKey(){
  const day=isBodybuilding()?(bvomBbOnRampActive()?bvomBbOnRampDay():bvomBbDay()):state.day;
  return day==null?null:mode+':'+String(day);
 }
+function bvomBbOrderPriority(slot,id){
+ // Warm-up-first, not merely compound-first. Profile 'compound' means
+ // this chosen movement has numerical/short progressive preparation in the
+ // main block; 'qualitative' (e.g. Chin-Up, Nordic Curl, Back Extension)
+ // has guidance only, and 'none' has no dedicated warm-up. On-Ramp uses
+ // qualitative load-finding for everyone but follows the same future plan.
+ const kind=BVOM_BB_WARMUP_STAGE_A_PROFILES[id]?.kind||'none';
+ const tier=kind==='compound'?0:kind==='qualitative'?1:2;
+ if(slot[0]==='A'){
+  // Preserve Squat -> Bench -> Row and Nordic -> Triceps -> Laterals.
+  const rank={A2:0,A1:1,A3:2,A4:3,A6:4,A5:5};
+  return tier*10+(rank[slot]??9);
+ }
+ // B uses the owner's actual phone-tested equipment/flow preference:
+ // hinge -> compound split squat -> incline press -> vertical pull,
+ // then curl ahead of rear delts. A qualitative Chin-Up cannot jump
+ // ahead of a DB press or split squat that needs progressive preparation.
+ const heavy={B2:0,B4:1,B3:2,B1:3,B6:4,B5:5};
+ const qualitative={B1:0,B2:1,B3:2,B4:3,B6:4,B5:5};
+ const accessory={B4:0,B6:1,B5:2,B1:3,B2:4,B3:5};
+ const rank=tier===0?heavy:tier===1?qualitative:accessory;
+ return tier*10+(rank[slot]??9);
+}
+function bvomOrderDefault(entries=bvomOrderEntries(),scope=bvomOrderDayKey()){
+ const canonical=entries.map(x=>x.key);
+ if(!isBodybuilding()||!['bodybuilding:A','bodybuilding:B'].includes(scope)||
+    canonical.length!==6||new Set(canonical).size!==6||
+    !canonical.every(slot=>/^[AB][1-6]$/.test(slot)&&slot[0]===scope.at(-1)))return canonical;
+ const selections=state.bodybuilding?.selections||{};
+ if(!canonical.every(slot=>BVOM_BB_EXERCISES[selections[slot]]?.slots.includes(slot)))return canonical;
+ // Stable, view-only sort: never change slot IDs, data, exercise-specific
+ // warm-up plans, prescriptions, set keys, or History.
+ return [...canonical].sort((a,b)=>bvomBbOrderPriority(a,selections[a])-bvomBbOrderPriority(b,selections[b]));
+}
+function bvomOrderSavedValid(saved,canonical){
+ return Array.isArray(saved)&&saved.length===canonical.length&&
+   new Set(saved).size===saved.length&&saved.every(x=>canonical.includes(x));
+}
 function bvomOrderEffective(entries=bvomOrderEntries(),scope=bvomOrderDayKey()){
  const canonical=entries.map(x=>x.key),record=state.exerciseDisplayOrder;
- if(!scope||!canonical.length||new Set(canonical).size!==canonical.length)return canonical;
+ const defaults=bvomOrderDefault(entries,scope);
+ if(!scope||!canonical.length||new Set(canonical).size!==canonical.length)return defaults;
  const saved=record&&typeof record==='object'&&!Array.isArray(record)?record[scope]:null;
- if(!Array.isArray(saved)||saved.length!==canonical.length||new Set(saved).size!==saved.length||!saved.every(x=>canonical.includes(x)))return canonical;
+ if(!bvomOrderSavedValid(saved,canonical))return defaults;
  return [...saved];
 }
 function bvomOrderChange(key,direction){
@@ -4453,7 +4764,7 @@ function bvomOrderChange(key,direction){
  const previous=state.exerciseDisplayOrder;
  const next=previous&&typeof previous==='object'&&!Array.isArray(previous)?{...previous}:{};
  [order[i],order[j]]=[order[j],order[i]];
- if(order.every((x,n)=>x===entries[n].key))delete next[scope];else next[scope]=order;
+ if(order.every((x,n)=>x===bvomOrderDefault(entries,scope)[n]))delete next[scope];else next[scope]=order;
  state.exerciseDisplayOrder=next;
  if(!save({durable:true})){if(previous===undefined)delete state.exerciseDisplayOrder;else state.exerciseDisplayOrder=previous;return false}
  renderAll();return true;
@@ -4491,7 +4802,7 @@ function bvomOrderApply(view){
   }
   header.insertBefore(controls,header.querySelector('.weight')||null);
  }
- if(ordered.some((x,i)=>x!==entries[i].key)){
+ if(ordered.some((x,i)=>x!==bvomOrderDefault(entries,scope)[i])){
   const row=document.createElement('div');row.className='bvomOrderReset';
   const reset=document.createElement('button');reset.type='button';
   reset.textContent=hlmTxt('RESET EXERCISE ORDER','種目の順番をリセット');
@@ -4508,7 +4819,7 @@ renderWarm=function(...args){const out=bvomOrderBaseWarm(...args);bvomOrderApply
 bvomHideMainSurfaces();if("serviceWorker" in navigator){
   window.addEventListener("load", async ()=>{
     try{
-      const reg = await navigator.serviceWorker.register("./sw.js?v=2.9.12");
+      const reg = await navigator.serviceWorker.register("./sw.js?v=2.9.13");
       bvomWatchServiceWorkerUpdate(reg);
       navigator.serviceWorker.addEventListener("controllerchange", ()=>{
         bvomSwFinishRequestedReload();

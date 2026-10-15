@@ -1,0 +1,362 @@
+'use strict';
+// Issue #55 — Monkey 021: actual BVOM application in phone-width Chromium.
+// Purely local fixtures, fake offline entitlement, and no external services.
+// Uses REAL HTML, callbacks, native DOM, browser storage and Web Locks.
+// Does not rely on Node VM emulation for the interactions under test.
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path'),http=require('node:http');
+const {chromium}=require('playwright'),H=require('./lib/bvom_harness');
+const root=path.resolve(__dirname,'../..'),build=H.loadBuild(root);
+const started=Date.now();
+let checks=0;const pass=s=>{console.log('PASS M021: '+s);checks++};
+
+function fixture({onramp=false,lang='en',day='A'}={}){
+ const h=H.boot(build);H.bbStart(h,{onramp});
+ const s=h.S(),b=s.bodybuilding;
+ b.selections.A1='barbell_bench_press';b.selections.A2='high_bar_squat';b.selections.A3='barbell_row';
+ b.selections.B2='romanian_deadlift';b.selections.B4='bulgarian_split_squat';
+ s.language=lang;s.accessoryList=[];s.gppList=[];
+ if(!onramp&&day==='B'){b.completedSessions=1;s.day='B'}
+ const loads={barbell_bench_press:85,high_bar_squat:100,barbell_row:50,romanian_deadlift:100,bulgarian_split_squat:20};
+ for(const [id,load] of Object.entries(loads)){
+  const p=b.progression[id]||(b.progression[id]={});Object.assign(p,{load,topLoad:load,increment:2.5,calibrated:true});
+ }
+ if(onramp){
+  for(const id of Object.values(b.selections)){
+   const e=h.ctx.bvomBbOnRampEx(id);e.state='CONFIRMED';
+   e.load=loads[id]||50;e.increment=2.5;
+  }
+ }
+ h.ev('save()');return JSON.parse(JSON.stringify(s));
+}
+const server=http.createServer((req,res)=>{
+ const url=new URL(req.url,'http://localhost');
+ if(url.pathname==='/seed'){res.writeHead(200,{'Content-Type':'text/html'});res.end('<!doctype html><title>BVOM isolated test seed</title>');return}
+ const file=path.resolve(root,'.'+url.pathname);
+ if(!file.startsWith(root+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return}
+ res.writeHead(200,{'Cache-Control':'no-store','Content-Type':file.endsWith('.html')?'text/html; charset=utf-8':file.endsWith('.js')?'application/javascript':'application/octet-stream'});
+ res.end(fs.readFileSync(file));
+});
+const read=page=>page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
+const raw=page=>page.evaluate(()=>localStorage.getItem('bvom_data'));
+const wait=async page=>{await page.waitForSelector('#app:not(.hidden)',{timeout:15000});await page.waitForTimeout(150)};
+let browser,origin;
+
+async function openScenario(data,{clock=false}={}){
+ const context=await browser.newContext({serviceWorkers:'block',viewport:{width:375,height:812},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+ context.setDefaultTimeout(8000);
+ await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
+ await context.addInitScript(()=>Object.defineProperty(navigator,'onLine',{get:()=>false}));
+ if(clock)await context.addInitScript(({now})=>{
+  const NativeDate=Date;window.monkeyNow=now;
+  window.Date=class extends NativeDate{
+   constructor(...args){super(...(args.length?args:[window.monkeyNow]))}
+   static now(){return window.monkeyNow}
+  };
+ },{now:Date.now()});
+ const seed=await context.newPage();await seed.goto(origin+'/seed');
+ await seed.evaluate(d=>{
+  localStorage.setItem('bvom_data',JSON.stringify(d));localStorage.setItem('bvom_data_owner','monkey021');
+  localStorage.setItem('bvom_entitlement_cache_monkey021',JSON.stringify({userId:'monkey021',verifiedAt:new Date().toISOString(),record:{user_id:'monkey021',status:'complimentary'}}));
+ },data);
+ await seed.close();
+ const page=await context.newPage();const exceptions=[];
+ page.on('pageerror',e=>exceptions.push(e.message));
+ await page.goto(origin+'/index.html');await wait(page);
+ return {context,page,exceptions};
+}
+async function beginWarm(page){await page.evaluate(()=>activateTab('warmup'));await page.locator('#warmup:not(.hidden)').waitFor()}
+async function cardNames(page,surface){
+ return page.locator('#'+surface+' > .exercise .exname').allTextContents();
+}
+async function testMain(lang){
+ const {context,page,exceptions}=await openScenario(fixture({lang}));
+ try{
+  await beginWarm(page);
+  const squat=page.locator('#warm-bb-A2'),buttons=squat.locator('button.set');
+  assert.equal(await buttons.count(),6,'100 kg high-bar squat should present six engine warm-ups');
+  const warm=await squat.textContent();
+  assert.match(warm,/20 kg × 5/);assert.match(warm,/40 kg × 5/);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'375px warm-up screen must not overflow horizontally');
+  assert.equal(await page.evaluate(()=>bvomSessionHasActivity()),false,'unrecorded warm-ups must not count as actual training');
+  await buttons.nth(0).click();
+  let d=await read(page),key=Object.keys(d.warmupDone||{}).find(x=>x.includes('|A2|high_bar_squat'));
+  assert.ok(key,'must store session-scoped squat mark');assert.equal(d.warmupDone[key].done['0'],true);
+  assert.ok(d.timerStart>0,'rest timer must start on warm-up tap');
+  assert.ok(d.workoutStartedAt==null,'warm-up must not set workout start');assert.equal(d.history.length,0);
+  assert.equal(Object.keys(d.session).length,0,'no working sets recorded');
+  assert.equal(await page.locator('#timerbar').evaluate(n=>n.classList.contains('idle')),false);
+  pass(lang+' 375px squat tick and timer, no false workout activity');
+  await buttons.nth(1).click();d=await read(page);
+  assert.equal(d.warmupDone[key].done['1'],true,'duplicate empty-bar sets remain separately tickable');
+  pass(lang+' duplicate opening sets are distinct');
+
+  await page.evaluate(()=>activateTab('workout'));
+  let ordered=await cardNames(page,'workout');
+  assert.match(ordered[0],/Squat/,'Workout A defaults to squat before bench');
+  assert.match(ordered[1],/Bench/,'bench follows squat');
+  await page.locator('#workout #work-bb-A2 .bvomOrderArrow').nth(1).click();
+  ordered=await cardNames(page,'workout');
+  assert.match(ordered[0],/Bench/,'down-arrow moves squat below bench');
+  assert.match(ordered[1],/Squat/,'squat remains second after manual down-arrow');
+  await beginWarm(page);
+  assert.deepEqual(await cardNames(page,'warmup'),ordered,'warm-up cards follow changed workout order');
+  assert.equal(await page.locator('#warm-bb-A2 button.set.done').count(),2,'marks survive exercise reorder');
+  pass(lang+' real exercise arrows preserve warm-up order and marks');
+  await page.reload();await wait(page);await beginWarm(page);
+  assert.equal(await page.locator('#warm-bb-A2 button.set.done').count(),2,'completed warm-up ticks must survive actual browser reload');
+  d=await read(page);assert.ok(Object.keys(d.warmupDone).some(k=>k.includes('|A2|high_bar_squat')));
+  pass(lang+' reload restores exact same-session ticks');
+
+  const count=await page.locator('#warm-bb-A2 button.set').count();
+  await page.locator('#warm-bb-A2 button.set').nth(count-1).click();
+  await page.locator('#workout:not(.hidden)').waitFor();
+  assert.equal(await page.locator('#workout #work-bb-A2').count(),1,'final warm-up must navigate to real exercise');
+  assert.equal(await page.evaluate(()=>bvomSessionHasActivity()),false,'last warm-up alone must not create training activity');
+  pass(lang+' last tick navigates to matching squat workout card');
+  await page.locator('#workout #work-bb-A2 button.set').first().click();
+  const modal=page.locator('.bvomModalOverlay').last();
+  await modal.locator('[data-load]').fill('100');
+  await modal.locator('[data-reps]').fill('8');
+  await modal.locator('[data-save]').click();
+  d=await read(page);
+  assert.equal(d.session['BB:high_bar_squat']['0'].reps,8);
+  assert.ok(d.workoutStartedAt>0);
+  assert.equal(d.history.length,0);
+  pass(lang+' actual working set records separately after warm-up');
+
+  const secondary=await context.newPage();await secondary.goto(origin+'/index.html');await wait(secondary);
+  const previous=await raw(page);
+  await secondary.evaluate(()=>activateTab('warmup'));
+  assert.equal(await secondary.locator('#bvomWorkoutReadOnlyOverlay').count(),1,'read-only overlay must intercept actual taps');
+  // A programmatically dispatched click bypasses the overlay hit-test; the
+  // application action guard must still independently refuse the stale write.
+  await secondary.locator('#warm-bb-A2 button.set').nth(2).dispatchEvent('click');
+  assert.equal(await raw(page),previous,'secondary tab must not write to shared data');
+  await secondary.close();
+  pass(lang+' second browser tab blocked from recording warm-up');
+
+  // Fail storage on an actual DOM tap: reject marker AND rest-time change.
+  await page.evaluate(()=>{
+   window.monkey21OriginalSetItem=Storage.prototype.setItem;
+   Storage.prototype.setItem=function(key,value){
+    if(key==='bvom_data')throw new DOMException('Monkey021 quota','QuotaExceededError');
+    return window.monkey21OriginalSetItem.call(this,key,value);
+   };
+  });
+  await beginWarm(page);const before=await raw(page);
+  await page.locator('#warm-bb-A2 button.set').nth(2).click();
+  const after=await raw(page);assert.equal(after,before,'failed storage must leave persisted blob unchanged');
+  assert.equal(await page.locator('#warm-bb-A2 button.set.done').count(),3,'failed tap cannot show an extra completed tick');
+  assert.ok(await page.locator('#bvomLocalSaveFailureOverlay').count()||await page.locator('#bvomPostCommitOwnerFailureOverlay').count(),'failed persistence must visibly stop unsafe continuation');
+  pass(lang+' real browser quota rejection cannot falsely tick warm-up');
+
+  assert.deepEqual(exceptions,[],'no uncaught browser JS errors');
+ }finally{await context.close()}
+}
+async function testBeginnerWarmups(){
+ const data=fixture(),b=data.bodybuilding;
+ b.selections.A1='machine_chest_press';b.selections.A2='leg_press';b.selections.A3='barbell_row';
+ for(const id of ['machine_chest_press','leg_press'])b.progression[id]={load:50,topLoad:50,increment:5,calibrated:true};
+ b.progression.barbell_row={load:75,topLoad:75,increment:2.5,calibrated:true};
+ const {context,page,exceptions}=await openScenario(data);
+ try{
+  await beginWarm(page);
+  const change=async(id,w)=>{
+   await page.evaluate(({id,w})=>{
+    state.bodybuilding.progression[id].load=w;
+    state.bodybuilding.progression[id].topLoad=w;
+    save();renderWarm();
+   },{id,w});
+  };
+  const numbers=async slot=>(await page.locator('#warm-bb-'+slot+' .warmrow b').allTextContents()).map(x=>Number(x.trim().split(' ')[0])).filter(Number.isFinite);
+  for(const work of [25,30,40,60]){
+   await change('machine_chest_press',work);
+   const loads=(await numbers('A1')).filter(w=>w<work);
+   assert.ok(loads.length>=2,'machine press '+work+'kg needs progressive preparation');
+   assert.ok(loads[0]<=work*.6,'machine press '+work+'kg must not start near its working weight');
+   assert.ok(loads.every(w=>w>0&&w<work),'all proposed machine weights below work');
+  }
+  pass('real mobile DOM shows low-weight 25/30/40/60kg machine pressing preparation');
+  for(const work of [50,100,150]){
+   await change('leg_press',work);
+   const loads=(await numbers('A2')).filter(w=>w<work);
+   assert.ok(loads.length>=3&&loads[0]<=work*.5,'leg press '+work+'kg must start easy');
+   assert.ok(loads.every(w=>w%5===0),'machine increment must be applied');
+  }
+  pass('real mobile DOM shows practical 50/100/150kg leg press preparation');
+  for(const work of [65,70,75,77.5,80]){
+   await change('barbell_row',work);
+   const loads=(await numbers('A3')).filter(w=>w<work);
+   assert.deepEqual(loads.slice(0,2),[20,20],'row '+work+'kg must not lose real bar prep after adding 2.5kg');
+  }
+  pass('real mobile DOM row progression has no 75→77.5kg opening-set cliff');
+  assert.equal(await page.evaluate(()=>bvomSessionHasActivity()),false);
+  assert.equal((await read(page)).history.length,0);
+  assert.deepEqual(exceptions,[]);
+ }finally{await context.close()}
+}
+async function testBDay(){
+ const {context,page,exceptions}=await openScenario(fixture({day:'B'}));
+ try{
+  await beginWarm(page);
+  assert.equal(await page.locator('#warm-bb-B4 button.set').count(),2,'Bulgarian split squat uses short per-hand compound prep');
+  assert.match(await page.locator('#warm-bb-B4').textContent(),/Dumbbell weight per hand/);
+  assert.ok((await page.locator('#warm-bb-B2 button.set').count())>2,'RDL should show a progressive compound ramp');
+  const firstRdl=await page.locator('#warm-bb-B2 .warmrow b').allTextContents();
+  assert.deepEqual(firstRdl.slice(0,2).map(x=>Number(x.split(' ')[0])),[20,20],'first-exercise 100kg RDL needs light bar preparation');
+  for(const work of [75,77.5]){
+   await page.evaluate(w=>{state.bodybuilding.progression.romanian_deadlift.load=w;state.bodybuilding.progression.romanian_deadlift.topLoad=w;save();renderWarm()},work);
+   const warm=await page.locator('#warm-bb-B2 .warmrow b').allTextContents();
+   assert.deepEqual(warm.slice(0,2).map(x=>Number(x.split(' ')[0])),[20,20],'RDL '+work+' kg must not lose light prep');
+  }
+  pass('RDL 75→77.5kg and 100kg first-exercise warm-ups retain actual empty-bar sets');
+  assert.equal(await page.locator('#warm-bb-B5 button.set').count(),0,'rear delt accessory does not need numeric warm-up');
+  assert.equal(await page.locator('#warm-bb-B6 button.set').count(),0,'curl accessory does not need numeric warm-up');
+  pass('Workout B hinge and split-squat prep, no rear-delt or biceps warm-up');
+  await page.evaluate(()=>activateTab('workout'));
+  // The split squat now defaults to second, immediately after RDL.
+  // Verify that it can still move down/up without losing set/tick state.
+  assert.deepEqual((await cardNames(page,'workout')).slice(0,2),['Romanian Deadlift','Bulgarian Split Squat']);
+  await page.locator('#work-bb-B4 .bvomOrderArrow').nth(1).click();
+  assert.equal((await cardNames(page,'workout'))[2],'Bulgarian Split Squat');
+  await page.locator('#work-bb-B4 .bvomOrderArrow').first().click();
+  assert.deepEqual((await cardNames(page,'workout')).slice(0,2),['Romanian Deadlift','Bulgarian Split Squat']);
+  await beginWarm(page);
+  assert.deepEqual((await cardNames(page,'warmup')).slice(0,2),['Romanian Deadlift','Bulgarian Split Squat']);
+  await page.locator('#warm-bb-B4 button.set').first().click();
+  await page.reload();await wait(page);await beginWarm(page);
+  assert.equal(await page.locator('#warm-bb-B4 button.set.done').count(),1,'B-day warm-up mark survives reload');
+  const s=await read(page);assert.equal(s.bodybuilding.completedSessions,1);
+  assert.equal(Object.keys(s.session).length,0);
+  pass('Workout B user arrows and split-squat tick persist without advancing Bodybuilding');
+  assert.deepEqual(exceptions,[]);
+ }finally{await context.close()}
+}
+async function testRecoveryClock(){
+ const {context,page,exceptions}=await openScenario(fixture(),{clock:true});
+ try{
+  await page.evaluate(()=>activateTab('workout'));
+  await page.locator('#work-bb-A2 button.set').first().click();
+  const modal=page.locator('.bvomModalOverlay').last();
+  await modal.locator('[data-load]').fill('100');
+  await modal.locator('[data-reps]').fill('8');
+  await modal.locator('[data-save]').click();
+  let d=await read(page);const initial=d.workoutLastActivityAt;
+  assert.ok(initial>0,'working set must start meaningful activity clock');
+  assert.equal(d.session['BB:high_bar_squat']['0'].reps,8);
+  await page.evaluate(()=>{window.monkeyNow+=3599000});
+  await beginWarm(page);await page.locator('#warm-bb-A2 button.set').first().click();
+  d=await read(page);const refreshed=d.workoutLastActivityAt;
+  assert.equal(refreshed,await page.evaluate(()=>window.monkeyNow),'real warm-up tap refreshes recorded workout activity');
+  assert.ok(refreshed>initial);
+  await page.evaluate(()=>{window.monkeyNow+=2000;bvomRecoveryCheck()});
+  d=await read(page);
+  assert.equal(d.history.length,0,'must not auto-archive active workout at old 60m boundary');
+  assert.equal(d.session['BB:high_bar_squat']['0'].reps,8,'actual workout stays intact');
+  pass('real mobile Chromium warm-up at 59m59 prevents premature workout expiry');
+
+  await page.evaluate(()=>{window.monkeyNow+=1000;bvomBbWarmStageBRest()});
+  d=await read(page);
+  assert.equal(d.workoutLastActivityAt,refreshed,'rest timer alone cannot refresh inactivity clock');
+  pass('rest-timer-only action remains passive for recovery');
+  await page.evaluate(()=>{window.monkeyNow+=1000});
+  await beginWarm(page);await page.locator('#warm-bb-A2 button.set').first().click();
+  d=await read(page);
+  assert.equal(d.workoutLastActivityAt,await page.evaluate(()=>window.monkeyNow),'unticking is meaningful prep activity');
+  assert.equal(d.history.length,0);
+  assert.deepEqual(exceptions,[]);
+  pass('unticking refreshes active workout safely, no false History or progression');
+ }finally{await context.close()}
+}
+async function testMonkey022Bodyweight(){
+ const d=fixture({day:'B'});
+ d.bodybuilding.selections.B1='chin_up';
+ d.bodybuilding.progression.chin_up={calibrated:true,resistance:'green band',assistance:'green band',addedLoad:0,pendingDifficulty:'harder',lastDecision:'harder'};
+ const {context,page,exceptions}=await openScenario(d);
+ try{
+  await page.evaluate(()=>activateTab('workout'));
+  const card=page.locator('#work-bb-B1');
+  assert.match(await card.textContent(),/HARDER DIFFICULTY EARNED/);
+  assert.match(await card.textContent(),/green band/);
+  const rawBefore=await raw(page);
+  await card.locator('[data-bb-difficulty] button').filter({hasText:'ACCEPT'}).click();
+  const inp=page.locator('.bvomModalOverlay [data-difficulty-value]');
+  await inp.fill('red band');
+  await page.locator('.bvomModalOverlay [data-accept]').click();
+  const saved=await read(page);
+  assert.equal(saved.bodybuilding.progression.chin_up.pendingDifficulty,null);
+  assert.equal(saved.bodybuilding.progression.chin_up.resistance,'red band');
+  assert.match(await card.locator('.setload').first().textContent(),/red band/);
+  assert.equal(await card.locator('[data-bb-difficulty]').count(),0,'resolved acceptance disappears');
+  assert.ok((await raw(page))!==rawBefore);
+  await page.reload();await wait(page);
+  await page.evaluate(()=>activateTab('workout'));
+  assert.match(await page.locator('#work-bb-B1 .setload').first().textContent(),/red band/);
+  pass('Bodybuilding real mobile ACCEPT dialog saves changed band and next prescription through reload');
+  assert.deepEqual(exceptions,[]);
+ }finally{await context.close()}
+ const hold=fixture({day:'B'});
+ hold.bodybuilding.selections.B1='chin_up';
+ hold.bodybuilding.progression.chin_up={calibrated:true,resistance:'green band',assistance:'green band',addedLoad:0,pendingDifficulty:'easier',lastDecision:'easier'};
+ const second=await openScenario(hold);
+ try{
+  await second.page.evaluate(()=>activateTab('workout'));
+  const card=second.page.locator('#work-bb-B1');
+  assert.match(await card.textContent(),/EASIER DIFFICULTY ADVISED/);
+  await card.locator('[data-bb-difficulty] button').filter({hasText:'HOLD'}).click();
+  const data=await read(second.page);
+  assert.equal(data.bodybuilding.progression.chin_up.pendingDifficulty,null);
+  assert.equal(data.bodybuilding.progression.chin_up.resistance,'green band');
+  assert.match(await card.locator('.setload').first().textContent(),/green band/);
+  assert.deepEqual(second.exceptions,[]);
+  pass('Bodybuilding real mobile HOLD retains previous resistance without phantom set');
+ }finally{await second.context.close()}
+}
+async function testMonkey022Handoff(){
+ const d=fixture({onramp:true});
+ d.session={'BBOR:machine_chest_press':{'0':{reps:7,index:0,load:60,onramp:true}}};
+ d.workoutStartedAt=Date.now();d.workoutLastActivityAt=Date.now();
+ d.workoutOwnershipVersion=1;
+ const {context,page,exceptions}=await openScenario(d);
+ try{
+  await page.evaluate(()=>activateTab('workout'));
+  await page.locator('#workout button').filter({hasText:'START 8-WEEK BLOCK NOW'}).click();
+  const s=await read(page);
+  assert.equal(s.bodybuilding.onramp.status,'active');
+  assert.equal(s.session['BBOR:machine_chest_press']['0'].reps,7);
+  assert.equal(s.history.length,0);
+  pass('real mobile early handoff button cannot discard existing On-Ramp set');
+  assert.deepEqual(exceptions,[]);
+ }finally{await context.close()}
+}
+async function testOnRamp(){
+ const {context,page,exceptions}=await openScenario(fixture({onramp:true}));
+ try{
+  await beginWarm(page);let info=await page.locator('#warmup').textContent();
+  assert.match(info,/Start very easy/);assert.ok(!/\d+ kg × \d+/.test(info),'On-Ramp must not invent numerical warm-up loads');
+  assert.equal(await page.locator('#warmup button.set').count(),0,'On-Ramp prep has no numeric checkmarks');
+  await page.locator('#warmup button').filter({hasText:'START REST TIMER'}).first().click();
+  let d=await read(page);assert.ok(d.timerStart>0);assert.ok(d.workoutStartedAt==null,'warm-up must not set workout start');
+  assert.equal(Object.keys(d.session).length,0);assert.equal(d.bodybuilding.onramp.status,'active');
+  pass('On-Ramp confirmed calibration stays qualitative; rest timer does not record work');
+  await page.evaluate(()=>activateTab('workout'));
+  await page.locator('#workout button').filter({hasText:'START 8-WEEK BLOCK NOW'}).click();
+  d=await read(page);assert.equal(d.bodybuilding.onramp.status,'handed_off');
+  assert.equal(d.bodybuilding.completedSessions,0);
+  assert.equal(Object.keys(d.session).length,0);
+  await beginWarm(page);
+  assert.equal(await page.locator('#warm-bb-A2 button.set').count(),6,'handoff should enable numeric strength-style squat warm-up');
+  assert.equal(await page.locator('#warmup').textContent().then(s=>s.includes('Start very easy')),false);
+  pass('real On-Ramp handoff enables known-load main-block engine without stale ticks');
+  assert.deepEqual(exceptions,[]);
+ }finally{await context.close()}
+}
+(async()=>{
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));origin='http://127.0.0.1:'+server.address().port;
+ try{
+  browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+  await testMain('en');await testMain('ja');await testBeginnerWarmups();await testRecoveryClock();await testBDay();await testOnRamp();await testMonkey022Bodyweight();await testMonkey022Handoff();
+  console.log('MONKEY 021 PASS '+checks+' checks; isolated real Chromium, no live data; '+(Date.now()-started)+'ms');
+ }finally{if(browser)await browser.close();await new Promise(r=>server.close(r))}
+})().catch(e=>{console.error('MONKEY 021 FAIL',e);process.exitCode=1});

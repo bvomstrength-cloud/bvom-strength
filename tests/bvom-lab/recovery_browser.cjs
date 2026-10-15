@@ -329,26 +329,172 @@ test('exercise arrows really reorder LP B cards and warmups, survive an active s
   assert.deepEqual((await saved(reopened)).session,before);
  }finally{await context.close()}
 });
-test('real Bodybuilding On-Ramp squat arrow moves quad before chest on screen and warmup',async()=>{
+test('real Bodybuilding On-Ramp A defaults Squat first / Triceps before Laterals; arrows, reload and Reset are display-only',async()=>{
  const prepared=H.boot(build);H.bbStart(prepared,{onramp:true});
  const {context,a}=await setup(JSON.parse(JSON.stringify(prepared.S())));
  try{
   const sel='#workout > .exercise .exhead .exname',warm='#warmup > .exercise .exhead .exname';
-  const before=await a.locator(sel).allTextContents();
-  assert.match(before[1],/squat/i,'second programmed slot must be a squat');
+  const before=await a.locator(sel).allTextContents(),beforeWarm=await a.locator(warm).allTextContents();
+  assert.match(before[0],/squat/i,'fresh A order must start with squat');
+  assert.match(before[1],/chest|bench/i,'chest follows quad');
+  assert.match(before[4],/pushdown|triceps/i,'triceps comes before lateral delts');
+  assert.match(before[5],/lateral/i);
+  assert.deepEqual(beforeWarm,before,'warmup must match default workout order');
   assert.equal(await a.locator('#workout > .exercise .bvomOrderArrow').count(),before.length*2);
-  await a.locator('#workout > .exercise').nth(1).locator('.bvomOrderArrow').first().click();
-  assert.match((await a.locator(sel).allTextContents())[0],/squat/i);
-  assert.match((await a.locator(warm).allTextContents())[0],/squat/i);
+  await a.locator('#workout > .exercise').first().locator('.bvomOrderArrow').nth(1).click();
+  const reordered=await a.locator(sel).allTextContents();
+  assert.match(reordered[0],/chest|bench/i);
+  assert.match(reordered[1],/squat/i);
+  assert.deepEqual(await a.locator(warm).allTextContents(),reordered);
   const data=await saved(a);
   assert.equal(data.bodybuilding?.onramp?.sessionsCompleted,0);
   assert.equal(JSON.stringify(data.bodybuilding?.selections),JSON.stringify(prepared.S().bodybuilding.selections));
   await a.close();
   const reopened=await open(context);
-  assert.match((await reopened.locator(sel).allTextContents())[0],/squat/i);
+  assert.deepEqual(await reopened.locator(sel).allTextContents(),reordered);
+  await reopened.locator('#workout .bvomOrderReset button').click();
+  assert.deepEqual(await reopened.locator(sel).allTextContents(),before);
+  assert.deepEqual(await reopened.locator(warm).allTextContents(),before);
  }finally{await context.close()}
 });
 
+test('selected RDL vs back extension produces warm-up-aware Workout B order in real Chromium',async()=>{
+ const prepared=H.boot(build);H.bbStart(prepared);
+ const b=prepared.S().bodybuilding;b.completedSessions=1;
+ b.selections.B1='lat_pulldown';b.selections.B2='romanian_deadlift';
+ b.selections.B3='incline_dumbbell_press';b.selections.B4='bulgarian_split_squat';
+ prepared.ev('save()');
+ const exerciseNames='#workout > .exercise .exhead .exname';
+ const warmNames='#warmup > .exercise .exhead .exname';
+ const {context,a}=await setup(JSON.parse(JSON.stringify(prepared.S())));
+ try{
+  const loaded=await a.locator(exerciseNames).allTextContents();
+  assert.match(loaded[0],/Romanian Deadlift/);
+  assert.match(loaded[1],/Bulgarian Split Squat/);
+  assert.match(loaded[2],/Incline Dumbbell Press/);
+  assert.deepEqual(await a.locator(warmNames).allTextContents(),loaded);
+  const preserved=JSON.stringify((await saved(a)).bodybuilding.progression);
+  await a.evaluate(()=>{state.bodybuilding.selections.B2='back_extension_45';save();renderAll()});
+  const lighter=await a.locator(exerciseNames).allTextContents();
+  assert.match(lighter[0],/Bulgarian Split Squat/,'a loaded split squat precedes a qualitative back extension');
+  assert.match(lighter[1],/Incline Dumbbell Press/);
+  assert.match(lighter[2],/Lat Pulldown/);
+  assert.match(lighter[3],/Back Extension/);
+  assert.deepEqual(await a.locator(warmNames).allTextContents(),lighter);
+  assert.match(await a.locator('#warm-bb-B2').innerText(),/Prepare for your working sets|No prescribed warm-up/);
+  assert.equal(JSON.stringify((await saved(a)).bodybuilding.progression),preserved,'display changes cannot progress weights');
+  await a.locator('#workout > .exercise').first().locator('.bvomOrderArrow').nth(1).click();
+  const manual=await a.locator(exerciseNames).allTextContents();
+  assert.match(manual[0],/Incline Dumbbell Press/);
+  await a.close();const reopened=await open(context);
+  assert.deepEqual(await reopened.locator(exerciseNames).allTextContents(),manual);
+  assert.deepEqual(await reopened.locator(warmNames).allTextContents(),manual);
+  await reopened.locator('#workout .bvomOrderReset button').click();
+  assert.deepEqual(await reopened.locator(exerciseNames).allTextContents(),lighter);
+ }finally{await context.close()}
+});
+test('phone-approved B sequence places ALL numeric warm-ups ahead of Chin-Up guidance in both phases',async()=>{
+ for(const onramp of [true,false]){
+  const prepared=H.boot(build);H.bbStart(prepared,{onramp});
+  const b=prepared.S().bodybuilding;
+  if(onramp)b.onramp.sessionsCompleted=1;else b.completedSessions=1;
+  Object.assign(b.selections,{B1:'chin_up',B2:'romanian_deadlift',
+   B3:'incline_dumbbell_press',B4:'bulgarian_split_squat',
+   B5:'dumbbell_rear_delt_raise',B6:'dumbbell_curl'});
+  // For the main block, these selected replacements need known working loads
+  // to yield numerical ramps; On-Ramp remains qualitative load finding.
+  for(const [id,load] of [['romanian_deadlift',100],['incline_dumbbell_press',25],['bulgarian_split_squat',20]])
+   b.progression[id]={...(b.progression[id]||{}),load,topLoad:load,increment:2.5};
+  prepared.ev('save()');
+  const {context,a}=await setup(JSON.parse(JSON.stringify(prepared.S())));
+  try{
+   const keys=async tab=>a.locator(tab+' > .exercise').evaluateAll(nodes=>
+    nodes.map(node=>node.id.split('-').at(-1)));
+   const desired=['B2','B4','B3','B1','B6','B5'];
+   assert.deepEqual(await keys('#workout'),desired);
+   assert.deepEqual(await keys('#warmup'),desired);
+   assert.equal(await a.locator('#warm-bb-B1 button.set').count(),0,
+    'Chin-Up has guidance but no numeric warm-up sets');
+   if(!onramp){
+    for(const slot of ['B2','B4','B3'])
+     assert.ok((await a.locator('#warm-bb-'+slot+' button.set').count())>0,
+      'Loaded '+slot+' needs progressive preparation');
+   }
+   await a.locator('#work-bb-B1 .bvomOrderArrow').first().click();
+   const overridden=['B2','B4','B1','B3','B6','B5'];
+   assert.deepEqual(await keys('#workout'),overridden);
+   assert.deepEqual(await keys('#warmup'),overridden);
+   await a.close();
+   const reopened=await open(context);
+   const readReopened=async tab=>reopened.locator(tab+' > .exercise').evaluateAll(nodes=>
+    nodes.map(node=>node.id.split('-').at(-1)));
+   assert.deepEqual(await readReopened('#workout'),overridden);
+   await reopened.locator('#workout .bvomOrderReset button').click();
+   assert.deepEqual(await readReopened('#workout'),desired);
+   assert.deepEqual(await readReopened('#warmup'),desired);
+  }finally{await context.close()}
+ }
+});
+test('real Nordic Curl FIND and working-set dialog shows localized volume-only estimate help',async()=>{
+ for(const [onramp,lang] of [[true,'en'],[false,'ja']]){
+  const prepared=H.boot(build);H.bbStart(prepared,{onramp});
+  prepared.S().language=lang;prepared.S().bodybuilding.selections.A4='nordic_curl';
+  prepared.ev('save()');
+  const initial=JSON.parse(JSON.stringify(prepared.S()));
+  const {context,a}=await setup(initial);
+  try{
+   await a.evaluate(onramp=>{
+    onramp?bvomBbOnRampSetModal('nordic_curl',0):bvomBbSetModal('nordic_curl',0);
+   },onramp);
+   const helper=a.locator('.bvomModalOverlay .bvomBwEstimateHelp');
+   assert.equal(await helper.count(),1,'help appears once in set-entry modal');
+   const info=await helper.textContent();
+   assert.match(info,lang==='en'?/Nordic curls/i:/ノルディック/);
+   assert.match(info,lang==='en'?/volume/i:/ボリューム/);
+   const placement=await a.evaluate(()=>{
+    const e=document.querySelector('.bvomModalOverlay [data-bw-estimate]');
+    return e?.closest('label')?.nextElementSibling===document.querySelector('.bvomModalOverlay .bvomBwEstimateHelp')&&
+      e.getAttribute('aria-describedby')==='bvomBwEstimateExplanation';
+   });
+   assert.equal(placement,true,'help must sit directly below estimate input and be accessible');
+   assert.deepEqual((await saved(a)).session,initial.session,'opening help never records sets');
+  }finally{await context.close()}
+ }
+});
+test('malformed saved B order cannot reshuffle recorded On-Ramp work during RDL replacement',async()=>{
+ const prepared=H.boot(build);H.bbStart(prepared,{onramp:true});
+ const b=prepared.S().bodybuilding;b.onramp.sessionsCompleted=1;b.selections.B2='romanian_deadlift';
+ prepared.S().exerciseDisplayOrder={'bodybuilding:B':['B2','B2','B1','B3','B4','B5']};
+ prepared.ev('save()');
+ H.orSet(prepared,b.selections.B1,0,{reps:8,load:50});
+ const {context,a}=await setup(JSON.parse(JSON.stringify(prepared.S())));
+ try{
+  const sel='#workout > .exercise .exhead .exname',warm='#warmup > .exercise .exhead .exname';
+  const initial=await a.locator(sel).allTextContents();
+  assert.match(initial[0],/Romanian Deadlift/);
+  const sessionBefore=JSON.stringify((await saved(a)).session);
+  await a.locator('#work-bb-B2').getByText("THIS EXERCISE DOESN'T FEEL RIGHT").click();
+  const n=await a.evaluate(()=>{
+   const options=bvomBbExerciseOptions('B2').filter(x=>x.id!=='romanian_deadlift');
+   return options.findIndex(x=>x.id==='back_extension_45')+1;
+  });
+  assert.ok(n>0);
+  await a.locator('.bvomModalOverlay [data-number]').fill(String(n));
+  await a.locator('.bvomModalOverlay [data-accept]').click();
+  const expected=[...initial];expected[0]='45° Back Extension';
+  assert.deepEqual(await a.locator(sel).allTextContents(),expected);
+  assert.deepEqual(await a.locator(warm).allTextContents(),expected);
+  const data=await saved(a);
+  assert.equal(data.bodybuilding.selections.B2,'back_extension_45');
+  assert.equal(JSON.stringify(data.session),sessionBefore);
+  assert.deepEqual(data.exerciseDisplayOrder['bodybuilding:B'],['B2','B3','B1','B4','B6','B5']);
+  await a.close();
+  const reopened=await open(context);
+  assert.deepEqual(await reopened.locator(sel).allTextContents(),expected);
+  assert.deepEqual(await reopened.locator(warm).allTextContents(),expected);
+  assert.equal(JSON.stringify((await saved(reopened)).session),sessionBefore);
+ }finally{await context.close()}
+});
 test('optional Android loopback server seeds dummy data and refuses replacement',async()=>{
  const {spawn}=require('node:child_process');const child=spawn(process.execPath,[path.join(__dirname,'recovery_phone_server.cjs'),'33331'],{stdio:['ignore','pipe','pipe']});let context;
  try{
