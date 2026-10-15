@@ -393,6 +393,32 @@ test('selected RDL vs back extension produces warm-up-aware Workout B order in r
   assert.deepEqual(await reopened.locator(exerciseNames).allTextContents(),lighter);
  }finally{await context.close()}
 });
+test('real Nordic Curl FIND and working-set dialog shows localized volume-only estimate help',async()=>{
+ for(const [onramp,lang] of [[true,'en'],[false,'ja']]){
+  const prepared=H.boot(build);H.bbStart(prepared,{onramp});
+  prepared.S().language=lang;prepared.S().bodybuilding.selections.A4='nordic_curl';
+  prepared.ev('save()');
+  const initial=JSON.parse(JSON.stringify(prepared.S()));
+  const {context,a}=await setup(initial);
+  try{
+   await a.evaluate(onramp=>{
+    onramp?bvomBbOnRampSetModal('nordic_curl',0):bvomBbSetModal('nordic_curl',0);
+   },onramp);
+   const helper=a.locator('.bvomModalOverlay .bvomBwEstimateHelp');
+   assert.equal(await helper.count(),1,'help appears once in set-entry modal');
+   const info=await helper.textContent();
+   assert.match(info,lang==='en'?/Nordic curls/i:/ノルディック/);
+   assert.match(info,lang==='en'?/volume/i:/ボリューム/);
+   const placement=await a.evaluate(()=>{
+    const e=document.querySelector('.bvomModalOverlay [data-bw-estimate]');
+    return e?.closest('label')?.nextElementSibling===document.querySelector('.bvomModalOverlay .bvomBwEstimateHelp')&&
+      e.getAttribute('aria-describedby')==='bvomBwEstimateExplanation';
+   });
+   assert.equal(placement,true,'help must sit directly below estimate input and be accessible');
+   assert.deepEqual((await saved(a)).session,initial.session,'opening help never records sets');
+  }finally{await context.close()}
+ }
+});
 test('malformed saved B order cannot reshuffle recorded On-Ramp work during RDL replacement',async()=>{
  const prepared=H.boot(build);H.bbStart(prepared,{onramp:true});
  const b=prepared.S().bodybuilding;b.onramp.sessionsCompleted=1;b.selections.B2='romanian_deadlift';
