@@ -42,11 +42,18 @@ const raw=page=>page.evaluate(()=>localStorage.getItem('bvom_data'));
 const wait=async page=>{await page.waitForSelector('#app:not(.hidden)',{timeout:15000});await page.waitForTimeout(150)};
 let browser,origin;
 
-async function openScenario(data){
+async function openScenario(data,{clock=false}={}){
  const context=await browser.newContext({serviceWorkers:'block',viewport:{width:375,height:812},deviceScaleFactor:1,isMobile:true,hasTouch:true});
  context.setDefaultTimeout(8000);
  await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
  await context.addInitScript(()=>Object.defineProperty(navigator,'onLine',{get:()=>false}));
+ if(clock)await context.addInitScript(({now})=>{
+  const NativeDate=Date;window.monkeyNow=now;
+  window.Date=class extends NativeDate{
+   constructor(...args){super(...(args.length?args:[window.monkeyNow]))}
+   static now(){return window.monkeyNow}
+  };
+ },{now:Date.now()});
  const seed=await context.newPage();await seed.goto(origin+'/seed');
  await seed.evaluate(d=>{
   localStorage.setItem('bvom_data',JSON.stringify(d));localStorage.setItem('bvom_data_owner','monkey021');
@@ -219,6 +226,42 @@ async function testBDay(){
   assert.deepEqual(exceptions,[]);
  }finally{await context.close()}
 }
+async function testRecoveryClock(){
+ const {context,page,exceptions}=await openScenario(fixture(),{clock:true});
+ try{
+  await page.evaluate(()=>activateTab('workout'));
+  await page.locator('#work-bb-A2 button.set').first().click();
+  const modal=page.locator('.bvomModalOverlay').last();
+  await modal.locator('[data-load]').fill('100');
+  await modal.locator('[data-reps]').fill('8');
+  await modal.locator('[data-save]').click();
+  let d=await read(page);const initial=d.workoutLastActivityAt;
+  assert.ok(initial>0,'working set must start meaningful activity clock');
+  assert.equal(d.session['BB:high_bar_squat']['0'].reps,8);
+  await page.evaluate(()=>{window.monkeyNow+=3599000});
+  await beginWarm(page);await page.locator('#warm-bb-A2 button.set').first().click();
+  d=await read(page);const refreshed=d.workoutLastActivityAt;
+  assert.equal(refreshed,await page.evaluate(()=>window.monkeyNow),'real warm-up tap refreshes recorded workout activity');
+  assert.ok(refreshed>initial);
+  await page.evaluate(()=>{window.monkeyNow+=2000;bvomRecoveryCheck()});
+  d=await read(page);
+  assert.equal(d.history.length,0,'must not auto-archive active workout at old 60m boundary');
+  assert.equal(d.session['BB:high_bar_squat']['0'].reps,8,'actual workout stays intact');
+  pass('real mobile Chromium warm-up at 59m59 prevents premature workout expiry');
+
+  await page.evaluate(()=>{window.monkeyNow+=1000;bvomBbWarmStageBRest()});
+  d=await read(page);
+  assert.equal(d.workoutLastActivityAt,refreshed,'rest timer alone cannot refresh inactivity clock');
+  pass('rest-timer-only action remains passive for recovery');
+  await page.evaluate(()=>{window.monkeyNow+=1000});
+  await beginWarm(page);await page.locator('#warm-bb-A2 button.set').first().click();
+  d=await read(page);
+  assert.equal(d.workoutLastActivityAt,await page.evaluate(()=>window.monkeyNow),'unticking is meaningful prep activity');
+  assert.equal(d.history.length,0);
+  assert.deepEqual(exceptions,[]);
+  pass('unticking refreshes active workout safely, no false History or progression');
+ }finally{await context.close()}
+}
 async function testOnRamp(){
  const {context,page,exceptions}=await openScenario(fixture({onramp:true}));
  try{
@@ -245,7 +288,7 @@ async function testOnRamp(){
  await new Promise(r=>server.listen(0,'127.0.0.1',r));origin='http://127.0.0.1:'+server.address().port;
  try{
   browser=await chromium.launch({headless:true,args:['--no-sandbox']});
-  await testMain('en');await testMain('ja');await testBeginnerWarmups();await testBDay();await testOnRamp();
+  await testMain('en');await testMain('ja');await testBeginnerWarmups();await testRecoveryClock();await testBDay();await testOnRamp();
   console.log('MONKEY 021 PASS '+checks+' checks; isolated real Chromium, no live data; '+(Date.now()-started)+'ms');
  }finally{if(browser)await browser.close();await new Promise(r=>server.close(r))}
 })().catch(e=>{console.error('MONKEY 021 FAIL',e);process.exitCode=1});
