@@ -370,15 +370,15 @@ test('selected RDL vs back extension produces warm-up-aware Workout B order in r
  try{
   const loaded=await a.locator(exerciseNames).allTextContents();
   assert.match(loaded[0],/Romanian Deadlift/);
-  assert.match(loaded[1],/Lat Pulldown/);
-  assert.match(loaded[3],/Bulgarian Split Squat/);
+  assert.match(loaded[1],/Bulgarian Split Squat/);
+  assert.match(loaded[2],/Incline Dumbbell Press/);
   assert.deepEqual(await a.locator(warmNames).allTextContents(),loaded);
   const preserved=JSON.stringify((await saved(a)).bodybuilding.progression);
   await a.evaluate(()=>{state.bodybuilding.selections.B2='back_extension_45';save();renderAll()});
   const lighter=await a.locator(exerciseNames).allTextContents();
-  assert.match(lighter[0],/Lat Pulldown/,'qualitative back extension cannot claim heavy hinge priority');
+  assert.match(lighter[0],/Bulgarian Split Squat/,'a loaded split squat precedes a qualitative back extension');
   assert.match(lighter[1],/Incline Dumbbell Press/);
-  assert.match(lighter[2],/Bulgarian Split Squat/);
+  assert.match(lighter[2],/Lat Pulldown/);
   assert.match(lighter[3],/Back Extension/);
   assert.deepEqual(await a.locator(warmNames).allTextContents(),lighter);
   assert.match(await a.locator('#warm-bb-B2').innerText(),/Prepare for your working sets|No prescribed warm-up/);
@@ -392,6 +392,44 @@ test('selected RDL vs back extension produces warm-up-aware Workout B order in r
   await reopened.locator('#workout .bvomOrderReset button').click();
   assert.deepEqual(await reopened.locator(exerciseNames).allTextContents(),lighter);
  }finally{await context.close()}
+});
+test('phone-approved B sequence places ALL numeric warm-ups ahead of Chin-Up guidance in both phases',async()=>{
+ for(const onramp of [true,false]){
+  const prepared=H.boot(build);H.bbStart(prepared,{onramp});
+  const b=prepared.S().bodybuilding;
+  if(onramp)b.onramp.sessionsCompleted=1;else b.completedSessions=1;
+  Object.assign(b.selections,{B1:'chin_up',B2:'romanian_deadlift',
+   B3:'incline_dumbbell_press',B4:'bulgarian_split_squat',
+   B5:'dumbbell_rear_delt_raise',B6:'dumbbell_curl'});
+  prepared.ev('save()');
+  const {context,a}=await setup(JSON.parse(JSON.stringify(prepared.S())));
+  try{
+   const keys=async tab=>a.locator(tab+' > .exercise').evaluateAll(nodes=>
+    nodes.map(node=>node.id.split('-').at(-1)));
+   const desired=['B2','B4','B3','B1','B6','B5'];
+   assert.deepEqual(await keys('#workout'),desired);
+   assert.deepEqual(await keys('#warmup'),desired);
+   assert.equal(await a.locator('#warm-bb-B1 button.set').count(),0,
+    'Chin-Up has guidance but no numeric warm-up sets');
+   if(!onramp){
+    for(const slot of ['B2','B4','B3'])
+     assert.ok((await a.locator('#warm-bb-'+slot+' button.set').count())>0,
+      'Loaded '+slot+' needs progressive preparation');
+   }
+   await a.locator('#work-bb-B1 .bvomOrderArrow').first().click();
+   const overridden=['B2','B4','B1','B3','B6','B5'];
+   assert.deepEqual(await keys('#workout'),overridden);
+   assert.deepEqual(await keys('#warmup'),overridden);
+   await a.close();
+   const reopened=await open(context);
+   const readReopened=async tab=>reopened.locator(tab+' > .exercise').evaluateAll(nodes=>
+    nodes.map(node=>node.id.split('-').at(-1)));
+   assert.deepEqual(await readReopened('#workout'),overridden);
+   await reopened.locator('#workout .bvomOrderReset button').click();
+   assert.deepEqual(await readReopened('#workout'),desired);
+   assert.deepEqual(await readReopened('#warmup'),desired);
+  }finally{await context.close()}
+ }
 });
 test('real Nordic Curl FIND and working-set dialog shows localized volume-only estimate help',async()=>{
  for(const [onramp,lang] of [[true,'en'],[false,'ja']]){
