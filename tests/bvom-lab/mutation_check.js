@@ -15,6 +15,9 @@ const guard=path.join(__dirname,'behaviour_guard.js');
 // replace exactly one occurrence of `from`, searching only inside the function/region starting at `region`
 function inRegion(region,from,to){return src=>{const r=src.indexOf(region);if(r<0)return null;const i=src.indexOf(from,r);if(i<0||i-r>20000)return null;return src.slice(0,i)+to+src.slice(i+from.length)}}
 const MUTATIONS=[
+ // Monkey 030: a qualitative Chin-Up must never steal an early slot
+ // from a loaded compound that needs progressive ramp sets.
+ {id:'BB-M030-CHINUP-STEALS-PREP-SLOT',why:'Bodyweight Chin-Up is placed ahead of progressive RDL and DB preparations',targets:['BB-M030-WARMUP-FIRST-B-ONRAMP','BB-M030-WARMUP-FIRST-B-BLOCK'],apply:inRegion('function bvomBbOrderPriority(', "const tier=kind==='compound'?0:kind==='qualitative'?1:2;", "const tier=kind==='compound'?0:kind==='qualitative'&&slot==='B1'?-1:kind==='qualitative'?1:2;")},
  // Monkey 029: set-entry dialogs must explain the estimated bodyweight
  // immediately below the field; the builder-only helper is insufficient.
  {id:'BB-M029-SET-HELP-MISSING',why:'On-Ramp FIND and Block set-entry dialogs no longer explain estimated bodyweight moved',targets:['BB-M029-BW-SET-ESTIMATE-HELP-FIND-EN','BB-M029-BW-SET-ESTIMATE-HELP-FIND-JA','BB-M029-BW-SET-ESTIMATE-HELP-BLOCK-EN','BB-M029-BW-SET-ESTIMATE-HELP-BLOCK-JA'],apply:inRegion('function bvomBwFields(', "<div id=\"bvomBwEstimateExplanation\" class=\"small bvomBwEstimateHelp\">${bvomT('bodyweight.estimateHelp')}</div>", '')},
@@ -24,8 +27,8 @@ const MUTATIONS=[
  {id:'BB-M027-ACTIVE-SWAP-RESHUFFLES',why:'Active On-Ramp session loses its visible order when replacement changes compound warm-up role',targets:['BB-M027-ACTIVE-ONRAMP-SWAP-STABLE'],apply:inRegion('function bvomBbOnRampSwap(', "if(bvomSessionHasActivity()&&scope&&!bvomOrderSavedValid(recordObject[scope],canonical))", "if(false&&scope&&!bvomOrderSavedValid(recordObject[scope],canonical))")},
  // Monkey 027: distinguish an RDL primary from a qualitative back extension,
  // and recognize B4 split-squat compound preparation instead of fixed slot order.
- {id:'BB-M027-B2-ALWAYS-LEADS',why:'Back extension incorrectly gets RDL-first priority',targets:['BB-M027-ADAPTIVE-B-ONRAMP','BB-M027-ADAPTIVE-B-BLOCK'],apply:inRegion('function bvomBbOrderPriority(', "if(slot==='B2')return kind==='compound'?0:kind==='qualitative'?4:5;", "if(slot==='B2')return 0;")},
- {id:'BB-M027-B4-COMPOUND-IGNORED',why:'Split squat compound is buried behind the back extension',targets:['BB-M027-ADAPTIVE-B-ONRAMP','BB-M027-ADAPTIVE-B-BLOCK'],apply:inRegion('function bvomBbOrderPriority(', "if(slot==='B4')return kind==='compound'?3:6;", "if(slot==='B4')return 6;")},
+ {id:'BB-M027-B2-ALWAYS-LEADS',why:'Back extension incorrectly gets RDL-first priority',targets:['BB-M027-ADAPTIVE-B-ONRAMP','BB-M027-ADAPTIVE-B-BLOCK'],apply:inRegion('function bvomBbOrderPriority(', "const tier=kind==='compound'?0:kind==='qualitative'?1:2;", "const tier=slot==='B2'?0:kind==='compound'?0:kind==='qualitative'?1:2;")},
+ {id:'BB-M027-B4-COMPOUND-IGNORED',why:'Split squat compound is buried behind other compound preparations',targets:['BB-M027-ADAPTIVE-B-ONRAMP','BB-M027-ADAPTIVE-B-BLOCK'],apply:inRegion('function bvomBbOrderPriority(', "const heavy={B2:0,B4:1,B3:2,B1:3,B6:4,B5:5};", "const heavy={B2:0,B4:7,B3:2,B1:3,B6:4,B5:5};")},
  // Monkey 026: default A is a view-only preference; canonical workout slots
  // remain unchanged for prescription and History compatibility.
  {id:'BB-M026-A-DEFAULT-REVERTS-CANONICAL',why:'New Bodybuilding A starts Bench before Squat and Laterals before Triceps again',targets:['BB-M026-DEFAULT-A-ONRAMP','BB-M026-DEFAULT-A-BLOCK'],apply:inRegion('function bvomBbOrderPriority(', "const rank={A2:0,A1:1,A3:2,A4:3,A6:4,A5:5};", "const rank={A1:0,A2:1,A3:2,A4:3,A5:4,A6:5};")},
@@ -299,6 +302,7 @@ if(knownBad){
     'BB-M027-ADAPTIVE-B-ONRAMP','BB-M027-ADAPTIVE-B-BLOCK','BB-M027-OVERRIDE-B-ONRAMP','BB-M027-OVERRIDE-B-BLOCK',
     'BB-M027-ACTIVE-ONRAMP-SWAP-STABLE',
     'BB-M028-MALFORMED-ACTIVE-SWAP-STRING','BB-M028-MALFORMED-ACTIVE-SWAP-DUPLICATE','BB-M028-MALFORMED-ACTIVE-SWAP-PARTIAL',
+    'BB-M030-WARMUP-FIRST-B-ONRAMP','BB-M030-WARMUP-FIRST-B-BLOCK',
     // Stage 1 forward-feature contracts: RED on exact v2.9.7 dbaad6ef.
     'BW-REFINE-VOLUME','BW-REFINE-HISTORY','BW-REFINE-INCREMENT','BW-REFINE-INCOMPLETE-GPP',
     'BW-STAGE1-RECORD','BW-STAGE1-HISTORY','BW-STAGE1-UNITS','BW-STAGE1-BUILDER','BW-STAGE1-BB','BW-STAGE1-ATOMIC','BW-STAGE1-CORRECTION-CLOUD','BW-STAGE1-OWNER','BW-STAGE1-ONRAMP',
