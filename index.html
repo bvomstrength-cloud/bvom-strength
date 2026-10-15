@@ -4697,11 +4697,21 @@ function bvomOrderDayKey(){
  const day=isBodybuilding()?(bvomBbOnRampActive()?bvomBbOnRampDay():bvomBbDay()):state.day;
  return day==null?null:mode+':'+String(day);
 }
+function bvomOrderDefault(entries=bvomOrderEntries(),scope=bvomOrderDayKey()){
+ const canonical=entries.map(x=>x.key);
+ // Only presentation changes. A1/A2/A5/A6 keep their existing exercises,
+ // prescriptions, History keys and progression. Workout B is unchanged.
+ const workoutA=['A1','A2','A3','A4','A5','A6'];
+ if(scope==='bodybuilding:A'&&canonical.length===workoutA.length&&
+    workoutA.every(x=>canonical.includes(x)))return ['A2','A1','A3','A4','A6','A5'];
+ return canonical;
+}
 function bvomOrderEffective(entries=bvomOrderEntries(),scope=bvomOrderDayKey()){
  const canonical=entries.map(x=>x.key),record=state.exerciseDisplayOrder;
- if(!scope||!canonical.length||new Set(canonical).size!==canonical.length)return canonical;
+ const defaults=bvomOrderDefault(entries,scope);
+ if(!scope||!canonical.length||new Set(canonical).size!==canonical.length)return defaults;
  const saved=record&&typeof record==='object'&&!Array.isArray(record)?record[scope]:null;
- if(!Array.isArray(saved)||saved.length!==canonical.length||new Set(saved).size!==saved.length||!saved.every(x=>canonical.includes(x)))return canonical;
+ if(!Array.isArray(saved)||saved.length!==canonical.length||new Set(saved).size!==saved.length||!saved.every(x=>canonical.includes(x)))return defaults;
  return [...saved];
 }
 function bvomOrderChange(key,direction){
@@ -4712,7 +4722,7 @@ function bvomOrderChange(key,direction){
  const previous=state.exerciseDisplayOrder;
  const next=previous&&typeof previous==='object'&&!Array.isArray(previous)?{...previous}:{};
  [order[i],order[j]]=[order[j],order[i]];
- if(order.every((x,n)=>x===entries[n].key))delete next[scope];else next[scope]=order;
+ if(order.every((x,n)=>x===bvomOrderDefault(entries,scope)[n]))delete next[scope];else next[scope]=order;
  state.exerciseDisplayOrder=next;
  if(!save({durable:true})){if(previous===undefined)delete state.exerciseDisplayOrder;else state.exerciseDisplayOrder=previous;return false}
  renderAll();return true;
@@ -4750,7 +4760,7 @@ function bvomOrderApply(view){
   }
   header.insertBefore(controls,header.querySelector('.weight')||null);
  }
- if(ordered.some((x,i)=>x!==entries[i].key)){
+ if(ordered.some((x,i)=>x!==bvomOrderDefault(entries,scope)[i])){
   const row=document.createElement('div');row.className='bvomOrderReset';
   const reset=document.createElement('button');reset.type='button';
   reset.textContent=hlmTxt('RESET EXERCISE ORDER','種目の順番をリセット');
