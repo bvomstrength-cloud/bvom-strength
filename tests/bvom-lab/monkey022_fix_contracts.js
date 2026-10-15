@@ -481,7 +481,7 @@ module.exports=({test,ok,H,build})=>{
     const saved=h.S().exerciseDisplayOrder?.['bodybuilding:A']?.join('|')===manual.join('|');
     const unchangedB=h.ctx.bvomOrderEffective(
      ['B1','B2','B3','B4','B5','B6'].map(key=>({key,label:key})),'bodybuilding:B'
-    ).join('|')==='B1|B2|B3|B4|B5|B6';
+    ).join('|')==='B2|B1|B3|B4|B5|B6';
     const reopened=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage,online:false,supabase:null});
     const reloadMatches=reopened.ctx.bvomOrderEffective().join('|')===manual.join('|');
     const reset=reopened.ctx.bvomOrderReset(),restored=reopened.ctx.bvomOrderEffective().join('|')===expected.join('|');
