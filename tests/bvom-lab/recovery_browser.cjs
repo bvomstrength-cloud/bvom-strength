@@ -393,6 +393,38 @@ test('selected RDL vs back extension produces warm-up-aware Workout B order in r
   assert.deepEqual(await reopened.locator(exerciseNames).allTextContents(),lighter);
  }finally{await context.close()}
 });
+test('malformed saved B order cannot reshuffle recorded On-Ramp work during RDL replacement',async()=>{
+ const prepared=H.boot(build);H.bbStart(prepared,{onramp:true});
+ const b=prepared.S().bodybuilding;b.onramp.sessionsCompleted=1;b.selections.B2='romanian_deadlift';
+ prepared.S().exerciseDisplayOrder={'bodybuilding:B':['B2','B2','B1','B3','B4','B5']};
+ prepared.ev('save()');
+ H.orSet(prepared,b.selections.B1,0,{reps:8,load:50});
+ const {context,a}=await setup(JSON.parse(JSON.stringify(prepared.S())));
+ try{
+  const sel='#workout > .exercise .exhead .exname',warm='#warmup > .exercise .exhead .exname';
+  const initial=await a.locator(sel).allTextContents();
+  assert.match(initial[0],/Romanian Deadlift/);
+  const sessionBefore=JSON.stringify((await saved(a)).session);
+  await a.locator('#work-bb-B2').getByText("THIS EXERCISE DOESN'T FEEL RIGHT").click();
+  const n=await a.evaluate(()=>{
+   const options=bvomBbExerciseOptions('B2').filter(x=>x.id!=='romanian_deadlift');
+   return options.findIndex(x=>x.id==='back_extension_45')+1;
+  });
+  assert.ok(n>0);
+  await a.locator('.bvomModalOverlay [data-number]').fill(String(n));
+  await a.locator('.bvomModalOverlay [data-accept]').click();
+  assert.deepEqual(await a.locator(sel).allTextContents(),initial);
+  assert.deepEqual(await a.locator(warm).allTextContents(),initial);
+  const data=await saved(a);
+  assert.equal(data.bodybuilding.selections.B2,'back_extension_45');
+  assert.equal(JSON.stringify(data.session),sessionBefore);
+  assert.deepEqual(data.exerciseDisplayOrder['bodybuilding:B'],['B2','B1','B3','B4','B5','B6']);
+  await a.close();
+  const reopened=await open(context);
+  assert.deepEqual(await reopened.locator(sel).allTextContents(),initial);
+  assert.equal(JSON.stringify((await saved(reopened)).session),sessionBefore);
+ }finally{await context.close()}
+});
 test('optional Android loopback server seeds dummy data and refuses replacement',async()=>{
  const {spawn}=require('node:child_process');const child=spawn(process.execPath,[path.join(__dirname,'recovery_phone_server.cjs'),'33331'],{stdio:['ignore','pipe','pipe']});let context;
  try{
