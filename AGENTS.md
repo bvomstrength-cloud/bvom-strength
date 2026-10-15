@@ -158,13 +158,11 @@ Supported modes include:
 - Feeder
 - None
 
-Numeric warm-ups are approximately:
+**Issue #55 main-block upgrade:** The former fixed 50/70/85% Bodybuilding approximation is a historical baseline, not the newly agreed training behaviour. Major loaded compound movements use optional, progressive BVOM strength-engine-based preparation where suitable; dumbbell compounds receive short per-hand preparation; smaller accessories do not require dedicated numeric warm-ups. On-Ramp, which is for establishing starting loads, shows qualitative guidance and optional rest timing rather than invented numeric prescriptions.
 
-- 50% × 5
-- 70% × 3
-- 85% × 1–2
+Warm-up completion must be session/slot/exercise/plan-scoped, ownership-guarded and durably saved before updating ticks or starting the rest timer. Warm-up-only actions must never progress lifts, count as working sets, calibrate On-Ramp, or create a completed workout. Unit changes, exercise swaps, repeated A/B days and handoffs must not leak old ticks.
 
-Warm-up changes should be checked against exercise loading, units, rounding/increments, and the active program.
+See `BVOM_SPEC.md` §13 for precise current behaviour. Preserve the existing warm-up calculations for all non-Bodybuilding programs.
 
 ## Release evidence
 
