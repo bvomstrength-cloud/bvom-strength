@@ -104,4 +104,79 @@ module.exports=({test,ok,H,build})=>{
    persisted(h).bodybuilding.progression.chin_up.pendingDifficulty==='harder',
    JSON.stringify({choice,pending:h.S().bodybuilding.progression.chin_up.pendingDifficulty}));
  });
+
+ // Codex PR57 P1: an On-Ramp with only optional work must be finishable.
+ // Exercise calibration is deliberately untouched and On-Ramp session count stays put.
+ const emptyRamp=()=>{
+  const h=H.boot(build);H.bbStart(h,{onramp:true});
+  for(const id of Object.values(h.S().bodybuilding.selections)){
+   const e=h.ctx.bvomBbOnRampEx(id);e.state='CONFIRMED';
+   if(h.ctx.bvomBbNumericExercise(id)){e.load=H.BB_LOADS[id]||30;e.increment=2.5}
+   else e.resistance='green band';
+  }
+  h.ev('save()');return h;
+ };
+ const recordAccessory=h=>{
+  h.S().accessoryList=[{id:'m022acc',name:'Cable Curl',category:'Upper',
+   assignment:'__BODYBUILDING__',hlmAssignment:'__BODYBUILDING__',
+   fourDayAssignment:'__BODYBUILDING__',freeAssignment:'__BODYBUILDING__',
+   bbAssignment:'Any',equipment:'machine',style:'straight',sets:2,reps:12,
+   topReps:12,weight:15,increment:2.5}];
+  h.ev('save()');h.ctx.tapAccessory('m022acc',0);
+  const modal=h.lastOverlay();
+  if(!modal?.innerHTML.includes('data-s'))return false;
+  modal.querySelector('[data-s]').onclick();
+  return h.S().session['ACC:m022acc']?.[0]?.reps===12;
+ };
+ const recordGpp=h=>{
+  h.S().gppList.push({id:'m022gpp',name:'Light Conditioning',
+   assignment:'Any',hlmAssignment:'Any',fourDayAssignment:'Any',
+   metrics:{sets:true,reps:true,load:false,distance:false,time:false,rounds:false},
+   planned:{sets:1,reps:12}});
+  h.ev('save()');h.ctx.bvomGppSetModal('m022gpp',0);
+  const modal=h.lastOverlay();
+  if(!modal?.innerHTML.includes('data-s'))return false;
+  modal.querySelector('[data-s]').onclick();
+  return h.S().gppSession.m022gpp?.sets?.[0]?.reps===12;
+ };
+ test('BB-M022-ONRAMP-ACCESSORY-ONLY','DEFECT','Real optional set -> Finish confirmation -> incomplete History -> early handoff, without On-Ramp count increase',()=>{
+  const h=emptyRamp();if(!recordAccessory(h))return ok(false,'Failed to record real optional accessory');
+  const before=snapshot(h),sessions=h.S().bodybuilding.onramp.sessionsCompleted;
+  h.ctx.finishWorkout();const confirm=h.lastOverlay(),shown=!!confirm?.querySelector('[data-accept]');
+  const unchanged=snapshot(h)===before; if(shown)confirm.querySelector('[data-accept]').onclick();
+  const archived=persisted(h),history=archived.history.at(-1);
+  const saved=archived.history.length===1&&history?.incomplete===true&&
+   history.session?.['ACC:m022acc']?.[0]?.reps===12&&
+   archived.bodybuilding.onramp.sessionsCompleted===sessions&&
+   archived.bodybuilding.onramp.status==='active'&&Object.keys(archived.session).length===0;
+  if(saved)h.ctx.bvomBbOnRampHandoff(true);
+  const after=persisted(h);
+  return ok(shown&&unchanged&&saved&&after.bodybuilding.onramp.status==='handed_off'&&
+   after.history.length===1,
+   JSON.stringify({shown,unchanged,saved,after:after.bodybuilding.onramp.status,history:history?.session?.['ACC:m022acc']}));
+ });
+ test('BB-M022-ONRAMP-GPP-ONLY','DEFECT','GPP-only On-Ramp must archive actual GPP result and clear session without consuming calibration exposure',()=>{
+  const h=emptyRamp();if(!recordGpp(h))return ok(false,'Failed to record real GPP set');
+  const before=snapshot(h),sessions=h.S().bodybuilding.onramp.sessionsCompleted;
+  h.ctx.bvomBbOnRampFinish(true);const d=persisted(h),last=d.history.at(-1);
+  return ok(before!==snapshot(h)&&d.history.length===1&&last?.incomplete===true&&
+   last.gpp?.[0]?.id==='m022gpp'&&last.gpp?.[0]?.sets?.[0]?.reps===12&&
+   d.bodybuilding.onramp.sessionsCompleted===sessions&&
+   Object.keys(d.gppSession).length===0&&d.bodybuilding.onramp.status==='active',
+   JSON.stringify({history:d.history.length,gpp:last?.gpp,count:d.bodybuilding.onramp.sessionsCompleted}));
+ });
+ test('BB-M022-ONRAMP-OPTIONAL-ATOMIC-EMPTY','DEFECT','Empty Finish creates no History; rejected optional-work Finish retains real work, timer, On-Ramp and durable state',()=>{
+  const empty=emptyRamp(),start=snapshot(empty);
+  empty.ctx.bvomBbOnRampFinish(true);
+  const noPhantom=snapshot(empty)===start&&empty.S().history.length===0;
+  const h=emptyRamp();if(!recordAccessory(h)||!recordGpp(h))return ok(false,'Could not stage mixed optional work');
+  const before=snapshot(h),memory=JSON.stringify(h.S()),setItem=h.ls.setItem;
+  h.ls.setItem=(k,v)=>{if(k==='bvom_data')throw Error('synthetic quota');return setItem(k,v)};
+  h.ctx.bvomBbOnRampFinish(true);h.ls.setItem=setItem;
+  const restored=before===snapshot(h)&&memory===JSON.stringify(h.S())&&
+   h.S().session['ACC:m022acc']?.[0]?.reps===12&&
+   h.S().gppSession.m022gpp?.sets?.[0]?.reps===12&&
+   h.S().bodybuilding.onramp.status==='active'&&h.S().history.length===0;
+  return ok(noPhantom&&restored,JSON.stringify({noPhantom,restored,storedHistory:persisted(h).history.length}));
+ });
 };
