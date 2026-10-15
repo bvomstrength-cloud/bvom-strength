@@ -539,4 +539,26 @@ module.exports=({test,ok,H,build})=>{
       JSON.stringify({original,custom,afterChange,reopenedCustom,adaptive,durable,unchanged}));
    });
  }
+
+ test('BB-M027-ACTIVE-ONRAMP-SWAP-STABLE','DEFECT',
+  'Changing unstarted hinge during an active B workout cannot silently move existing recorded work',()=>{
+   const h=H.boot(build);H.bbStart(h,{onramp:true});
+   const b=h.S().bodybuilding;b.onramp.sessionsCompleted=1;b.selections.B2='romanian_deadlift';
+   h.ev('save()');const beforeOrder=h.ctx.bvomOrderEffective().join('|');
+   const first=b.selections.B1;
+   H.orSet(h,first,0,{reps:8,load:50});
+   const beforeHistory=JSON.stringify(h.S().history),beforeSet=JSON.stringify(h.S().session);
+   const opts=h.ctx.bvomBbExerciseOptions('B2').filter(o=>o.id!=='romanian_deadlift');
+   const n=opts.findIndex(x=>x.id==='back_extension_45')+1;
+   h.ctx.bvomBbOnRampSwap('B2');const dlg=h.lastOverlay();
+   dlg.querySelector('[data-number]').value=String(n);dlg.querySelector('[data-accept]').onclick();
+   const afterOrder=h.ctx.bvomOrderEffective().join('|');
+   const stored=JSON.parse(h.ls.getItem('bvom_data'));
+   const stable=stored.exerciseDisplayOrder?.['bodybuilding:B']?.join('|')===beforeOrder;
+   return ok(n>0&&beforeOrder==='B2|B1|B3|B4|B5|B6'&&
+    b.selections.B2==='back_extension_45'&&stable&&afterOrder===beforeOrder&&
+    JSON.stringify(h.S().session)===beforeSet&&JSON.stringify(h.S().history)===beforeHistory,
+    JSON.stringify({beforeOrder,afterOrder,stable,swapped:b.selections.B2,
+     setsPreserved:JSON.stringify(h.S().session)===beforeSet}));
+  });
 };
