@@ -184,7 +184,11 @@ module.exports=({test,ok,H,build})=>{
    history:h.S().history.length===0
   };
   const restored=Object.values(checks).every(Boolean);
+  const original=JSON.parse(memory),current=h.S();
+  const differingKeys=Object.keys({...original,...current})
+   .filter(k=>JSON.stringify(original[k])!==JSON.stringify(current[k]))
+   .map(k=>({key:k,before:JSON.stringify(original[k])?.slice(0,500),after:JSON.stringify(current[k])?.slice(0,500)}));
   return ok(noPhantom&&restored&&rejectedWrites>0,
-   JSON.stringify({noPhantom,checks,rejectedWrites,storedHistory:persisted(h).history.length}));
+   JSON.stringify({noPhantom,checks,rejectedWrites,storedHistory:persisted(h).history.length,differingKeys}));
  });
 };
