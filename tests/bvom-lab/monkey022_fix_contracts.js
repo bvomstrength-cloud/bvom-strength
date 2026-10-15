@@ -406,4 +406,39 @@ module.exports=({test,ok,H,build})=>{
       modalOpen:result.visibleModal}));
    });
  }
+
+ // Monkey 024: in-app validation, never Chrome/Android's native "site says"
+ // alert, on both Bodybuilding and On-Ramp bodyweight set forms.
+ for(const [tag,onramp] of [['ONRAMP',true],['BLOCK',false]]){
+  test('BB-M024-BW-INLINE-ERROR-'+tag,'DEFECT',
+   'Invalid Nordic Curl bodyweight fields stay in the set modal with a readable inline notice and no native alert',()=>{
+    const failures=[];
+    for(const [field,value] of [
+      ['[data-load]',''],
+      ['[data-bw-estimate]','-1'],
+      ['[data-bw-inc]','0'],
+      ['[data-reps]','-1']
+    ]){
+      const h=H.boot(build);H.bbStart(h,{onramp});
+      h.S().bodybuilding.selections.A4='nordic_curl';h.ev('save()');
+      if(onramp)h.ctx.bvomBbOnRampSetModal('nordic_curl',1);
+      else h.ctx.bvomBbSetModal('nordic_curl',1);
+      const o=h.lastOverlay(),start=h.ls.getItem('bvom_data');
+      const html=o.innerHTML,notice=o.querySelector('[data-bb-validation]');
+      o.querySelector('[data-load]').value='0';
+      o.querySelector('[data-bw-estimate]').value='';
+      o.querySelector('[data-bw-inc]').value='2.5';
+      o.querySelector('[data-reps]').value='8';
+      o.querySelector(field).value=value;
+      o.querySelector('[data-save]').onclick();
+      const pass=html.includes('data-bb-validation')&&
+       notice.hidden===false&&String(notice.textContent||'').length>10&&
+       o.removed===false&&!h.log.some(row=>row[0]==='alert')&&
+       h.ls.getItem('bvom_data')===start;
+      failures.push({field,pass,inline:html.includes('data-bb-validation'),notice:notice.textContent,
+       hidden:notice.hidden,alerts:h.log.filter(row=>row[0]==='alert')});
+    }
+    return ok(failures.every(x=>x.pass),JSON.stringify(failures));
+   });
+ }
 };
