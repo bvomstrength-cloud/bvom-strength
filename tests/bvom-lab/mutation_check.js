@@ -15,6 +15,10 @@ const guard=path.join(__dirname,'behaviour_guard.js');
 // replace exactly one occurrence of `from`, searching only inside the function/region starting at `region`
 function inRegion(region,from,to){return src=>{const r=src.indexOf(region);if(r<0)return null;const i=src.indexOf(from,r);if(i<0||i-r>20000)return null;return src.slice(0,i)+to+src.slice(i+from.length)}}
 const MUTATIONS=[
+ // Codex PR57 P1: GPP scope and program mode must be durably committed together.
+ {id:'BB-M023-GPP-INTERMEDIATE-LP-MODE',why:'A GPP owner change persists a temporary LP/RPT mode',targets:['BB-M023-GPP-ONRAMP-POSTCOMMIT-CREATE','BB-M023-GPP-BLOCK-POSTCOMMIT-EDIT'],apply:inRegion('function openGppBuilder(id=null)', "if(!save({durable:true})){state=before;return false}", "state.programMode='lprpt';if(!save({durable:true})){state=before;return false}")},
+ {id:'BB-M023-GPP-CREATE-SCOPE-LEAK',why:'A new Bodybuilding GPP activity is assigned to unrelated programs',targets:['BB-M023-GPP-ONRAMP-POSTCOMMIT-CREATE','BB-M023-GPP-BLOCK-POSTCOMMIT-CREATE'],apply:inRegion('function openGppBuilder(id=null)', "for(const field of fields)item[field]=g?g[field]:BVOM_BB_SENTINEL;", "for(const field of fields)item[field]=g?g[field]:'Any';")},
+ {id:'BB-M023-GPP-REJECT-LEAK',why:'Rejected single-blob GPP save leaves phantom assignment in live state',targets:['BB-M023-GPP-ONRAMP-REJECT-ATOMIC','BB-M023-GPP-BLOCK-REJECT-ATOMIC'],apply:inRegion('function openGppBuilder(id=null)', "if(!save({durable:true})){state=before;return false}", "if(!save({durable:true})){return false}")},
  // Monkey 023 follow-up: the On-Ramp's computed A/B day differs from state.day.
  {id:'BB-M023-GPP-ONRAMP-USES-BLOCK-DAY',why:'On-Ramp B incorrectly uses Bodybuilding day A to select GPP',targets:['BB-M023-GPP-ONRAMP-DAY-FILTER'],apply:inRegion('const bvomBbBaseGppAssigned=bvomGppAssigned;', 'const day=bvomBbOnRampActive()?bvomBbOnRampDay():bvomBbDay();', 'const day=bvomBbDay();')},
  {id:'BB-M023-GPP-EDITOR-HIDDEN-AGAIN',why:'GPP editor hides its Bodybuilding A/B selector again',targets:['BB-M023-GPP-ONRAMP-EDITOR','BB-M023-GPP-BLOCK-EDITOR'],apply:inRegion('function bvomGppBuilderAssignments(g)', 'const bbField=isBodybuilding()?', 'const bbField=false?')},
@@ -264,6 +268,9 @@ if(knownBad){
     'BB-M023-GPP-ONRAMP-VISIBLE','BB-M023-GPP-BLOCK-VISIBLE',
     'BB-M023-GPP-ONRAMP-DAY-FILTER','BB-M023-GPP-BLOCK-DAY-FILTER','BB-M023-GPP-ONRAMP-EDITOR','BB-M023-GPP-BLOCK-EDITOR',
     'BB-M023-GPP-ONRAMP-NEW-ASSIGNMENT','BB-M023-GPP-BLOCK-NEW-ASSIGNMENT',
+    'BB-M023-GPP-ONRAMP-POSTCOMMIT-CREATE','BB-M023-GPP-ONRAMP-POSTCOMMIT-EDIT',
+    'BB-M023-GPP-BLOCK-POSTCOMMIT-CREATE','BB-M023-GPP-BLOCK-POSTCOMMIT-EDIT',
+    'BB-M023-GPP-ONRAMP-REJECT-ATOMIC','BB-M023-GPP-BLOCK-REJECT-ATOMIC',
     // Stage 1 forward-feature contracts: RED on exact v2.9.7 dbaad6ef.
     'BW-REFINE-VOLUME','BW-REFINE-HISTORY','BW-REFINE-INCREMENT','BW-REFINE-INCOMPLETE-GPP',
     'BW-STAGE1-RECORD','BW-STAGE1-HISTORY','BW-STAGE1-UNITS','BW-STAGE1-BUILDER','BW-STAGE1-BB','BW-STAGE1-ATOMIC','BW-STAGE1-CORRECTION-CLOUD','BW-STAGE1-OWNER','BW-STAGE1-ONRAMP',
