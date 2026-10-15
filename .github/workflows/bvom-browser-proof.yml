@@ -149,3 +149,5 @@ jobs:
         run: node tests/bvom-lab/bodyweight_browser.cjs
       - name: Run Monkey 018 Bodyweight edit and volume endurance
         run: node tests/bvom-lab/bodyweight_monkey018.cjs
+      - name: Run Monkey 021 Bodybuilding warm-up mobile-browser endurance
+        run: node tests/bvom-lab/bb_warmup_monkey021.cjs
