@@ -574,7 +574,8 @@ test('F92-ORDER-LP-B-ISOLATED','DEFECT','LP B reorder is persisted without chang
 test('F93-ORDER-BB-ONRAMP-REOPEN','DEFECT','On-Ramp arrow changes slots on screen only and survives restart and handoff to Bodybuilding',()=>{
  const h=H.boot(build);bbStart(h,{onramp:true});const original=h.ctx.bvomOrderEntries(),slot=original.find(x=>/squat/i.test(x.label))?.key;
  if(!slot)return ok(false,'No squat in default A');
- const okMove=h.ctx.bvomOrderChange(slot,-1),after=h.ctx.bvomOrderEffective().join('|'),originalKeys=original.map(x=>x.key).join('|');
+ const defaultOrder=h.ctx.bvomOrderEffective().join('|');
+ const okMove=h.ctx.bvomOrderChange(slot,1),after=h.ctx.bvomOrderEffective().join('|'),originalKeys=defaultOrder;
  const saved=JSON.stringify(h.S().bodybuilding),history=JSON.stringify(h.S().history);
  const re=H.boot(build,{ls:h.ls}),reopened=re.ctx.bvomOrderEffective().join('|');
  re.S().bodybuilding.onramp.status='handed_off';re.ev('save()');
