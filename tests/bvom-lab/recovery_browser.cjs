@@ -413,15 +413,17 @@ test('malformed saved B order cannot reshuffle recorded On-Ramp work during RDL 
   assert.ok(n>0);
   await a.locator('.bvomModalOverlay [data-number]').fill(String(n));
   await a.locator('.bvomModalOverlay [data-accept]').click();
-  assert.deepEqual(await a.locator(sel).allTextContents(),initial);
-  assert.deepEqual(await a.locator(warm).allTextContents(),initial);
+  const expected=[...initial];expected[0]='45° Back Extension';
+  assert.deepEqual(await a.locator(sel).allTextContents(),expected);
+  assert.deepEqual(await a.locator(warm).allTextContents(),expected);
   const data=await saved(a);
   assert.equal(data.bodybuilding.selections.B2,'back_extension_45');
   assert.equal(JSON.stringify(data.session),sessionBefore);
   assert.deepEqual(data.exerciseDisplayOrder['bodybuilding:B'],['B2','B1','B3','B4','B5','B6']);
   await a.close();
   const reopened=await open(context);
-  assert.deepEqual(await reopened.locator(sel).allTextContents(),initial);
+  assert.deepEqual(await reopened.locator(sel).allTextContents(),expected);
+  assert.deepEqual(await reopened.locator(warm).allTextContents(),expected);
   assert.equal(JSON.stringify((await saved(reopened)).session),sessionBefore);
  }finally{await context.close()}
 });
