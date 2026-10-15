@@ -358,6 +358,41 @@ test('real Bodybuilding On-Ramp A defaults Squat first / Triceps before Laterals
  }finally{await context.close()}
 });
 
+test('selected RDL vs back extension produces warm-up-aware Workout B order in real Chromium',async()=>{
+ const prepared=H.boot(build);H.bbStart(prepared);
+ const b=prepared.S().bodybuilding;b.completedSessions=1;
+ b.selections.B1='lat_pulldown';b.selections.B2='romanian_deadlift';
+ b.selections.B3='incline_dumbbell_press';b.selections.B4='bulgarian_split_squat';
+ prepared.ev('save()');
+ const exerciseNames='#workout > .exercise .exhead .exname';
+ const warmNames='#warmup > .exercise .exhead .exname';
+ const {context,a}=await setup(JSON.parse(JSON.stringify(prepared.S())));
+ try{
+  const loaded=await a.locator(exerciseNames).allTextContents();
+  assert.match(loaded[0],/Romanian Deadlift/);
+  assert.match(loaded[1],/Lat Pulldown/);
+  assert.match(loaded[3],/Bulgarian Split Squat/);
+  assert.deepEqual(await a.locator(warmNames).allTextContents(),loaded);
+  const preserved=JSON.stringify((await saved(a)).bodybuilding.progression);
+  await a.evaluate(()=>{state.bodybuilding.selections.B2='back_extension_45';save();renderAll()});
+  const lighter=await a.locator(exerciseNames).allTextContents();
+  assert.match(lighter[0],/Lat Pulldown/,'qualitative back extension cannot claim heavy hinge priority');
+  assert.match(lighter[1],/Incline Dumbbell Press/);
+  assert.match(lighter[2],/Bulgarian Split Squat/);
+  assert.match(lighter[3],/Back Extension/);
+  assert.deepEqual(await a.locator(warmNames).allTextContents(),lighter);
+  assert.match(await a.locator('#warm-bb-B2').innerText(),/Prepare for your working sets|No prescribed warm-up/);
+  assert.equal(JSON.stringify((await saved(a)).bodybuilding.progression),preserved,'display changes cannot progress weights');
+  await a.locator('#workout > .exercise').first().locator('.bvomOrderArrow').nth(1).click();
+  const manual=await a.locator(exerciseNames).allTextContents();
+  assert.match(manual[0],/Incline Dumbbell Press/);
+  await a.close();const reopened=await open(context);
+  assert.deepEqual(await reopened.locator(exerciseNames).allTextContents(),manual);
+  assert.deepEqual(await reopened.locator(warmNames).allTextContents(),manual);
+  await reopened.locator('#workout .bvomOrderReset button').click();
+  assert.deepEqual(await reopened.locator(exerciseNames).allTextContents(),lighter);
+ }finally{await context.close()}
+});
 test('optional Android loopback server seeds dummy data and refuses replacement',async()=>{
  const {spawn}=require('node:child_process');const child=spawn(process.execPath,[path.join(__dirname,'recovery_phone_server.cjs'),'33331'],{stdio:['ignore','pipe','pipe']});let context;
  try{
