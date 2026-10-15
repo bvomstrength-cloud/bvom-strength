@@ -238,6 +238,10 @@ if(knownBad){
   // These defects were introduced by later hardening, so passing them on v2.8.0 does not make the
   // contracts toothless. Keep provenance exceptions explicit instead of weakening the contracts.
   const notApplicableToV280=new Set([
+    // Issue #55 Stage A is a forward-only, unwired warm-up feature absent from v2.8.0.
+    // Candidate still MUST pass each test; historical reference can only be N/A.
+    'BB-STAGE-A-CATALOGUE','BB-STAGE-A-CORE-UNCHANGED','BB-STAGE-A-FREEBAR',
+    'BB-STAGE-A-MACHINE','BB-STAGE-A-LIGHT-ROWS-HINGES','BB-STAGE-A-DB-ONRAMP-ACCESSORY','BB-STAGE-A-IMPERIAL',
     // Stage 1 forward-feature contracts: RED on exact v2.9.7 dbaad6ef.
     'BW-REFINE-VOLUME','BW-REFINE-HISTORY','BW-REFINE-INCREMENT','BW-REFINE-INCOMPLETE-GPP',
     'BW-STAGE1-RECORD','BW-STAGE1-HISTORY','BW-STAGE1-UNITS','BW-STAGE1-BUILDER','BW-STAGE1-BB','BW-STAGE1-ATOMIC','BW-STAGE1-CORRECTION-CLOUD','BW-STAGE1-OWNER','BW-STAGE1-ONRAMP',
