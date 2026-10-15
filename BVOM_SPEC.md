@@ -724,6 +724,8 @@ GPP activities may have timers and additional result metrics.
 
 **Bodybuilding A/B GPP assignments (Monkey 023 follow-up):** GPP has its own persisted `bbAssignment` (`Any`, `A` or `B`), independent of LP/RPT `assignment`, HLM `hlmAssignment`, 4-Day `fourDayAssignment` and Custom day scope. Both On-Ramp and the 24-session block display a labelled Bodybuilding A/B selector when GPP is added or edited. Opening and saving without changing the selector must preserve an existing A-only/B-only choice. The chosen value must persist over reload, while assignments to other programs remain unchanged. A newly created Bodybuilding GPP must be scoped only to Bodybuilding, not leaked to the other programs. On-Ramp filters GPP by its *current computed* alternating A/B session, even if legacy `state.day` remains A; the Bodybuilding block uses its own current A/B day. No assignment editing is allowed to silently widen scope to Any.
 
+**GPP edit commit atomicity (Codex PR57 P1):** Bodybuilding and On-Ramp GPP add/edit must durably commit the final `programMode='bodybuilding'`, selected `bbAssignment`, the other programs' preserved/sentinel assignments, and all existing live training state **in one blob write**. Never temporarily commit LP/RPT mode or use a subsequent cleanup save. A rejected blob write must leave in-memory state and recorded work exactly as before, retain the editor for retry and not create phantom GPP; a post-blob ownership-marker failure must stop the window but preserve the **already-complete** Bodybuilding/GPP state for reload, with no second attempted blob write.
+
 ### 12.1 Pause / resume
 
 Pausing a timed GPP activity freezes elapsed time.
