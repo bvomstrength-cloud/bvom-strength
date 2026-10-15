@@ -130,8 +130,9 @@ module.exports=({test,ok,H,build})=>{
   return true;
  };
  const recordGpp=h=>{
+  // Bodybuilding normalizes saved GPP templates to include this field.
   h.S().gppList.push({id:'m022gpp',name:'Light Conditioning',
-   assignment:'Any',hlmAssignment:'Any',fourDayAssignment:'Any',
+   assignment:'Any',hlmAssignment:'Any',fourDayAssignment:'Any',bbAssignment:null,
    metrics:{sets:true,reps:true,load:false,distance:false,time:false,rounds:false},
    planned:{sets:1,reps:12}});
   // Seed the persisted result shape from a completed GPP set.
@@ -166,7 +167,7 @@ module.exports=({test,ok,H,build})=>{
    Object.keys(d.gppSession).length===0&&d.bodybuilding.onramp.status==='active',
    JSON.stringify({history:d.history.length,gpp:last?.gpp,count:d.bodybuilding.onramp.sessionsCompleted}));
  });
- test('BB-M022-ONRAMP-OPTIONAL-ATOMIC-EMPTY','DEFECT','Empty Finish creates no History; rejected optional-work Finish retains real work, timer, On-Ramp and durable state',()=>{
+ test('BB-M022-ONRAMP-OPTIONAL-ATOMIC-EMPTY','DEFECT','Empty Finish creates no History; rejected optional-work Finish retains real work, On-Ramp and durable state',()=>{
   const empty=emptyRamp(),start=snapshot(empty);
   empty.ctx.bvomBbOnRampFinish(true);
   const noPhantom=snapshot(empty)===start&&empty.S().history.length===0;
