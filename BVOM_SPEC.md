@@ -637,6 +637,8 @@ Only a valid successful hand-off changes On-Ramp status to handed off and activa
 
 **Monkey 022 preservation rule:** Both **START 8-WEEK BLOCK NOW** and **SKIP ON-RAMP**, including any direct hand-off call, refuse transition while a live On-Ramp session has recorded sets, active training or GPP activity. The user must first **FINISH WORKOUT**, saving the partial session as incomplete History if necessary; then an empty-session hand-off may proceed. Rejected attempts must not clear sets, consume a session or alter History, cloud/owner metadata or calibrated loads. No silent archiving or implicit early hand-off.
 
+**Optional-only Finish (Codex P1):** A session with recorded accessories or GPP but no `BBOR:` calibration sets must still offer Finish and archive as **incomplete** History, including both any accessory sets and a snapshot of recorded GPP results. This must not consume an On-Ramp exposure or trigger handoff. An entirely empty session does not create a History entry. A failed durable write keeps all recorded work and the active On-Ramp session intact.
+
 ### 10.7 Set-entry validation is atomic
 
 A rejected On-Ramp set entry must leave the exercise object's live and persisted state unchanged.
