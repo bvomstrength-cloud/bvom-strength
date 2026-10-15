@@ -30,6 +30,24 @@ jobs:
           ZIP="BVOM-v${BUILD}-PR${PR_NUMBER}-TEST.zip"
           mkdir -p .bvom-netlify-test/i18n .bvom-netlify-test/vendor
           cp index.html admin.html sw.js manifest.json .bvom-netlify-test/
+          # Only the manually uploaded test-site copy of sw.js is changed.
+          # Production source keeps its release version. A PR's app JS can
+          # change without its release number changing; if the cache token
+          # stays the same, existing test-site users remain on stale HTML.
+          TEST_CACHE="bvom-${BUILD}-pr${PR_NUMBER}-${SOURCE_SHA:0:12}"
+          export TEST_CACHE
+          python3 - <<'PY'
+          import os, pathlib, re
+          sw = pathlib.Path('.bvom-netlify-test/sw.js')
+          original = sw.read_text()
+          changed, count = re.subn(r"(?m)^const CACHE = '[^']+';$",
+                                   "const CACHE = '" + os.environ['TEST_CACHE'] + "';",
+                                   original, count=1)
+          if count != 1 or original == changed:
+              raise SystemExit('Cannot set unique test-only service-worker cache')
+          sw.write_text(changed)
+          PY
+          grep -F "const CACHE = '${TEST_CACHE}';" .bvom-netlify-test/sw.js
           cp icon-192.png icon-512.png og-image.png .bvom-netlify-test/
           cp theme-bee-v23c.svg theme-cherry-v23f.svg theme-coastal-v23f.svg .bvom-netlify-test/
           cp i18n/en.js i18n/ja.js .bvom-netlify-test/i18n/
@@ -38,6 +56,7 @@ jobs:
             'Manual upload to a DIFFERENT Netlify site only.' \
             'Uses the SAME cloud backend as normal BVOM; sign in ONLY with a disposable test account.' \
             "App version: ${BUILD}" "Source PR: #${PR_NUMBER}" "Source head commit: ${SOURCE_SHA}" \
+            "Test-only SW cache: ${TEST_CACHE}" \
             > .bvom-netlify-test/NETLIFY-TEST-BUILD.txt
           test -s .bvom-netlify-test/index.html
           test -s .bvom-netlify-test/vendor/supabase-js-2.117.3.js
