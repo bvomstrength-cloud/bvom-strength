@@ -3866,6 +3866,16 @@ function bvomBbOnRampPrepareHandoff(target){
  o.status='handed_off';b.completedSessions=0;b.status='active';
  return null;
 }
+// On-Ramp finish/handoff has no generic WORKOUT SAVED acknowledgement modal.
+// Release its cloud write fence only after the durable blob committed and the
+// owner/window is still safe. A genuine remote conflict still requires consent.
+function bvomBbOnRampCloudCommitDone(oldDefer){
+ if(!window.__bvomCloudBooted||bvomPersistenceBlocked()||bvomAnyWorkoutActive())return;
+ bvomCloud.deferWorkoutCommit=oldDefer;
+ if(oldDefer)return;
+ if(bvomCloud.syncReady)bvomCloudScheduleAutoSave();
+ else if(!bvomCloud.conflict&&!bvomCloud.assessing)bvomCloudAssessSync();
+}
 function bvomBbOnRampFinish(approvedIncomplete=false){
  if(!bvomWorkoutActionAllowed()||window.__bvomFinishBusy)return;
  const day=bvomBbOnRampDay(),ids=bvomBbOnRampSlots(day).map(s=>state.bodybuilding.selections[s]),complete=ids.every(bvomBbOnRampExerciseTouched);
@@ -3899,7 +3909,7 @@ function bvomBbOnRampFinish(approvedIncomplete=false){
   committed=true;
   // A committed blob with failed owner bookkeeping stops the window; don't revert it.
   if(bvomPersistenceBlocked())return;
-  cancelTimer();bvomStopGppRuntime();renderAll();
+  cancelTimer();bvomStopGppRuntime();renderAll();bvomBbOnRampCloudCommitDone(oldDefer);
   if(!finalHandoff&&complete&&bvomBbOnRampAllConfirmed())setTimeout(()=>{
    bvomBbUiModal('ON-RAMP COMPLETE','All starting loads are confirmed. Start the 8-week Bodybuilding block now?',null,()=>{
     if(bvomBbOnRampActive()&&bvomBbOnRampAllConfirmed())bvomBbOnRampHandoff(true)
@@ -3935,7 +3945,7 @@ function bvomBbOnRampHandoff(early=false){
   }
   committed=true;
   if(bvomPersistenceBlocked())return;
-  cancelTimer();renderAll();
+  cancelTimer();renderAll();bvomBbOnRampCloudCommitDone(oldDefer);
  }catch(err){
   if(!committed){state=before;bvomCloud.deferWorkoutCommit=oldDefer}
   console.error('On-Ramp handoff failed',err);

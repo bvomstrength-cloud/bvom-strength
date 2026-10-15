@@ -15,6 +15,11 @@ const guard=path.join(__dirname,'behaviour_guard.js');
 // replace exactly one occurrence of `from`, searching only inside the function/region starting at `region`
 function inRegion(region,from,to){return src=>{const r=src.indexOf(region);if(r<0)return null;const i=src.indexOf(from,r);if(i<0||i-r>20000)return null;return src.slice(0,i)+to+src.slice(i+from.length)}}
 const MUTATIONS=[
+ // Monkey 031: losing the post-durable On-Ramp cloud-fence release makes the
+ // finished session appear active until reload. The explicit failed-save
+ // guard still checks that no cloud upload occurs after a rejected write.
+ {id:'BB-M031-RELEASE-FENCE-REMOVED',why:'On-Ramp completion leaves cloud sync deferred after durable commit',targets:['BB-M031-ONRAMP-FINISH-CLOUD-UNBLOCK','BB-M031-ONRAMP-SIXTH-CLOUD-UNBLOCK','BB-M031-ONRAMP-DIRECT-HANDOFF-CLOUD-UNBLOCK'],apply:inRegion('function bvomBbOnRampCloudCommitDone(', 'bvomCloud.deferWorkoutCommit=oldDefer;', 'bvomCloud.deferWorkoutCommit=true;')},
+
  // Monkey 030: a qualitative Chin-Up must never steal an early slot
  // from a loaded compound that needs progressive ramp sets.
  {id:'BB-M030-CHINUP-STEALS-PREP-SLOT',why:'Bodyweight Chin-Up is placed ahead of progressive RDL and DB preparations',targets:['BB-M030-WARMUP-FIRST-B-ONRAMP','BB-M030-WARMUP-FIRST-B-BLOCK'],apply:inRegion('function bvomBbOrderPriority(', "const tier=kind==='compound'?0:kind==='qualitative'?1:2;", "const tier=kind==='compound'?0:kind==='qualitative'&&slot==='B1'?-1:kind==='qualitative'?1:2;")},
@@ -303,7 +308,7 @@ if(knownBad){
     'BB-M027-ACTIVE-ONRAMP-SWAP-STABLE',
     'BB-M028-MALFORMED-ACTIVE-SWAP-STRING','BB-M028-MALFORMED-ACTIVE-SWAP-DUPLICATE','BB-M028-MALFORMED-ACTIVE-SWAP-PARTIAL',
     'BB-M030-WARMUP-FIRST-B-ONRAMP','BB-M030-WARMUP-FIRST-B-BLOCK',
-    'BB-M031-ONRAMP-FINISH-CLOUD-UNBLOCK','BB-M031-ONRAMP-SIXTH-CLOUD-UNBLOCK','BB-M031-ONRAMP-DIRECT-HANDOFF-CLOUD-UNBLOCK','BB-M031-ONRAMP-REJECT-CLOUD-SAFE',
+    'BB-M031-ONRAMP-FINISH-CLOUD-UNBLOCK','BB-M031-ONRAMP-SIXTH-CLOUD-UNBLOCK','BB-M031-ONRAMP-DIRECT-HANDOFF-CLOUD-UNBLOCK','BB-M031-ONRAMP-REJECT-CLOUD-SAFE','BB-M031-ONRAMP-CONFLICT-REMAINS-PAUSED',
     // Stage 1 forward-feature contracts: RED on exact v2.9.7 dbaad6ef.
     'BW-REFINE-VOLUME','BW-REFINE-HISTORY','BW-REFINE-INCREMENT','BW-REFINE-INCOMPLETE-GPP',
     'BW-STAGE1-RECORD','BW-STAGE1-HISTORY','BW-STAGE1-UNITS','BW-STAGE1-BUILDER','BW-STAGE1-BB','BW-STAGE1-ATOMIC','BW-STAGE1-CORRECTION-CLOUD','BW-STAGE1-OWNER','BW-STAGE1-ONRAMP',

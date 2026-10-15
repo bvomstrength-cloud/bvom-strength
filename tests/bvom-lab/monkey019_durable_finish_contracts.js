@@ -110,4 +110,16 @@ module.exports=({test,ok,H,build})=>{
    JSON.stringify({active,defer,pending,saved:h.S().history.length}));
  });
 
+
+ test('BB-M031-ONRAMP-CONFLICT-REMAINS-PAUSED','DEFECT','On-Ramp Finish unlocks manual choice without automatic overwrite of a divergent cloud',()=>{
+  const h=rampFixture();armCloud(h);
+  h.ev('bvomCloud.syncReady=false;bvomCloud.conflict=true;');
+  h.ctx.bvomBbOnRampFinish();
+  const d=JSON.parse(h.ls.getItem('bvom_data'));
+  const defer=h.ev('bvomCloud.deferWorkoutCommit'),pending=h.ev('bvomCloud.pendingAuto'),
+    conflict=h.ev('bvomCloud.conflict');
+  return ok(d.history.length===1&&!defer&&!pending&&conflict,
+   JSON.stringify({saved:d.history.length,defer,pending,conflict}));
+ });
+
 };
