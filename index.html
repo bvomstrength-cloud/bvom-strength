@@ -3947,8 +3947,19 @@ function bvomBbOnRampSwap(slot){if(!bvomWorkoutActionAllowed()||!bvomBbOnRampAct
  const original=state.bodybuilding.selections[slot],opts=bvomBbExerciseOptions(slot).filter(o=>o.id!==original);if(!opts.length)return;
  bvomBbUiModal('Choose a replacement for '+BVOM_BB_SLOT_LABELS[slot]+':','',opts,n=>{
   if(!bvomBbOnRampActive()||state.bodybuilding.selections[slot]!==original)return;
-  const id=opts[n-1].id;state.bodybuilding.selections[slot]=id;
-  const ramp=bvomBbOnRampEnsure();delete ramp.exercises[original];bvomBbOnRampResetExercise(id);save();renderAll()
+  const id=opts[n-1].id,before=JSON.parse(JSON.stringify(state));
+  // If other sets have already been recorded, preserve the user's current
+  // screen order. Reclassifying a hinge as a qualitative back extension
+  // must not jump cards around midway through an active On-Ramp workout.
+  const scope=bvomOrderDayKey(),record=state.exerciseDisplayOrder;
+  if(bvomSessionHasActivity()&&scope&&!record?.[scope]){
+   state.exerciseDisplayOrder={...(record||{}),[scope]:bvomOrderEffective()};
+  }
+  state.bodybuilding.selections[slot]=id;
+  const ramp=bvomBbOnRampEnsure();delete ramp.exercises[original];bvomBbOnRampResetExercise(id);
+  if(!save({durable:true})){state=before;return}
+  if(bvomPersistenceBlocked())return;
+  renderAll()
  },'REPLACE')}
 /* ===== ISSUE #55: BODYBUILDING PROGRESSIVE WARM-UP ADAPTER — STAGE A (NOT YET WIRED TO UI) =====
  * The established strength warmups()/warmupsLb() remain untouched.
