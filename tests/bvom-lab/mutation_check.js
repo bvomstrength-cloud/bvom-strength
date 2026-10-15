@@ -15,6 +15,10 @@ const guard=path.join(__dirname,'behaviour_guard.js');
 // replace exactly one occurrence of `from`, searching only inside the function/region starting at `region`
 function inRegion(region,from,to){return src=>{const r=src.indexOf(region);if(r<0)return null;const i=src.indexOf(from,r);if(i<0||i-r>20000)return null;return src.slice(0,i)+to+src.slice(i+from.length)}}
 const MUTATIONS=[
+ // Monkey 023 follow-up: the On-Ramp's computed A/B day differs from state.day.
+ {id:'BB-M023-GPP-ONRAMP-USES-BLOCK-DAY',why:'On-Ramp B incorrectly uses Bodybuilding day A to select GPP',targets:['BB-M023-GPP-ONRAMP-DAY-FILTER'],apply:inRegion('const bvomBbBaseGppAssigned=bvomGppAssigned;', 'const day=bvomBbOnRampActive()?bvomBbOnRampDay():bvomBbDay();', 'const day=bvomBbDay();')},
+ {id:'BB-M023-GPP-EDITOR-HIDDEN-AGAIN',why:'GPP editor hides its Bodybuilding A/B selector again',targets:['BB-M023-GPP-ONRAMP-EDITOR','BB-M023-GPP-BLOCK-EDITOR'],apply:inRegion('function bvomGppBuilderAssignments(g)', 'const bbField=isBodybuilding()?', 'const bbField=false?')},
+ {id:'BB-M023-GPP-EDITOR-RESETS-ANY',why:'Bodybuilding GPP editor discards selected A/B and saves Any',targets:['BB-M023-GPP-ONRAMP-EDITOR','BB-M023-GPP-BLOCK-EDITOR','BB-M023-GPP-ONRAMP-NEW-ASSIGNMENT','BB-M023-GPP-BLOCK-NEW-ASSIGNMENT'],apply:inRegion('const bvomBbBaseOpenGppBuilder=openGppBuilder;', "target.bbAssignment=o.querySelector('[data-bb]')?.value||existing?.bbAssignment||'Any'", "target.bbAssignment='Any'")},
  // Monkey 023: both Bodybuilding modes must expose their existing GPP entry UI.
  {id:'BB-M023-GPP-ONRAMP-HIDDEN',why:'On-Ramp workout drops the GPP section again',targets:['BB-M023-GPP-ONRAMP-VISIBLE'],apply:inRegion('function bvomBbOnRampRenderWorkout(){', "h+=renderAccessories17();h+=renderGpp17();document.querySelector('#workout').innerHTML=h}", "h+=renderAccessories17();document.querySelector('#workout').innerHTML=h}")},
  {id:'BB-M023-GPP-BLOCK-HIDDEN',why:'24-session Bodybuilding workout drops the GPP section again',targets:['BB-M023-GPP-BLOCK-VISIBLE'],apply:inRegion('function bvomBbRenderFoundationWorkout(){bvomBbEnsure();', "h+=renderAccessories17();h+=renderGpp17();el.innerHTML=h}", "h+=renderAccessories17();el.innerHTML=h}")},
@@ -258,6 +262,8 @@ if(knownBad){
     'BB-M022-BODYWEIGHT-ACCEPT','BB-M022-BODYWEIGHT-EASIER','BB-M022-BODYWEIGHT-FAIL-SAVE',
     'BB-M022-ONRAMP-ACCESSORY-ONLY','BB-M022-ONRAMP-GPP-ONLY','BB-M022-ONRAMP-OPTIONAL-ATOMIC-EMPTY',
     'BB-M023-GPP-ONRAMP-VISIBLE','BB-M023-GPP-BLOCK-VISIBLE',
+    'BB-M023-GPP-ONRAMP-DAY-FILTER','BB-M023-GPP-BLOCK-DAY-FILTER','BB-M023-GPP-ONRAMP-EDITOR','BB-M023-GPP-BLOCK-EDITOR',
+    'BB-M023-GPP-ONRAMP-NEW-ASSIGNMENT','BB-M023-GPP-BLOCK-NEW-ASSIGNMENT',
     // Stage 1 forward-feature contracts: RED on exact v2.9.7 dbaad6ef.
     'BW-REFINE-VOLUME','BW-REFINE-HISTORY','BW-REFINE-INCREMENT','BW-REFINE-INCOMPLETE-GPP',
     'BW-STAGE1-RECORD','BW-STAGE1-HISTORY','BW-STAGE1-UNITS','BW-STAGE1-BUILDER','BW-STAGE1-BB','BW-STAGE1-ATOMIC','BW-STAGE1-CORRECTION-CLOUD','BW-STAGE1-OWNER','BW-STAGE1-ONRAMP',
