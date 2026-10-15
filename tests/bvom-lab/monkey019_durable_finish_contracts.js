@@ -70,4 +70,44 @@ module.exports=({test,ok,H,build})=>{
   try{h.ctx.bvomBbOnRampHandoff(true)}finally{restore()}
   const s=h.S();return ok(unchanged(h,before)&&s.bodybuilding.onramp.status==='active'&&Object.keys(s.session).length>0,{status:s.bodybuilding.onramp.status,sets:Object.keys(s.session).length});
  });
+
+ // Owner Android field report (16 Oct): On-Ramp FINISH commits History but
+ // leaves deferWorkoutCommit stuck, so KEEP THIS DEVICE says Finish first
+ // until the tab reloads. Test real successful durable save and sync guard.
+ const armCloud=h=>h.ev("bvomCloud.user={id:'fixture',email:'fixture@example.test'};bvomCloud.syncReady=true;bvomCloud.conflict=false;bvomCloud.deferWorkoutCommit=false;bvomCloud.pendingAuto=false;");
+ test('BB-M031-ONRAMP-FINISH-CLOUD-UNBLOCK','DEFECT','Durably finished On-Ramp releases cloud write fence and schedules safe backup without reload',()=>{
+  const h=rampFixture();armCloud(h);h.ctx.bvomBbOnRampFinish();
+  const d=JSON.parse(h.ls.getItem('bvom_data')),defer=h.ev('bvomCloud.deferWorkoutCommit'),
+    active=h.ev('bvomCloudWorkoutActive()'),pending=h.ev('bvomCloud.pendingAuto');
+  return ok(d.history.length===1&&Object.keys(d.session).length===0&&!active&&!defer&&pending,
+   JSON.stringify({saved:d.history.length,active,defer,pending}));
+ });
+ test('BB-M031-ONRAMP-SIXTH-CLOUD-UNBLOCK','DEFECT','Sixth On-Ramp session/handoff releases cloud fence after atomic durable save',()=>{
+  const h=rampFixture(6);armCloud(h);h.ctx.bvomBbOnRampFinish();
+  const d=JSON.parse(h.ls.getItem('bvom_data')),defer=h.ev('bvomCloud.deferWorkoutCommit'),
+    pending=h.ev('bvomCloud.pendingAuto');
+  return ok(d.history.length===1&&d.bodybuilding.onramp.status==='handed_off'&&!defer&&pending,
+   JSON.stringify({saved:d.history.length,status:d.bodybuilding.onramp.status,defer,pending}));
+ });
+ test('BB-M031-ONRAMP-DIRECT-HANDOFF-CLOUD-UNBLOCK','DEFECT','Durable empty On-Ramp handoff releases cloud fence with no phantom workout',()=>{
+  const h=H.boot(build);H.bbStart(h,{onramp:true});
+  for(const id of Object.values(h.S().bodybuilding.selections)){
+   const e=h.ctx.bvomBbOnRampEx(id);e.state='CONFIRMED';
+   e.load=H.BB_LOADS[id]||40;e.increment=2.5;e.resistance='assistance set';
+  }
+  h.ev('save()');armCloud(h);h.ctx.bvomBbOnRampHandoff(true);
+  const d=JSON.parse(h.ls.getItem('bvom_data')),defer=h.ev('bvomCloud.deferWorkoutCommit'),
+    pending=h.ev('bvomCloud.pendingAuto');
+  return ok(d.bodybuilding.onramp.status==='handed_off'&&d.history.length===0&&!defer&&pending,
+   JSON.stringify({status:d.bodybuilding.onramp.status,history:d.history.length,defer,pending}));
+ });
+ test('BB-M031-ONRAMP-REJECT-CLOUD-SAFE','DEFECT','Rejected On-Ramp durable save never queues cloud upload nor discards workout',()=>{
+  const h=rampFixture();armCloud(h);const before=h.ls.getItem('bvom_data'),restore=failsave(h);
+  try{h.ctx.bvomBbOnRampFinish()}finally{restore()}
+  const active=h.ev('bvomCloudWorkoutActive()'),defer=h.ev('bvomCloud.deferWorkoutCommit'),
+    pending=h.ev('bvomCloud.pendingAuto');
+  return ok(active&&!defer&&!pending&&h.ls.getItem('bvom_data')===before&&h.S().history.length===0,
+   JSON.stringify({active,defer,pending,saved:h.S().history.length}));
+ });
+
 };
