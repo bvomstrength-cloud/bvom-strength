@@ -631,7 +631,7 @@ function bvomBwCardContext(a){
  return details.length?'<div class="bvomBwContext">'+details.map(bvomEsc).join(' · ')+'</div>':'';
 }
 function bvomBwFields(load,resistance,estimate,estimateAttr='data-bw-estimate'){
- return `<label>${bvomT('bodyweight.added')} (${unitLabel()})<input data-load type="number" min="0" step="any" value="${bvomEsc(load??0)}"></label><label>${bvomT('bodyweight.assistance')}<input data-res type="text" maxlength="80" value="${bvomEsc(resistance??'')}"></label><label>${bvomT('bodyweight.approximate')} (${unitLabel()})<input ${estimateAttr} type="number" min="0" step="any" value="${bvomEsc(estimate??'')}"></label>`;
+ return `<label>${bvomT('bodyweight.added')} (${unitLabel()})<input data-load type="number" min="0" step="any" value="${bvomEsc(load??0)}"></label><label>${bvomT('bodyweight.assistance')}<input data-res type="text" maxlength="80" value="${bvomEsc(resistance??'')}"></label><label>${bvomT('bodyweight.approximate')} (${unitLabel()})<input ${estimateAttr} type="number" min="0" step="any" aria-describedby="bvomBwEstimateExplanation" value="${bvomEsc(estimate??'')}"></label><div id="bvomBwEstimateExplanation" class="small bvomBwEstimateHelp">${bvomT('bodyweight.estimateHelp')}</div>`;
 }
 function bvomBwRead(o,onInvalid=null){
  const raw=o.querySelector('[data-load]').value,load=Number(raw),estimateRaw=o.querySelector('[data-bw-estimate]').value,estimate=estimateRaw===''?null:Number(estimateRaw);
