@@ -3980,7 +3980,9 @@ function bvomBbWarmStageBTap(slot,index,token){
  if(!Object.keys(done).length)delete next[key];else next[key]={fingerprint,done};
  state.warmupDone=next;
  if(!removing)state.timerStart=Date.now();
- if(!save({durable:true})){
+ // A saved warm-up tick counts as meaningful activity only if real workout
+ // activity already exists. Rest-timer-only actions remain passive.
+ if(!save({durable:true,activity:true})){
   if(priorMap===undefined)delete state.warmupDone;else state.warmupDone=priorMap;
   state.timerStart=priorTimer;
   return false;
