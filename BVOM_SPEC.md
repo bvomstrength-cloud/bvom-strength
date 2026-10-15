@@ -722,6 +722,8 @@ GPP activities may have timers and additional result metrics.
 
 **Bodybuilding / On-Ramp visibility (Monkey 023 P2):** Both the optional On-Ramp workout and the 24-session Bodybuilding workout must render the existing GPP section, including **+ ADD** even when no activity has been configured. Each assigned GPP activity shows its normal set-entry or timer/recording controls. Respect the active A/B day assignment; unrelated-day activity cards must not leak into the current workout. Rendering GPP must not itself create training sets, consume On-Ramp exposures, change Bodybuilding progression or alter History. GPP results recorded through those controls retain their existing Finish/History and recovery protections.
 
+**Bodybuilding A/B GPP assignments (Monkey 023 follow-up):** GPP has its own persisted `bbAssignment` (`Any`, `A` or `B`), independent of LP/RPT `assignment`, HLM `hlmAssignment`, 4-Day `fourDayAssignment` and Custom day scope. Both On-Ramp and the 24-session block display a labelled Bodybuilding A/B selector when GPP is added or edited. Opening and saving without changing the selector must preserve an existing A-only/B-only choice. The chosen value must persist over reload, while assignments to other programs remain unchanged. A newly created Bodybuilding GPP must be scoped only to Bodybuilding, not leaked to the other programs. On-Ramp filters GPP by its *current computed* alternating A/B session, even if legacy `state.day` remains A; the Bodybuilding block uses its own current A/B day. No assignment editing is allowed to silently widen scope to Any.
+
 ### 12.1 Pause / resume
 
 Pausing a timed GPP activity freezes elapsed time.
