@@ -531,13 +531,13 @@ module.exports=({test,ok,H,build})=>{
     b.selections.B3='incline_dumbbell_press';b.selections.B4='bulgarian_split_squat';
     h.ev('save()');
     const get=()=>h.ctx.bvomOrderEffective().join('|');
-    const primary=get(),expectedHeavy='B2|B1|B3|B4|B5|B6';
+    const primary=get(),expectedHeavy='B2|B4|B3|B1|B6|B5';
     b.selections.B2='back_extension_45';h.ev('save()');
-    const replacement=get(),expectedBack='B1|B3|B4|B2|B5|B6';
+    const replacement=get(),expectedBack='B4|B3|B1|B2|B6|B5';
     b.selections.B4='leg_extension';h.ev('save()');
-    const plain=get(),expectedPlain='B1|B3|B2|B4|B5|B6';
+    const plain=get(),expectedPlain='B3|B1|B2|B4|B6|B5';
     b.selections.B1='chin_up';b.selections.B2='romanian_deadlift';h.ev('save()');
-    const chinWithRdl=get(),expectedChin='B2|B1|B3|B4|B5|B6';
+    const chinWithRdl=get(),expectedChin='B2|B3|B1|B4|B6|B5';
     const pass=primary===expectedHeavy&&replacement===expectedBack&&
       plain===expectedPlain&&chinWithRdl===expectedChin;
     return ok(pass,JSON.stringify({primary,replacement,plain,chinWithRdl,phase}));
@@ -555,12 +555,12 @@ module.exports=({test,ok,H,build})=>{
     const reopened=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage,supabase:null,online:false});
     const reopenedCustom=reopened.ctx.bvomOrderEffective().join('|');
     const cleared=reopened.ctx.bvomOrderReset(),adaptive=reopened.ctx.bvomOrderEffective().join('|');
-    const expected='B1|B3|B2|B4|B5|B6';
+    const expected='B3|B1|B2|B4|B6|B5';
     const stored=JSON.parse(reopened.ls.getItem('bvom_data'));
     const durable=stored.bodybuilding?.selections?.B2==='back_extension_45'&&
       !stored.exerciseDisplayOrder?.['bodybuilding:B'];
     const unchanged=before===JSON.stringify({history:h.S().history,session:h.S().session});
-    return ok(original==='B2|B1|B3|B4|B5|B6'&&changed&&custom==='B1|B2|B3|B4|B5|B6'&&
+    return ok(original==='B2|B3|B1|B4|B6|B5'&&changed&&custom==='B3|B2|B1|B4|B6|B5'&&
       afterChange===custom&&reopenedCustom===custom&&cleared&&adaptive===expected&&durable&&unchanged,
       JSON.stringify({original,custom,afterChange,reopenedCustom,adaptive,durable,unchanged}));
    });
@@ -581,7 +581,7 @@ module.exports=({test,ok,H,build})=>{
    const afterOrder=h.ctx.bvomOrderEffective().join('|');
    const stored=JSON.parse(h.ls.getItem('bvom_data'));
    const stable=stored.exerciseDisplayOrder?.['bodybuilding:B']?.join('|')===beforeOrder;
-   return ok(n>0&&beforeOrder==='B2|B1|B3|B4|B5|B6'&&
+   return ok(n>0&&beforeOrder==='B2|B3|B1|B4|B6|B5'&&
     b.selections.B2==='back_extension_45'&&stable&&afterOrder===beforeOrder&&
     JSON.stringify(h.S().session)===beforeSet&&JSON.stringify(h.S().history)===beforeHistory,
     JSON.stringify({beforeOrder,afterOrder,stable,swapped:b.selections.B2,
@@ -611,7 +611,7 @@ module.exports=({test,ok,H,build})=>{
     const correct=stored.bodybuilding?.selections?.B2==='back_extension_45';
     const untouched=JSON.stringify(h.S().session)===beforeSet&&JSON.stringify(h.S().history)===beforeHistory;
     const reread=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage,supabase:null,online:false});
-    return ok(n>0&&beforeOrder==='B2|B1|B3|B4|B5|B6'&&correct&&stable&&
+    return ok(n>0&&beforeOrder==='B2|B3|B1|B4|B6|B5'&&correct&&stable&&
      order===beforeOrder&&untouched&&reread.ctx.bvomOrderEffective().join('|')===beforeOrder,
      JSON.stringify({kind,beforeOrder,order,correct,stable,untouched,frozen}));
    });
