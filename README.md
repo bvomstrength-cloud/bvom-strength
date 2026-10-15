@@ -2,7 +2,19 @@
 
 Production source repository for BVOM Strength.
 
-## Current source baseline
+## Current approved release — v2.9.14
+
+- **GitHub production source:** `main` at `03d5b7880448b651611ecf550d34423bc2300104` (16 October 2026 release review; subsequent documentation-only commits may change this SHA).
+- **App version:** `v2.9.14`, shown in app header, `BVOM_BUILD`, service-worker build and cache name.
+- **Owner deployment report:** v2.9.14 running in production. GitHub merge does not itself deploy Netlify.
+- **Release trail:** [PR #56](https://github.com/bvomstrength-cloud/bvom-strength/pull/56) (Stage A), [PR #57](https://github.com/bvomstrength-cloud/bvom-strength/pull/57) (Bodybuilding warm-up engine and ordering), and [PR #58](https://github.com/bvomstrength-cloud/bvom-strength/pull/58) (post-On-Ramp Finish cloud-sync fence); all merged.
+- **Verification:** v15.2 full regression, browser/recovery checks and mutation tests passed on PR #58; the post-merge `main` v15.2 GitHub Actions run passed.
+- **Pending minor UI issue:** [#59](https://github.com/bvomstrength-cloud/bvom-strength/issues/59), occasional second UPDATE & RELOAD prompt in Android Chrome, deferred to the next routine release. No hotfix required.
+- **Safety:** Keep installed-app updates and cloud conflict handling guarded during active workouts; do not substitute test-site ZIPs for production releases.
+
+**Documentation only:** The historical sections below retain old release evidence and once-current draft plans. They are archived context, **not today's deployment or upgrade instructions**.
+
+## Historical v2.8.9 baseline (superseded)
 
 - Application version: **v2.8.9**
 - Branch: **`main`**
@@ -11,9 +23,9 @@ Production source repository for BVOM Strength.
 - Known-bad reference: **48/48 applicable DEFECT contracts fail**; EXPORT-HISTORY-METADATA, EXPORT-V1-TRANSLATOR, STRAVA-ADAPTER-V1, STRAVA-OAUTH-CLIENT-V1, F23 and F25 are documented historical-provenance N/A
 - Final v2.8.9 deployment ZIP SHA-256: `3fa86b33fffc37b0616baa892f0795457c7de9a9e422dcc41cfe9774e7cdbada`
 
-The current source preserves completed Bodybuilding GPP/conditioning results in Workout History, adds destination-neutral metadata to newly completed workout History records, includes a pure Export v1 translator and Strava adapter, and now adds a pure write-only Strava OAuth client boundary plus the documented server-side OAuth/security architecture. No live OAuth execution, token storage, webhook endpoint, Settings UI, or workout upload is enabled.
+At the time, the source preserved completed Bodybuilding GPP/conditioning results in Workout History, adds destination-neutral metadata to newly completed workout History records, includes a pure Export v1 translator and Strava adapter, and now adds a pure write-only Strava OAuth client boundary plus the documented server-side OAuth/security architecture. No live OAuth execution, token storage, webhook endpoint, Settings UI, or workout upload is enabled.
 
-## v2.9.1 release candidate (DRAFT — NOT DEPLOYED)
+## Historical v2.9.1 draft plan (superseded)
 
 Proposed next release from [draft PR #39](https://github.com/bvomstrength-cloud/bvom-strength/pull/39). The owner has accepted the Android repeated-tap window-recovery delay as a minor edge case; preserving recorded workouts remains mandatory.
 
