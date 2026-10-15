@@ -766,17 +766,26 @@ Bodybuilding classifies exercise slots as:
 - Feeder
 - None
 
-For ordinary numeric barbell-style primary work, the full warm-up is approximately:
+### 13.2.1 Bodybuilding progressive preparation (Issue #55)
 
-- 50% × 5
-- 70% × 3
-- 85% × 1–2
+The **main 24-session Bodybuilding block** offers **optional** progressive preparation for selected major compound movements based on their working load, the existing strength lift-family warm-up engine and suitable equipment treatment. The existing core engine's outcomes for LP/RPT, HLM, 4-Day and Custom Training remain unchanged.
 
-A Feeder slot uses a lighter single feeder set rather than the full sequence.
+- Free-bar squat, press, row and hinge families may use the configured bar and existing strength warm-up calculations.
+- Machine / Smith / landmine examples are **advisory weights** snapped to the exercise's practical increment where available, not fictitious 20 kg or 45 lb bars or per-side plate calculations. Actual machine minimum resistance and increments are equipment-specific.
+- Compound dumbbell exercises use short preparation expressed **per hand**; a dumbbell does not inherit a free-bar starting weight.
+- Other accessory movements have no dedicated numerical warm-up; bodyweight exercises may show qualitative preparation advice.
+- The actual user-selected movement determines the preparation classification; Bulgarian and split squats are treated as compound dumbbell preparation. This does not change their **working-set progression**.
+- All preparation is optional. A user may proceed straight to working sets.
 
-Equipment-specific plans may use different percentages/representations.
+The **On-Ramp** exists to discover the starting loads. Its warm-up screen gives **qualitative start-easy guidance without numerical prescriptions**, even while provisional or confirmed calibration loads exist; optional rest timing does not record calibration work.
 
-A barbell warm-up must never prescribe a load below the actual bar floor.
+Warm-up completion ticks for main-block numeric preparations are **durably saved, session/slot/exercise/plan-scoped**, and restart the normal rest clock only on an accepted write. Ticks may be undone; rejected writes must roll back. No warm-up tap may change workout activity status, required working sets, progression, History, On-Ramp calibration, or Finish eligibility. Save/reload should preserve current-session marks but never transfer them to a subsequent session.
+
+The exercise order shown on the warm-up and workout screens follows the existing saved user ordering; adding this feature does not silently rearrange active or configured programs.
+
+### 13.2.2 Historical behaviour
+
+Before Issue #55, numeric Bodybuilding warm-ups used a fixed 50/70/85% approximation (and simpler equipment-specific percentages) with a 65% Feeder category. These old percentages are **not** the contract for the new main-block progressive compound suggestions.
 
 ## 14. History
 
