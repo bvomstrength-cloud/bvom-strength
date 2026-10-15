@@ -4711,22 +4711,27 @@ function bvomOrderDayKey(){
  return day==null?null:mode+':'+String(day);
 }
 function bvomBbOrderPriority(slot,id){
- // The selected exercise's *actual* warm-up class matters: B2 may be a
- // progressively warmed hinge or a qualitative back extension, while B4 may
- // be a dumbbell split-squat compound or an ordinary leg extension.
+ // Warm-up-first, not merely compound-first. Profile 'compound' means
+ // this chosen movement has numerical/short progressive preparation in the
+ // main block; 'qualitative' (e.g. Chin-Up, Nordic Curl, Back Extension)
+ // has guidance only, and 'none' has no dedicated warm-up. On-Ramp uses
+ // qualitative load-finding for everyone but follows the same future plan.
  const kind=BVOM_BB_WARMUP_STAGE_A_PROFILES[id]?.kind||'none';
+ const tier=kind==='compound'?0:kind==='qualitative'?1:2;
  if(slot[0]==='A'){
-  // Quad/chest/pull before isolation; triceps before lateral raises to
-  // avoid an unnecessary switch from barbell to dumbbells on Workout A.
-  const rank={A2:0,A1:1,A3:2,A4:3,A6:4,A5:5};return rank[slot]??99;
+  // Preserve Squat -> Bench -> Row and Nordic -> Triceps -> Laterals.
+  const rank={A2:0,A1:1,A3:2,A4:3,A6:4,A5:5};
+  return tier*10+(rank[slot]??9);
  }
- if(slot==='B2')return kind==='compound'?0:kind==='qualitative'?4:5;
- if(slot==='B1')return kind==='compound'||kind==='qualitative'?1:5;
- if(slot==='B3')return kind==='compound'?2:5;
- if(slot==='B4')return kind==='compound'?3:6;
- if(slot==='B5')return 7;
- if(slot==='B6')return 8;
- return 99;
+ // B uses the owner's actual phone-tested equipment/flow preference:
+ // hinge -> compound split squat -> incline press -> vertical pull,
+ // then curl ahead of rear delts. A qualitative Chin-Up cannot jump
+ // ahead of a DB press or split squat that needs progressive preparation.
+ const heavy={B2:0,B4:1,B3:2,B1:3,B6:4,B5:5};
+ const qualitative={B1:0,B2:1,B3:2,B4:3,B6:4,B5:5};
+ const accessory={B4:0,B6:1,B5:2,B1:3,B2:4,B3:5};
+ const rank=tier===0?heavy:tier===1?qualitative:accessory;
+ return tier*10+(rank[slot]??9);
 }
 function bvomOrderDefault(entries=bvomOrderEntries(),scope=bvomOrderDayKey()){
  const canonical=entries.map(x=>x.key);
