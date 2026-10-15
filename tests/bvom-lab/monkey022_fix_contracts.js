@@ -479,14 +479,16 @@ module.exports=({test,ok,H,build})=>{
     const preferred=h.ctx.bvomOrderEffective();
     const swapped=h.ctx.bvomOrderChange('A2',1),manual=h.ctx.bvomOrderEffective();
     const saved=h.S().exerciseDisplayOrder?.['bodybuilding:A']?.join('|')===manual.join('|');
-    const other=h.ctx.bvomOrderEffective(h.ctx.bvomOrderEntries(),'bodybuilding:B').join('|')===canonical.join('|');
+    const unchangedB=h.ctx.bvomOrderEffective(
+     ['B1','B2','B3','B4','B5','B6'].map(key=>({key,label:key})),'bodybuilding:B'
+    ).join('|')==='B1|B2|B3|B4|B5|B6';
     const reopened=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage,online:false,supabase:null});
     const reloadMatches=reopened.ctx.bvomOrderEffective().join('|')===manual.join('|');
     const reset=reopened.ctx.bvomOrderReset(),restored=reopened.ctx.bvomOrderEffective().join('|')===expected.join('|');
     const changesOnlyOrder=beforeData===JSON.stringify(h.S().bodybuilding)&&
      beforeSession===JSON.stringify(h.S().session)&&beforeHistory===JSON.stringify(h.S().history);
     const assertions={default:preferred.join('|')===expected.join('|'),canonicalSlots:canonical.join('|')==='A1|A2|A3|A4|A5|A6',
-     swapped,custom:manual[0]==='A1'&&manual[1]==='A2'&&saved,other,reloadMatches,reset,restored,changesOnlyOrder};
+     swapped,custom:manual[0]==='A1'&&manual[1]==='A2'&&saved,unchangedB,reloadMatches,reset,restored,changesOnlyOrder};
     return ok(Object.values(assertions).every(Boolean),JSON.stringify(assertions));
    });
  }
