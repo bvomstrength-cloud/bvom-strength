@@ -329,23 +329,32 @@ test('exercise arrows really reorder LP B cards and warmups, survive an active s
   assert.deepEqual((await saved(reopened)).session,before);
  }finally{await context.close()}
 });
-test('real Bodybuilding On-Ramp squat arrow moves quad before chest on screen and warmup',async()=>{
+test('real Bodybuilding On-Ramp A defaults Squat first / Triceps before Laterals; arrows, reload and Reset are display-only',async()=>{
  const prepared=H.boot(build);H.bbStart(prepared,{onramp:true});
  const {context,a}=await setup(JSON.parse(JSON.stringify(prepared.S())));
  try{
   const sel='#workout > .exercise .exhead .exname',warm='#warmup > .exercise .exhead .exname';
-  const before=await a.locator(sel).allTextContents();
-  assert.match(before[1],/squat/i,'second programmed slot must be a squat');
+  const before=await a.locator(sel).allTextContents(),beforeWarm=await a.locator(warm).allTextContents();
+  assert.match(before[0],/squat/i,'fresh A order must start with squat');
+  assert.match(before[1],/chest|bench/i,'chest follows quad');
+  assert.match(before[4],/pushdown|triceps/i,'triceps comes before lateral delts');
+  assert.match(before[5],/lateral/i);
+  assert.deepEqual(beforeWarm,before,'warmup must match default workout order');
   assert.equal(await a.locator('#workout > .exercise .bvomOrderArrow').count(),before.length*2);
-  await a.locator('#workout > .exercise').nth(1).locator('.bvomOrderArrow').first().click();
-  assert.match((await a.locator(sel).allTextContents())[0],/squat/i);
-  assert.match((await a.locator(warm).allTextContents())[0],/squat/i);
+  await a.locator('#workout > .exercise').first().locator('.bvomOrderArrow').nth(1).click();
+  const reordered=await a.locator(sel).allTextContents();
+  assert.match(reordered[0],/chest|bench/i);
+  assert.match(reordered[1],/squat/i);
+  assert.deepEqual(await a.locator(warm).allTextContents(),reordered);
   const data=await saved(a);
   assert.equal(data.bodybuilding?.onramp?.sessionsCompleted,0);
   assert.equal(JSON.stringify(data.bodybuilding?.selections),JSON.stringify(prepared.S().bodybuilding.selections));
   await a.close();
   const reopened=await open(context);
-  assert.match((await reopened.locator(sel).allTextContents())[0],/squat/i);
+  assert.deepEqual(await reopened.locator(sel).allTextContents(),reordered);
+  await reopened.locator('#workout .bvomOrderReset button').click();
+  assert.deepEqual(await reopened.locator(sel).allTextContents(),before);
+  assert.deepEqual(await reopened.locator(warm).allTextContents(),before);
  }finally{await context.close()}
 });
 
