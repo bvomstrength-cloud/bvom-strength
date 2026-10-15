@@ -259,6 +259,10 @@ module.exports=({test,ok,H,build})=>{
   test('BB-M023-GPP-'+tag+'-EDITOR','DEFECT',
    'GPP editor exposes Bodybuilding A/B/Any and preserves then updates independent assignment durably',()=>{
     const h=H.boot(build);H.bbStart(h,{onramp});h.S().gppList=gppAssignmentFixture();
+    // Emulate real document.querySelectorAll so the Bodybuilding wrapper
+    // actually installs its SAVE callback (VM default returns an empty list).
+    h.ctx.document.querySelectorAll=sel=>sel==='.bvomModalOverlay'?
+     h.overlays().filter(o=>o.className==='bvomModalOverlay'&&!o.removed):[];
     h.ev('save()');h.ctx.openGppBuilder('m023-a');
     let o=h.lastOverlay(),markup=o.innerHTML;
     const hasBb=markup.includes('data-bb'),options=['Any','A','B'].every(x=>markup.includes('value="'+x+'"'));
@@ -295,6 +299,33 @@ module.exports=({test,ok,H,build})=>{
     const retained=restored.S().gppList.find(g=>g.id==='m023-a')?.bbAssignment==='B';
     return ok(hasBb&&options&&selected&&preserved&&preselect&&changed&&retained,
      JSON.stringify({hasBb,options,selected,preserved,preselect,changed,retained}));
+   });
+ 
+  test('BB-M023-GPP-'+tag+'-NEW-ASSIGNMENT','DEFECT',
+   'Create B-only GPP from the '+tag+' editor without leaking it into LP/RPT, HLM, 4-Day or day A',()=>{
+    const h=H.boot(build);H.bbStart(h,{onramp});
+    h.ctx.document.querySelectorAll=sel=>sel==='.bvomModalOverlay'?
+     h.overlays().filter(o=>o.className==='bvomModalOverlay'&&!o.removed):[];
+    const previousSessions=onramp?h.S().bodybuilding.onramp.sessionsCompleted:h.S().bodybuilding.completedSessions;
+    h.ctx.openGppBuilder();
+    const o=h.lastOverlay(),visible=o.innerHTML.includes('data-bb');
+    if(!visible)return ok(false,'No Bodybuilding GPP assignment selector');
+    o.querySelector('[data-name]').value='M023 Created B GPP';
+    o.querySelector('[data-lp]').value='Any';o.querySelector('[data-hlm]').value='Any';
+    o.querySelector('[data-fd]').value='Any';o.querySelector('[data-bb]').value='B';
+    o.querySelectorAll=sel=>sel==='[data-metric]'?[{dataset:{metric:'sets'},checked:true}]:[];
+    o.querySelector('[data-values]').querySelectorAll=sel=>sel==='[data-v]'?[{dataset:{v:'sets'},value:'2'}]:[];
+    o.querySelector('[data-s]').onclick();
+    const g=persisted(h).gppList.find(x=>x.name==='M023 Created B GPP');
+    const hiddenElsewhere=g?.assignment==='__BODYBUILDING__'&&g?.hlmAssignment==='__BODYBUILDING__'&&
+     g?.fourDayAssignment==='__BODYBUILDING__'&&g?.freeAssignment==='__BODYBUILDING__';
+    h.ctx.renderWorkout();const onA=!h.els['#workout'].innerHTML.includes('M023 Created B GPP');
+    if(onramp)h.S().bodybuilding.onramp.sessionsCompleted=1;else h.S().bodybuilding.completedSessions=1;
+    h.ev('save()');h.ctx.renderWorkout();
+    const onB=h.els['#workout'].innerHTML.includes('M023 Created B GPP');
+    const count=onramp?h.S().bodybuilding.onramp.sessionsCompleted:h.S().bodybuilding.completedSessions;
+    return ok(visible&&g?.bbAssignment==='B'&&hiddenElsewhere&&onA&&onB&&count===previousSessions+1,
+     JSON.stringify({visible,assignment:g?.bbAssignment,hiddenElsewhere,onA,onB,count}));
    });
  }
 };
