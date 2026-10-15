@@ -116,7 +116,10 @@ async function testMain(lang){
   const secondary=await context.newPage();await secondary.goto(origin+'/index.html');await wait(secondary);
   const previous=await raw(page);
   await secondary.evaluate(()=>activateTab('warmup'));
-  await secondary.locator('#warm-bb-A2 button.set').nth(2).click();
+  assert.equal(await secondary.locator('#bvomWorkoutReadOnlyOverlay').count(),1,'read-only overlay must intercept actual taps');
+  // A programmatically dispatched click bypasses the overlay hit-test; the
+  // application action guard must still independently refuse the stale write.
+  await secondary.locator('#warm-bb-A2 button.set').nth(2).dispatchEvent('click');
   assert.equal(await raw(page),previous,'secondary tab must not write to shared data');
   await secondary.close();
   pass(lang+' second browser tab blocked from recording warm-up');
