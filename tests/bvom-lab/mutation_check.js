@@ -15,6 +15,9 @@ const guard=path.join(__dirname,'behaviour_guard.js');
 // replace exactly one occurrence of `from`, searching only inside the function/region starting at `region`
 function inRegion(region,from,to){return src=>{const r=src.indexOf(region);if(r<0)return null;const i=src.indexOf(from,r);if(i<0||i-r>20000)return null;return src.slice(0,i)+to+src.slice(i+from.length)}}
 const MUTATIONS=[
+ // Monkey 023: both Bodybuilding modes must expose their existing GPP entry UI.
+ {id:'BB-M023-GPP-ONRAMP-HIDDEN',why:'On-Ramp workout drops the GPP section again',targets:['BB-M023-GPP-ONRAMP-VISIBLE'],apply:inRegion('function bvomBbOnRampRenderWorkout(){', "h+=renderAccessories17();h+=renderGpp17();document.querySelector('#workout').innerHTML=h}", "h+=renderAccessories17();document.querySelector('#workout').innerHTML=h}")},
+ {id:'BB-M023-GPP-BLOCK-HIDDEN',why:'24-session Bodybuilding workout drops the GPP section again',targets:['BB-M023-GPP-BLOCK-VISIBLE'],apply:inRegion('function bvomBbRenderFoundationWorkout(){bvomBbEnsure();', "h+=renderAccessories17();h+=renderGpp17();el.innerHTML=h}", "h+=renderAccessories17();el.innerHTML=h}")},
  // Codex PR57 P1: optional On-Ramp sets/GPP must remain finishable and archived.
  {id:'BB-M022-OPTIONAL-TRAP-RESTORED',why:'On-Ramp Finish again refuses accessory-only or GPP-only work',targets:['BB-M022-ONRAMP-ACCESSORY-ONLY','BB-M022-ONRAMP-GPP-ONLY'],apply:inRegion('function bvomBbOnRampFinish(approvedIncomplete=false)', 'if(!bvomSessionHasActivity())return;', 'if(!ids.some(bvomBbOnRampExerciseTouched))return;')},
  {id:'BB-M022-GPP-HISTORY-DROPPED',why:'On-Ramp Finish discards GPP results while clearing the live session',targets:['BB-M022-ONRAMP-GPP-ONLY'],apply:inRegion('function bvomBbOnRampFinish(approvedIncomplete=false)', "session:historySession,gpp,note:'Bodybuilding On-Ramp'", "session:historySession,note:'Bodybuilding On-Ramp'")},
@@ -254,6 +257,7 @@ if(knownBad){
     'BB-M022-ONRAMP-HANDOFF-PRESERVES-SETS','BB-M022-ONRAMP-EMPTY-HANDOFF','BB-M022-BODYWEIGHT-HOLD',
     'BB-M022-BODYWEIGHT-ACCEPT','BB-M022-BODYWEIGHT-EASIER','BB-M022-BODYWEIGHT-FAIL-SAVE',
     'BB-M022-ONRAMP-ACCESSORY-ONLY','BB-M022-ONRAMP-GPP-ONLY','BB-M022-ONRAMP-OPTIONAL-ATOMIC-EMPTY',
+    'BB-M023-GPP-ONRAMP-VISIBLE','BB-M023-GPP-BLOCK-VISIBLE',
     // Stage 1 forward-feature contracts: RED on exact v2.9.7 dbaad6ef.
     'BW-REFINE-VOLUME','BW-REFINE-HISTORY','BW-REFINE-INCREMENT','BW-REFINE-INCOMPLETE-GPP',
     'BW-STAGE1-RECORD','BW-STAGE1-HISTORY','BW-STAGE1-UNITS','BW-STAGE1-BUILDER','BW-STAGE1-BB','BW-STAGE1-ATOMIC','BW-STAGE1-CORRECTION-CLOUD','BW-STAGE1-OWNER','BW-STAGE1-ONRAMP',
