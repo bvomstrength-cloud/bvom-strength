@@ -15,6 +15,7 @@ const guard=path.join(__dirname,'behaviour_guard.js');
 // replace exactly one occurrence of `from`, searching only inside the function/region starting at `region`
 function inRegion(region,from,to){return src=>{const r=src.indexOf(region);if(r<0)return null;const i=src.indexOf(from,r);if(i<0||i-r>20000)return null;return src.slice(0,i)+to+src.slice(i+from.length)}}
 const MUTATIONS=[
+ {id:'BB-M027-ACTIVE-SWAP-RESHUFFLES',why:'Active On-Ramp session loses its visible order when replacement changes compound warm-up role',targets:['BB-M027-ACTIVE-ONRAMP-SWAP-STABLE'],apply:inRegion('function bvomBbOnRampSwap(', "if(bvomSessionHasActivity()&&scope&&!record?.[scope])", "if(false&&scope&&!record?.[scope])")},
  // Monkey 027: distinguish an RDL primary from a qualitative back extension,
  // and recognize B4 split-squat compound preparation instead of fixed slot order.
  {id:'BB-M027-B2-ALWAYS-LEADS',why:'Back extension incorrectly gets RDL-first priority',targets:['BB-M027-ADAPTIVE-B-ONRAMP','BB-M027-ADAPTIVE-B-BLOCK'],apply:inRegion('function bvomBbOrderPriority(', "if(slot==='B2')return kind==='compound'?0:kind==='qualitative'?4:5;", "if(slot==='B2')return 0;")},
@@ -289,6 +290,7 @@ if(knownBad){
     'BB-M025-ESTIMATED-WEIGHT-HELP-EN','BB-M025-ESTIMATED-WEIGHT-HELP-JA',
     'BB-M026-DEFAULT-A-ONRAMP','BB-M026-DEFAULT-A-BLOCK',
     'BB-M027-ADAPTIVE-B-ONRAMP','BB-M027-ADAPTIVE-B-BLOCK','BB-M027-OVERRIDE-B-ONRAMP','BB-M027-OVERRIDE-B-BLOCK',
+    'BB-M027-ACTIVE-ONRAMP-SWAP-STABLE',
     // Stage 1 forward-feature contracts: RED on exact v2.9.7 dbaad6ef.
     'BW-REFINE-VOLUME','BW-REFINE-HISTORY','BW-REFINE-INCREMENT','BW-REFINE-INCOMPLETE-GPP',
     'BW-STAGE1-RECORD','BW-STAGE1-HISTORY','BW-STAGE1-UNITS','BW-STAGE1-BUILDER','BW-STAGE1-BB','BW-STAGE1-ATOMIC','BW-STAGE1-CORRECTION-CLOUD','BW-STAGE1-OWNER','BW-STAGE1-ONRAMP',
