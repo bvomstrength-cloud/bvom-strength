@@ -4258,6 +4258,9 @@ function bvomSwFinishRequestedReload(){
   bvomRefreshServiceWorkerUpdate();
   return false;
  }
+ // A worker becoming "activated" does not guarantee client takeover.
+ // Wait for controllerchange; otherwise Chrome can reload the old shell.
+ if(bvomSwPendingUpdate?.worker&&navigator.serviceWorker?.controller!==bvomSwPendingUpdate.worker)return false;
  try{sessionStorage.removeItem(BVOM_SW_UPDATE_FLAG)}catch(e){}
  bvomSwUpdateBusy=false;
  location.reload();return true;
@@ -4310,7 +4313,7 @@ function bvomShowServiceWorkerUpdate(reg){
   // Once this exact worker is active, a navigation uses its fresh cached shell.
   if(isActivated()){bvomSwFinishRequestedReload();return}
   try{waiting.postMessage({type:'SKIP_WAITING'})}catch(e){retry();return}
-  setTimeout(()=>{if(attempt!==bvomSwUpdateAttempt||!bvomSwUpdateBusy)return;if(!isActivated())retry();else bvomSwFinishRequestedReload()},8000);
+  setTimeout(()=>{if(attempt!==bvomSwUpdateAttempt||!bvomSwUpdateBusy)return;if(!isActivated()||navigator.serviceWorker?.controller!==waiting)retry();else bvomSwFinishRequestedReload()},8000);
  };
 }
 function bvomWatchServiceWorkerUpdate(reg){
@@ -4845,7 +4848,11 @@ renderWarm=function(...args){const out=bvomOrderBaseWarm(...args);bvomOrderApply
 bvomHideMainSurfaces();if("serviceWorker" in navigator){
   window.addEventListener("load", async ()=>{
     try{
-      const reg = await navigator.serviceWorker.register("./sw.js?v=2.9.15");
+      // Keep the existing scope's registration and script URL during upgrades.
+       // Re-registering with a new ?v= every release installs a second worker.
+       // Only first-time installations register a new versioned URL.
+       const reg = await navigator.serviceWorker.getRegistration("./") ||
+         await navigator.serviceWorker.register("./sw.js?v=2.9.15",{updateViaCache:"none"});
       bvomWatchServiceWorkerUpdate(reg);
       navigator.serviceWorker.addEventListener("controllerchange", ()=>{
         bvomSwFinishRequestedReload();
