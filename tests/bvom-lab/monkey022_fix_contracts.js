@@ -328,4 +328,82 @@ module.exports=({test,ok,H,build})=>{
      JSON.stringify({visible,assignment:g?.bbAssignment,hiddenElsewhere,onA,onB,count}));
    });
  }
+
+ // Codex PR57 P1 (Monkey 023): a delayed owner change *after the single blob
+ // commit* must not leave persisted programMode LP/RPT or unsaved A/B scope.
+ function m023GppOwnerFinish(h,{edit=false,scope='B',injectFailure=false}={}){
+  h.ctx.document.querySelectorAll=sel=>sel==='.bvomModalOverlay'?
+   h.overlays().filter(o=>o.className==='bvomModalOverlay'&&!o.removed):[];
+  const beforeRaw=h.ls.getItem('bvom_data'),owner=h.ls.getItem('bvom_workout_tab_owner');
+  h.ctx.openGppBuilder(edit?'m023-owner':null);
+  const o=h.lastOverlay();
+  if(!o?.innerHTML?.includes('data-bb'))return {error:'No BB selector'};
+  o.querySelector('[data-name]').value=edit?'M023 Edited':'M023 Created';
+  o.querySelector('[data-lp]').value='B';
+  o.querySelector('[data-hlm]').value='M';
+  o.querySelector('[data-fd]').value='3';
+  o.querySelector('[data-bb]').value=scope;
+  o.querySelectorAll=sel=>sel==='[data-metric]'?[
+   {dataset:{metric:'sets'},checked:true},{dataset:{metric:'reps'},checked:true}
+  ]:[];
+  o.querySelector('[data-values]').querySelectorAll=sel=>sel==='[data-v]'?[
+   {dataset:{v:'sets'},value:'2'},{dataset:{v:'reps'},value:'10'}
+  ]:[];
+  const put=h.ls.setItem;let blobWrites=0;
+  h.ls.setItem=(k,v)=>{
+   if(k==='bvom_data'){
+    blobWrites++;
+    if(injectFailure)throw Error('synthetic full disk');
+    put(k,v);h.ls._map.set('bvom_workout_tab_owner','new-owner');
+    return;
+   }
+   return put(k,v);
+  };
+  try{o.querySelector('[data-s]').onclick()}finally{h.ls.setItem=put}
+  const raw=h.ls.getItem('bvom_data'),saved=JSON.parse(raw),item=saved.gppList.find(x=>x.id==='m023-owner'||x.name==='M023 Created');
+  return {beforeRaw,raw,owner,blobWrites,saved,item,visibleModal:!o.removed};
+ }
+ for(const [mode,onramp] of [['ONRAMP',true],['BLOCK',false]])for(const edit of [false,true]){
+  const suffix=edit?'EDIT':'CREATE';
+  test('BB-M023-GPP-'+mode+'-POSTCOMMIT-'+suffix,'DEFECT',
+   'Owner change immediately after GPP blob write cannot persist LP/RPT or lose Bodybuilding A/B scope',()=>{
+    const h=H.boot(build);H.bbStart(h,{onramp});
+    if(edit)h.S().gppList=[{
+     id:'m023-owner',name:'M023 Original',assignment:'A',hlmAssignment:'H',
+     fourDayAssignment:'4',freeAssignment:'__FREE__',bbAssignment:'A',
+     metrics:{sets:true,reps:true},planned:{sets:2,reps:10}
+    }];
+    h.S().workoutStartedAt=Date.now();h.ev('save()');
+    const prior=JSON.parse(h.ls.getItem('bvom_data'));
+    const result=m023GppOwnerFinish(h,{edit,scope:'B'}),d=result.saved,item=result.item;
+    const scoped=edit?(item?.assignment==='A'&&item?.hlmAssignment==='H'&&
+     item?.fourDayAssignment==='4'&&item?.freeAssignment==='__FREE__'):
+     (item?.assignment==='__BODYBUILDING__'&&item?.hlmAssignment==='__BODYBUILDING__'&&
+      item?.fourDayAssignment==='__BODYBUILDING__'&&item?.freeAssignment==='__BODYBUILDING__');
+    const check={
+     once:result.blobWrites===1,
+     program:d?.programMode==='bodybuilding',
+     scope:item?.bbAssignment==='B'&&scoped,
+     noSetLoss:JSON.stringify(d?.session)===JSON.stringify(prior.session),
+     noHistoryLoss:JSON.stringify(d?.history)===JSON.stringify(prior.history),
+     owner:h.ls.getItem('bvom_workout_tab_owner')==='new-owner',
+     active:d?.workoutStartedAt===prior.workoutStartedAt
+    };
+    return ok(Object.values(check).every(Boolean),JSON.stringify(check));
+   });
+ }
+ for(const mode of ['ONRAMP','BLOCK']){
+  test('BB-M023-GPP-'+mode+'-REJECT-ATOMIC','DEFECT',
+   'Rejected durable GPP add never widens assignments, loses training state or creates a phantom GPP',()=>{
+    const h=H.boot(build);H.bbStart(h,{onramp:mode==='ONRAMP'});
+    h.S().workoutStartedAt=Date.now();h.ev('save()');
+    const before=h.ls.getItem('bvom_data'),memory=JSON.stringify(h.S());
+    const result=m023GppOwnerFinish(h,{scope:'A',injectFailure:true});
+    const same=h.ls.getItem('bvom_data')===before;
+    return ok(result.blobWrites===1&&same&&JSON.stringify(h.S())===memory&&
+     result.saved.gppList.length===JSON.parse(before).gppList.length&&result.visibleModal,
+     JSON.stringify({writes:result.blobWrites,blob:same,memory:JSON.stringify(h.S())===memory,
+      modalOpen:result.visibleModal}));
+   });
+ }
 };
