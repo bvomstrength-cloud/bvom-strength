@@ -616,4 +616,28 @@ module.exports=({test,ok,H,build})=>{
      JSON.stringify({kind,beforeOrder,order,correct,stable,untouched,frozen}));
    });
  }
+
+ // Monkey 030: approved phone screenshot explicitly ranks exercises by
+ // *real progressive warm-up need*, not by a broad "compound" label.
+ for(const [phase,onramp] of [['ONRAMP',true],['BLOCK',false]]){
+  test('BB-M030-WARMUP-FIRST-B-'+phase,'DEFECT',
+   'RDL and split squat and incline press all prepare before qualitative Chin-Up; curls before rear delts',()=>{
+    const h=H.boot(build);H.bbStart(h,{onramp});
+    const b=h.S().bodybuilding;
+    if(onramp)b.onramp.sessionsCompleted=1;else b.completedSessions=1;
+    Object.assign(b.selections,{B1:'chin_up',B2:'romanian_deadlift',
+     B3:'incline_dumbbell_press',B4:'bulgarian_split_squat',
+     B5:'dumbbell_rear_delt_raise',B6:'dumbbell_curl'});
+    h.ev('save()');
+    const preferred=h.ctx.bvomOrderEffective().join('|'),want='B2|B4|B3|B1|B6|B5';
+    const profiles=['B2','B4','B3','B1','B6','B5'].map(slot=>({
+     slot,kind:h.ctx.BVOM_BB_WARMUP_STAGE_A_PROFILES[b.selections[slot]]?.kind
+    }));
+    const chinPlan=h.ctx.bvomBbStageAWarmupPlan('chin_up',80,onramp);
+    return ok(preferred===want&&
+     profiles.map(x=>x.kind).join('|')==='compound|compound|compound|qualitative|none|none'&&
+     chinPlan.kind==='guidance'&&chinPlan.sets.length===0,
+     JSON.stringify({preferred,want,profiles,chinPlan:chinPlan.kind,phase}));
+  });
+ }
 };
