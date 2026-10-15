@@ -151,3 +151,10 @@ jobs:
         run: node tests/bvom-lab/bodyweight_monkey018.cjs
       - name: Run Monkey 021 Bodybuilding warm-up mobile-browser endurance
         run: node tests/bvom-lab/bb_warmup_monkey021.cjs
+      - name: Check out exact v2.9.14 for upgrade-loop RED and GREEN
+        uses: actions/checkout@v4
+        with:
+          ref: 3ccf06eb47baaf78d35e497c011b06e7f1c8ebdb
+          path: .bvom-production-v2914
+      - name: Prove native service worker one-tap upgrade and no second prompt
+        run: node tests/bvom-lab/sw_update_browser.cjs
