@@ -215,7 +215,8 @@ async function testBDay(){
   assert.equal(await page.locator('#warm-bb-B6 button.set').count(),0,'curl accessory does not need numeric warm-up');
   pass('Workout B hinge and split-squat prep, no rear-delt or biceps warm-up');
   await page.evaluate(()=>activateTab('workout'));
-  await page.locator('#work-bb-B2 .bvomOrderArrow').first().click();
+  // RDL now defaults to first; promote the split squat without trying
+  // to click the legitimately disabled "move RDL up" arrow.
   await page.locator('#work-bb-B4 .bvomOrderArrow').first().click();
   await page.locator('#work-bb-B4 .bvomOrderArrow').first().click();
   assert.deepEqual((await cardNames(page,'workout')).slice(0,2),['Romanian Deadlift','Bulgarian Split Squat']);
