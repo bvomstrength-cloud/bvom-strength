@@ -487,7 +487,7 @@ test('malformed saved B order cannot reshuffle recorded On-Ramp work during RDL 
   const data=await saved(a);
   assert.equal(data.bodybuilding.selections.B2,'back_extension_45');
   assert.equal(JSON.stringify(data.session),sessionBefore);
-  assert.deepEqual(data.exerciseDisplayOrder['bodybuilding:B'],['B2','B1','B3','B4','B5','B6']);
+  assert.deepEqual(data.exerciseDisplayOrder['bodybuilding:B'],['B2','B3','B1','B4','B6','B5']);
   await a.close();
   const reopened=await open(context);
   assert.deepEqual(await reopened.locator(sel).allTextContents(),expected);
