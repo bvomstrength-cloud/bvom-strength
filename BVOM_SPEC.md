@@ -645,6 +645,8 @@ A rejected On-Ramp set entry must leave the exercise object's live and persisted
 
 This includes load and practical increment.
 
+**Bodyweight set-entry validation presentation (Monkey 024):** Within Bodybuilding and On-Ramp set modals, invalid added weight, estimate, added-weight increment and repetitions, plus a unit-changed warning, are displayed inline in the existing form with accessible alert text and the affected field identified. Never show the browser's native `site says` alert for these form errors; keep the entered values and modal open, and do not mutate or persist an invalid training set. This is a presentation-only change, not a change to allowed values or progression.
+
 ### 10.8 Bodybuilding / On-Ramp Finish must commit durably (Monkey 019)
 
 A Bodybuilding FINISH or On-Ramp FINISH must **not** clear recorded sets, consume a session, change progression, add phantom History, stop the active timer, or report success until the entire completed result is durably written. A rejected blob write restores the pre-Finish in-memory workout, including its exact recorded sets and On-Ramp calibration, and leaves the durable copy unchanged. A failure of separate owner-marker cleanup **after** the blob was written does not justify restoring the old state; the window must stop and request a reload instead of declaring an unsaved workout.
