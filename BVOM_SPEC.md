@@ -514,6 +514,8 @@ The current engine includes three main progression families:
 
 Bodyweight/assistance exercises use directional difficulty progression rather than pretending a precise external load always exists.
 
+**Selected Bodybuilding bodyweight/band movements (Monkey 022):** Finishing the relevant completed B/A workout may earn a *harder* or *easier* direction, but never guesses the change in kilograms or band assistance. The earned `pendingDifficulty` remains visible until the *next exposure to that exercise*. The working-set entry is blocked until the lifter explicitly chooses **ACCEPT** or **HOLD**. HOLD retains existing assistance/resistance and clears the pending direction. ACCEPT asks for an **explicit changed assistance, resistance or variation**; the saved next prescription displays that change, including for unweighted chin-ups (not a misleading "0 kg" label). The decision is durably owner-guarded with rollback on failure, does not count as a working set, does not change earned session numbers or On-Ramp calibration, and never applies automatically. This is distinct from the numeric **accessory** opt-in in §11.5.
+
 ### 9.4 Stable / Demanding primary rule
 
 For the primary top set, the working range is 6–8 reps.
@@ -633,6 +635,8 @@ A failed hand-off/manual-setup validation must not:
 
 Only a valid successful hand-off changes On-Ramp status to handed off and activates the main block.
 
+**Monkey 022 preservation rule:** Both **START 8-WEEK BLOCK NOW** and **SKIP ON-RAMP**, including any direct hand-off call, refuse transition while a live On-Ramp session has recorded sets, active training or GPP activity. The user must first **FINISH WORKOUT**, saving the partial session as incomplete History if necessary; then an empty-session hand-off may proceed. Rejected attempts must not clear sets, consume a session or alter History, cloud/owner metadata or calibrated loads. No silent archiving or implicit early hand-off.
+
 ### 10.7 Set-entry validation is atomic
 
 A rejected On-Ramp set entry must leave the exercise object's live and persisted state unchanged.
@@ -692,7 +696,7 @@ Normal cloud backup is retained; new fields are additive and introduced only thr
 
 ### 11.5 Stage 2A — opt-in, user-approved Bodyweight added-weight progression
 
-**Scope:** Only explicitly opted-in Bodyweight straight-set **accessories** in LP/RPT, HLM and 4-Day programs. Custom Training remains manual; existing Bodybuilding selected Chin-Up/Pull-Up directional rules, On-Ramp and Bodybuilding optional accessories remain unchanged until separate owner sign-off. Old/new Bodyweight templates default to progression **off** unless the lifter turns it on.
+**Scope:** Only explicitly opted-in Bodyweight straight-set **accessories** in LP/RPT, HLM and 4-Day programs. Custom Training remains manual; selected Bodybuilding Chin-Up/Pull-Up now use their separately approved **directional ACCEPT/HOLD** flow in §9.3 rather than this numeric accessory opt-in. Bodybuilding On-Ramp and optional accessories remain separate.  Old/new Bodyweight templates default to progression **off** unless the lifter turns it on.
 
 The accessory builder offers **Offer added-weight progression**, a first-set rep goal (6–30, default **8**), and the existing user-selected positive increment (no barbell/paired-plate rounding). Estimated weight moved is for approximate volume only and never influences progression or personal records. Under this opt-in, future prescribed added weight applies to **set 1 only**; later straight sets prescribe **BW + 0**, though their actual external load remains independently editable and accurately recorded. Do not silently change the accessory's saved set/repetition prescription.
 
