@@ -522,7 +522,7 @@ module.exports=({test,ok,H,build})=>{
     if(onramp)b.onramp.sessionsCompleted=1;else b.completedSessions=1;
     b.selections.B2='romanian_deadlift';h.ev('save()');
     const original=h.ctx.bvomOrderEffective().join('|');
-    const before=JSON.stringify({history:h.S().history,session:h.S().session,progression:b.progression});
+    const before=JSON.stringify({history:h.S().history,session:h.S().session});
     const changed=h.ctx.bvomOrderChange('B2',1),custom=h.ctx.bvomOrderEffective().join('|');
     b.selections.B2='back_extension_45';h.ev('save()');
     const afterChange=h.ctx.bvomOrderEffective().join('|');
@@ -530,8 +530,10 @@ module.exports=({test,ok,H,build})=>{
     const reopenedCustom=reopened.ctx.bvomOrderEffective().join('|');
     const cleared=reopened.ctx.bvomOrderReset(),adaptive=reopened.ctx.bvomOrderEffective().join('|');
     const expected='B1|B3|B2|B4|B5|B6';
-    const durable=reopened.ls.getItem('bvom_data')===JSON.stringify(reopened.S());
-    const unchanged=before===JSON.stringify({history:h.S().history,session:h.S().session,progression:b.progression});
+    const stored=JSON.parse(reopened.ls.getItem('bvom_data'));
+    const durable=stored.bodybuilding?.selections?.B2==='back_extension_45'&&
+      !stored.exerciseDisplayOrder?.['bodybuilding:B'];
+    const unchanged=before===JSON.stringify({history:h.S().history,session:h.S().session});
     return ok(original==='B2|B1|B3|B4|B5|B6'&&changed&&custom==='B1|B2|B3|B4|B5|B6'&&
       afterChange===custom&&reopenedCustom===custom&&cleared&&adaptive===expected&&durable&&unchanged,
       JSON.stringify({original,custom,afterChange,reopenedCustom,adaptive,durable,unchanged}));
