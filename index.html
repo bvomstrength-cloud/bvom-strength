@@ -3952,8 +3952,10 @@ function bvomBbOnRampSwap(slot){if(!bvomWorkoutActionAllowed()||!bvomBbOnRampAct
   // screen order. Reclassifying a hinge as a qualitative back extension
   // must not jump cards around midway through an active On-Ramp workout.
   const scope=bvomOrderDayKey(),record=state.exerciseDisplayOrder;
-  if(bvomSessionHasActivity()&&scope&&!record?.[scope]){
-   state.exerciseDisplayOrder={...(record||{}),[scope]:bvomOrderEffective()};
+  const entries=bvomOrderEntries(),canonical=entries.map(x=>x.key);
+  const recordObject=record&&typeof record==='object'&&!Array.isArray(record)?record:{};
+  if(bvomSessionHasActivity()&&scope&&!bvomOrderSavedValid(recordObject[scope],canonical)){
+   state.exerciseDisplayOrder={...recordObject,[scope]:bvomOrderEffective(entries,scope)};
   }
   state.bodybuilding.selections[slot]=id;
   const ramp=bvomBbOnRampEnsure();delete ramp.exercises[original];bvomBbOnRampResetExercise(id);
@@ -4737,12 +4739,16 @@ function bvomOrderDefault(entries=bvomOrderEntries(),scope=bvomOrderDayKey()){
  // warm-up plans, prescriptions, set keys, or History.
  return [...canonical].sort((a,b)=>bvomBbOrderPriority(a,selections[a])-bvomBbOrderPriority(b,selections[b]));
 }
+function bvomOrderSavedValid(saved,canonical){
+ return Array.isArray(saved)&&saved.length===canonical.length&&
+   new Set(saved).size===saved.length&&saved.every(x=>canonical.includes(x));
+}
 function bvomOrderEffective(entries=bvomOrderEntries(),scope=bvomOrderDayKey()){
  const canonical=entries.map(x=>x.key),record=state.exerciseDisplayOrder;
  const defaults=bvomOrderDefault(entries,scope);
  if(!scope||!canonical.length||new Set(canonical).size!==canonical.length)return defaults;
  const saved=record&&typeof record==='object'&&!Array.isArray(record)?record[scope]:null;
- if(!Array.isArray(saved)||saved.length!==canonical.length||new Set(saved).size!==saved.length||!saved.every(x=>canonical.includes(x)))return defaults;
+ if(!bvomOrderSavedValid(saved,canonical))return defaults;
  return [...saved];
 }
 function bvomOrderChange(key,direction){
