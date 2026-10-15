@@ -50,7 +50,7 @@ module.exports=({test,ok,H,build})=>{
     JSON.stringify({sessions:d.bodybuilding.completedSessions,decision,extra:record?.session?.['BB:'+row]?.[start]}));
  });
  test('BBEXTRA-NO-ONRAMP','DEFECT','Additional main-block sets are unavailable in On-Ramp and cannot alter calibration',()=>{
-  const h=H.boot(build);H.bbStart(h,{onramp:true}),raw=h.ls.getItem('bvom_data');
+  const h=H.boot(build);H.bbStart(h,{onramp:true});const raw=h.ls.getItem('bvom_data');
   const id=h.S().bodybuilding.selections.A3;
   const result=typeof h.ctx.bvomBbAddExtraSet==='function'?h.ctx.bvomBbAddExtraSet(id):'missing';
   return ok(result===false&&raw===h.ls.getItem('bvom_data')&&!h.els['#workout'].innerHTML.includes('work-bb-A3-extra'),
