@@ -73,6 +73,47 @@ module.exports=({test,ok,H,build})=>{
    JSON.stringify(s.session)===before&&s.bodybuilding.onramp.sessionsCompleted===n&&!s.workoutStartedAt,
    JSON.stringify({rest,timer:s.timerStart,calibration:s.bodybuilding.onramp.sessionsCompleted,hadNumeric:html.includes('60 kg ×')}));
  });
+ test('BB-STAGE-B-RECOVERY-CLOCK','DEFECT','Committed warm-up ticks and unticks extend real-workout 60-minute expiry, while rest timer alone does not',()=>H.withClock(c=>{
+  const h=selectSquat(fresh()),id=h.S().bodybuilding.selections.A1;
+  H.bbSet(h,id,0,{load:60,reps:8});
+  h.ev("bvomCloud.user={id:'dummy'};window.__bvomAuthUserId='dummy';bvomEntitlement.record={status:'complimentary',user_id:'dummy'}");
+  h.ls.setItem('bvom_data_owner','dummy');h.ctx.showApp();
+  const persisted=()=>JSON.parse(h.ls.getItem('bvom_data'));
+  const original=persisted().workoutLastActivityAt;
+  if(!(original>0))return ok(false,'fixture missing recorded-workout clock');
+  const before=JSON.stringify(h.S().session);
+  c.advance(3599000);
+  const p=spec(h),tap=h.ctx.bvomBbWarmStageBTap('A2',0,p.token);
+  const afterTap=persisted(),clock=afterTap.workoutLastActivityAt;
+  if(!(tap===true&&clock===c.now()&&clock>original&&afterTap.timerStart===clock))
+   return ok(false,JSON.stringify({tap,original,clock,now:c.now()}));
+  c.advance(2000);h.ctx.bvomRecoveryCheck();
+  if(persisted().history.length||JSON.stringify(h.S().session)!==before)
+   return ok(false,'expired despite committed warm-up tap');
+  const started=afterTap.workoutLastActivityAt;
+  c.advance(1000);const rest=h.ctx.bvomBbWarmStageBRest(),afterRest=persisted();
+  if(!rest||afterRest.workoutLastActivityAt!==started)
+   return ok(false,'passive rest timer advanced recovery timestamp');
+  c.advance(1000);const untap=h.ctx.bvomBbWarmStageBTap('A2',0,p.token),afterUndo=persisted();
+  return ok(untap===true&&afterUndo.workoutLastActivityAt===c.now()&&
+   afterUndo.timerStart===afterRest.timerStart&&
+   !afterUndo.warmupDone?.[p.key]&&afterUndo.history.length===0&&
+   JSON.stringify(afterUndo.session)===before,
+   JSON.stringify({original,tapAt:started,undoAt:afterUndo.workoutLastActivityAt,restPassive:true,history:afterUndo.history.length}));
+ }));
+ test('BB-STAGE-B-RECOVERY-FAILED-SAVE','DEFECT','Failed warm-up activity save rolls back activity clock, tick, and rest timer together',()=>H.withClock(c=>{
+  const h=selectSquat(fresh()),id=h.S().bodybuilding.selections.A1;
+  H.bbSet(h,id,0,{load:60,reps:8});
+  const before=h.ls.getItem('bvom_data'),last=h.S().workoutLastActivityAt,timer=h.S().timerStart,marks=JSON.stringify(h.S().warmupDone);
+  c.advance(1000);const p=spec(h),old=h.ls.setItem;
+  h.ls.setItem=(k,v)=>{if(k==='bvom_data')throw Error('quota test');return old(k,v)};
+  const tap=h.ctx.bvomBbWarmStageBTap('A2',0,p.token);
+  h.ls.setItem=old;
+  return ok(tap===false&&before===h.ls.getItem('bvom_data')&&
+   h.S().workoutLastActivityAt===last&&h.S().timerStart===timer&&
+   JSON.stringify(h.S().warmupDone)===marks,
+   JSON.stringify({tap,activityUnchanged:h.S().workoutLastActivityAt===last,timerUnchanged:h.S().timerStart===timer}));
+ }));
  test('BB-STAGE-B-ORDER-COMPAT','CONTROL','Existing day slots match warm-up and workout cards; arrow preferences remain untouched',()=>{
   const h=selectSquat(fresh()),before=JSON.stringify(h.S().exerciseDisplayOrder||null);
   const warm=h.els['#warmup'].innerHTML,work=h.els['#workout'].innerHTML,slots=['A1','A2','A3','A4','A5','A6'];
