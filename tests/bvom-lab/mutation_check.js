@@ -15,6 +15,9 @@ const guard=path.join(__dirname,'behaviour_guard.js');
 // replace exactly one occurrence of `from`, searching only inside the function/region starting at `region`
 function inRegion(region,from,to){return src=>{const r=src.indexOf(region);if(r<0)return null;const i=src.indexOf(from,r);if(i<0||i-r>20000)return null;return src.slice(0,i)+to+src.slice(i+from.length)}}
 const MUTATIONS=[
+ // Monkey 029: set-entry dialogs must explain the estimated bodyweight
+ // immediately below the field; the builder-only helper is insufficient.
+ {id:'BB-M029-SET-HELP-MISSING',why:'On-Ramp FIND and Block set-entry dialogs no longer explain estimated bodyweight moved',targets:['BB-M029-BW-SET-ESTIMATE-HELP-FIND-EN','BB-M029-BW-SET-ESTIMATE-HELP-FIND-JA','BB-M029-BW-SET-ESTIMATE-HELP-BLOCK-EN','BB-M029-BW-SET-ESTIMATE-HELP-BLOCK-JA'],apply:inRegion('function bvomBwFields(', "<div id=\"bvomBwEstimateExplanation\" class=\"small bvomBwEstimateHelp\">${bvomT('bodyweight.estimateHelp')}</div>", '')},
  // Monkey 028 / current Codex P2: invalid truthy saved orders must not
  // prevent freezing the effective order during an active On-Ramp replacement.
  {id:'BB-M028-MALFORMED-OVERRIDE-ACCEPTED',why:'Malformed saved order bypasses active-session order pin',targets:['BB-M028-MALFORMED-ACTIVE-SWAP-STRING','BB-M028-MALFORMED-ACTIVE-SWAP-DUPLICATE','BB-M028-MALFORMED-ACTIVE-SWAP-PARTIAL'],apply:inRegion('function bvomBbOnRampSwap(', '!bvomOrderSavedValid(recordObject[scope],canonical)', '!recordObject[scope]')},
@@ -291,6 +294,7 @@ if(knownBad){
     'BB-M023-GPP-ONRAMP-REJECT-ATOMIC','BB-M023-GPP-BLOCK-REJECT-ATOMIC',
     'BB-M024-BW-INLINE-ERROR-ONRAMP','BB-M024-BW-INLINE-ERROR-BLOCK',
     'BB-M025-ESTIMATED-WEIGHT-HELP-EN','BB-M025-ESTIMATED-WEIGHT-HELP-JA',
+    'BB-M029-BW-SET-ESTIMATE-HELP-FIND-EN','BB-M029-BW-SET-ESTIMATE-HELP-FIND-JA','BB-M029-BW-SET-ESTIMATE-HELP-BLOCK-EN','BB-M029-BW-SET-ESTIMATE-HELP-BLOCK-JA',
     'BB-M026-DEFAULT-A-ONRAMP','BB-M026-DEFAULT-A-BLOCK',
     'BB-M027-ADAPTIVE-B-ONRAMP','BB-M027-ADAPTIVE-B-BLOCK','BB-M027-OVERRIDE-B-ONRAMP','BB-M027-OVERRIDE-B-BLOCK',
     'BB-M027-ACTIVE-ONRAMP-SWAP-STABLE',
