@@ -401,6 +401,10 @@ test('phone-approved B sequence places ALL numeric warm-ups ahead of Chin-Up gui
   Object.assign(b.selections,{B1:'chin_up',B2:'romanian_deadlift',
    B3:'incline_dumbbell_press',B4:'bulgarian_split_squat',
    B5:'dumbbell_rear_delt_raise',B6:'dumbbell_curl'});
+  // For the main block, these selected replacements need known working loads
+  // to yield numerical ramps; On-Ramp remains qualitative load finding.
+  for(const [id,load] of [['romanian_deadlift',100],['incline_dumbbell_press',25],['bulgarian_split_squat',20]])
+   b.progression[id]={...(b.progression[id]||{}),load,topLoad:load,increment:2.5};
   prepared.ev('save()');
   const {context,a}=await setup(JSON.parse(JSON.stringify(prepared.S())));
   try{
