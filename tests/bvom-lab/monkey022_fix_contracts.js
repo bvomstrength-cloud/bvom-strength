@@ -228,4 +228,73 @@ module.exports=({test,ok,H,build})=>{
     return ok(Object.values(checks).every(Boolean),JSON.stringify(checks));
    });
  }
+
+ // Monkey 023 follow-up: GPP must be scoped to the Bodybuilding program's own
+ // A/B exposure, including On-Ramp (state.day may be stale), not LP/RPT days.
+ const gppAssignmentFixture=()=>[
+  {id:'m023-any',name:'M023 Any GPP',assignment:'B',hlmAssignment:'M',fourDayAssignment:'3',bbAssignment:'Any',
+   metrics:{sets:true,reps:true},planned:{sets:2,reps:10}},
+  {id:'m023-a',name:'M023 A GPP',assignment:'B',hlmAssignment:'L',fourDayAssignment:'2',bbAssignment:'A',
+   metrics:{sets:true,reps:true},planned:{sets:2,reps:10}},
+  {id:'m023-b',name:'M023 B GPP',assignment:'A',hlmAssignment:'H',fourDayAssignment:'1',bbAssignment:'B',
+   metrics:{sets:true,reps:true},planned:{sets:1,reps:10}}
+ ];
+ for(const [tag,onramp] of [['ONRAMP',true],['BLOCK',false]]){
+  test('BB-M023-GPP-'+tag+'-DAY-FILTER','DEFECT',
+   'GPP Any/A/B assignment respects '+tag+' actual day, ignoring unrelated LP/RPT assignment and stale state.day',()=>{
+    const h=H.boot(build);H.bbStart(h,{onramp});h.S().gppList=gppAssignmentFixture();
+    h.S().day='A';h.ev('save()');h.ctx.renderWorkout();
+    const a=h.els['#workout'].innerHTML,shown=(s,n)=>s.includes(n);
+    const aCorrect=shown(a,'M023 Any GPP')&&shown(a,'M023 A GPP')&&!shown(a,'M023 B GPP');
+    if(onramp)h.S().bodybuilding.onramp.sessionsCompleted=1;
+    else h.S().bodybuilding.completedSessions=1;
+    h.S().day='A';h.ev('save()');h.ctx.renderWorkout();
+    const b=h.els['#workout'].innerHTML;
+    const dayB=onramp?h.ctx.bvomBbOnRampDay():h.ctx.bvomBbDay();
+    const bCorrect=shown(b,'M023 Any GPP')&&!shown(b,'M023 A GPP')&&shown(b,'M023 B GPP');
+    return ok(aCorrect&&bCorrect&&dayB==='B',
+     JSON.stringify({aCorrect,bCorrect,dayB,staleStateDay:h.S().day}));
+   });
+
+  test('BB-M023-GPP-'+tag+'-EDITOR','DEFECT',
+   'GPP editor exposes Bodybuilding A/B/Any and preserves then updates independent assignment durably',()=>{
+    const h=H.boot(build);H.bbStart(h,{onramp});h.S().gppList=gppAssignmentFixture();
+    h.ev('save()');h.ctx.openGppBuilder('m023-a');
+    let o=h.lastOverlay(),markup=o.innerHTML;
+    const hasBb=markup.includes('data-bb'),options=['Any','A','B'].every(x=>markup.includes('value="'+x+'"'));
+    const selected=hasBb&&/data-bb>[\s\S]*?<option value="A" selected/.test(markup);
+    // Fake DOM only supplies element lookup: inject the user's ordinary modal
+    // inputs and click the actual app SAVE callback, not a fabricated store write.
+    const submit=(scope,name)=>{
+     const box=h.lastOverlay(),vals=box.querySelector('[data-values]');
+     box.querySelector('[data-name]').value=name;
+     box.querySelector('[data-lp]').value='B';
+     box.querySelector('[data-hlm]').value='L';
+     box.querySelector('[data-fd]').value='2';
+     box.querySelector('[data-bb]').value=scope;
+     box.querySelectorAll=sel=>sel==='[data-metric]'?[
+      {dataset:{metric:'sets'},checked:true},{dataset:{metric:'reps'},checked:true}
+     ]:[];
+     vals.querySelectorAll=sel=>sel==='[data-v]'?[
+      {dataset:{v:'sets'},value:'2'},{dataset:{v:'reps'},value:'10'}
+     ]:[];
+     box.querySelector('[data-s]').onclick();
+    };
+    if(!hasBb)return ok(false,JSON.stringify({hasBb,options,selected}));
+    submit('A','M023 A GPP');
+    const unchanged=persisted(h).gppList.find(g=>g.id==='m023-a');
+    const preserved=unchanged?.bbAssignment==='A'&&unchanged.assignment==='B'&&
+     unchanged.hlmAssignment==='L'&&unchanged.fourDayAssignment==='2';
+    h.ctx.openGppBuilder('m023-a');
+    const second=h.lastOverlay(),preselect=/data-bb>[\s\S]*?<option value="A" selected/.test(second.innerHTML);
+    submit('B','M023 Renamed GPP');
+    const saved=persisted(h).gppList.find(g=>g.id==='m023-a');
+    const changed=saved?.bbAssignment==='B'&&saved?.name==='M023 Renamed GPP'&&
+     saved.assignment==='B'&&saved.hlmAssignment==='L'&&saved.fourDayAssignment==='2';
+    const restored=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage,supabase:null,online:false});
+    const retained=restored.S().gppList.find(g=>g.id==='m023-a')?.bbAssignment==='B';
+    return ok(hasBb&&options&&selected&&preserved&&preselect&&changed&&retained,
+     JSON.stringify({hasBb,options,selected,preserved,preselect,changed,retained}));
+   });
+ }
 };
