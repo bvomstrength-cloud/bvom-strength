@@ -441,4 +441,28 @@ module.exports=({test,ok,H,build})=>{
     return ok(failures.every(x=>x.pass),JSON.stringify(failures));
    });
  }
+
+ // Field-test UI microcopy: the explanation belongs directly under the
+ // estimated weight field, never below Assistance / variation.
+ for(const lang of ['en','ja']){
+  test('BB-M025-ESTIMATED-WEIGHT-HELP-'+lang.toUpperCase(),'DEFECT',
+   'Bodyweight accessory builder shows localized volume-only explanation immediately after estimate field',()=>{
+    const h=H.boot(build);h.S().language=lang;h.ev('save()');
+    h.ctx.openAccessoryBuilder();
+    const o=h.lastOverlay(),html=o?.innerHTML||'',label=h.ctx.bvomT('bodyweight.estimateHelp');
+    const estimate=html.indexOf('id="accBwEstimate"'),help=html.indexOf(label),
+     assistance=html.indexOf('id="accBwResistance"');
+    const checks={
+     builder:estimate>=0&&assistance>estimate,
+     helperPresent:help>estimate&&help<assistance,
+     explanation:lang==='en'?
+      /chin-ups/i.test(label)&&/push-ups/i.test(label)&&/Nordic curls/i.test(label)&&
+       /volume/i.test(label)&&/progression/i.test(label)&&/blank/i.test(label):
+      /懸垂/.test(label)&&/腕立て/.test(label)&&/ノルディック/.test(label)&&
+       /ボリューム/.test(label)&&/進行/.test(label)&&/空欄/.test(label),
+     once:html.split(label).length===2
+    };
+    return ok(Object.values(checks).every(Boolean),JSON.stringify(checks));
+   });
+ }
 };
