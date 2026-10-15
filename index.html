@@ -3884,31 +3884,49 @@ function bvomBbStageAWarmupPlan(id,workingLoad,onramp=false){
   return {kind:'short',sets:a,unitBasis:'per_hand',source:'equipment_fallback'};
  }
  const lift=profile.lift;
- // The core Row/Deadlift engine normally STARTS at 60 kg / 135 lb;
- // at beginner working loads that can yield no preparation. Use its
- // established lighter-lift ramp instead, never a 50/70/85 replacement.
- const lightLimit=isLb()?165:75;
- const proxyLift=(lift==='Prone Row'&&work<=lightLimit)?'Bench Press':
-                 (lift==='Deadlift'&&work<=lightLimit)?'Squat':lift;
+ // Bodybuilding exercises are independent selections and can move to the
+ // first slot. Use ONE stable standalone ramp family for rows and hinges:
+ // no cliff between 75 and 77.5 kg, and the first RDL gets light preparation.
+ // The core LP/RPT/HLM/4-Day/Custom warmups() remain byte-identical.
+ const proxyLift=lift==='Prone Row'?'Bench Press':lift==='Deadlift'?'Squat':lift;
  const raw=warmups(work,proxyLift);
  const actualBar=Number(state.barByLift?.[lift]??state.bar??(isLb()?45:20));
  const proxyBar=Number(state.barByLift?.[proxyLift]??state.bar??(isLb()?45:20));
  const a=[],seen=new Set();
+ if(profile.equipment==='machine'){
+  // No assumed Smith bar weight, machine floor, sled weight or plate maths.
+  // These are ADVISORY targets, snapped to the entered machine increment.
+  // A very light machine load cannot safely inherit a 20 kg barbell floor.
+  const addMachine=(w,reps,repeat=false)=>{
+   w=bvomBbRoundToStep(w,actualStep);
+   if(!(Number.isFinite(w)&&w>0&&w<work))return;
+   if(!repeat&&seen.has(w))return;
+   seen.add(w);a.push([w,reps]);
+  };
+  if(work<(isLb()?135:65)){
+   for(const [fraction,reps] of [[.4,5],[.65,3],[.8,2]])
+    addMachine(work*fraction,reps);
+  }else{
+   const light=bvomBbRoundToStep(work*.2,actualStep);
+   const firstCore=raw.find(([w])=>w>proxyBar+1e-6)?.[0]??work;
+   if(light>0&&light<firstCore&&light<work){
+    addMachine(light,5,true);addMachine(light,5,true);
+   }
+   for(const [w,reps] of raw)if(w>proxyBar+1e-6)addMachine(w,reps);
+  }
+  return {kind:a.length?'full':'guidance',sets:a,source:'machine_advisory',
+   unitBasis:'total',equipmentNote:'nearest_available_weight',finding:!a.length};
+ }
  for(const [unrounded,reps] of raw){
-  // An unspecified machine/Smith/landmine has no known 20 kg bar or sled.
-  // Remove proxy-bar exposures; show only plausible ramp weights as advisory.
-  if(profile.equipment!=='freebar'&&unrounded<=proxyBar+1e-6)continue;
   let w=unrounded;
-  if(profile.equipment==='freebar'&&proxyLift!==lift)w=roundWarmupLoad(w,lift);
-  if(profile.equipment==='machine'&&actualStep)w=bvomBbRoundToStep(w,actualStep);
-  if(profile.equipment==='freebar'&&w<actualBar-1e-6)continue;
-  if(!(w>0&&w<work))continue;
-  // Intentionally retain repeated true-bar exposures from the strength engine.
-  if(profile.equipment!=='freebar'||w!==actualBar){if(seen.has(w))continue;seen.add(w)}
+  if(proxyLift!==lift)w=roundWarmupLoad(w,lift);
+  if(w<actualBar-1e-6||!(w>0&&w<work))continue;
+  // Preserve two genuine bar exposures; dedupe all other repeated loads.
+  if(w!==actualBar){if(seen.has(w))continue;seen.add(w)}
   a.push([w,reps]);
  }
  return {kind:'full',sets:a,source:'strength_engine',unitBasis:'total',
-  equipmentNote:profile.equipment==='freebar'?'verified_bar':'nearest_available_weight'};
+  equipmentNote:'verified_bar'};
 }
 /* ===== END ISSUE #55 STAGE A ===== */
 /* ===== ISSUE #55 STAGE B: OPTIONAL BODYBUILDING WARM-UP INTERACTION =====
