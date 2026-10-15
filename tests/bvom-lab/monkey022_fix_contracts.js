@@ -492,4 +492,49 @@ module.exports=({test,ok,H,build})=>{
     return ok(Object.values(assertions).every(Boolean),JSON.stringify(assertions));
    });
  }
+
+ // Monkey 027: the ordering decision is about getting meaningful compound
+ // warm-ups first, not sorting fixed Bodybuilding slot numbers.
+ for(const [phase,onramp] of [['ONRAMP',true],['BLOCK',false]]){
+  test('BB-M027-ADAPTIVE-B-'+phase,'DEFECT',
+   'Selected heavy hinge opens Workout B; back extension cannot steal heavy first place',()=>{
+    const h=H.boot(build);H.bbStart(h,{onramp});
+    const b=h.S().bodybuilding;
+    if(onramp)b.onramp.sessionsCompleted=1;else b.completedSessions=1;
+    b.selections.B1='lat_pulldown';b.selections.B2='romanian_deadlift';
+    b.selections.B3='incline_dumbbell_press';b.selections.B4='bulgarian_split_squat';
+    h.ev('save()');
+    const get=()=>h.ctx.bvomOrderEffective().join('|');
+    const primary=get(),expectedHeavy='B2|B1|B3|B4|B5|B6';
+    b.selections.B2='back_extension_45';h.ev('save()');
+    const replacement=get(),expectedBack='B1|B3|B4|B2|B5|B6';
+    b.selections.B4='leg_extension';h.ev('save()');
+    const plain=get(),expectedPlain='B1|B3|B2|B4|B5|B6';
+    b.selections.B1='chin_up';b.selections.B2='romanian_deadlift';h.ev('save()');
+    const chinWithRdl=get(),expectedChin='B2|B1|B3|B4|B5|B6';
+    const pass=primary===expectedHeavy&&replacement===expectedBack&&
+      plain===expectedPlain&&chinWithRdl===expectedChin;
+    return ok(pass,JSON.stringify({primary,replacement,plain,chinWithRdl,phase}));
+   });
+  test('BB-M027-OVERRIDE-B-'+phase,'DEFECT',
+   'Manual B preference wins over changing exercise selection; reload and reset recompute actual warm-up roles',()=>{
+    const h=H.boot(build);H.bbStart(h,{onramp});const b=h.S().bodybuilding;
+    if(onramp)b.onramp.sessionsCompleted=1;else b.completedSessions=1;
+    b.selections.B2='romanian_deadlift';h.ev('save()');
+    const original=h.ctx.bvomOrderEffective().join('|');
+    const before=JSON.stringify({history:h.S().history,session:h.S().session,progression:b.progression});
+    const changed=h.ctx.bvomOrderChange('B2',1),custom=h.ctx.bvomOrderEffective().join('|');
+    b.selections.B2='back_extension_45';h.ev('save()');
+    const afterChange=h.ctx.bvomOrderEffective().join('|');
+    const reopened=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage,supabase:null,online:false});
+    const reopenedCustom=reopened.ctx.bvomOrderEffective().join('|');
+    const cleared=reopened.ctx.bvomOrderReset(),adaptive=reopened.ctx.bvomOrderEffective().join('|');
+    const expected='B1|B3|B2|B4|B5|B6';
+    const durable=reopened.ls.getItem('bvom_data')===JSON.stringify(reopened.S());
+    const unchanged=before===JSON.stringify({history:h.S().history,session:h.S().session,progression:b.progression});
+    return ok(original==='B2|B1|B3|B4|B5|B6'&&changed&&custom==='B1|B2|B3|B4|B5|B6'&&
+      afterChange===custom&&reopenedCustom===custom&&cleared&&adaptive===expected&&durable&&unchanged,
+      JSON.stringify({original,custom,afterChange,reopenedCustom,adaptive,durable,unchanged}));
+   });
+ }
 };
