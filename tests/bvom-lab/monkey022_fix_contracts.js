@@ -175,10 +175,16 @@ module.exports=({test,ok,H,build})=>{
   let rejectedWrites=0;
   h.ls.setItem=(k,v)=>{if(k==='bvom_data'){rejectedWrites++;throw Error('synthetic quota')}return setItem(k,v)};
   h.ctx.bvomBbOnRampFinish(true);h.ls.setItem=setItem;
-  const restored=before===snapshot(h)&&memory===JSON.stringify(h.S())&&
-   h.S().session['ACC:m022acc']?.[0]?.reps===12&&
-   h.S().gppSession.m022gpp?.sets?.[0]?.reps===12&&
-   h.S().bodybuilding.onramp.status==='active'&&h.S().history.length===0;
-  return ok(noPhantom&&restored&&rejectedWrites>0,JSON.stringify({noPhantom,restored,rejectedWrites,storedHistory:persisted(h).history.length}));
+  const checks={
+   sameRaw:before===snapshot(h),
+   sameMemory:memory===JSON.stringify(h.S()),
+   accessory:h.S().session['ACC:m022acc']?.[0]?.reps===12,
+   gpp:h.S().gppSession.m022gpp?.sets?.[0]?.reps===12,
+   active:h.S().bodybuilding.onramp.status==='active',
+   history:h.S().history.length===0
+  };
+  const restored=Object.values(checks).every(Boolean);
+  return ok(noPhantom&&restored&&rejectedWrites>0,
+   JSON.stringify({noPhantom,checks,rejectedWrites,storedHistory:persisted(h).history.length}));
  });
 };
