@@ -49,7 +49,7 @@ module.exports=({test,ok,H,build})=>{
    unknown.kind==='none'&&accessory.kind==='none',JSON.stringify({db:db.sets,bulgarian:bul.sets,or:ramp}));
  });
  test('BB-STAGE-A-IMPERIAL','CONTROL','Imperial ramps are increasing, below working load, and no false 45 lb machine bar is prescribed',()=>{
-  const h=H.boot(build);h.S().unit='lb';h.S().bar=45;
+  const h=H.boot(build);h.S().unit='lb';h.S().bar=45;h.S().barByLift=Object.fromEntries(['Squat','Bench Press','Prone Row','Supine Row','Overhead Press','Deadlift'].map(x=>[x,45]));
   const sq=example(h,'high_bar_squat',225),machine=example(h,'leg_press',225);
   return ok(sq.kind==='full'&&sq.sets.some(([w])=>w===45)&&stable(sq.sets)&&sq.sets.every(([w])=>w<225)&&
    machine.kind==='full'&&stable(machine.sets)&&machine.sets.every(([w])=>w>45&&w<225),JSON.stringify({squat:sq.sets,machine:machine.sets}));
