@@ -18,7 +18,7 @@ const MUTATIONS=[
  // Monkey 028 / current Codex P2: invalid truthy saved orders must not
  // prevent freezing the effective order during an active On-Ramp replacement.
  {id:'BB-M028-MALFORMED-OVERRIDE-ACCEPTED',why:'Malformed saved order bypasses active-session order pin',targets:['BB-M028-MALFORMED-ACTIVE-SWAP-STRING','BB-M028-MALFORMED-ACTIVE-SWAP-DUPLICATE','BB-M028-MALFORMED-ACTIVE-SWAP-PARTIAL'],apply:inRegion('function bvomBbOnRampSwap(', '!bvomOrderSavedValid(recordObject[scope],canonical)', '!recordObject[scope]')},
- {id:'BB-M027-ACTIVE-SWAP-RESHUFFLES',why:'Active On-Ramp session loses its visible order when replacement changes compound warm-up role',targets:['BB-M027-ACTIVE-ONRAMP-SWAP-STABLE'],apply:inRegion('function bvomBbOnRampSwap(', "if(bvomSessionHasActivity()&&scope&&!record?.[scope])", "if(false&&scope&&!record?.[scope])")},
+ {id:'BB-M027-ACTIVE-SWAP-RESHUFFLES',why:'Active On-Ramp session loses its visible order when replacement changes compound warm-up role',targets:['BB-M027-ACTIVE-ONRAMP-SWAP-STABLE'],apply:inRegion('function bvomBbOnRampSwap(', "if(bvomSessionHasActivity()&&scope&&!bvomOrderSavedValid(recordObject[scope],canonical))", "if(false&&scope&&!bvomOrderSavedValid(recordObject[scope],canonical))")},
  // Monkey 027: distinguish an RDL primary from a qualitative back extension,
  // and recognize B4 split-squat compound preparation instead of fixed slot order.
  {id:'BB-M027-B2-ALWAYS-LEADS',why:'Back extension incorrectly gets RDL-first priority',targets:['BB-M027-ADAPTIVE-B-ONRAMP','BB-M027-ADAPTIVE-B-BLOCK'],apply:inRegion('function bvomBbOrderPriority(', "if(slot==='B2')return kind==='compound'?0:kind==='qualitative'?4:5;", "if(slot==='B2')return 0;")},
