@@ -75,7 +75,7 @@ async function testMain(lang){
   let d=await read(page),key=Object.keys(d.warmupDone||{}).find(x=>x.includes('|A2|high_bar_squat'));
   assert.ok(key,'must store session-scoped squat mark');assert.equal(d.warmupDone[key].done['0'],true);
   assert.ok(d.timerStart>0,'rest timer must start on warm-up tap');
-  assert.equal(d.workoutStartedAt,null);assert.equal(d.history.length,0);
+  assert.ok(d.workoutStartedAt==null,'warm-up must not set workout start');assert.equal(d.history.length,0);
   assert.equal(Object.keys(d.session).length,0,'no working sets recorded');
   assert.equal(await page.locator('#timerbar').evaluate(n=>n.classList.contains('idle')),false);
   pass(lang+' 375px squat tick and timer, no false workout activity');
@@ -146,7 +146,7 @@ async function testOnRamp(){
   assert.match(info,/Start very easy/);assert.ok(!/\d+ kg × \d+/.test(info),'On-Ramp must not invent numerical warm-up loads');
   assert.equal(await page.locator('#warmup button.set').count(),0,'On-Ramp prep has no numeric checkmarks');
   await page.locator('#warmup button').filter({hasText:'START REST TIMER'}).first().click();
-  let d=await read(page);assert.ok(d.timerStart>0);assert.equal(d.workoutStartedAt,null);
+  let d=await read(page);assert.ok(d.timerStart>0);assert.ok(d.workoutStartedAt==null,'warm-up must not set workout start');
   assert.equal(Object.keys(d.session).length,0);assert.equal(d.bodybuilding.onramp.status,'active');
   pass('On-Ramp confirmed calibration stays qualitative; rest timer does not record work');
   await page.evaluate(()=>activateTab('workout'));
