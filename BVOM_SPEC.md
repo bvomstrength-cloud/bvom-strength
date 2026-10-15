@@ -797,7 +797,9 @@ The **On-Ramp** exists to discover the starting loads. Its warm-up screen gives 
 
 Warm-up completion ticks for main-block numeric preparations are **durably saved, session/slot/exercise/plan-scoped**, and restart the normal rest clock only on an accepted write. Ticks may be undone; rejected writes must roll back. No warm-up tap may change workout activity status, required working sets, progression, History, On-Ramp calibration, or Finish eligibility. Save/reload should preserve current-session marks but never transfer them to a subsequent session.
 
-The exercise order shown on the warm-up and workout screens follows the existing saved user ordering; adding this feature does not silently rearrange active or configured programs.
+The exercise order shown on the warm-up and workout screens follows the existing saved user ordering. The exercise order is **presentation-only** and never changes underlying exercise slots, progression, session keys, warm-up prescription, or History.
+
+**Bodybuilding Workout A default (Monkey 026):** For a fresh or invalid saved display preference, On-Ramp A and 24-session Bodybuilding A both show A2 (quad/squat), A1 (chest/bench), A3 (horizontal pull), A4 (hamstring), A6 (triceps), then A5 (lateral delt), in that order. Workout B and all other programs retain their existing defaults. Existing valid manually saved A/B order overrides take priority and remain durable across restart and handoff. Moving with arrows or tapping RESET modifies only the saved display preference; resetting A restores the preferred order above rather than canonical slot-key order.
 
 ### 13.2.2 Historical behaviour
 
