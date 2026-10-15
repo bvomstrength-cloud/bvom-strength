@@ -15,6 +15,9 @@ const guard=path.join(__dirname,'behaviour_guard.js');
 // replace exactly one occurrence of `from`, searching only inside the function/region starting at `region`
 function inRegion(region,from,to){return src=>{const r=src.indexOf(region);if(r<0)return null;const i=src.indexOf(from,r);if(i<0||i-r>20000)return null;return src.slice(0,i)+to+src.slice(i+from.length)}}
 const MUTATIONS=[
+ // Codex PR57 P1: optional On-Ramp sets/GPP must remain finishable and archived.
+ {id:'BB-M022-OPTIONAL-TRAP-RESTORED',why:'On-Ramp Finish again refuses accessory-only or GPP-only work',targets:['BB-M022-ONRAMP-ACCESSORY-ONLY','BB-M022-ONRAMP-GPP-ONLY'],apply:inRegion('function bvomBbOnRampFinish(approvedIncomplete=false)', 'if(!bvomSessionHasActivity())return;', 'if(!ids.some(bvomBbOnRampExerciseTouched))return;')},
+ {id:'BB-M022-GPP-HISTORY-DROPPED',why:'On-Ramp Finish discards GPP results while clearing the live session',targets:['BB-M022-ONRAMP-GPP-ONLY'],apply:inRegion('function bvomBbOnRampFinish(approvedIncomplete=false)', "session:historySession,gpp,note:'Bodybuilding On-Ramp'", "session:historySession,note:'Bodybuilding On-Ramp'")},
  {id:'BB-M019-FINISH-IGNORES-REJECT',why:'Bodybuilding FINISH advances despite a rejected durable training write',targets:['BB-M019-REJECT-NORMAL'],apply:inRegion('function bvomBbFinish(approvedIncomplete=false)', 'if(!save({durable:true})){state=before;', 'if(false){state=before;')},
  {id:'BB-M019-ONRAMP-IGNORES-REJECT',why:'On-Ramp FINISH advances despite a rejected durable training write',targets:['BB-M019-REJECT-ONRAMP'],apply:inRegion('function bvomBbOnRampFinish(approvedIncomplete=false)', 'if(!save({durable:true})){', 'if(false){')},
 
@@ -250,6 +253,7 @@ if(knownBad){
     'BB-STAGE-B-RECOVERY-CLOCK','BB-STAGE-B-RECOVERY-FAILED-SAVE',
     'BB-M022-ONRAMP-HANDOFF-PRESERVES-SETS','BB-M022-ONRAMP-EMPTY-HANDOFF','BB-M022-BODYWEIGHT-HOLD',
     'BB-M022-BODYWEIGHT-ACCEPT','BB-M022-BODYWEIGHT-EASIER','BB-M022-BODYWEIGHT-FAIL-SAVE',
+    'BB-M022-ONRAMP-ACCESSORY-ONLY','BB-M022-ONRAMP-GPP-ONLY','BB-M022-ONRAMP-OPTIONAL-ATOMIC-EMPTY',
     // Stage 1 forward-feature contracts: RED on exact v2.9.7 dbaad6ef.
     'BW-REFINE-VOLUME','BW-REFINE-HISTORY','BW-REFINE-INCREMENT','BW-REFINE-INCOMPLETE-GPP',
     'BW-STAGE1-RECORD','BW-STAGE1-HISTORY','BW-STAGE1-UNITS','BW-STAGE1-BUILDER','BW-STAGE1-BB','BW-STAGE1-ATOMIC','BW-STAGE1-CORRECTION-CLOUD','BW-STAGE1-OWNER','BW-STAGE1-ONRAMP',
