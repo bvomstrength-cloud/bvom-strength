@@ -34,6 +34,7 @@ require('./starting_setup_contracts')({test,ok,H,build});
 require('./bb_warmup_stage_a_contracts')({test,ok,H,build});
 require('./bb_warmup_stage_b_contracts')({test,ok,H,build});
 require('./monkey022_fix_contracts')({test,ok,H,build});
+require('./bb_extra_sets_contracts')({test,ok,H,build});
 test('F50-SECONDARY-PENDING-ANSWER-ATOMIC','DEFECT','Different-tab pending answers leave memory/blob/owner unchanged and explain non-persistence',()=>{
  const result=[];for(const pick of ['onL','onR']){const{a,b,ls}=ownershipPair(),raw=ls.getItem('bvom_data'),memory=JSON.stringify(b.S()),owner=ls.getItem('bvom_workout_tab_owner');b.dialog[pick]();const rejected=raw===ls.getItem('bvom_data')&&memory===JSON.stringify(b.S())&&owner===ls.getItem('bvom_workout_tab_owner')&&readOnlyNotice(b);a.dialog.onR();const p=JSON.parse(ls.getItem('bvom_data'));result.push(rejected&&p.weights['Bench Press']===47.5&&!p.pendingCloseMissChoice)}return ok(result.every(Boolean),JSON.stringify(result));
 });
@@ -504,7 +505,8 @@ test('F102-SW-UPDATE-RETAIN-ACTIVATED','DEFECT','Activation during workout keeps
  worker.state='activated';reg.active=worker;reg.waiting=null;handlers.forEach(fn=>fn());
  const held=reloads===0&&el.style.display==='none'&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null;
  h.S().workoutStartedAt=null;h.ctx.save();h.ctx.bvomSyncWorkoutControls();
- const offered=el.style.display!=='none'&&reloads===0;btn.onclick();
+ const offered=el.style.display!=='none'&&reloads===0;
+ h.ctx.navigator.serviceWorker={controller:worker};btn.onclick();
  return ok(held&&offered&&posts===1&&reloads===1,JSON.stringify({held,offered,posts,reloads}));
 });
 
@@ -517,6 +519,7 @@ test('F103-SW-UPDATE-CONSENT-CANCELLED','DEFECT','Critical work cancels earlier 
  h.S().workoutStartedAt=null;h.ctx.save();h.ctx.bvomSyncWorkoutControls();
  worker.state='activated';reg.active=worker;reg.waiting=null;handlers.forEach(fn=>fn());h.ctx.bvomSwFinishRequestedReload();
  const deferred=reloads===0&&el.style.display!=='none'&&!btn.disabled&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null;
+ h.ctx.navigator.serviceWorker={controller:worker};
  btn.onclick();return ok(deferred&&reloads===1,JSON.stringify({deferred,reloads}));
 });
 
@@ -531,7 +534,9 @@ test('F97-SW-UPDATE-ONE-TAP','DEFECT','One update tap disables repeats and perfo
  btn.onclick();btn.onclick();
  const once=sent===1&&btn.disabled&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')==='1';
  candidate.state='activated';reg.active=candidate;events.statechange();events.statechange();
- return ok(once&&reloaded===1&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null,JSON.stringify({sent,once,reloaded}));
+ const premature=reloaded===0;
+ h.ctx.navigator.serviceWorker.controller=candidate;h.ctx.bvomSwFinishRequestedReload();
+ return ok(once&&premature&&reloaded===1&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null,JSON.stringify({sent,once,reloaded}));
 });
 test('F98-SW-UPDATE-RETRY-AND-ACTIVE-GUARD','DEFECT','Stalled worker enables retry; activation during a newly started workout cannot force reload',()=>{
  const h=H.boot(build);let sent=0,reloaded=0;const events=[];
@@ -549,6 +554,7 @@ test('F98-SW-UPDATE-RETRY-AND-ACTIVE-GUARD','DEFECT','Stalled worker enables ret
  for(const fn of events)fn();
  const protectedActive=reloaded===0&&!btn.disabled&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null;
  h.S().workoutStartedAt=null;
+ h.ctx.navigator.serviceWorker={controller:candidate};
  btn.onclick();
  return ok(timedOut&&retried&&protectedActive&&reloaded===1,JSON.stringify({timedOut,retried,protectedActive,reloaded}));
 });

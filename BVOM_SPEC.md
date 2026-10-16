@@ -566,6 +566,11 @@ The safeguard itself must not silently change the otherwise-correct progression 
 
 After an intentional/recovery reduction, the first exposure at the reduced load may establish a fresh reference without producing a false large-drop warning against the obsolete reference.
 
+### 9.7.1 Optional extra working sets (v2.9.15)
+
+Each main-block Bodybuilding exercise permits the lifter to record additional working sets (maximum 30 retained extras) without changing its prescribed set count, A/B schedule, completion gate or progression calculation. Extras are actuals only: save weight/assistance, reps and effort, permit editing/removing them, and retain the records in workout History, volume and sharing/export.
+
+Progression and performance references consider **only the original prescribed sets**. Extra sets with lower reps, changed weights or a harder effort cannot block an increase otherwise earned. Extra sets are absent from On-Ramp calibration and do not create an exposure there. Extra-set writes are durable with rollback on rejection; vacancy reuse and capacity use the count of actual recorded extras, not a historical high-water index.
 ### 9.8 Accessories inside Bodybuilding
 
 Bodybuilding accessory work can be recorded with the workout.

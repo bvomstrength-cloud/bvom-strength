@@ -292,6 +292,11 @@ test('update deferred: visible prompt hides on set dialog, retains activated wor
   await assertFinishReachable(a);await a.locator('.bvomModalOverlay [data-finish]').click();await a.locator('.bvomModalOverlay [data-skip]').click();
   assert.equal(await banner.isVisible(),false);await a.locator('.bvomModalOverlay [data-ok]').click();await banner.waitFor({state:'visible'});
   assert.equal(await a.evaluate(()=>window.__fakeUpdate.posts),1);assert.equal((await saved(a)).history.length,1);
+  // The mock worker is activated but not yet controlling the page. In real
+  // Chrome, clients.claim() triggers controllerchange before an update reload.
+  await a.evaluate(()=>Object.defineProperty(navigator.serviceWorker,'controller',{
+   configurable:true,get:()=>window.__fakeUpdate.worker
+  }));
   await Promise.all([a.waitForEvent('load'),banner.locator('[data-bvom-update]').click()]);await a.waitForSelector('#app:not(.hidden)');
   assert.equal((await saved(a)).history.length,1);assert.equal(await a.evaluate(()=>sessionStorage.getItem('bvom-update-reload-requested')),null);
  }finally{await context.close()}
