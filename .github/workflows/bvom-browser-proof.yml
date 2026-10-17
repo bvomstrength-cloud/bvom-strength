@@ -151,6 +151,8 @@ jobs:
         run: node tests/bvom-lab/bodyweight_monkey018.cjs
       - name: Run Monkey 021 Bodybuilding warm-up mobile-browser endurance
         run: node tests/bvom-lab/bb_warmup_monkey021.cjs
+      - name: Check Bodybuilding next-weight edits on real mobile Chromium EN and JA
+        run: node tests/bvom-lab/bb_manual_load_browser.cjs
       - name: Check out exact v2.9.15 for upgrade-loop RED and GREEN
         uses: actions/checkout@v4
         with:
