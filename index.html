@@ -4197,7 +4197,8 @@ function bvomBbWarmStageBTap(slot,index,token){
  }
  if(bvomPersistenceBlocked())return true; // committed but window stopped
  if(!removing)bvomBbWarmStageBClock();
- renderWarm();
+ // Synchronise the disabled EDIT WEIGHT control immediately after a warm-up tick.
+ renderWarm();renderWorkout();
  if(!removing&&index===plan.sets.length-1){
   activateTab('workout');scrollExercise('work-bb-',slot);
  }
