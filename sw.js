@@ -1,5 +1,5 @@
-const CACHE = 'bvom-2.9.15';
-const BUILD = '2.9.15';
+const CACHE = 'bvom-2.9.16';
+const BUILD = '2.9.16';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './og-image.png', './i18n/en.js?v=6090d2f48f09', './i18n/ja.js?v=326ff8e97bb8',
   './theme-bee-v23c.svg',
   './theme-cherry-v23f.svg',
