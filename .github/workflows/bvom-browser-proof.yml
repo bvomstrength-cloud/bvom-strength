@@ -167,4 +167,16 @@ jobs:
           path: .bvom-v2916-before-plates
       - name: Prove same-version v2.9.16 -> v2.9.16-plates worker refresh
         run: node tests/bvom-lab/sw_same_version_plate_browser.cjs
+      - name: Check out initial v2.9.16 weight editor before plate maths
+        uses: actions/checkout@v4
+        with:
+          ref: 623587f29905074ddfb764e49cd7ec68c7c8c488
+          path: .bvom-v2916-first
+      - name: Check out shipped v2.9.16 plate-math cache revision
+        uses: actions/checkout@v4
+        with:
+          ref: 51548e2ca425c2d3017f88a077e854db6f6fbc8e
+          path: .bvom-v2916-plates1
+      - name: Prove restored guidance-only v2.9.16 updates safely from both test builds
+        run: node tests/bvom-lab/sw_same_version_warmup_restore_browser.cjs
 
