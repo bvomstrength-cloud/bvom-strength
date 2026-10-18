@@ -577,6 +577,8 @@ During an active 24-workout Bodybuilding **main block**, numeric-resistance exer
 
 One durable write updates only \`bodybuilding.progression[id].load/topLoad\` while retaining the user's increment and performance-reference history. Obsolete \`previousSuccessfulLoad\` and \`performanceRefResetLoad\` fields are cleared after an explicit manual load change. Workouts, back-off percentages and warm-ups must immediately recompute from the new value. Stale dialogs (changed session, selection, unit, latest weight or new recorded work/ticks), invalid weights, secondary tabs and rejected durable writes must not commit. A failed write must roll back the full in-memory state. Bodyweight/assistance decisions and On-Ramp calibration remain unaffected.
 
+**Plate-load display (v2.9.16):** On the Bodybuilding warm-up screen, genuine free-barbell warm-up sets and the working weight show BVOM's existing per-side plate calculation. Respect the configured bar weight for the mapped lift, enabled standard plates and selected microplate mode, with localized empty-bar, below-bar and not-loadable notices. Exercise profiles for Smith, landmine, machine, dumbbell, band and bodyweight must not be given ordinary-barbell plate guidance. Dumbbells retain per-hand and machines retain nearest-available guidance. This is read-only UI; do not alter planned loads, warm-up marks/fingerprints, progression, workout actuals or History simply to display the breakdown.
+
 ### 9.8 Accessories inside Bodybuilding
 
 Bodybuilding accessory work can be recorded with the workout.

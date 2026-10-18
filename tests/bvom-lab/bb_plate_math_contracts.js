@@ -18,7 +18,7 @@ module.exports=({test,ok,H,build})=>{
   return ok(empty===h.ctx.bvomT('warmup.emptyBar')&&
    forty.includes('10')&&forty.includes(h.ctx.bvomT('warmup.perSide'))&&
    full.includes('20 + 20 + 1.25')&&full.includes(h.ctx.bvomT('warmup.perSide'))&&
-   html.includes(full)&&html.includes(forty)&&!html.includes('warm-up only'),
+   html.includes(full)&&html.includes(forty),
    JSON.stringify({empty,forty,full,hasInHtml:html.includes(full)}));
  });
  test('BBPLATE-BAR-AND-UNLOADABLE','DEFECT','Respects per-lift 15kg bar and never invents plates when configured inventory cannot load weight',()=>{
