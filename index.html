@@ -8,7 +8,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="BVOM">
 <meta name="twitter:description" content="Best Version Of Myself — strength training and progression.">
-<title>BVOM Strength v2.9.15</title><link rel="manifest" href="manifest.json">
+<title>BVOM Strength v2.9.16</title><link rel="manifest" href="manifest.json">
 <style>
 :root{--bg:#f4f4f4;--card:#fff;--ink:#111;--muted:#737373;--accent:#d91e18;--line:#ddd}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
@@ -242,7 +242,7 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
 <div id="authgate" class="setup hidden"></div>
 <div id="setup" class="setup hidden"></div>
 <div id="app" class="hidden">
-<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v2.9.15</div></header>
+<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v2.9.16</div></header>
 <div class="tabs"><div class="tab on" data-tab="workout">WORKOUT</div><div class="tab" data-tab="warmup">WARM-UP</div><div class="tab" data-tab="history">HISTORY</div><div class="tab" data-tab="info">INFO</div><div class="tab" data-tab="settings">SETTINGS</div></div>
 <main><section id="workout"></section><section id="warmup" class="hidden"></section><section id="history" class="hidden"></section><section id="info" class="hidden"></section><section id="settings" class="hidden"></section></main>
 <div class="timer idle" id="timerbar"><div class="timerin"><div><div class="clock" id="clock">0:00</div><div class="marks">DINGS 3 · 5 · 10</div></div><button class="cancel" onclick="if(bvomWorkoutActionAllowed())cancelTimer()">CANCEL</button><button class="finish" onclick="finishWorkout()">FINISH</button></div></div>
@@ -251,7 +251,7 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
 <script src="./i18n/ja.js?v=326ff8e97bb8"></script>
 <script src="./vendor/supabase-js-2.117.3.js"></script>
 <script>
-const BVOM_BUILD='2.9.15';
+const BVOM_BUILD='2.9.16';
 const programs={A:[["Squat",3,5],["Bench Press",3,5],["Prone Row",3,5]],B:[["Squat",3,5],["Overhead Press",5,5],["Deadlift",1,5]]};
 function liftLabel(n){return n==='Prone Row'?(isHLM()?'Prone Row':'Row'):n==='Overhead Press'?'Press':n;}
 const inc={Squat:2.5,"Bench Press":2.5,"Prone Row":2.5,"Overhead Press":2.5,Deadlift:5};
@@ -3810,7 +3810,50 @@ function bvomBbAddExtraSet(id){
  }
  bvomBbSetModal(id,bvomBbNextExtraIndex(id));return true;
 }
-function bvomBbRenderFoundationWorkout(){bvomBbEnsure();const day=bvomBbDay();const el=document.querySelector('#workout');if(!day){el.innerHTML=`<div class="card"><b>BODYBUILDING COMPLETE</b><div class="small" style="margin-top:8px">24 of 24 workouts completed. Nice work. Your next step is a return-to-strength re-entry rather than an immediate max test.</div></div>`;return}const n=state.bodybuilding.completedSessions+1;let h=`<div class="toprow"><div><b>BODYBUILDING · WORKOUT ${n} OF 24 — ${day}</b><div class="small">${day==='A'?'Push + quad emphasis':'Pull + posterior emphasis'} · stop with about two good reps left</div></div></div>`;for(const slot of bvomBbSlotsForDay(day)){const id=state.bodybuilding.selections[slot],x=BVOM_BB_EXERCISES[id],rx=bvomBbPrescription(id),ss=state.session[bvomBbSessionKey(id)]||{};h+=`<div class="exercise" id="work-bb-${slot}"><div class="exhead"><div><div class="exname">${bvomEsc(x.name)}</div><div class="small">${BVOM_BB_SLOT_LABELS[slot]} · ${rx?.method?.replaceAll('_',' ')||''}</div></div></div><div class="sets">`;for(let i=0;i<bvomBbSetCount(rx);i++){const q=rx.sets[i],log=ss[i],cl=log?'done':'';h+=`<div class="setwrap"><button class="set ${cl}" onclick="bvomBbSetModal('${id}',${i})">${log?log.reps:'✓'}</button><div class="setload">${log?.bodyweight===true?bvomEsc(bvomBwSetText(log)):bvomBbLoadText(q,id)+' × '+bvomBbSetTarget(rx,i)}</div>${log?.harderThanIntended?'<div class="extraLabel">HARD</div>':''}</div>`}for(const ix of bvomBbExtraIndices(id,rx,ss)){ const log=ss[ix],detail=log.bodyweight===true?bvomBwSetText(log):bvomBbNumericExercise(id)?fmt(log.load)+' '+unitLabel()+' × '+log.reps:String(log.resistance||'Bodyweight')+' × '+log.reps; h+=`<div class="setwrap" data-bb-extra="${ix}"><button class="set done" onclick="bvomBbSetModal('${id}',${ix})">${log.reps}</button><div class="setload">${bvomEsc(detail)}<div class="extraLabel">${hlmTxt('EXTRA','追加')}</div></div></div>`;}h+=`</div><button type="button" class="secondary" style="margin-top:8px" onclick="bvomBbAddExtraSet('${id}')">+ ${hlmTxt('ADD EXTRA SET','追加セットを記録')}</button>${bvomBbDifficultyCallout(id)}</div>`}h+=renderAccessories17();h+=renderGpp17();el.innerHTML=h}
+// Main-block numeric loads are independent of LP/RPT settings.
+function bvomBbWeightEditAllowed(id){
+ if(!isBodybuilding()||bvomBbOnRampActive()||state.bodybuilding?.status!=='active'||!bvomBbNumericExercise(id))return false;
+ const slot=bvomBbSlotsForDay(bvomBbDay()).find(x=>state.bodybuilding?.selections?.[x]===id);
+ if(!slot)return false;
+ if(Object.values(state.session?.[bvomBbSessionKey(id)]||{}).some(x=>x&&x.reps!==undefined))return false;
+ const warm=state.warmupDone?.[bvomBbWarmStageBKey(slot,id)];
+ if(Object.values(warm?.done||{}).some(Boolean))return false;
+ return true;
+}
+function bvomBbEditWorkingWeight(id){
+ if(!bvomWorkoutActionAllowed()||document.querySelector('.bvomModalOverlay')||!bvomBbWeightEditAllowed(id))return false;
+ const p=state.bodybuilding?.progression?.[id],old=Number(p?.load??p?.topLoad),
+  number=state.bodybuilding.completedSessions,started=state.bodybuilding.startedAt,
+  slot=bvomBbSlotsForDay(bvomBbDay()).find(x=>state.bodybuilding.selections[x]===id);
+ if(!(Number.isFinite(old)&&old>0))return false;
+ const name=BVOM_BB_EXERCISES[id].name,unit=unitLabel(),o=document.createElement('div');o.className='bvomModalOverlay';
+ o.innerHTML='<div class="bvomModal" role="dialog" aria-modal="true"><h3>'+hlmTxt('EDIT BODYBUILDING WEIGHT','ボディビルディングの重量を変更')+'</h3><div class="sub">'+bvomEsc(name)+' · '+hlmTxt('Upcoming prescribed top set, not a recorded set or LP weight.','次回のトップセットの指定重量です。記録済みのセットやLP重量は変更しません。')+'</div><label>'+hlmTxt('Next working weight','次回のワーキング重量')+' ('+unit+')<input data-bb-weight type="number" inputmode="decimal" min=".25" step=".25" value="'+old+'"></label><div class="small">'+hlmTxt('Back-off sets and warm-ups update immediately. Already recorded sets and warm-ups are protected.','バックオフセットとウォームアップはすぐに更新されます。記録済みのセットやウォームアップは保護されます。')+'</div><div class="bvomBbValidationNotice" data-bb-validation role="alert" aria-live="polite" hidden></div><div class="modalActions"><button type="button" data-cancel>'+hlmTxt('CANCEL','キャンセル')+'</button><button type="button" class="primary" data-save>'+hlmTxt('SAVE WEIGHT','重量を保存')+'</button></div></div>';
+ document.body.appendChild(o);
+ const entry=o.querySelector('[data-bb-weight]');entry.focus();entry.select();
+ o.querySelector('[data-cancel]').onclick=()=>o.remove();
+ o.querySelector('[data-save]').onclick=()=>{
+  if(!bvomWorkoutActionAllowed())return false;
+  const current=Number(state.bodybuilding?.progression?.[id]?.load??state.bodybuilding?.progression?.[id]?.topLoad);
+  if(!bvomBbWeightEditAllowed(id)||state.bodybuilding?.completedSessions!==number||
+   state.bodybuilding?.startedAt!==started||state.bodybuilding?.selections?.[slot]!==id||
+   unitLabel()!==unit||!Number.isFinite(current)||Math.abs(current-old)>1e-9){
+   bvomBbInputNotice(o,hlmTxt('Workout changed. Close and reopen this editor.','ワークアウトが変更されました。閉じて再度開いてください。'),'[data-bb-weight]');return false;
+  }
+  const raw=String(entry.value??''),value=Number(raw);
+  if(!raw.trim()||!Number.isFinite(value)||value<=0){
+   bvomBbInputNotice(o,hlmTxt('Enter a valid positive working weight.','有効な正の重量を入力してください。'),'[data-bb-weight]');return false;
+  }
+  if(Math.abs(value-old)<1e-9){o.remove();return true}
+  const before=JSON.parse(JSON.stringify(state)),next=bvomBbProgress(id);
+  next.load=value;next.topLoad=value;
+  delete next.previousSuccessfulLoad;delete next.performanceRefResetLoad;
+  if(!save({durable:true})){state=before;return false}
+  if(bvomPersistenceBlocked())return true;
+  o.remove();renderWorkout();renderWarm();bvomSyncWorkoutControls();return true;
+ };
+ return true;
+}
+function bvomBbRenderFoundationWorkout(){bvomBbEnsure();const day=bvomBbDay();const el=document.querySelector('#workout');if(!day){el.innerHTML=`<div class="card"><b>BODYBUILDING COMPLETE</b><div class="small" style="margin-top:8px">24 of 24 workouts completed. Nice work. Your next step is a return-to-strength re-entry rather than an immediate max test.</div></div>`;return}const n=state.bodybuilding.completedSessions+1;let h=`<div class="toprow"><div><b>BODYBUILDING · WORKOUT ${n} OF 24 — ${day}</b><div class="small">${day==='A'?'Push + quad emphasis':'Pull + posterior emphasis'} · stop with about two good reps left</div></div></div>`;for(const slot of bvomBbSlotsForDay(day)){const id=state.bodybuilding.selections[slot],x=BVOM_BB_EXERCISES[id],rx=bvomBbPrescription(id),ss=state.session[bvomBbSessionKey(id)]||{},editUi=bvomBbNumericExercise(id)? '<div class="small" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:6px 0 12px"><span>'+hlmTxt('Next working weight','次回のワーキング重量')+': <b>'+fmt(rx?.sets?.[0]?.load)+' '+unitLabel()+'</b></span><button type="button" class="secondary" data-bb-edit-weight="'+id+'" onclick="bvomBbEditWorkingWeight(this.dataset.bbEditWeight)" '+(bvomBbWeightEditAllowed(id)?'':'disabled')+'>'+hlmTxt('EDIT WEIGHT','重量を変更')+'</button></div>':'';h+=`<div class="exercise" id="work-bb-${slot}"><div class="exhead"><div><div class="exname">${bvomEsc(x.name)}</div><div class="small">${BVOM_BB_SLOT_LABELS[slot]} · ${rx?.method?.replaceAll('_',' ')||''}</div></div></div>${editUi}<div class="sets">`;for(let i=0;i<bvomBbSetCount(rx);i++){const q=rx.sets[i],log=ss[i],cl=log?'done':'';h+=`<div class="setwrap"><button class="set ${cl}" onclick="bvomBbSetModal('${id}',${i})">${log?log.reps:'✓'}</button><div class="setload">${log?.bodyweight===true?bvomEsc(bvomBwSetText(log)):bvomBbLoadText(q,id)+' × '+bvomBbSetTarget(rx,i)}</div>${log?.harderThanIntended?'<div class="extraLabel">HARD</div>':''}</div>`}for(const ix of bvomBbExtraIndices(id,rx,ss)){ const log=ss[ix],detail=log.bodyweight===true?bvomBwSetText(log):bvomBbNumericExercise(id)?fmt(log.load)+' '+unitLabel()+' × '+log.reps:String(log.resistance||'Bodyweight')+' × '+log.reps; h+=`<div class="setwrap" data-bb-extra="${ix}"><button class="set done" onclick="bvomBbSetModal('${id}',${ix})">${log.reps}</button><div class="setload">${bvomEsc(detail)}<div class="extraLabel">${hlmTxt('EXTRA','追加')}</div></div></div>`;}h+=`</div><button type="button" class="secondary" style="margin-top:8px" onclick="bvomBbAddExtraSet('${id}')">+ ${hlmTxt('ADD EXTRA SET','追加セットを記録')}</button>${bvomBbDifficultyCallout(id)}</div>`}h+=renderAccessories17();h+=renderGpp17();el.innerHTML=h}
 function bvomBbSetModal(id,i){if(!bvomWorkoutActionAllowed())return;
  if(bvomBbDifficultyPending(id)){
   bvomBeeModal(hlmTxt('CHOOSE ACCEPT OR HOLD FIRST','先に承認または維持を選んでください。'),
@@ -4154,7 +4197,8 @@ function bvomBbWarmStageBTap(slot,index,token){
  }
  if(bvomPersistenceBlocked())return true; // committed but window stopped
  if(!removing)bvomBbWarmStageBClock();
- renderWarm();
+ // Synchronise the disabled EDIT WEIGHT control immediately after a warm-up tick.
+ renderWarm();renderWorkout();
  if(!removing&&index===plan.sets.length-1){
   activateTab('workout');scrollExercise('work-bb-',slot);
  }
@@ -4852,7 +4896,7 @@ bvomHideMainSurfaces();if("serviceWorker" in navigator){
        // Re-registering with a new ?v= every release installs a second worker.
        // Only first-time installations register a new versioned URL.
        const reg = await navigator.serviceWorker.getRegistration("./") ||
-         await navigator.serviceWorker.register("./sw.js?v=2.9.15",{updateViaCache:"none"});
+         await navigator.serviceWorker.register("./sw.js?v=2.9.16",{updateViaCache:"none"});
       bvomWatchServiceWorkerUpdate(reg);
       navigator.serviceWorker.addEventListener("controllerchange", ()=>{
         bvomSwFinishRequestedReload();

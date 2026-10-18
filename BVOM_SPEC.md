@@ -571,6 +571,12 @@ After an intentional/recovery reduction, the first exposure at the reduced load 
 Each main-block Bodybuilding exercise permits the lifter to record additional working sets (maximum 30 retained extras) without changing its prescribed set count, A/B schedule, completion gate or progression calculation. Extras are actuals only: save weight/assistance, reps and effort, permit editing/removing them, and retain the records in workout History, volume and sharing/export.
 
 Progression and performance references consider **only the original prescribed sets**. Extra sets with lower reps, changed weights or a harder effort cannot block an increase otherwise earned. Extra sets are absent from On-Ramp calibration and do not create an exposure there. Extra-set writes are durable with rollback on rejection; vacancy reuse and capacity use the count of actual recorded extras, not a historical high-water index.
+### 9.7.2 Manual next-working-weight adjustment (v2.9.16, Issue #62)
+
+During an active 24-workout Bodybuilding **main block**, numeric-resistance exercise cards show **EDIT WEIGHT**. A lifter may change the **next prescribed** base/top working load, including after an On-Ramp, before recording any actual sets (including extras) or ticking warm-up preparation **for that specific exercise**. Other exercises can already be in progress. This action does not record a set, earn progression or alter the session count, prior History, On-Ramp exposures, LP/RPT settings or other program weights.
+
+One durable write updates only \`bodybuilding.progression[id].load/topLoad\` while retaining the user's increment and performance-reference history. Obsolete \`previousSuccessfulLoad\` and \`performanceRefResetLoad\` fields are cleared after an explicit manual load change. Workouts, back-off percentages and warm-ups must immediately recompute from the new value. Stale dialogs (changed session, selection, unit, latest weight or new recorded work/ticks), invalid weights, secondary tabs and rejected durable writes must not commit. A failed write must roll back the full in-memory state. Bodyweight/assistance decisions and On-Ramp calibration remain unaffected.
+
 ### 9.8 Accessories inside Bodybuilding
 
 Bodybuilding accessory work can be recorded with the workout.

@@ -1,0 +1,78 @@
+'use strict';
+// Issue #62 — real narrow-phone Chromium, EN/JA: explicit Bodybuilding
+// prescription edits after On-Ramp, preserved state and active-set protection.
+// The test uses only synthetic offline data and never contacts real BVOM services.
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),
+ http=require('node:http'),{chromium}=require('playwright'),H=require('./lib/bvom_harness');
+const root=path.resolve(__dirname,'../..'),build=H.loadBuild(root);
+function fixture(lang){
+ const h=H.boot(build);H.bbStart(h);
+ const s=h.S(),b=s.bodybuilding;b.selections.A2='high_bar_squat';
+ b.progression.high_bar_squat={load:100,topLoad:100,increment:2.5,calibrated:true};
+ s.weights.Squat=145;s.language=lang;s.accessoryList=[];s.gppList=[];
+ h.ev('save()');return JSON.parse(JSON.stringify(s));
+}
+const server=http.createServer((req,res)=>{
+ const url=new URL(req.url,'http://localhost');
+ if(url.pathname==='/seed'){res.writeHead(200,{'Content-Type':'text/html'});res.end('<!doctype html><title>BVOM test seed</title>');return}
+ const file=path.resolve(root,'.'+url.pathname);
+ if(!file.startsWith(root+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return}
+ res.writeHead(200,{'Content-Type':file.endsWith('.html')?'text/html; charset=utf-8':file.endsWith('.js')?'application/javascript':'application/octet-stream','Cache-Control':'no-store'});
+ res.end(fs.readFileSync(file));
+});
+(async()=>{
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ const origin='http://127.0.0.1:'+server.address().port;let browser;
+ try{
+  browser=await chromium.launch({headless:true});
+  for(const lang of ['en','ja']){
+   const context=await browser.newContext({serviceWorkers:'block',viewport:{width:375,height:812},deviceScaleFactor:1,isMobile:true,hasTouch:true});
+   context.setDefaultTimeout(8000);
+   await context.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
+   await context.addInitScript(()=>Object.defineProperty(navigator,'onLine',{get:()=>false}));
+   const seed=await context.newPage();await seed.goto(origin+'/seed');
+   await seed.evaluate(data=>{
+    localStorage.setItem('bvom_data',JSON.stringify(data));
+    localStorage.setItem('bvom_data_owner','bbweight');
+    localStorage.setItem('bvom_entitlement_cache_bbweight',JSON.stringify({userId:'bbweight',verifiedAt:new Date().toISOString(),record:{user_id:'bbweight',status:'complimentary'}}));
+   },fixture(lang));await seed.close();
+   const page=await context.newPage(),errs=[];page.on('pageerror',e=>errs.push(e.message));
+   await page.goto(origin+'/index.html');
+   await page.waitForSelector('#app:not(.hidden)',{timeout:15000});
+   const get=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
+   const before=await page.evaluate(()=>({rx:bvomBbPrescription('high_bar_squat'),warm:bvomBbWarmStageBPlan('A2','high_bar_squat')}));
+   assert.equal(before.rx.sets[0].load,100);
+   const btn=page.locator('#workout #work-bb-A2 [data-bb-edit-weight]');
+   assert.equal(await btn.count(),1,'one high-bar prescribed weight button');
+   assert.equal(await btn.isEnabled(),true);
+   await btn.click();
+   const modal=page.locator('.bvomModalOverlay');
+   assert.match(await modal.textContent(),lang==='en'?/next working weight/i:/次回のワーキング重量/);
+   await modal.locator('[data-bb-weight]').fill('102.5');
+   await modal.locator('[data-save]').click();
+   assert.equal(await modal.count(),0,'successful edit closes the modal');
+   const after=await page.evaluate(()=>({rx:bvomBbPrescription('high_bar_squat'),warm:bvomBbWarmStageBPlan('A2','high_bar_squat')}));
+   assert.equal(after.rx.sets[0].load,102.5);
+   assert.notEqual(after.rx.sets[1].load,before.rx.sets[1].load,'back-offs recalculated');
+   assert.notDeepEqual(after.warm.sets,before.warm.sets,'warm-up recalculated');
+   let d=await get();
+   assert.equal(d.bodybuilding.progression.high_bar_squat.load,102.5);
+   assert.equal(d.weights.Squat,145,'LP load untouched');
+   assert.equal(d.bodybuilding.completedSessions,0);
+   assert.equal(d.history.length,0);
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'375px no page overflow');
+   await page.evaluate(()=>activateTab('warmup'));
+   assert.match(await page.locator('#warmup #warm-bb-A2').textContent(),/102.5 kg/);
+   await page.reload();await page.waitForSelector('#app:not(.hidden)');
+   d=await get();assert.equal(d.bodybuilding.progression.high_bar_squat.load,102.5,'reload retains edit');
+   await page.evaluate(()=>activateTab('warmup'));
+   await page.locator('#warmup #warm-bb-A2 button.set').first().click();
+   await page.evaluate(()=>activateTab('workout'));
+   assert.equal(await page.locator('#workout #work-bb-A2 [data-bb-edit-weight]').isDisabled(),true,'warm-up tick locks same-exercise edit');
+   d=await get();assert.equal(d.bodybuilding.progression.high_bar_squat.load,102.5);
+   assert.deepEqual(errs,[],'no app JS exceptions');
+   console.log('PASS native Chromium Bodybuilding manual load: '+lang+' 375px, 100→102.5, backoffs, warmups, reload, LP isolation, tick protection');
+   await context.close();
+  }
+ }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
+})().catch(e=>{console.error(e);process.exitCode=1});

@@ -151,10 +151,25 @@ jobs:
         run: node tests/bvom-lab/bodyweight_monkey018.cjs
       - name: Run Monkey 021 Bodybuilding warm-up mobile-browser endurance
         run: node tests/bvom-lab/bb_warmup_monkey021.cjs
-      - name: Check out exact v2.9.14 for upgrade-loop RED and GREEN
+      - name: Check Bodybuilding next-weight edits on real mobile Chromium EN and JA
+        run: node tests/bvom-lab/bb_manual_load_browser.cjs
+      - name: Check out exact v2.9.15 for upgrade-loop RED and GREEN
         uses: actions/checkout@v4
         with:
-          ref: 3ccf06eb47baaf78d35e497c011b06e7f1c8ebdb
-          path: .bvom-production-v2914
+          ref: 5918dacd06fcb9ad836cee293e92bd50ce89adeb
+          path: .bvom-production-v2915
       - name: Prove native service worker one-tap upgrade and no second prompt
         run: node tests/bvom-lab/sw_update_browser.cjs
+      - name: Check out initial v2.9.16 weight editor before plate maths
+        uses: actions/checkout@v4
+        with:
+          ref: 623587f29905074ddfb764e49cd7ec68c7c8c488
+          path: .bvom-v2916-first
+      - name: Check out shipped v2.9.16 plate-math cache revision
+        uses: actions/checkout@v4
+        with:
+          ref: 51548e2ca425c2d3017f88a077e854db6f6fbc8e
+          path: .bvom-v2916-plates1
+      - name: Prove restored guidance-only v2.9.16 updates safely from both test builds
+        run: node tests/bvom-lab/sw_same_version_warmup_restore_browser.cjs
+

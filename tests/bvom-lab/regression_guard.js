@@ -52,7 +52,10 @@ const swq=(html.match(/sw\.js\?v=([^'"&<]+)/i)||[])[1];
 const cache=(sw.match(/const CACHE\s*=\s*['"]bvom-([^'"]+)['"]/i)||[])[1];
 const docTitle=(html.match(/<title>\s*BVOM Strength v([^<]+)<\/title>/i)||[])[1]?.trim();
 t('Build identifiers all present',!!header&&!!build&&!!swq&&!!cache);
-t('Build identifiers agree (header, BVOM_BUILD, sw.js?v=, SW cache)',header?.replace(/ BB DEV /i,'-bb-dev').toLowerCase()===build?.toLowerCase()&&build===swq&&swq===cache,JSON.stringify({header,build,swq,cache}));
+// Permit only the explicitly tested, same-public-version guidance-only
+// v2.9.16 worker refresh; all other releases retain exact SW/cache alignment.
+const supportedCache=cache===swq||(build==='2.9.16'&&swq==='2.9.16'&&cache==='2.9.16-warmup2');
+t('Build identifiers agree (header, BVOM_BUILD, sw.js?v=, SW cache)',header?.replace(/ BB DEV /i,'-bb-dev').toLowerCase()===build?.toLowerCase()&&build===swq&&supportedCache,JSON.stringify({header,build,swq,cache}));
 t('Browser document title matches BVOM_BUILD',!!docTitle&&docTitle===build,JSON.stringify({docTitle,build}));
 
 
