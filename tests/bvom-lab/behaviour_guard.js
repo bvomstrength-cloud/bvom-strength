@@ -36,7 +36,6 @@ require('./bb_warmup_stage_b_contracts')({test,ok,H,build});
 require('./monkey022_fix_contracts')({test,ok,H,build});
 require('./bb_extra_sets_contracts')({test,ok,H,build});
 require('./bb_manual_load_contracts')({test,ok,H,build});
-require('./bb_plate_math_contracts')({test,ok,H,build});
 test('F50-SECONDARY-PENDING-ANSWER-ATOMIC','DEFECT','Different-tab pending answers leave memory/blob/owner unchanged and explain non-persistence',()=>{
  const result=[];for(const pick of ['onL','onR']){const{a,b,ls}=ownershipPair(),raw=ls.getItem('bvom_data'),memory=JSON.stringify(b.S()),owner=ls.getItem('bvom_workout_tab_owner');b.dialog[pick]();const rejected=raw===ls.getItem('bvom_data')&&memory===JSON.stringify(b.S())&&owner===ls.getItem('bvom_workout_tab_owner')&&readOnlyNotice(b);a.dialog.onR();const p=JSON.parse(ls.getItem('bvom_data'));result.push(rejected&&p.weights['Bench Press']===47.5&&!p.pendingCloseMissChoice)}return ok(result.every(Boolean),JSON.stringify(result));
 });

@@ -1,6 +1,6 @@
-// Revision-specific precache: a new shell within the SAME 2.9.16 public build
-// must change this worker script, or the installed PWA keeps the older shell.
-const CACHE = 'bvom-2.9.16-plates1';
+// Distinct cache for the guidance-only revision of the already-distributed
+// v2.9.16 test build; keep the user-facing version and storage unchanged.
+const CACHE = 'bvom-2.9.16-warmup2';
 const BUILD = '2.9.16';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './og-image.png', './i18n/en.js?v=6090d2f48f09', './i18n/ja.js?v=326ff8e97bb8',
   './theme-bee-v23c.svg',

@@ -160,13 +160,6 @@ jobs:
           path: .bvom-production-v2915
       - name: Prove native service worker one-tap upgrade and no second prompt
         run: node tests/bvom-lab/sw_update_browser.cjs
-      - name: Check out first v2.9.16 test build for same-version RED/ GREEN
-        uses: actions/checkout@v4
-        with:
-          ref: 623587f29905074ddfb764e49cd7ec68c7c8c488
-          path: .bvom-v2916-before-plates
-      - name: Prove same-version v2.9.16 -> v2.9.16-plates worker refresh
-        run: node tests/bvom-lab/sw_same_version_plate_browser.cjs
       - name: Check out initial v2.9.16 weight editor before plate maths
         uses: actions/checkout@v4
         with:

@@ -63,16 +63,6 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'375px no page overflow');
    await page.evaluate(()=>activateTab('warmup'));
    assert.match(await page.locator('#warmup #warm-bb-A2').textContent(),/102.5 kg/);
-   const plateUi=await page.evaluate(()=>{
-    const rows=[...document.querySelectorAll('#warmup #warm-bb-A2 .warmrow')];
-    return {labels:rows.map(x=>x.querySelector('.plates')?.textContent||''),
-      suffix:bvomT('warmup.perSide'),empty:bvomT('warmup.emptyBar')};
-   });
-   assert.ok(plateUi.labels.some(x=>x.includes('20 + 20 + 1.25')&&x.includes(plateUi.suffix)),
-    'working 102.5kg free barbell shows both 20s and 1.25 plate each side');
-   assert.ok(plateUi.labels.some(x=>x===plateUi.empty),'warmups show empty bar');
-   assert.ok(!plateUi.labels.some(x=>x==='warm-up only'),'placeholder removed');
-
    await page.reload();await page.waitForSelector('#app:not(.hidden)');
    d=await get();assert.equal(d.bodybuilding.progression.high_bar_squat.load,102.5,'reload retains edit');
    await page.evaluate(()=>activateTab('warmup'));

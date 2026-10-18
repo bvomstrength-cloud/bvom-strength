@@ -4213,13 +4213,6 @@ function bvomBbWarmStageBRest(){
  if(bvomPersistenceBlocked())return true;
  bvomBbWarmStageBClock();return true;
 }
-// True free-bar warm-ups reuse BVOM's existing enabled bar/plate math.
-// Smith, landmine, machine and dumbbell do NOT have assumed plateable bars.
-function bvomBbWarmPlateText(id,total){
- const profile=BVOM_BB_WARMUP_STAGE_A_PROFILES[id];
- if(profile?.equipment!=='freebar')return '';
- return plateTextFor(profile.lift,total);
-}
 function bvomBbWarmStageBRender(){
  const onramp=bvomBbOnRampActive(),day=onramp?bvomBbOnRampDay():bvomBbDay();
  if(!day)return;
@@ -4247,12 +4240,12 @@ function bvomBbWarmStageBRender(){
   }else{
    for(let i=0;i<plan.sets.length;i++){
     const [weight,reps]=plan.sets[i],checked=!!done[i];
-    html+='<div class="warmrow"><button type="button" class="set '+(checked?'done':'')+'" aria-label="'+hlmTxt('Mark warm-up set','ウォームアップセットを記録')+' '+(i+1)+'" onclick="bvomBbWarmStageBTap(\''+slot+'\','+i+',\''+token+'\')">✓</button><b>'+fmt(weight)+' '+unitLabel()+' × '+reps+'</b><span class="plates">'+bvomEsc(bvomBbWarmPlateText(id,weight)||hlmTxt('warm-up only','ウォームアップのみ'))+'</span></div>';
+    html+='<div class="warmrow"><button type="button" class="set '+(checked?'done':'')+'" aria-label="'+hlmTxt('Mark warm-up set','ウォームアップセットを記録')+' '+(i+1)+'" onclick="bvomBbWarmStageBTap(\''+slot+'\','+i+',\''+token+'\')">✓</button><b>'+fmt(weight)+' '+unitLabel()+' × '+reps+'</b><span class="plates">'+hlmTxt('warm-up only','ウォームアップのみ')+'</span></div>';
    }
    if(plan.unitBasis==='per_hand')html+='<p class="small">'+hlmTxt('Dumbbell weight per hand.','ダンベルは片手あたりの重量です。')+'</p>';
    if(plan.equipmentNote==='nearest_available_weight')html+='<p class="small">'+hlmTxt('Machine or Smith: use the nearest practical available weight. Equipment resistance varies.','マシンやスミスは使用できる近い重量に調整してください。機器によって負荷が異なります。')+'</p>';
    const working=Number(state.bodybuilding?.progression?.[id]?.load??state.bodybuilding?.progression?.[id]?.topLoad);
-   if(working>0)html+='<div class="warmrow"><span></span><b>'+hlmTxt('Working weight','ワーキング重量')+': '+fmt(working)+' '+unitLabel()+'</b><span class="plates">'+bvomEsc(bvomBbWarmPlateText(id,working)||hlmTxt('Follow the workout prescription','ワークアウトの指示に従ってください'))+'</span></div>';
+   if(working>0)html+='<div class="warmrow"><span></span><b>'+hlmTxt('Working weight','ワーキング重量')+': '+fmt(working)+' '+unitLabel()+'</b><span class="plates">'+hlmTxt('Follow the workout prescription','ワークアウトの指示に従ってください')+'</span></div>';
   }
   html+='</div>';
  }
