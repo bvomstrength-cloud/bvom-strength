@@ -33,7 +33,7 @@ const contentType=n=>n.endsWith('.js')?'application/javascript':n.endsWith('.htm
   await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();await r.update()});
   await page.locator('#bvomUpdateBanner [data-bvom-update]').waitFor({state:'visible',timeout:15000});
   await page.locator('#bvomUpdateBanner [data-bvom-update]').click();
-  await page.waitForFunction((expected)=>document.querySelector('header')?.textContent.includes(expected),targetBuild,null,{timeout:15000});
+  await page.waitForFunction((expected)=>document.querySelector('header')?.textContent.includes(expected),targetBuild,{timeout:15000});
   await page.waitForTimeout(1700);
   const after=await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return{
    build:document.querySelector('header')?.textContent,
