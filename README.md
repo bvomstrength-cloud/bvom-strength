@@ -2,15 +2,16 @@
 
 Production source repository for BVOM Strength.
 
-## Current approved release — v2.9.14
+## Current approved release — v2.9.17
 
-- **GitHub production source:** `main` at `03d5b7880448b651611ecf550d34423bc2300104` (16 October 2026 release review; subsequent documentation-only commits may change this SHA).
-- **App version:** `v2.9.14`, shown in app header, `BVOM_BUILD`, service-worker build and cache name.
-- **Owner deployment report:** v2.9.14 running in production. GitHub merge does not itself deploy Netlify.
-- **Release trail:** [PR #56](https://github.com/bvomstrength-cloud/bvom-strength/pull/56) (Stage A), [PR #57](https://github.com/bvomstrength-cloud/bvom-strength/pull/57) (Bodybuilding warm-up engine and ordering), and [PR #58](https://github.com/bvomstrength-cloud/bvom-strength/pull/58) (post-On-Ramp Finish cloud-sync fence); all merged.
-- **Verification:** v15.2 full regression, browser/recovery checks and mutation tests passed on PR #58; the post-merge `main` v15.2 GitHub Actions run passed.
-- **Pending minor UI issue:** [#59](https://github.com/bvomstrength-cloud/bvom-strength/issues/59), occasional second UPDATE & RELOAD prompt in Android Chrome, deferred to the next routine release. No hotfix required.
-- **Safety:** Keep installed-app updates and cloud conflict handling guarded during active workouts; do not substitute test-site ZIPs for production releases.
+- **GitHub application baseline:** `main` at `e126027cabb007a6913035aa5192cc2e16030f12` (20 October 2026; later documentation-only commits may advance `main` without changing the application files).
+- **App version:** `v2.9.17`, shown in the title/header and `BVOM_BUILD`; the service worker uses build `2.9.17` and cache `bvom-2.9.17`.
+- **Owner deployment report:** The owner uploaded the verified production ZIP to Netlify and confirmed the live application displays `v2.9.17` on 20 October 2026. GitHub merges do not themselves deploy Netlify.
+- **Production ZIP:** `BVOM-v2.9.17-PRODUCTION.zip`, 13 deployment files, SHA-256 `88cd8a7eb84f7e8f836e35487e09fdada00192833e4a2f5b1f63e10e9722db02`. All 13 files were verified against the application blobs at the merged `main` commit.
+- **Change:** Bodybuilding On-Ramp corrections can restore previously earned CONFIRMED status, and recorded secondary sets remain visible; the two-exposure calibration rule and normal Bodybuilding progression remain unchanged. The fix does not retrospectively repair older provisional records that have lost confirmation provenance.
+- **Release trail:** [PR #65](https://github.com/bvomstrength-cloud/bvom-strength/pull/65) (On-Ramp correction) and [PR #66](https://github.com/bvomstrength-cloud/bvom-strength/pull/66) (v2.9.17 version, cache and version-aware upgrade tests) were merged. [PR #63](https://github.com/bvomstrength-cloud/bvom-strength/pull/63) delivered the v2.9.16 Bodybuilding manual working-weight editor, resolving [Issue #62](https://github.com/bvomstrength-cloud/bvom-strength/issues/62).
+- **Verification:** Independent Codex ACCEPT for PR #65; On-Ramp browser smoke tests 26/26 PASS; v2.9.17 PR GitHub full regression/mutation and browser/recovery/service-worker workflows PASS; post-merge `main` v15.2 regression PASS.
+- **Safety:** Preserve active-workout update and cloud-conflict guards; test future releases separately and verify deployment ZIP contents against the intended `main` code baseline.
 
 **Documentation only:** The historical sections below retain old release evidence and once-current draft plans. They are archived context, **not today's deployment or upgrade instructions**.
 
