@@ -1,7 +1,6 @@
-// Distinct cache for the guidance-only revision of the already-distributed
-// v2.9.16 test build; keep the user-facing version and storage unchanged.
-const CACHE = 'bvom-2.9.16-warmup2';
-const BUILD = '2.9.16';
+// v2.9.17 On-Ramp confirmation correction; versioned shell cache.
+const CACHE = 'bvom-2.9.17';
+const BUILD = '2.9.17';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './og-image.png', './i18n/en.js?v=6090d2f48f09', './i18n/ja.js?v=326ff8e97bb8',
   './theme-bee-v23c.svg',
   './theme-cherry-v23f.svg',

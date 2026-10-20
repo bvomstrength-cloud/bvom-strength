@@ -4,6 +4,9 @@
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),
  http=require('node:http'),fs=require('node:fs'),path=require('node:path');
 const roots=[path.resolve('.bvom-production-v2915'),path.resolve('.')];
+const targetSource=fs.readFileSync(path.resolve('index.html'),'utf8');
+const targetBuild=targetSource.match(/const BVOM_BUILD='([^']+)'/)?.[1];
+assert.ok(targetBuild,'target application build marker must exist');
 let version=0,browser,server;
 const contentType=n=>n.endsWith('.js')?'application/javascript':n.endsWith('.html')||n==='index.html'?'text/html':n.endsWith('.json')?'application/json':n.endsWith('.svg')?'image/svg+xml':n.endsWith('.png')?'image/png':'text/plain';
 (async()=>{
@@ -30,7 +33,7 @@ const contentType=n=>n.endsWith('.js')?'application/javascript':n.endsWith('.htm
   await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();await r.update()});
   await page.locator('#bvomUpdateBanner [data-bvom-update]').waitFor({state:'visible',timeout:15000});
   await page.locator('#bvomUpdateBanner [data-bvom-update]').click();
-  await page.waitForFunction(()=>document.querySelector('header')?.textContent.includes('2.9.16'),null,{timeout:15000});
+  await page.waitForFunction((expected)=>document.querySelector('header')?.textContent.includes(expected),targetBuild,{timeout:15000});
   await page.waitForTimeout(1700);
   const after=await page.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return{
    build:document.querySelector('header')?.textContent,
@@ -44,9 +47,9 @@ const contentType=n=>n.endsWith('.js')?'application/javascript':n.endsWith('.htm
   assert.ok(after.banner!=='flex','a second update banner must not appear');
   assert.equal(after.regs,1,'single scope registration');
   await page.reload();
-  await page.waitForFunction(()=>document.querySelector('header')?.textContent.includes('2.9.16'));
+  await page.waitForFunction((expected)=>document.querySelector('header')?.textContent.includes(expected),targetBuild);
   assert.equal(await page.locator('#bvomUpdateBanner').count(),0,'reloaded current shell remains update-free');
-  console.log('PASS native Chromium: one tap 2.9.15 to 2.9.16, fresh shell, no second update prompt',after);
+  console.log('PASS native Chromium: one tap 2.9.15 to '+targetBuild+', fresh shell, no second update prompt',after);
   await context.close();
  }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
 })().catch(e=>{console.error(e);process.exitCode=1});

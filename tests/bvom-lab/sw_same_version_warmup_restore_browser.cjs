@@ -1,9 +1,12 @@
 'use strict';
-// BVOM v2.9.16: owner explicitly withdrew Bodybuilding plate maths.
-// Real Chromium must replace both previously distributed v2.9.16 test builds:
-// plain first v2.9.16 and newer 2.9.16-plates1, without clearing local data.
+// Real Chromium upgrade of the two previously distributed v2.9.16 test builds
+// to the CURRENT release candidate must preserve data, the weight editor,
+// guidance-only warm-ups, and one-tap service-worker behaviour.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),
  http=require('node:http'),{chromium}=require('playwright');
+const candidateBuild=fs.readFileSync(path.resolve('index.html'),'utf8').match(/const BVOM_BUILD='([^']+)'/)?.[1];
+const candidateCache=fs.readFileSync(path.resolve('sw.js'),'utf8').match(/const CACHE = '([^']+)'/)?.[1];
+assert.ok(candidateBuild&&candidateCache,'candidate version/cache markers');
 const oldRoots=[
  {name:'initial v2.9.16',dir:'.bvom-v2916-first',cache:'bvom-2.9.16',hadPlate:false},
  {name:'v2.9.16 plate-math test',dir:'.bvom-v2916-plates1',cache:'bvom-2.9.16-plates1',hadPlate:true}
@@ -44,7 +47,7 @@ const mime=n=>n.endsWith('.js')?'application/javascript':n.endsWith('.html')?'te
    await page.locator('#bvomUpdateBanner [data-bvom-update]').waitFor({state:'visible',timeout:15000});
    await page.locator('#bvomUpdateBanner [data-bvom-update]').click();
    await page.waitForFunction(()=>window.__beforeUpgradeMarker!=='old',null,{timeout:15000});
-   await page.waitForFunction(async()=> (await caches.keys()).includes('bvom-2.9.16-warmup2'),null,{timeout:15000});
+   await page.waitForFunction(async(expected)=> (await caches.keys()).includes(expected),candidateCache,{timeout:15000});
    await page.waitForTimeout(1200);
    const updated=await page.evaluate(async()=>{
     const r=await navigator.serviceWorker.getRegistration();
@@ -58,14 +61,14 @@ const mime=n=>n.endsWith('.js')?'application/javascript':n.endsWith('.html')?'te
    assert.equal(updated.hasPlate,false,'no Bodybuilding plate calculation after rollback');
    assert.equal(updated.hasWeightEditor,true,'working-weight edit preserved');
    assert.equal(updated.sentinel,'intact','local storage preserved');
-   assert.ok(updated.caches.includes('bvom-2.9.16-warmup2'),'new worker precache');
+   assert.ok(updated.caches.includes(candidateCache),'new worker precache');
    assert.ok(!updated.caches.includes(old.cache),'old cache removed after activation');
    assert.equal(updated.waiting,null,'no second waiting worker');
    assert.ok(updated.banner!=='flex','no second update banner');
-   assert.match(updated.build,/2\.9\.16/,'public build stays at v2.9.16');
+   assert.ok(updated.build.includes(candidateBuild),'public build matches release candidate');
    await page.reload();
    assert.equal(await page.evaluate(()=>typeof bvomBbWarmPlateText),'undefined','plate math absent after another reload');
-   console.log('PASS native Chromium '+old.name+' -> restored guidance-only v2.9.16: one tap, fresh cache, weight editor retained, no plate math or data loss');
+   console.log('PASS native Chromium '+old.name+' -> guidance-only '+candidateBuild+': one tap, fresh cache, weight editor retained, no plate math or data loss');
    await context.close();
   }
  }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
