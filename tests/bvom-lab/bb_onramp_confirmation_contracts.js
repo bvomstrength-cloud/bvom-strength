@@ -7,7 +7,7 @@ module.exports=({test,ok,H,build})=>{
  const disk=h=>JSON.parse(h.ls.getItem('bvom_data'));
  const record=(h,i,reps)=>H.orSet(h,id,i,{load:100,reps,inc:'2.5'});
  const moveToFreshA=h=>{h.S().session={};h.S().workoutStartedAt=null;h.S().bodybuilding.onramp.sessionsCompleted=2;h.ev('save({durable:true})');h.ctx.renderWorkout()};
- test('BB-ONRAMP-FIRST-EXPOSURE-STAYS-PROVISIONAL','DEFECT',
+ test('BB-ONRAMP-FIRST-EXPOSURE-STAYS-PROVISIONAL','CONTROL',
   'First exposure and corrections to its existing record cannot silently bypass calibration',()=>{
    const h=start(),e=()=>h.ctx.bvomBbOnRampEx(id);
    record(h,0,8);const first=e().state==='PROVISIONAL'&&h.ctx.bvomBbOnRampSetCount(id)===1&&!h.S().session[key][0].previouslyConfirmedExposure;
