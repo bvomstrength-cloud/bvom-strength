@@ -47,15 +47,36 @@ function sameDecimal(a, b) {
   const x = decimalParts(a), y = decimalParts(b);
   return x.n * y.d === y.n * x.d;
 }
+// Numeric event inputs carry the user's *entered* decimal and unit. A derived
+// future prescription instead identifies the event that computed it. Never
+// reconstruct an entered unit from a rounded canonical magnitude.
+function validateMassOrigin(grams, origin, name, allowDerived = false) {
+  integer(grams, `${name} grams`);
+  if (allowDerived && origin?.kind === 'DERIVED') {
+    positiveId(origin.sourceEventId, `${name} derived source`);
+  } else if (!origin || typeof origin.value !== 'string' ||
+    !['kg', 'lb'].includes(origin.unit) || canonicalGrams(origin.value, origin.unit) !== grams) {
+    fail(`invalid ${name} origin`);
+  }
+  return clone(origin);
+}
 function resolveNumericSubmission(original, submitted, unit, intent) {
   if (!['PRESCRIPTION', 'ACTUAL', 'DIFFERENT_ACTUAL', 'INCREMENT'].includes(intent)) fail('invalid numeric intent');
   if (!original || !Number.isSafeInteger(original.grams)) fail('invalid canonical origin');
-  if (intent !== 'DIFFERENT_ACTUAL' && intent !== 'INCREMENT' && unit === original.unit && sameDecimal(submitted, original.displayed)) {
-    return { grams: original.grams, inherited: true, emitEvent: false };
+  validateMassOrigin(original.grams,
+    { value: String(original.originalValue), unit: original.originalUnit }, 'canonical');
+  if (intent !== 'DIFFERENT_ACTUAL' && unit === original.unit && sameDecimal(submitted, original.displayed)) {
+    return { grams: original.grams,
+      origin: { value: String(original.originalValue), unit: original.originalUnit },
+      inherited: true, emitEvent: false };
   }
+  if (intent === 'ACTUAL') fail('different actual requires explicit different-actual control');
   const grams = canonicalGrams(submitted, unit);
   const unchanged = (intent === 'PRESCRIPTION' || intent === 'INCREMENT') && grams === original.grams;
-  return { grams: unchanged ? original.grams : grams, inherited: unchanged, emitEvent: !unchanged };
+  return { grams: unchanged ? original.grams : grams,
+    origin: unchanged ? { value: String(original.originalValue), unit: original.originalUnit } :
+      { value: String(submitted), unit },
+    inherited: unchanged, emitEvent: !unchanged };
 }
 
 function createBB2Opening({ ownerId, blockId, progress = {}, sealRevision = 0 } = {}) {
@@ -73,6 +94,45 @@ function validateOpening(opening) {
   positiveId(opening.ownerId, 'owner'); positiveId(opening.blockId, 'block');
   integer(opening.sealRevision, 'seal revision');
   if (!opening.progress || typeof opening.progress !== 'object' || Array.isArray(opening.progress)) fail('invalid opening progress');
+  for (const item of Object.values(opening.progress)) initialProgress(item);
+}
+function validateEventPayload(e) {
+  const mass = (name, field, originField) => validateMassOrigin(e[field], e[originField], name);
+  switch (e.type) {
+    case 'WORKOUT_STARTED':
+      positiveId(e.sessionId, 'session');
+      if (!Array.isArray(e.slots) || !e.slots.length) fail('missing session slots');
+      e.slots.forEach(validateSlot);
+      break;
+    case 'EXERCISE_LOCKED':
+      positiveId(e.sessionId, 'session');
+      mass('planned', 'plannedG', 'plannedOrigin');
+      break;
+    case 'CALIBRATION_PLAN_REVISED': mass('planned', 'plannedG', 'plannedOrigin'); break;
+    case 'CALIBRATION_ACCEPTED':
+    case 'PRESCRIPTION_EDITED':
+    case 'STALL_REDUCTION_ACCEPTED':
+    case 'CHOICE_RESOLVED':
+    case 'CHOICE_REPLACED':
+      if (e.loadG !== undefined) mass('working load', 'loadG', 'loadOrigin');
+      break;
+    case 'INCREMENT_EDITED': mass('increment', 'incrementG', 'incrementOrigin'); break;
+    case 'SET_RECORDED':
+    case 'EXTRA_SET_RECORDED':
+    case 'SET_CORRECTED':
+      if (e.actualG !== undefined) mass('actual', 'actualG', 'actualOrigin');
+      break;
+    case 'NOTE_EDITED':
+      if (typeof e.text !== 'string') fail('invalid note text');
+      break;
+    case 'UNIT_METADATA':
+      if (!['kg', 'lb'].includes(e.unit)) fail('invalid display unit metadata');
+      break;
+    case 'WORKOUT_DISCARDED': positiveId(e.sessionId, 'discarded session'); break;
+    case 'TOMBSTONE': positiveId(e.discardedSessionId, 'discarded session'); break;
+    default: break;
+  }
+  if (e.addedWeightG !== undefined) mass('added weight', 'addedWeightG', 'addedWeightOrigin');
 }
 function validateEvents(opening, events) {
   if (!Array.isArray(events)) fail('events must be an array');
@@ -85,19 +145,23 @@ function validateEvents(opening, events) {
     ids.add(e.eventId);
     if (e.commitOrdinal !== i + 1) fail('missing, duplicate or non-consecutive event ordinal');
     if (e.blockId !== opening.blockId) fail('wrong block ID');
+    validateEventPayload(e);
   }
 }
 function initialProgress(v = {}, plan = {}) {
   const p = {
     loadG: v.loadG ?? plan.plannedG ?? null,
+    loadOrigin: v.loadOrigin ?? plan.plannedOrigin ?? null,
     incrementG: v.incrementG ?? plan.incrementG ?? 2500,
+    incrementOrigin: v.incrementOrigin ?? plan.incrementOrigin ?? { value: '2.5', unit: 'kg' },
     variation: v.variation ?? plan.variation ?? null,
     assistance: v.assistance ?? plan.assistance ?? null,
     calibrated: !!v.calibrated, bestReps: v.bestReps ?? null,
     stallCount: v.stallCount ?? 0,
     epochId: v.epochId ?? 'opening', lastNormalSessionId: v.lastNormalSessionId ?? null
   };
-  if (p.loadG !== null) integer(p.loadG, 'working grams');
+  if (p.loadG !== null) validateMassOrigin(p.loadG, p.loadOrigin, 'working load', true);
+  validateMassOrigin(p.incrementG, p.incrementOrigin, 'increment', true);
   integer(p.incrementG, 'increment grams', 1);
   if (p.bestReps !== null) integer(p.bestReps, 'best reps', 1);
   integer(p.stallCount, 'stall count');
@@ -107,7 +171,9 @@ function validateSlot(s) {
   positiveId(s.roleSlotId, 'slot'); positiveId(s.exerciseId, 'exercise');
   integer(s.sets, 'prescribed set count', 1); integer(s.ceiling, 'rep ceiling', 1);
   if (s.equipment !== 'loaded' && s.equipment !== 'bodyweight') fail('invalid equipment');
-  if (s.equipment === 'loaded') integer(s.plannedG, 'planned grams');
+  if (s.plannedG !== undefined) validateMassOrigin(s.plannedG, s.plannedOrigin, 'planned');
+  if (s.equipment === 'loaded' && s.plannedG === undefined) fail('missing planned grams');
+  if (s.incrementG !== undefined) validateMassOrigin(s.incrementG, s.incrementOrigin, 'increment');
   integer(s.incrementG ?? 2500, 'increment grams', 1);
 }
 function validSet(record, slot) {
@@ -151,7 +217,8 @@ function effectiveRevisions(events) {
         integer(e.actualG, 'corrected grams');
       }
       records.set(key, e.type === 'SET_VOIDED' ? null : { ...originals.get(key),
-        reps: e.reps, actualG: e.actualG, harderThanIntended: !!e.harderThanIntended,
+        reps: e.reps, actualG: e.actualG, actualOrigin: clone(e.actualOrigin),
+        harderThanIntended: !!e.harderThanIntended,
         variation: e.variation, assistance: e.assistance });
     }
     if (e.type === 'SESSION_VOIDED') voidSessions.add(e.sessionId);
@@ -169,8 +236,10 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
   const quotas = Object.fromEntries(TEMPLATES.map(x => [x, 0]));
   let sealed = !!opening.sealed, sealId = null;
   const getProgress = (key, plan) => progress[key] ||= initialProgress({}, plan);
-  const epoch = (p, id, nextLoad) => { if (p.loadG !== nextLoad) {
-    p.loadG = nextLoad; p.epochId = id; p.bestReps = null; p.stallCount = 0;
+  const epoch = (p, id, nextLoad, origin = null) => { if (p.loadG !== nextLoad) {
+    p.loadG = nextLoad;
+    p.loadOrigin = origin ? clone(origin) : { kind: 'DERIVED', sourceEventId: id };
+    p.epochId = id; p.bestReps = null; p.stallCount = 0;
   } };
   const boundary = (key, ordinal, kind) => boundaries.push({ key, ordinal, kind });
   const findSlot = (s, e) => {
@@ -221,7 +290,8 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         if (e.type === 'INCREMENT_EDITED') {
           integer(e.incrementG, 'increment grams', 1);
           if (p.incrementG === e.incrementG) fail('no-op increment event');
-          p.incrementG = e.incrementG; if (slot) slot.incrementG = e.incrementG;
+          p.incrementG = e.incrementG; p.incrementOrigin = clone(e.incrementOrigin);
+          if (slot) { slot.incrementG = e.incrementG; slot.incrementOrigin = clone(e.incrementOrigin); }
         } else if (e.type === 'VARIATION_EDITED') {
           positiveId(e.variation, 'variation');
           if (p.variation === e.variation) fail('no-op variation event');
@@ -231,8 +301,8 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         } else {
           integer(e.loadG, 'working grams');
           if (p.loadG === e.loadG) fail('no-op prescription event');
-          epoch(p, `event:${e.eventId}`, e.loadG);
-          if (slot) slot.plannedG = e.loadG;
+          epoch(p, `event:${e.eventId}`, e.loadG, e.loadOrigin);
+          if (slot) { slot.plannedG = e.loadG; slot.plannedOrigin = clone(e.loadOrigin); }
           boundary(key, e.commitOrdinal, 'explicit');
         }
         break;
@@ -252,13 +322,14 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         integer(e.plannedG, 'calibration grams');
         // Trial is session-only; it does not rewrite the historical initial or existing actuals.
         slot.calibrationTrialG = e.plannedG;
+        slot.calibrationTrialOrigin = clone(e.plannedOrigin);
         break;
       }
       case 'CALIBRATION_ACCEPTED': {
         const s = sessions.get(e.sessionId), slot = findSlot(s, e);
         if (s.outcome) fail('calibration choice after outcome');
         integer(e.loadG, 'accepted calibration grams');
-        s.accepted.set(slot.roleSlotId, { loadG: e.loadG, eventId: e.eventId });
+        s.accepted.set(slot.roleSlotId, { loadG: e.loadG, loadOrigin: clone(e.loadOrigin), eventId: e.eventId });
         break;
       }
       case 'WORKOUT_FINISHED':
@@ -283,13 +354,13 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
           if (first) {
             p.calibrated = true;
             const accepted = s.accepted.get(slot.roleSlotId);
-            if (accepted) epoch(p, `calibration:${accepted.eventId}`, accepted.loadG);
-            else if (info.onPlan && !info.harder) epoch(p, `promote:${e.eventId}`, slot.plannedG);
+            if (accepted) epoch(p, `calibration:${accepted.eventId}`, accepted.loadG, accepted.loadOrigin);
+            else if (info.onPlan && !info.harder) epoch(p, `promote:${e.eventId}`, slot.plannedG, slot.plannedOrigin);
             if (info.uniform && !info.harder && info.actualG === p.loadG) {
               p.bestReps = info.repSum; p.stallCount = 0;
             }
           } else if (info.onPlan && !info.harder) {
-            if (p.loadG !== slot.plannedG) epoch(p, `promote:${e.eventId}:${key}`, slot.plannedG);
+            if (p.loadG !== slot.plannedG) epoch(p, `promote:${e.eventId}:${key}`, slot.plannedG, slot.plannedOrigin);
             boundary(key, e.commitOrdinal, 'qualified-finish');
             if (slot.equipment === 'bodyweight' && info.allTop) {
               pending[key] = { kind: 'DIFFICULTY', sessionId: s.sessionId, variation: slot.variation,
@@ -313,7 +384,7 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         if (!['ACCEPT', 'KEEP', 'HOLD', 'DIFFICULTY_ACCEPT', 'REPLACE'].includes(e.decision)) fail('invalid decision');
         const p = getProgress(key, slot);
         if (e.decision === 'ACCEPT' || e.decision === 'REPLACE') {
-          integer(e.loadG, 'accepted grams'); epoch(p, `choice:${e.eventId}`, e.loadG);
+          integer(e.loadG, 'accepted grams'); epoch(p, `choice:${e.eventId}`, e.loadG, e.loadOrigin);
           const info = evidenceFor(s, slot.roleSlotId, records);
           const validOffer = s.eligible && info.complete && info.uniform && !info.harder && info.actualG === e.loadG && !info.onPlan;
           if (e.decision === 'ACCEPT' && validOffer) {
@@ -328,7 +399,7 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
           if (typeof e.assistance !== 'string') fail('missing accepted assistance');
           integer(e.addedWeightG, 'added bodyweight grams');
           p.variation = e.variation; p.assistance = e.assistance;
-          epoch(p, `choice:${e.eventId}`, e.addedWeightG);
+          epoch(p, `choice:${e.eventId}`, e.addedWeightG, e.addedWeightOrigin);
           p.epochId = `choice:${e.eventId}`; p.bestReps = null; p.stallCount = 0;
           boundary(key, e.commitOrdinal, 'explicit');
         } else if (e.decision === 'KEEP') boundary(key, e.commitOrdinal, 'explicit');
@@ -415,6 +486,7 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
       k.startsWith(`${s.sessionId}|${slot.roleSlotId}|`) && record).map(([, record]) => ({
       roleSlotId: slot.roleSlotId, exerciseId: slot.exerciseId, setIndex: record.setIndex,
       prescribed: record.setIndex < slot.sets, reps: record.reps, actualG: record.actualG,
+      actualOrigin: record.actualOrigin,
       variation: record.variation, assistance: record.assistance,
       harderThanIntended: !!record.harderThanIntended
     })).sort((a, b) => a.setIndex - b.setIndex))

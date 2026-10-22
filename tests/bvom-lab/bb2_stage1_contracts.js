@@ -11,14 +11,29 @@ const {
 const ownerId = 'test-owner';
 const K = 'upper_a|chest|bench';
 const P = 'upper_a|row|row';
+// The fixtures represent actual kg entries; an origin must be logged with the
+// canonical grams, never guessed by the production fold.
+const kgOrigin = grams => ({ value: String(grams / 1000), unit: 'kg' });
+const withOrigins = value => {
+  const v = { ...value };
+  for (const [gramsField, originField] of [
+    ['plannedG', 'plannedOrigin'], ['incrementG', 'incrementOrigin'],
+    ['actualG', 'actualOrigin'], ['loadG', 'loadOrigin'],
+    ['addedWeightG', 'addedWeightOrigin']
+  ]) if (Object.hasOwn(v, gramsField) && !Object.hasOwn(v, originField)) {
+    v[originField] = kgOrigin(v[gramsField]);
+  }
+  return v;
+};
 const slot = (roleSlotId, exerciseId, sets, plannedG, ceiling = 8, incrementG = 2500) =>
-  ({ roleSlotId, exerciseId, sets, ceiling, plannedG, incrementG, equipment: 'loaded' });
-const open = (progress = {}) => createBB2Opening({ ownerId, blockId: 'block-a', progress });
+  withOrigins({ roleSlotId, exerciseId, sets, ceiling, plannedG, incrementG, equipment: 'loaded' });
+const open = (progress = {}) => createBB2Opening({ ownerId, blockId: 'block-a',
+  progress: Object.fromEntries(Object.entries(progress).map(([k, v]) => [k, withOrigins(v)])) });
 const journal = () => {
   const events = [];
   const add = (type, fields = {}) => {
     const n = events.length + 1;
-    const e = { type, eventId: `event-${n}`, commitOrdinal: n, blockId: 'block-a', ...fields };
+    const e = withOrigins({ type, eventId: `event-${n}`, commitOrdinal: n, blockId: 'block-a', ...fields });
     events.push(e); return e;
   };
   return { events, add };
@@ -132,10 +147,78 @@ check('102.5 kg displays as 226 lb but unchanged submitted plan and set inherit 
   assert.equal(canonicalGrams('226', 'lb'), 102512);
   assert.equal(canonicalGrams('102.5', 'kg'), 102500);
   const existing = { grams: 102500, displayed: '226', unit: 'lb', originalValue: '102.5', originalUnit: 'kg' };
-  assert.deepEqual(resolveNumericSubmission(existing, '226', 'lb', 'PRESCRIPTION'), { grams: 102500, inherited: true, emitEvent: false });
-  assert.deepEqual(resolveNumericSubmission(existing, '226', 'lb', 'ACTUAL'), { grams: 102500, inherited: true, emitEvent: false });
-  assert.deepEqual(resolveNumericSubmission(existing, '226', 'lb', 'DIFFERENT_ACTUAL'), { grams: 102512, inherited: false, emitEvent: true });
+  assert.deepEqual(resolveNumericSubmission(existing, '226', 'lb', 'PRESCRIPTION'), { grams: 102500,
+    origin: { value: '102.5', unit: 'kg' }, inherited: true, emitEvent: false });
+  assert.deepEqual(resolveNumericSubmission(existing, '226', 'lb', 'ACTUAL'), { grams: 102500,
+    origin: { value: '102.5', unit: 'kg' }, inherited: true, emitEvent: false });
+  assert.deepEqual(resolveNumericSubmission(existing, '226', 'lb', 'DIFFERENT_ACTUAL'), { grams: 102512,
+    origin: { value: '226', unit: 'lb' }, inherited: false, emitEvent: true });
+  assert.throws(() => resolveNumericSubmission(existing, '225', 'lb', 'ACTUAL'), /different actual/i);
+  const shownIncrement = { grams: 2500, displayed: '5.5', unit: 'lb', originalValue: '2.5', originalUnit: 'kg' };
+  for (let n = 0; n < 10; n++) {
+    assert.deepEqual(resolveNumericSubmission(existing, '226', 'lb', 'PRESCRIPTION'), {
+      grams: 102500, origin: { value: '102.5', unit: 'kg' }, inherited: true, emitEvent: false
+    });
+    assert.deepEqual(resolveNumericSubmission(shownIncrement, '5.5', 'lb', 'INCREMENT'), {
+      grams: 2500, origin: { value: '2.5', unit: 'kg' }, inherited: true, emitEvent: false
+    });
+  }
   assert.equal(canonicalGrams('0.0005', 'kg'), 1); // half-gram tie upward
+});
+
+check('numeric entry origin is immutable through display-only conversion, correction and seal', () => {
+  const original = { grams: 102500, displayed: '226', unit: 'lb', originalValue: '102.5', originalUnit: 'kg' };
+  const inherited = resolveNumericSubmission(original, '226', 'lb', 'ACTUAL');
+  const changed = resolveNumericSubmission(original, '226', 'lb', 'DIFFERENT_ACTUAL');
+  assert.deepEqual(inherited.origin, { value: '102.5', unit: 'kg' });
+  assert.deepEqual(changed.origin, { value: '226', unit: 'lb' });
+  const b = open({ [K]: { loadG: 102500, incrementG: 2500, calibrated: true, bestReps: 18 } });
+  const { events, add } = journal();
+  start(add, 's1', 'NORMAL', [slot('chest', 'bench', 2, 102500)]);
+  const first = add('SET_RECORDED', { sessionId: 's1', roleSlotId: 'chest', exerciseId: 'bench',
+    setIndex: 0, reps: 7, prescribed: true, actualG: inherited.grams, actualOrigin: inherited.origin });
+  add('SET_RECORDED', { sessionId: 's1', roleSlotId: 'chest', exerciseId: 'bench',
+    setIndex: 1, reps: 7, prescribed: true, actualG: inherited.grams, actualOrigin: inherited.origin });
+  add('UNIT_METADATA', { unit: 'lb' });
+  finish(add, 's1', 'credit-s1');
+  let r = foldBB2Block(b, events);
+  assert.equal(r.history[0].sets[0].actualG, 102500);
+  assert.deepEqual(r.history[0].sets[0].actualOrigin, { value: '102.5', unit: 'kg' });
+  assert.deepEqual(r.history[0].slots[0].plannedOrigin, { value: '102.5', unit: 'kg' });
+  assert.deepEqual(r.progress[K].loadOrigin, { value: '102.5', unit: 'kg' });
+  assert.equal(r.progress[K].bestReps, 18); // two 7s do not beat the prior 18
+  add('SET_CORRECTED', { sessionId: 's1', targetEventId: first.eventId,
+    reps: 7, actualG: changed.grams, actualOrigin: changed.origin });
+  r = foldBB2Block(b, events);
+  assert.equal(r.history[0].sets[0].actualG, 102512);
+  assert.deepEqual(r.history[0].sets[0].actualOrigin, { value: '226', unit: 'lb' });
+  assert.equal(r.history[0].sets[1].actualG, 102500);
+  assert.deepEqual(r.history[0].sets[1].actualOrigin, { value: '102.5', unit: 'kg' });
+  assert.equal(r.progress[K].loadG, 102500); // mixed actuals cannot rewrite plan
+  assert.deepEqual(r.progress[K].loadOrigin, { value: '102.5', unit: 'kg' });
+});
+
+check('fail-closed numeric event provenance and malformed event payloads', () => {
+  const b = open();
+  const { events, add } = journal();
+  start(add, 's1', 'NORMAL', [slot('chest', 'bench', 2, 102500)]);
+  const saved = JSON.stringify(events);
+  const badPlan = structuredClone(events);
+  delete badPlan[0].slots[0].plannedOrigin;
+  assert.throws(() => foldBB2Block(b, badPlan), /planned origin/i);
+  const badGrams = structuredClone(events);
+  badGrams[0].slots[0].plannedOrigin = { value: '226', unit: 'lb' };
+  assert.throws(() => foldBB2Block(b, badGrams), /planned origin/i);
+  const missingActualOrigin = [{ type: 'SET_RECORDED', eventId: 'missing-provenance',
+    commitOrdinal: 2, blockId: 'block-a', sessionId: 's1', roleSlotId: 'chest',
+    exerciseId: 'bench', setIndex: 0, reps: 8, prescribed: true, actualG: 102500 }];
+  assert.throws(() => foldBB2Block(b, [...events, ...missingActualOrigin]), /actual origin/i);
+  const mismatchedActual = [{ ...missingActualOrigin[0], actualOrigin: { value: '226', unit: 'lb' } }];
+  assert.throws(() => foldBB2Block(b, [...events, ...mismatchedActual]), /actual origin/i);
+  const malformed = { type: 'NOTE_EDITED', eventId: 'bad-note', commitOrdinal: 2,
+    blockId: 'block-a', sessionId: 's1' };
+  assert.throws(() => foldBB2Block(b, [...events, malformed]), /note text/i);
+  assert.equal(JSON.stringify(events), saved);
 });
 
 check('stale correction preview or active BVOM workout is rejected atomically', () => {
@@ -248,8 +331,8 @@ check('off-plan ACCEPT at the ceiling earns from actual 55, not hypothetical 60'
 });
 
 check('bodyweight all-at-top asks for explicit direction and never invents numeric added weight', () => {
-  const bwSlot = { roleSlotId: 'vertical', exerciseId: 'pullup', equipment: 'bodyweight',
-    variation: 'pull-up', assistance: 'none', sets: 2, ceiling: 12, plannedG: 0, incrementG: 1000 };
+  const bwSlot = withOrigins({ roleSlotId: 'vertical', exerciseId: 'pullup', equipment: 'bodyweight',
+    variation: 'pull-up', assistance: 'none', sets: 2, ceiling: 12, plannedG: 0, incrementG: 1000 });
   const b = open();
   const { events, add } = journal();
   const doSession = (sid, reps) => {
@@ -285,6 +368,8 @@ check('32 credits seal the prior block; inactive records and stable History surv
   const r = foldBB2Block(b, events);
   assert.equal(r.sealed, true);
   assert.equal(r.closingSnapshot.foldRulesVersion, 1);
+  assert.deepEqual(r.closingSnapshot.progress['upper_a|chest|bench'].loadOrigin,
+    { value: '100', unit: 'kg' });
   assert.equal(r.closingSnapshot.priorCreditIds.length, 32);
   assert.equal(r.sealRevision, 1);
   const next = createNextBB2Opening(r, 'block-b');
@@ -294,7 +379,8 @@ check('32 credits seal the prior block; inactive records and stable History surv
   assert.equal(foldBB2Block(next, []).quotas.upper_a, 0);
   assert.equal(foldBB2Block(next, []).progress['upper_a|chest|bench'].calibrated, true);
   const corrected = { type: 'SET_CORRECTED', blockId: 'block-a', eventId: 'late-correction',
-    commitOrdinal: events.length + 1, sessionId: 'upper_a-0', targetEventId: 'event-2', reps: 6, actualG: 100000 };
+    commitOrdinal: events.length + 1, sessionId: 'upper_a-0', targetEventId: 'event-2',
+    reps: 6, actualG: 100000, actualOrigin: kgOrigin(100000) };
   assert.throws(() => foldBB2Block(b, [...events, corrected]), /sealed block/i);
 });
 
