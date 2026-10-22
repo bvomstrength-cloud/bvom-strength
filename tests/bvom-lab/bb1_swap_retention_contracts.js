@@ -93,7 +93,7 @@ module.exports=({test,ok,H,build})=>{
   const h=fixture();h.S().bodybuilding.completedSessions=6;h.S().day='A';h.ev('save()');
   swap(h,'barbell_row',45);
   h.S().bodybuilding.progression.barbell_row.calibrated=true;h.ev('save()');
-  H.bbSession(h,(id,i)=>id==='barbell_row'&&i===0?{reps:8,load:45}:{});
+  H.bbSession(h,(id,i)=>id==='barbell_row'?{reps:i===0?12:8,load:45}:{});
   const trained=disk(h),earned=trained.bodybuilding.progression.barbell_row.load===47.5&&
    trained.bodybuilding.completedSessions===7&&trained.history.length===2;
   const back=swap(h,'chest_supported_row');
@@ -103,7 +103,7 @@ module.exports=({test,ok,H,build})=>{
   return ok(earned&&restored&&again.bodybuilding.progression.barbell_row.load===47.5,
    JSON.stringify({earned,restored,alternate:again.bodybuilding.progression.barbell_row.load}));
  });
- test('BB1-SWAP-COMPARABLE-PERFORMANCE-REF','DEFECT',
+ test('BB1-SWAP-COMPARABLE-PERFORMANCE-REF','CONTROL',
   'Real exercise-qualified performance-reference key remains usable after switch away and back',()=>{
   const h=fixture(),before=h.ctx.bvomBbPerformanceDrop('chest_supported_row',62.5,7);
   swap(h,'barbell_row',45);swap(h,'chest_supported_row');
