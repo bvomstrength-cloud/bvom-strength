@@ -476,6 +476,12 @@ The current Day plan becomes locked/staged appropriately once live work exists s
 
 Recording Custom Training work must not alter LP/RPT, HLM, 4-Day, or Bodybuilding progression state.
 
+**BB2 Stage (i) isolation:** The new `bb2/ledger.cjs` is a pure, independent,
+version-pinned domain module under development. It does not import or mutate
+the shipped BB1 `bodybuilding` state, any structured programme, Custom
+Training, or the live History model. These boundaries must remain explicit
+when BB2 eventually receives integration; BB2 is not currently selectable.
+
 Custom Training may update general history/PB records where explicitly designed, but it must not behave as an automatic structured progression engine.
 
 ## 9. Bodybuilding block
@@ -940,6 +946,17 @@ Offline-local access must not activate cloud sync until a real Supabase session 
 
 Cloud is a backup/sync layer around local training data.
 
+**BB2 Stage (i) boundary:** The pure BB2 ledger module has no connection to
+local storage, cloud upload, cloud comparison fingerprints or restore. The
+existing v2.9.18 cloud functions do not yet provide a BB2-aware writer gate.
+Before any staged UI can save `bodybuilding2` in live application state,
+automatic and manual cloud uploads must exclude the complete BB2 subtree,
+cloud-comparison fingerprints must exclude it symmetrically, and guarded
+legacy restore must preserve validated local BB2 bytes. Server-enforced
+older-client denial and monotonic seal CAS are mandatory for eventual cloud
+enablement. None of these later integration gates are claimed implemented
+by the isolated Stage (i) module.
+
 It is not the authority for an unfinished live workout.
 
 ### 17.1 Live workout exclusion
@@ -1024,6 +1041,10 @@ Therefore an unfinished active workout must not be silently erased or orphaned b
 - switching into Bodybuilding
 - switching out of Bodybuilding
 - other program-switch paths protected by the active-workout guard
+
+Future BB2 integration must also refuse switching into/out of BB2 while a
+workout in any programme is active. A paused BB2 block must retain its own
+progression and quotas, without resetting BB1 or shared programme state.
 
 When no workout is active, setup/program selection remains available normally.
 

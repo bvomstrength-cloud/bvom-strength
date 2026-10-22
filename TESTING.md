@@ -151,7 +151,8 @@ The gate runs, in order:
 1. static
 2. behaviour
 3. sequence
-4. mutation + known-bad reference
+4. isolated BB2 Stage (i) golden contracts (`bb2_stage1_contracts.js`)
+5. mutation + known-bad reference
 
 The final line must be:
 
