@@ -12,7 +12,7 @@ module.exports=({test,ok,H,build})=>{
    load:62.5,topLoad:62.5,increment:2.5,calibrated:true,
    previousSuccessfulLoad:60,attempts:3
   };
-  s.bodybuilding.performanceRefs.chest_supported_row={'62.5':{load:62.5,reps:11}};
+  s.bodybuilding.performanceRefs.chest_supported_row={[h.ctx.bvomBbComparableKey('chest_supported_row',62.5)]:{load:62.5,reps:11}};
   s.history.push({date:'2026-10-01T00:00:00.000Z',program:'bodybuilding',day:'A',
    session:{'BB:chest_supported_row':{0:{load:60,reps:11}}}});
   s.weights.Squat=145;
@@ -33,7 +33,7 @@ module.exports=({test,ok,H,build})=>{
    p.barbell_row.load===45&&p.barbell_row.increment===2.5&&
    p.chest_supported_row.load===62.5&&p.chest_supported_row.calibrated===true&&
    p.chest_supported_row.previousSuccessfulLoad===60&&
-   next.bodybuilding.performanceRefs.chest_supported_row['62.5'].reps===11&&
+   next.bodybuilding.performanceRefs.chest_supported_row['chest_supported_row|62.5'].reps===11&&
    next.bodybuilding.completedSessions===7&&
    JSON.stringify(next.history)===JSON.stringify(start.history)&&
    next.weights.Squat===145&&
@@ -65,5 +65,51 @@ module.exports=({test,ok,H,build})=>{
    h.S().bodybuilding.selections.A3==='chest_supported_row'&&
    h.S().bodybuilding.progression.chest_supported_row.load===62.5,
    JSON.stringify({fresh:!!fresh,saved:h.S().bodybuilding.selections.A3}));
+ });
+ test('BB1-SWAP-INACTIVE-EDIT-CLEARS-STALE','DEFECT',
+  'Editing inactive-by-commit load clears obsolete previousSuccessfulLoad before returning and reducing after a real workout',()=>{
+  const h=fixture();h.S().bodybuilding.completedSessions=6;h.S().day='A';h.ev('save()');
+  h.ctx.__bvomBbSetupDraft=null;
+  h.ctx.bvomBbSetupValue('chest_supported_row','load',80);
+  h.ctx.bvomBbSetupSelect('A3','barbell_row');
+  h.ctx.bvomBbSetupValue('barbell_row','load',45);
+  h.ctx.bvomBbSetupValue('barbell_row','increment',2.5);
+  h.ctx.bvomBbCommitSetup();
+  const inactive=disk(h).bodybuilding.progression.chest_supported_row;
+  const switched=inactive.load===80&&!('previousSuccessfulLoad' in inactive);
+  const restored=swap(h,'chest_supported_row');
+  const clean=restored.bodybuilding.progression.chest_supported_row.load===80&&
+   !('previousSuccessfulLoad' in restored.bodybuilding.progression.chest_supported_row);
+  H.bbSession(h,(id,i)=>id==='chest_supported_row'&&i===0?{reps:5,load:80}:{});
+  const after=disk(h),p=after.bodybuilding.progression.chest_supported_row;
+  const decision=after.history.at(-1)?.bodybuilding?.decisions?.find(x=>x.id==='chest_supported_row')?.decision;
+  return ok(switched&&clean&&p.load===77.5&&p.topLoad===77.5&&
+   decision?.action==='reduce'&&after.bodybuilding.completedSessions===7&&
+   after.bodybuilding.progression.barbell_row.load===45,
+   JSON.stringify({switched,clean,current:p.load,decision,count:after.bodybuilding.completedSessions}));
+ });
+ test('BB1-SWAP-ALTERNATE-TRAIN-RESUME','DEFECT',
+  'Alternate row really earns its own load increase before restoring original row, without cross-exercise leakage',()=>{
+  const h=fixture();h.S().bodybuilding.completedSessions=6;h.S().day='A';h.ev('save()');
+  swap(h,'barbell_row',45);
+  h.S().bodybuilding.progression.barbell_row.calibrated=true;h.ev('save()');
+  H.bbSession(h,(id,i)=>id==='barbell_row'&&i===0?{reps:8,load:45}:{});
+  const trained=disk(h),earned=trained.bodybuilding.progression.barbell_row.load===47.5&&
+   trained.bodybuilding.completedSessions===7&&trained.history.length===2;
+  const back=swap(h,'chest_supported_row');
+  const restored=back.bodybuilding.progression.chest_supported_row.load===62.5&&
+   back.bodybuilding.progression.barbell_row.load===47.5&&back.bodybuilding.completedSessions===7;
+  const again=swap(h,'barbell_row');
+  return ok(earned&&restored&&again.bodybuilding.progression.barbell_row.load===47.5,
+   JSON.stringify({earned,restored,alternate:again.bodybuilding.progression.barbell_row.load}));
+ });
+ test('BB1-SWAP-COMPARABLE-PERFORMANCE-REF','DEFECT',
+  'Real exercise-qualified performance-reference key remains usable after switch away and back',()=>{
+  const h=fixture(),before=h.ctx.bvomBbPerformanceDrop('chest_supported_row',62.5,7);
+  swap(h,'barbell_row',45);swap(h,'chest_supported_row');
+  const after=h.ctx.bvomBbPerformanceDrop('chest_supported_row',62.5,7);
+  return ok(before?.triggered===true&&after?.triggered===true&&
+   after.referenceReps===11&&Math.abs(after.drop-4/11)<1e-7,
+   JSON.stringify({before,after}));
  });
 };
