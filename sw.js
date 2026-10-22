@@ -1,6 +1,6 @@
-// v2.9.17 On-Ramp confirmation correction; versioned shell cache.
-const CACHE = 'bvom-2.9.17';
-const BUILD = '2.9.17';
+// v2.9.18 BB1 exercise swap progression retention; versioned shell cache.
+const CACHE = 'bvom-2.9.18';
+const BUILD = '2.9.18';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './og-image.png', './i18n/en.js?v=6090d2f48f09', './i18n/ja.js?v=326ff8e97bb8',
   './theme-bee-v23c.svg',
   './theme-cherry-v23f.svg',
