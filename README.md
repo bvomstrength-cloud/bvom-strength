@@ -2,7 +2,18 @@
 
 Production source repository for BVOM Strength.
 
-## Current approved release — v2.9.18
+## Current approved release — v2.9.19
+
+- **GitHub application baseline:** merged `main` application commit `71a0c0acdcfc9cb6593cb61875f0cda41388e5e4` (23 October 2026). Later documentation-only commits may advance `main` without changing these application files.
+- **App version:** `v2.9.19` in the title/header and `BVOM_BUILD`; service worker `BUILD = '2.9.19'` with production cache `bvom-2.9.19`.
+- **Owner deployment report:** On 23 October 2026, the owner confirmed uploading/deploying the verified production ZIP to Netlify. This is an owner-reported deployment, not independent verification of the public endpoint or installed Android PWA after deployment.
+- **Production ZIP:** `BVOM-v2.9.19-PRODUCTION.zip`, 13 files (1,618,278 bytes); SHA-256 `ff3b9d820df0949a53bf72d0a58ab5a42c311b289a759ae4b29dba54d907091d`. All 13 files were verified against the exact Git blobs at the merged `main` commit. The PR-specific test-site service-worker cache was replaced with the canonical production service worker; the test marker was excluded.
+- **Change:** Bodybuilding (BB1) workout cards no longer label the already-prescribed top-set weight as “Next working weight” before the complete workout is saved. The `EDIT WEIGHT` button and per-set load/rep prescriptions remain. BB1 progression, On-Ramp, workout completion, saved-data schema and BB2 Stage (i) remain unchanged.
+- **Release trail:** [PR #72](https://github.com/bvomstrength-cloud/bvom-strength/pull/72) merged. The production ZIP verification record and checksum are documented in the PR discussion.
+- **Verification:** PR #72 full BVOM Lab, browser recovery and EN/JA mobile Chromium checks, service-worker upgrade checks and test ZIP workflow **PASS**; post-merge `main` BVOM Lab run **#485 PASS**. Physical post-deployment Android testing was not independently observed.
+- **Safety:** GitHub merges do not automatically deploy Netlify; preserve offline workout ownership, PWA update protections, and backups. Keep prior verified release ZIPs for rollback.
+
+## Previous approved release — v2.9.18 (superseded 23 October 2026)
 
 - **GitHub application baseline:** `main` at `c167cc37b14d1f0b6e99720d2fdae36d4cac2ab8` (22 October 2026; later documentation-only commits may advance `main` without changing the application files).
 - **App version:** `v2.9.18`, displayed in the title/header and `BVOM_BUILD`; service worker build `2.9.18` with cache `bvom-2.9.18`.
