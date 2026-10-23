@@ -81,6 +81,18 @@ t('End-road intermediate modal offers a Starting Setup route',html.includes('fun
 }
 t('SW shell cache write failure does not discard fresh navigation response',sw.includes("cache.put('./index.html', copy).catch(() => {})"));
 
+// BB1: working-set prescriptions are shown below each set. Do not imply
+// a next-workout progression has already been awarded before Finish.
+// The weight editor and rep targets must remain available in the live renderer.
+{
+ const from=html.lastIndexOf('function bvomBbRenderFoundationWorkout(){bvomBbEnsure();');
+ const to=html.indexOf('function bvomBbSetModal',from);
+ const renderer=from>=0&&to>from?html.slice(from,to):'';
+ t('BB1 workout cards omit premature next-weight claim but retain EDIT WEIGHT and set targets',
+   !!renderer&&!renderer.includes("hlmTxt('Next working weight'")&&
+   renderer.includes('data-bb-edit-weight')&&renderer.includes('bvomBbSetTarget(rx,i)'));
+}
+
 // --- Contractual Info wording (textual by nature)
 t('EN Info: Bodybuilding — 8-Week Training Block',html.includes('Bodybuilding — 8-Week Training Block'));
 t('JA Info: ボディビルディング — 8週間トレーニングブロック',html.includes('ボディビルディング — 8週間トレーニングブロック'));
