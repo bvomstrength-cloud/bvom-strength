@@ -212,6 +212,12 @@ function effectiveRevisions(events) {
     if (e.type === 'SET_CORRECTED' || e.type === 'SET_VOIDED') {
       const key = targets.get(e.targetEventId);
       if (!key || !key.startsWith(`${e.sessionId}|`)) fail('invalid correction target');
+      const original = originals.get(key);
+      if ((e.roleSlotId !== undefined && e.roleSlotId !== original.roleSlotId) ||
+          (e.exerciseId !== undefined && e.exerciseId !== original.exerciseId) ||
+          (e.setIndex !== undefined && e.setIndex !== original.setIndex)) {
+        fail('correction target identity mismatch');
+      }
       if (e.type === 'SET_CORRECTED') {
         integer(e.reps, 'corrected reps', 1);
         integer(e.actualG, 'corrected grams');
@@ -341,12 +347,23 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         const count = s.slots.reduce((n, slot) => n + slot.sets, 0);
         const validCount = s.slots.reduce((n, slot) => n + Array.from({ length: slot.sets }, (_, i) =>
           validSet(records.get(`${s.sessionId}|${slot.roleSlotId}|${i}`), slot) ? 1 : 0).filter(Boolean).length, 0);
-        s.prescribedCount = count; s.validCount = validCount;
-        s.eligible = s.outcome === 'FINISH' && sessionEligible(s) && validCount >= Math.ceil(.70 * count) && !voidSessions.has(s.sessionId);
-        if (s.outcome === 'FINISH' && sessionEligible(s) && !s.eligible && !voidSessions.has(s.sessionId)) {
-          // A once-valid Finish can be made ineligible by a later correction.
-          if (!chronologicalEvents.some(x => x.type === 'SET_CORRECTED' || x.type === 'SET_VOIDED')) fail('Finish below 70 percent gate');
+        // Finish legality is frozen at its original ordinal. Later corrections
+        // can revoke eligibility, but cannot retroactively legitimise a Finish
+        // that was below threshold when the trainee pressed the button.
+        const originalSets = chronologicalEvents.filter(x =>
+          x.sessionId === s.sessionId && x.type === 'SET_RECORDED' &&
+          x.commitOrdinal < e.commitOrdinal);
+        const originalValidCount = s.slots.reduce((total, item) =>
+          total + originalSets.filter(x =>
+            x.roleSlotId === item.roleSlotId && x.exerciseId === item.exerciseId &&
+            x.setIndex < item.sets && validSet(x, item)).length, 0);
+        const minimumValid = Math.ceil(.70 * count);
+        if (s.outcome === 'FINISH' && sessionEligible(s) && originalValidCount < minimumValid) {
+          fail('Finish below 70 percent gate');
         }
+        s.prescribedCount = count; s.validCount = validCount;
+        s.eligible = s.outcome === 'FINISH' && sessionEligible(s) &&
+          validCount >= minimumValid && !voidSessions.has(s.sessionId);
         if (s.eligible) for (const slot of s.slots) {
           const key = identity(s.templateId, slot.roleSlotId, slot.exerciseId), info = evidenceFor(s, slot.roleSlotId, records);
           if (!info.complete) continue;
