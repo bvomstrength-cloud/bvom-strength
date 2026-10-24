@@ -149,9 +149,9 @@ const faults=[
   {name:'ALLOW-RECOVERY-FROM-ONE-STALLED-EXERCISE',
     from:"relevantMilestones.size >= 2",
     to:"relevantMilestones.size >= 1"},
-  {name:'IGNORE-CURRENT-RECOVERY-STALL-EPOCH',
-    from:"p.stallCount >= 3 && p.epochId === milestone.epochId",
-    to:"p.stallCount >= 3 && true"},
+  {name:'ALLOW-OLD-STALL-MILESTONE-OUTSIDE-SESSION-WINDOW',
+    from:"recentEligibleSet.has(milestone.sessionId) && p &&",
+    to:"true && p &&"},
   {name:'COUNT-INCOMPLETE-AND-RECOVERY-IN-SUGGESTION-WINDOW',
     from:"if (s.eligible) eligibleNormalFinishes.push(s.sessionId);",
     to:"if (s.outcome) eligibleNormalFinishes.push(s.sessionId);"}
