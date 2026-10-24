@@ -294,7 +294,7 @@ const acceptedOffPlanJournal=(bMode='NORMAL',hardB=false)=>{
     decision:'ACCEPT',loadG:55000,loadOrigin:origin(55000)
   });
   r.append('WORKOUT_STARTED',{sessionId:'B',templateId:'upper_a',
-    kind:bMode,slots:[planned(55000)]});
+    kind:bMode==='INCOMPLETE'?'NORMAL':bMode,slots:[planned(55000)]});
   const b=record('B',55000,hardB);
   if(bMode==='INCOMPLETE') r.append('WORKOUT_INCOMPLETE',{sessionId:'B'});
   else r.finish('B');
