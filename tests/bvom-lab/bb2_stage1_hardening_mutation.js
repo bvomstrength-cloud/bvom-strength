@@ -58,7 +58,13 @@ const faults=[
     to:"if (false && !source) fail('choice revision must target a prior ACCEPT');"},
   {name:'ALLOW-DUPLICATE-CHOICE-REVISION',
     from:"if (revisedChoices.has(e.targetEventId)) fail('duplicate choice revision');",
-    to:"if (false && revisedChoices.has(e.targetEventId)) fail('duplicate choice revision');"}
+    to:"if (false && revisedChoices.has(e.targetEventId)) fail('duplicate choice revision');"},
+  {name:'SKIP-OFFPLAN-DECISION-CHECK',
+    from:"if (!offeredOffPlan) fail('choice has no original eligible off-plan offer');",
+    to:"if (false && !offeredOffPlan) fail('choice has no original eligible off-plan offer');"},
+  {name:'SKIP-ACCEPTED-OFFER-VALUE-CHECK',
+    from:"if (e.decision === 'ACCEPT' && e.loadG !== sourceEvidence.actualG) {",
+    to:"if (false && e.decision === 'ACCEPT' && e.loadG !== sourceEvidence.actualG) {"}
 ];
 let killed=0;
 for(const fault of faults) {

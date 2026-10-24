@@ -498,7 +498,36 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         const s = sessions.get(e.sourceSessionId);
         if (!s || !s.finishOrdinal || e.commitOrdinal <= s.finishOrdinal) fail('choice before source Finish');
         const slot = findSlot(s, e), key = identity(s.templateId, slot.roleSlotId, slot.exerciseId);
-        if (!['ACCEPT', 'KEEP', 'HOLD', 'DIFFICULTY_ACCEPT', 'REPLACE'].includes(e.decision)) fail('invalid decision');
+        if (!['ACCEPT', 'KEEP', 'HOLD', 'DIFFICULTY_ACCEPT'].includes(e.decision) &&
+            !(e.type === 'CHOICE_REPLACED' && e.decision === 'REPLACE')) fail('invalid decision');
+        if (e.type === 'CHOICE_RESOLVED' && e.targetEventId !== undefined) fail('resolution may not target prior choice');
+        // A user may later correct the source; the explicit decision must still
+        // have been earned by the evidence committed at its *own* ordinal.
+        // Never validate a historical ACCEPT against the final corrected sets.
+        const atChoice = effectiveRevisions(chronologicalEvents.slice(0, e.commitOrdinal - 1));
+        const sourceEligible = sessionEligible(s) && s.outcome === 'FINISH' &&
+          !atChoice.voidSessions.has(s.sessionId) &&
+          s.slots.reduce((n, item) =>
+            n + Array.from({ length: item.sets }, (_, i) =>
+              validSet(atChoice.records.get(`${s.sessionId}|${item.roleSlotId}|${i}`), item))
+              .filter(Boolean).length, 0) >=
+          Math.ceil(.70 * s.slots.reduce((n, item) => n + item.sets, 0));
+        const sourceEvidence = evidenceFor(s, slot.roleSlotId, atChoice.records);
+        const offeredOffPlan = sourceEligible && sourceEvidence.complete &&
+          sourceEvidence.uniform && !sourceEvidence.harder && !sourceEvidence.onPlan &&
+          slot.equipment === 'loaded';
+        if (e.type === 'CHOICE_RESOLVED' && ['ACCEPT', 'KEEP'].includes(e.decision)) {
+          if (!offeredOffPlan) fail('choice has no original eligible off-plan offer');
+          if (e.decision === 'ACCEPT' && e.loadG !== sourceEvidence.actualG) {
+            fail('accepted value differs from original off-plan offer');
+          }
+        }
+        if (e.type === 'CHOICE_RESOLVED' && ['HOLD', 'DIFFICULTY_ACCEPT'].includes(e.decision)) {
+          if (!(sourceEligible && sourceEvidence.complete && sourceEvidence.onPlan &&
+                !sourceEvidence.harder && sourceEvidence.allTop && slot.equipment === 'bodyweight')) {
+            fail('difficulty choice has no eligible bodyweight offer');
+          }
+        }
         const p = getProgress(key, slot);
         if (e.decision === 'ACCEPT' || e.decision === 'REPLACE') {
           integer(e.loadG, 'accepted grams'); epoch(p, `choice:${e.eventId}`, e.loadG, e.loadOrigin);

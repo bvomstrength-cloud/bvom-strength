@@ -591,5 +591,54 @@ check('choice reclassification cannot be reused to suppress consent twice',()=>{
   assert.throws(()=>foldBB2Block(opening(),r.events),/duplicate choice revision/);
 });
 
+
+check('ACCEPT requires exact original offered off-plan value',()=>{
+  const r=acceptedOffPlanJournal();
+  const valid=foldBB2Block(opening(),r.events);
+  assert.equal(valid.progress['upper_a|bench|barbell-bench'].loadG,55000);
+  const changed=structuredClone(r.events);
+  const accept=changed.find(e=>e.eventId===r.choice.eventId);
+  accept.loadG=54000;accept.loadOrigin=origin(54000);
+  assert.throws(()=>foldBB2Block(opening(),changed),/accepted value differs from original off-plan offer/);
+});
+check('on-plan completed exercise does not issue an ACCEPT offer',()=>{
+  const r=creditJournal();
+  r.append('CHOICE_RESOLVED',{sourceSessionId:'s',roleSlotId:'bench',
+    exerciseId:'barbell-bench',decision:'ACCEPT',loadG:100000,loadOrigin:origin(100000)});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/no original eligible off-plan offer/);
+});
+check('real off-plan KEEP leaves normal prescription unchanged',()=>{
+  const r=creditJournal();
+  for(const e of r.events.filter(e=>e.type==='SET_RECORDED')) {
+    e.actualG=95000;e.actualOrigin=origin(95000);
+  }
+  r.append('CHOICE_RESOLVED',{sourceSessionId:'s',roleSlotId:'bench',
+    exerciseId:'barbell-bench',decision:'KEEP'});
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].loadG,100000);
+  assert.equal(p.pending['upper_a|bench|barbell-bench'],undefined);
+});
+check('original ACCEPT remains historically valid after subsequent source correction',()=>{
+  const r=acceptedOffPlanJournal();
+  r.append('SET_CORRECTED',{sessionId:'A',targetEventId:r.a[0].eventId,
+    roleSlotId:'bench',exerciseId:'barbell-bench',setIndex:0,
+    reps:7,actualG:50000,actualOrigin:origin(50000)});
+  const p=foldBB2Block(opening(),r.events);
+  assert.deepEqual(p.requiredConsent,[]);
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].loadG,55000);
+});
+check('ordinary resolution cannot masquerade as future replacement',()=>{
+  const r=acceptedOffPlanJournal();
+  r.append('CHOICE_RESOLVED',{sourceSessionId:'A',roleSlotId:'bench',
+    exerciseId:'barbell-bench',decision:'REPLACE',loadG:57000,loadOrigin:origin(57000)});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/invalid decision/);
+});
+check('HOLD requires a genuine bodyweight offer',()=>{
+  const r=creditJournal();
+  r.append('CHOICE_RESOLVED',{sourceSessionId:'s',roleSlotId:'bench',
+    exerciseId:'barbell-bench',decision:'HOLD'});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/no eligible bodyweight offer/);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);
