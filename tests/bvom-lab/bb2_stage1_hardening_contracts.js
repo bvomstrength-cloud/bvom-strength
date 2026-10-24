@@ -192,5 +192,85 @@ check('malformed hard-effort boolean is rejected on set and correction',()=>{
   assert.throws(()=>foldBB2Block(opening(),r.events),/harder-than-intended flag/);
 });
 
+
+const revokeCredit=(r,creditId='credit-s')=>r.append('CREDIT_REVOKED',
+  {sessionId:'s',creditId});
+const grantCredit=(r,creditId='credit-s',type='CREDIT_GRANTED')=>r.append(type,
+  {sessionId:'s',creditId});
+const correctCreditSet=(r,target)=>r.append('SET_CORRECTED',{
+  sessionId:'s',targetEventId:target.eventId,
+  roleSlotId:'bench',exerciseId:'barbell-bench',setIndex:target.setIndex,
+  reps:7,actualG:100000,actualOrigin:origin(100000)
+});
+const creditJournal=()=>{
+  const r=log();r.start('s',3);const source=r.sets('s',3);r.finish('s');
+  return { ...r,source };
+};
+check('credit grant rejects ineligible revision even if later correction restores eligibility',()=>{
+  const r=creditJournal();
+  r.append('SET_VOIDED',{sessionId:'s',targetEventId:r.source[0].eventId});
+  grantCredit(r);
+  correctCreditSet(r,r.source[0]);
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /credit grant without eligible session revision/);
+});
+check('credit cannot be revoked while session was still eligible at revoke ordinal',()=>{
+  const r=creditJournal();grantCredit(r);revokeCredit(r);
+  r.append('SET_VOIDED',{sessionId:'s',targetEventId:r.source[0].eventId});
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /credit revoke without ineligible session revision/);
+});
+check('premature regrant stays illegal even when a later correction restores eligibility',()=>{
+  const r=creditJournal();grantCredit(r);
+  r.append('SET_VOIDED',{sessionId:'s',targetEventId:r.source[0].eventId});
+  revokeCredit(r);
+  grantCredit(r,'credit-restored','CREDIT_REGRANTED');
+  correctCreditSet(r,r.source[0]);
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /credit grant without eligible session revision/);
+});
+check('revoked session cannot mint a second first-grant in place of regrant',()=>{
+  const r=creditJournal();grantCredit(r);
+  r.append('SET_VOIDED',{sessionId:'s',targetEventId:r.source[0].eventId});
+  revokeCredit(r);correctCreditSet(r,r.source[0]);
+  grantCredit(r,'credit-replacement','CREDIT_GRANTED');
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /second first-grant; use regrant/);
+});
+check('two revoke-restore-regrant cycles yield exactly one active credit and full lineage',()=>{
+  const r=creditJournal();grantCredit(r);
+  for(let i=1;i<=2;i++) {
+    r.append('SET_VOIDED',{sessionId:'s',targetEventId:r.source[0].eventId});
+    revokeCredit(r,i===1?'credit-s':'credit-regrant-1');
+    correctCreditSet(r,r.source[0]);
+    grantCredit(r,'credit-regrant-'+i,'CREDIT_REGRANTED');
+    const p=foldBB2Block(opening(),r.events);
+    assert.equal(p.quotas.upper_a,1);
+    assert.equal(Object.keys(p.activeCredits).length,1);
+    assert.equal(p.history[0].creditId,'credit-regrant-'+i);
+    assert.equal(p.history[0].status,'COMPLETED_NORMAL');
+  }
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(Object.keys(p.creditLedger).length,3);
+  assert.deepEqual(p.activeCredits,{s:'credit-regrant-2'});
+  assert.equal(p.creditLedger['credit-s'].active,false);
+  assert.equal(p.creditLedger['credit-regrant-1'].active,false);
+  assert.equal(p.creditLedger['credit-regrant-2'].active,true);
+  assert.equal(p.creditLedger['credit-regrant-1'].previousCreditId,'credit-s');
+  assert.equal(p.creditLedger['credit-regrant-2'].previousCreditId,'credit-regrant-1');
+  assert.ok(p.creditLedger['credit-s'].revokeEventId);
+  assert.ok(p.creditLedger['credit-regrant-1'].revokeEventId);
+  assert.equal(p.history.length,1);
+});
+check('initial valid grant may later revoke after correction; unaffected template quotas stay zero',()=>{
+  const r=creditJournal();grantCredit(r);
+  r.append('SET_VOIDED',{sessionId:'s',targetEventId:r.source[0].eventId});
+  revokeCredit(r);
+  const p=foldBB2Block(opening(),r.events);
+  assert.deepEqual(p.quotas,{upper_a:0,lower_a:0,upper_b:0,lower_b:0});
+  assert.equal(p.history[0].status,'INCOMPLETE_CORRECTED');
+  assert.equal(p.creditLedger['credit-s'].active,false);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);

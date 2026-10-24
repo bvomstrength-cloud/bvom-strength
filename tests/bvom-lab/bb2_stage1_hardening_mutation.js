@@ -19,7 +19,16 @@ const faults=[
     to:"variation: e.variation,"},
   {name:'WIPE-HARD-EFFORT',
     from:"harderThanIntended: own(e, 'harderThanIntended') ? e.harderThanIntended : prior.harderThanIntended,",
-    to:"harderThanIntended: !!e.harderThanIntended,"}
+    to:"harderThanIntended: !!e.harderThanIntended,"},
+  {name:'IGNORE-CREDIT-AT-REVISION',
+    from:"if (!creditEligibleAt(s, e.commitOrdinal)) fail('credit grant without eligible session revision');",
+    to:"if (false && !creditEligibleAt(s, e.commitOrdinal)) fail('credit grant without eligible session revision');"},
+  {name:'IGNORE-CREDIT-REVOKE-REVISION',
+    from:"if (creditEligibleAt(sessions.get(e.sessionId), e.commitOrdinal)) {",
+    to:"if (false && creditEligibleAt(sessions.get(e.sessionId), e.commitOrdinal)) {"},
+  {name:'ALLOW-SECOND-FIRST-GRANT',
+    from:"if (e.type === 'CREDIT_GRANTED' && priorCredits.length) fail('second first-grant; use regrant');",
+    to:"if (false && e.type === 'CREDIT_GRANTED' && priorCredits.length) fail('second first-grant; use regrant');"}
 ];
 let killed=0;
 for(const fault of faults) {

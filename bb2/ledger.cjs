@@ -250,6 +250,20 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
   const grants = new Map(), activeCredits = new Map(), pending = {};
   const quotas = Object.fromEntries(TEMPLATES.map(x => [x, 0]));
   let sealed = !!opening.sealed, sealId = null;
+  // Credit events must be valid at their own chronological ordinal, not only
+  // against the retrospective final effective sets. A later correction cannot
+  // legitimise a grant or regrant that was premature when recorded.
+  const creditEligibleAt = (s, ordinal) => {
+    if (!s || s.kind !== 'NORMAL' || s.outcome !== 'FINISH') return false;
+    const prior = effectiveRevisions(chronologicalEvents.slice(0, ordinal - 1));
+    if (prior.voidSessions.has(s.sessionId)) return false;
+    const prescribed = s.slots.reduce((sum, slot) => sum + slot.sets, 0);
+    const valid = s.slots.reduce((sum, slot) => sum +
+      Array.from({ length: slot.sets }, (_, i) =>
+        validSet(prior.records.get(`${s.sessionId}|${slot.roleSlotId}|${i}`), slot))
+        .filter(Boolean).length, 0);
+    return valid >= Math.ceil(0.70 * prescribed);
+  };
   const getProgress = (key, plan) => progress[key] ||= initialProgress({}, plan);
   const epoch = (p, id, nextLoad, origin = null) => { if (p.loadG !== nextLoad) {
     p.loadG = nextLoad;
@@ -439,15 +453,27 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         if (!s || s.kind !== 'NORMAL' || s.outcome !== 'FINISH') fail('credit without normal Finish');
         positiveId(e.creditId, 'credit ID');
         if (grants.has(e.creditId) || activeCredits.has(e.sessionId)) fail('duplicate credit');
-        if (e.type === 'CREDIT_REGRANTED' && ![...grants.values()].some(g => g.sessionId === e.sessionId && !g.active)) fail('regrant without prior revoke');
+        if (!creditEligibleAt(s, e.commitOrdinal)) fail('credit grant without eligible session revision');
+        const priorCredits = [...grants.values()].filter(g => g.sessionId === e.sessionId);
+        if (e.type === 'CREDIT_GRANTED' && priorCredits.length) fail('second first-grant; use regrant');
+        if (e.type === 'CREDIT_REGRANTED' &&
+            (!priorCredits.length || priorCredits[priorCredits.length - 1].active)) {
+          fail('regrant without prior revoke');
+        }
         if (quotas[s.templateId] >= 8) fail('template credit quota full');
-        grants.set(e.creditId, { sessionId: e.sessionId, templateId: s.templateId, active: true });
+        grants.set(e.creditId, { sessionId: e.sessionId, templateId: s.templateId,
+          active: true, grantEventId: e.eventId, grantOrdinal: e.commitOrdinal,
+          previousCreditId: priorCredits.length ? [...grants.entries()].filter(([,g]) => g.sessionId === e.sessionId).at(-1)[0] : null });
         activeCredits.set(e.sessionId, e.creditId); quotas[s.templateId]++; break;
       }
       case 'CREDIT_REVOKED': {
         const g = grants.get(e.creditId);
         if (!g || !g.active || g.sessionId !== e.sessionId) fail('invalid credit revocation');
-        g.active = false; activeCredits.delete(e.sessionId); quotas[g.templateId]--; break;
+        if (creditEligibleAt(sessions.get(e.sessionId), e.commitOrdinal)) {
+          fail('credit revoke without ineligible session revision');
+        }
+        g.active = false; g.revokeEventId = e.eventId; g.revokeOrdinal = e.commitOrdinal;
+        activeCredits.delete(e.sessionId); quotas[g.templateId]--; break;
       }
       case 'HISTORY_HIDDEN':
       case 'HISTORY_UNHIDDEN':
