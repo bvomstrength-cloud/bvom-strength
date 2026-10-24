@@ -179,7 +179,8 @@ function validateEvents(opening, events) {
     validateEventPayload(e);
     // Consent revisions must identify exactly one earlier accepted choice;
     // a forged/duplicate target cannot erase historical consent obligations.
-    if (e.type === 'CHOICE_RESOLVED' && e.decision === 'ACCEPT') {
+    if (e.type === 'CHOICE_RESOLVED' &&
+        ['ACCEPT', 'DIFFICULTY_ACCEPT'].includes(e.decision)) {
       acceptedChoices.set(e.eventId, e);
     }
     if (e.type === 'CHOICE_RECLASSIFIED' || e.type === 'CHOICE_REPLACED') {
@@ -194,6 +195,10 @@ function validateEvents(opening, events) {
           fail('choice replacement source identity mismatch');
         }
         validateMassOrigin(e.loadG, e.loadOrigin, 'replacement load');
+        if (source.decision === 'DIFFICULTY_ACCEPT') {
+          positiveId(e.variation, 'replacement difficulty variation');
+          if (typeof e.assistance !== 'string') fail('invalid replacement assistance');
+        }
       }
       revisedChoices.add(e.targetEventId);
     }
@@ -531,6 +536,12 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         const p = getProgress(key, slot);
         if (e.decision === 'ACCEPT' || e.decision === 'REPLACE') {
           integer(e.loadG, 'accepted grams'); epoch(p, `choice:${e.eventId}`, e.loadG, e.loadOrigin);
+          if (e.type === 'CHOICE_REPLACED' && slot.equipment === 'bodyweight') {
+            positiveId(e.variation, 'replacement difficulty variation');
+            if (typeof e.assistance !== 'string') fail('invalid replacement assistance');
+            p.variation = e.variation; p.assistance = e.assistance;
+            p.bestReps = null; p.stallCount = 0; p.epochId = `choice:${e.eventId}`;
+          }
           const info = evidenceFor(s, slot.roleSlotId, records);
           const validOffer = s.eligible && info.complete && info.uniform && !info.harder && info.actualG === e.loadG && !info.onPlan;
           if (e.decision === 'ACCEPT' && validOffer) {
@@ -547,6 +558,16 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
           p.variation = e.variation; p.assistance = e.assistance;
           epoch(p, `choice:${e.eventId}`, e.addedWeightG, e.addedWeightOrigin);
           p.epochId = `choice:${e.eventId}`; p.bestReps = null; p.stallCount = 0;
+          // An accepted harder variation is an authoritative choice even if
+          // a later set correction removes the qualifying all-at-top result.
+          // Consent is evaluated against the corrected hypothetical replay.
+          const info = evidenceFor(s, slot.roleSlotId, records);
+          const validOffer = s.eligible && info.complete && info.onPlan &&
+            !info.harder && info.allTop && slot.equipment === 'bodyweight';
+          choices.push({ eventId: e.eventId, ordinal: e.commitOrdinal,
+            sourceSessionId: s.sessionId, key, valueG: e.addedWeightG,
+            variation: e.variation, assistance: e.assistance,
+            validOffer, decision: e.decision });
           boundary(key, e.commitOrdinal, 'explicit');
         } else if (e.decision === 'KEEP') boundary(key, e.commitOrdinal, 'explicit');
         delete pending[key];
@@ -623,11 +644,19 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
   for (const [sessionId] of activeCredits) if (!sessions.get(sessionId)?.eligible) fail('ineligible active credit requires revoke');
   const requiredConsent = [];
   for (const choice of choices) {
-    if (choice.decision !== 'ACCEPT' || choice.validOffer) continue;
+    if (!['ACCEPT', 'DIFFICULTY_ACCEPT'].includes(choice.decision) || choice.validOffer) continue;
     const superseded = boundaries.some(b => b.key === choice.key && b.ordinal > choice.ordinal);
     const classified = chronologicalEvents.some(e => e.type === 'CHOICE_RECLASSIFIED' && e.targetEventId === choice.eventId && e.decision === 'KEEP_AS_MANUAL');
     const replaced = chronologicalEvents.some(e => e.type === 'CHOICE_REPLACED' && e.targetEventId === choice.eventId);
-    if (!superseded && !classified && !replaced) requiredConsent.push({ choiceEventId: choice.eventId, sourceSessionId: choice.sourceSessionId, key: choice.key, valueG: choice.valueG });
+    if (!superseded && !classified && !replaced) {
+      const request = { choiceEventId: choice.eventId,
+        sourceSessionId: choice.sourceSessionId, key: choice.key, valueG: choice.valueG };
+      if (choice.decision === 'DIFFICULTY_ACCEPT') {
+        request.variation = choice.variation;
+        request.assistance = choice.assistance;
+      }
+      requiredConsent.push(request);
+    }
   }
   for (const e of chronologicalEvents.filter(x => x.type === 'CHOICE_RECLASSIFIED')) {
     if (e.decision !== 'KEEP_AS_MANUAL' || !choices.some(c => c.eventId === e.targetEventId && c.ordinal < e.commitOrdinal)) fail('invalid consent reclassification');

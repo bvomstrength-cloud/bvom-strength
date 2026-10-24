@@ -64,7 +64,13 @@ const faults=[
     to:"if (false && !offeredOffPlan) fail('choice has no original eligible off-plan offer');"},
   {name:'SKIP-ACCEPTED-OFFER-VALUE-CHECK',
     from:"if (e.decision === 'ACCEPT' && e.loadG !== sourceEvidence.actualG) {",
-    to:"if (false && e.decision === 'ACCEPT' && e.loadG !== sourceEvidence.actualG) {"}
+    to:"if (false && e.decision === 'ACCEPT' && e.loadG !== sourceEvidence.actualG) {"},
+  {name:'SKIP-BODYWEIGHT-CONSENT-CLASSIFICATION',
+    from:"if (!['ACCEPT', 'DIFFICULTY_ACCEPT'].includes(choice.decision) || choice.validOffer) continue;",
+    to:"if (choice.decision !== 'ACCEPT' || choice.validOffer) continue;"},
+  {name:'PRETEND-CORRECTED-DIFFICULTY-OFFER-STILL-VALID',
+    from:"variation: e.variation, assistance: e.assistance,\n            validOffer, decision: e.decision });",
+    to:"variation: e.variation, assistance: e.assistance,\n            validOffer: true, decision: e.decision });"}
 ];
 let killed=0;
 for(const fault of faults) {

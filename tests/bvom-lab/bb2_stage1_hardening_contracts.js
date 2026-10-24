@@ -640,5 +640,130 @@ check('HOLD requires a genuine bodyweight offer',()=>{
   assert.throws(()=>foldBB2Block(opening(),r.events),/no eligible bodyweight offer/);
 });
 
+
+const bodyweightDirectionJournal=(withSuperseder=false)=>{
+  const r=bwJournal();
+  r.append('WORKOUT_STARTED',{sessionId:'bw2',templateId:'upper_a',kind:'NORMAL',slots:[bwSlot()]});
+  const earned=[];
+  for(let i=0;i<3;i++) earned.push(r.append('SET_RECORDED',{
+    sessionId:'bw2',roleSlotId:'vertical-pull',exerciseId:'chin-up',
+    setIndex:i,reps:8,actualG:5000,actualOrigin:origin(5000),
+    variation:'chin-up',assistance:'light-band',prescribed:true
+  }));
+  r.finish('bw2');
+  const choice=r.append('CHOICE_RESOLVED',{sourceSessionId:'bw2',
+    roleSlotId:'vertical-pull',exerciseId:'chin-up',decision:'DIFFICULTY_ACCEPT',
+    variation:'weighted-chin',assistance:'light-band',
+    addedWeightG:7500,addedWeightOrigin:origin(7500)});
+  if(withSuperseder){
+    r.append('WORKOUT_STARTED',{sessionId:'bw3',templateId:'upper_a',kind:'NORMAL',
+      slots:[{...bwSlot(),plannedG:7500,plannedOrigin:origin(7500),
+        variation:'weighted-chin'}]});
+    for(let i=0;i<3;i++) r.append('SET_RECORDED',{
+      sessionId:'bw3',roleSlotId:'vertical-pull',exerciseId:'chin-up',
+      setIndex:i,reps:7,actualG:7500,actualOrigin:origin(7500),
+      variation:'weighted-chin',assistance:'light-band',prescribed:true
+    });
+    r.finish('bw3');
+  }
+  return {...r,earned,choice};
+};
+const voidDifficultyTop=(r,first)=>r.append('SET_CORRECTED',{
+  sessionId:'bw2',targetEventId:first.eventId,
+  roleSlotId:'vertical-pull',exerciseId:'chin-up',setIndex:0,
+  reps:7,actualG:5000,actualOrigin:origin(5000)
+});
+const bodyweightProgressKey='upper_a|vertical-pull|chin-up';
+check('accepted harder bodyweight choice survives source correction but demands consent',()=>{
+  const r=bodyweightDirectionJournal();
+  let p=foldBB2Block(opening(),r.events);
+  assert.equal(p.progress[bodyweightProgressKey].loadG,7500);
+  assert.equal(p.progress[bodyweightProgressKey].variation,'weighted-chin');
+  assert.deepEqual(p.requiredConsent,[]);
+  voidDifficultyTop(r,r.earned[0]);
+  p=foldBB2Block(opening(),r.events);
+  assert.deepEqual(p.requiredConsent,[{
+    choiceEventId:r.choice.eventId,sourceSessionId:'bw2',key:bodyweightProgressKey,
+    valueG:7500,variation:'weighted-chin',assistance:'light-band'
+  }]);
+  assert.equal(p.progress[bodyweightProgressKey].loadG,7500);
+  assert.equal(p.progress[bodyweightProgressKey].variation,'weighted-chin');
+});
+check('unconsented bodyweight source correction rejects atomic transaction',()=>{
+  const r=bodyweightDirectionJournal();
+  const old=JSON.stringify(r.events);
+  const correction={type:'SET_CORRECTED',eventId:'correct-bodyweight',
+    commitOrdinal:r.events.length+1,blockId:'test-block',
+    sessionId:'bw2',targetEventId:r.earned[0].eventId,
+    roleSlotId:'vertical-pull',exerciseId:'chin-up',setIndex:0,
+    reps:7,actualG:5000,actualOrigin:origin(5000)};
+  const guard={ownerId:'test-owner',blockId:'test-block',foldRulesVersion:1,
+    expectedHead:r.events.length,sealRevision:0,activeWorkout:false};
+  assert.throws(()=>commitBB2Transaction(opening(),r.events,[correction],guard),
+    /unresolved correction consent/);
+  assert.equal(JSON.stringify(r.events),old);
+});
+check('bodyweight KEEP-AS-MANUAL retains accepted historical variation and original ordinal',()=>{
+  const r=bodyweightDirectionJournal();
+  const correction={type:'SET_CORRECTED',eventId:'correct-bodyweight',
+    commitOrdinal:r.events.length+1,blockId:'test-block',
+    sessionId:'bw2',targetEventId:r.earned[0].eventId,
+    reps:7,actualG:5000,actualOrigin:origin(5000)};
+  const keep={type:'CHOICE_RECLASSIFIED',eventId:'keep-bodyweight',
+    commitOrdinal:r.events.length+2,blockId:'test-block',
+    targetEventId:r.choice.eventId,decision:'KEEP_AS_MANUAL'};
+  const out=commitBB2Transaction(opening(),r.events,[correction,keep],{
+    ownerId:'test-owner',blockId:'test-block',foldRulesVersion:1,
+    expectedHead:r.events.length,sealRevision:0,activeWorkout:false
+  });
+  assert.deepEqual(out.projection.requiredConsent,[]);
+  assert.equal(out.projection.progress[bodyweightProgressKey].loadG,7500);
+  assert.equal(out.projection.progress[bodyweightProgressKey].variation,'weighted-chin');
+  assert.equal(out.projection.progress[bodyweightProgressKey].epochId,
+    'choice:'+r.choice.eventId);
+  assert.equal(out.projection.progress[bodyweightProgressKey].bestReps,null);
+});
+check('bodyweight REPLACE makes a new explicitly chosen variation and load',()=>{
+  const r=bodyweightDirectionJournal();
+  voidDifficultyTop(r,r.earned[0]);
+  const replacement=r.append('CHOICE_REPLACED',{
+    targetEventId:r.choice.eventId,sourceSessionId:'bw2',
+    roleSlotId:'vertical-pull',exerciseId:'chin-up',
+    decision:'REPLACE',loadG:7000,loadOrigin:origin(7000),
+    variation:'assisted-chin',assistance:'medium-band'
+  });
+  const p=foldBB2Block(opening(),r.events);
+  assert.deepEqual(p.requiredConsent,[]);
+  assert.equal(p.progress[bodyweightProgressKey].loadG,7000);
+  assert.equal(p.progress[bodyweightProgressKey].variation,'assisted-chin');
+  assert.equal(p.progress[bodyweightProgressKey].assistance,'medium-band');
+  assert.equal(p.progress[bodyweightProgressKey].epochId,'choice:'+replacement.eventId);
+});
+check('later qualified same-identity bodyweight exposure supersedes invalidated earlier choice',()=>{
+  const r=bodyweightDirectionJournal(true);
+  voidDifficultyTop(r,r.earned[0]);
+  const p=foldBB2Block(opening(),r.events);
+  assert.deepEqual(p.requiredConsent,[]);
+  assert.equal(p.progress[bodyweightProgressKey].loadG,7500);
+  assert.equal(p.progress[bodyweightProgressKey].bestReps,21);
+});
+check('bodyweight replacement refuses missing variation or invalid assistance',()=>{
+  const r=bodyweightDirectionJournal();
+  voidDifficultyTop(r,r.earned[0]);
+  const repl=r.append('CHOICE_REPLACED',{
+    targetEventId:r.choice.eventId,sourceSessionId:'bw2',
+    roleSlotId:'vertical-pull',exerciseId:'chin-up',
+    decision:'REPLACE',loadG:7000,loadOrigin:origin(7000),
+    variation:'assisted-chin',assistance:'medium-band'
+  });
+  const damaged=structuredClone(r.events);
+  delete damaged.at(-1).variation;
+  assert.throws(()=>foldBB2Block(opening(),damaged),/replacement difficulty variation/);
+  const invalid=structuredClone(r.events);
+  invalid.at(-1).assistance=19;
+  assert.throws(()=>foldBB2Block(opening(),invalid),/replacement assistance/);
+  assert.ok(repl.eventId);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);
