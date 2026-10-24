@@ -239,6 +239,12 @@ const faults=[
   {name:'IGNORE-TAMPERED-SEALED-PROGRESS',
     from:"!sameCanonicalValue(previousProjection.progress, closing.progress) ||",
     to:"false ||"},
+  {name:'REWRITE-IMMUTABLE-START-PLAN-IN-HISTORY',
+    from:"initialSlots: clone(s.initialSlots),",
+    to:"initialSlots: clone(s.slots),"},
+  {name:'LOSE-EFFECTIVE-LOCK-TIME-PLAN-IN-HISTORY',
+    from:"effectiveSlots: s.slots.map(slot => clone(s.lockSnapshots.get(slot.roleSlotId) || slot)),",
+    to:"effectiveSlots: clone(s.initialSlots),"},
   {name:'IGNORE-TAMPERED-SEALED-SELECTIONS',
     from:"!sameCanonicalValue(previousProjection.selections, closing.selections) ||",
     to:"false ||"}
