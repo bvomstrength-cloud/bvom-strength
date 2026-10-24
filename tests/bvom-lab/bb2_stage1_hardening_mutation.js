@@ -91,7 +91,25 @@ const faults=[
     to:"if (false && s.accepted.has(slot.roleSlotId)) fail('duplicate calibration acceptance');"},
   {name:'ALLOW-DUPLICATE-SESSION-VOID',
     from:"if (voidSessions.has(e.sessionId)) fail('duplicate session void');",
-    to:"if (false && voidSessions.has(e.sessionId)) fail('duplicate session void');"}
+    to:"if (false && voidSessions.has(e.sessionId)) fail('duplicate session void');"},
+  {name:'ALLOW-EXERCISE-LOCK-AFTER-FINISH',
+    from:"if (s.outcome) fail('exercise lock after workout outcome');",
+    to:"if (false && s.outcome) fail('exercise lock after workout outcome');"},
+  {name:'ALLOW-SESSION-EDIT-AFTER-FINISH',
+    from:"if (session?.outcome) fail('session edit after workout outcome');",
+    to:"if (false && session?.outcome) fail('session edit after workout outcome');"},
+  {name:'ALLOW-UNKNOWN-SESSION-EDIT',
+    from:"if (e.sessionId && !session) fail('edit references unknown session');",
+    to:"if (false && e.sessionId && !session) fail('edit references unknown session');"},
+  {name:'ALLOW-HISTORY-HIDE-BEFORE-FINISH',
+    from:"if (e.type !== 'NOTE_EDITED' && !sessions.get(e.sessionId).outcome) {",
+    to:"if (false && e.type !== 'NOTE_EDITED' && !sessions.get(e.sessionId).outcome) {"},
+  {name:'ALLOW-VOID-DURING-ACTIVE-WORKOUT',
+    from:"if ([...sessions.values()].some(x => !x.outcome)) fail('retrospective revision during active workout');",
+    to:"if (false && [...sessions.values()].some(x => !x.outcome)) fail('retrospective revision during active workout');"},
+  {name:'ALLOW-CORRECTION-DURING-ACTIVE-WORKOUT',
+    from:"if (!sessions.get(e.sessionId)?.outcome) fail('correction before Finish');\n        if ([...sessions.values()].some(x => !x.outcome)) fail('retrospective revision during active workout');",
+    to:"if (!sessions.get(e.sessionId)?.outcome) fail('correction before Finish');\n        if (false && [...sessions.values()].some(x => !x.outcome)) fail('retrospective revision during active workout');"}
 ];
 let killed=0;
 for(const fault of faults) {

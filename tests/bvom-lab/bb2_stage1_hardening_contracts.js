@@ -897,5 +897,75 @@ check('session void is idempotent by stable source session identity',()=>{
   assert.throws(()=>foldBB2Block(opening(),r.events),/duplicate session void/);
 });
 
+
+check('exercise lock cannot be recorded after saved Incomplete or Finish',()=>{
+  for(const outcome of ['WORKOUT_INCOMPLETE','WORKOUT_FINISHED']) {
+    const r=log();r.start('already-ended',3);
+    if(outcome==='WORKOUT_FINISHED')r.sets('already-ended',3);
+    r.append(outcome,{sessionId:'already-ended'});
+    r.append('EXERCISE_LOCKED',{sessionId:'already-ended',
+      roleSlotId:'bench',exerciseId:'barbell-bench',
+      plannedG:100000,plannedOrigin:origin(100000)});
+    assert.throws(()=>foldBB2Block(opening(),r.events),
+      /exercise lock after workout outcome/);
+  }
+});
+check('session-tied future prescription edit is refused after its Finish',()=>{
+  const r=log();r.start('done',3);r.sets('done',3);r.finish('done');
+  const field={templateId:'upper_a',roleSlotId:'bench',
+    exerciseId:'barbell-bench',loadG:102500,loadOrigin:origin(102500),scope:'GLOBAL'};
+  r.append('PRESCRIPTION_EDITED',{...field,sessionId:'done'});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/session edit after workout outcome/);
+  r.events.pop();
+  r.append('PRESCRIPTION_EDITED',field);
+  assert.equal(foldBB2Block(opening(),r.events).progress['upper_a|bench|barbell-bench'].loadG,102500);
+});
+check('session-tied edit cannot refer to unknown session even with valid template',()=>{
+  const r=log();r.append('PRESCRIPTION_EDITED',{
+    sessionId:'fictional-session',templateId:'upper_a',
+    roleSlotId:'bench',exerciseId:'barbell-bench',scope:'GLOBAL',
+    loadG:102500,loadOrigin:origin(102500)
+  });
+  assert.throws(()=>foldBB2Block(opening(),r.events),/edit references unknown session/);
+});
+check('hide or unhide requires History outcome; active notes remain harmless',()=>{
+  for(const type of ['HISTORY_HIDDEN','HISTORY_UNHIDDEN']){
+    const r=log();r.start('still-active',3);r.append(type,{sessionId:'still-active'});
+    assert.throws(()=>foldBB2Block(opening(),r.events),
+      /History visibility requires finished session/);
+  }
+  const r=log();r.start('still-active',3);
+  r.append('NOTE_EDITED',{sessionId:'still-active',text:'Session note'});
+  assert.equal(foldBB2Block(opening(),r.events).headOrdinal,2);
+});
+check('post-Finish set revisions cannot be recorded while another session is active',()=>{
+  const r=log();r.start('old',3);const saved=r.sets('old',3);r.finish('old');
+  r.start('current',3);
+  r.append('SET_CORRECTED',{
+    sessionId:'old',targetEventId:saved[0].eventId,
+    roleSlotId:'bench',exerciseId:'barbell-bench',setIndex:0,
+    reps:6,actualG:100000,actualOrigin:origin(100000)
+  });
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /retrospective revision during active workout/);
+  r.events.pop();r.append('WORKOUT_INCOMPLETE',{sessionId:'current'});
+  r.append('SET_CORRECTED',{
+    sessionId:'old',targetEventId:saved[0].eventId,reps:6,
+    actualG:100000,actualOrigin:origin(100000)
+  });
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.history.find(h=>h.sessionId==='old').sets[0].reps,6);
+});
+check('session void cannot be committed during a different active workout',()=>{
+  const r=log();r.start('old',3);r.sets('old',3);r.finish('old');
+  r.start('current',3);
+  r.append('SESSION_VOIDED',{sessionId:'old'});
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /retrospective revision during active workout/);
+  r.events.pop();r.append('WORKOUT_INCOMPLETE',{sessionId:'current'});
+  r.append('SESSION_VOIDED',{sessionId:'old'});
+  assert.equal(foldBB2Block(opening(),r.events).history.find(h=>h.sessionId==='old').status,'VOID');
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);

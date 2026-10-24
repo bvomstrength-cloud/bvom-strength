@@ -391,6 +391,7 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
       }
       case 'EXERCISE_LOCKED': {
         const s = sessions.get(e.sessionId), slot = findSlot(s, e);
+        if (s.outcome) fail('exercise lock after workout outcome');
         if (s.locks.has(slot.roleSlotId)) fail('duplicate exercise lock');
         if (s.seenSets.has(slot.roleSlotId)) fail('late exercise lock');
         if (e.plannedG !== slot.plannedG) fail('lock plan differs from committed plan');
@@ -404,6 +405,8 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         const templateId = e.templateId ?? sessions.get(e.sessionId)?.templateId;
         const key = identity(templateId, e.roleSlotId, e.exerciseId);
         const session = e.sessionId ? sessions.get(e.sessionId) : null;
+        if (e.sessionId && !session) fail('edit references unknown session');
+        if (session?.outcome) fail('session edit after workout outcome');
         const slot = session ? findSlot(session, e) : null;
         if (slot && (session.locks.has(slot.roleSlotId) || session.seenSets.has(slot.roleSlotId))) fail('edit after lock');
         const p = getProgress(key, slot);
@@ -621,6 +624,9 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
       case 'HISTORY_UNHIDDEN':
       case 'NOTE_EDITED': {
         if (!sessions.has(e.sessionId)) fail('History change targets unknown session');
+        if (e.type !== 'NOTE_EDITED' && !sessions.get(e.sessionId).outcome) {
+          fail('History visibility requires finished session');
+        }
         if (e.type === 'HISTORY_HIDDEN') hidden.add(e.sessionId);
         if (e.type === 'HISTORY_UNHIDDEN') hidden.delete(e.sessionId);
         if (e.type === 'NOTE_EDITED') notes.set(e.sessionId, e.text);
@@ -637,7 +643,9 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
       }
       case 'UNIT_METADATA': unitMetadata.push({ eventId: e.eventId, ordinal: e.commitOrdinal, unit: e.unit }); break;
       case 'SESSION_VOIDED': {
-        if (!sessions.has(e.sessionId) || !sessions.get(e.sessionId).outcome) fail('void unknown/unfinished session'); break;
+        if (!sessions.has(e.sessionId) || !sessions.get(e.sessionId).outcome) fail('void unknown/unfinished session');
+        if ([...sessions.values()].some(x => !x.outcome)) fail('retrospective revision during active workout');
+        break;
       }
       case 'BLOCK_SEALED': {
         if (sealed) fail('duplicate block seal');
@@ -648,6 +656,7 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
       case 'SET_CORRECTED':
       case 'SET_VOIDED': {
         if (!sessions.get(e.sessionId)?.outcome) fail('correction before Finish');
+        if ([...sessions.values()].some(x => !x.outcome)) fail('retrospective revision during active workout');
         break;
       }
       case 'BLOCK_CREATED':
