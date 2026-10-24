@@ -491,7 +491,8 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
           }
         }
         sessions.set(e.sessionId, { sessionId: e.sessionId, templateId: e.templateId, kind: e.kind, slots,
-          initialSlots: clone(slots), locks: new Set(), seenSets: new Set(), accepted: new Map(), outcome: null,
+          initialSlots: clone(slots), locks: new Set(), lockSnapshots: new Map(),
+          seenSets: new Set(), accepted: new Map(), outcome: null,
           finishOrdinal: null, note: '' });
         break;
       }
@@ -529,6 +530,7 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
             fail('lock increment origin differs from saved plan');
           }
         }
+        s.lockSnapshots.set(slot.roleSlotId, clone(slot));
         s.locks.add(slot.roleSlotId); break;
       }
       case 'PRESCRIPTION_EDITED':
@@ -610,6 +612,11 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
           if (e.setIndex >= slot.sets + 30) fail('extra working set index exceeds limit');
         }
         if (!validSet(e, slot)) fail('invalid recorded set');
+        // First working set implicitly locks the effective plan before
+        // any session-only calibration trial can revise it.
+        if (!s.lockSnapshots.has(slot.roleSlotId)) {
+          s.lockSnapshots.set(slot.roleSlotId, clone(slot));
+        }
         s.seenSets.add(slot.roleSlotId); s.locks.add(slot.roleSlotId); break;
       }
       case 'CALIBRATION_PLAN_REVISED': {
@@ -940,7 +947,12 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         activeCredits.has(s.sessionId) ? 'COMPLETED_NORMAL' : 'COMPLETED_NORMAL_NONCREDIT') :
         s.kind === 'RECOVERY' ? 'LOW_STRESS_RECOVERY' : 'INCOMPLETE_CORRECTED',
     creditId: activeCredits.get(s.sessionId) ?? null, prescribedCount: s.prescribedCount,
-    validCount: s.validCount, slots: clone(s.slots), hidden: hidden.has(s.sessionId), note: notes.get(s.sessionId) || '',
+    validCount: s.validCount,
+    // Original Start plan and effective first-lock plan are separate audit
+    // snapshots. Keep legacy `slots` unchanged for existing projections.
+    initialSlots: clone(s.initialSlots),
+    effectiveSlots: s.slots.map(slot => clone(s.lockSnapshots.get(slot.roleSlotId) || slot)),
+    slots: clone(s.slots), hidden: hidden.has(s.sessionId), note: notes.get(s.sessionId) || '',
     sets: s.slots.flatMap(slot => [...records.entries()].filter(([k, record]) =>
       k.startsWith(`${s.sessionId}|${slot.roleSlotId}|`) && record).map(([, record]) => ({
       roleSlotId: slot.roleSlotId, exerciseId: slot.exerciseId, setIndex: record.setIndex,
