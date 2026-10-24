@@ -1046,5 +1046,44 @@ check('bodyweight correction cannot replace valid actual with missing required l
   assert.throws(()=>foldBB2Block(opening(),r.events),/invalid corrected grams/);
 });
 
+
+check('qualitative bodyweight exercise may lock without fictitious numeric load',()=>{
+  const r=log(),chosen=bwSlot();
+  delete chosen.plannedG;delete chosen.plannedOrigin;
+  r.append('WORKOUT_STARTED',{sessionId:'qual-lock',templateId:'upper_a',
+    kind:'NORMAL',slots:[chosen]});
+  r.append('EXERCISE_LOCKED',{sessionId:'qual-lock',
+    roleSlotId:'vertical-pull',exerciseId:'chin-up'});
+  for(let i=0;i<3;i++)r.append('SET_RECORDED',{
+    sessionId:'qual-lock',roleSlotId:'vertical-pull',exerciseId:'chin-up',
+    setIndex:i,reps:7,variation:'chin-up',assistance:'none',prescribed:true
+  });
+  r.append('WORKOUT_INCOMPLETE',{sessionId:'qual-lock'});
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.history[0].validCount,3);
+  assert.equal(p.history[0].status,'INCOMPLETE');
+});
+check('qualitative exercise lock rejects spurious numeric origin',()=>{
+  const r=log(),chosen=bwSlot();
+  delete chosen.plannedG;delete chosen.plannedOrigin;
+  r.append('WORKOUT_STARTED',{sessionId:'q',templateId:'upper_a',
+    kind:'NORMAL',slots:[chosen]});
+  r.append('EXERCISE_LOCKED',{sessionId:'q',roleSlotId:'vertical-pull',
+    exerciseId:'chin-up',plannedOrigin:origin(0)});
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /qualitative lock cannot have numeric origin/);
+});
+check('numeric exercise lock must still match its saved plan and numeric origin',()=>{
+  const r=log();r.start('numeric',3);
+  r.append('EXERCISE_LOCKED',{sessionId:'numeric',
+    roleSlotId:'bench',exerciseId:'barbell-bench'});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/lock plan differs from committed plan/);
+  r.events.pop();
+  r.append('EXERCISE_LOCKED',{sessionId:'numeric',
+    roleSlotId:'bench',exerciseId:'barbell-bench',
+    plannedG:100000,plannedOrigin:{value:'99',unit:'kg'}});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/invalid planned origin/);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);

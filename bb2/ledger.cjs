@@ -120,7 +120,11 @@ function validateEventPayload(e) {
       break;
     case 'EXERCISE_LOCKED':
       positiveId(e.sessionId, 'session');
-      mass('planned', 'plannedG', 'plannedOrigin');
+      // A qualitative bodyweight variation deliberately has no numeric
+      // working load. Its lock records identity/order, not fictitious kg.
+      // When numeric, original magnitude/unit evidence remains mandatory.
+      if (e.plannedG !== undefined) mass('planned', 'plannedG', 'plannedOrigin');
+      else if (e.plannedOrigin !== undefined) fail('qualitative lock cannot have numeric origin');
       break;
     case 'CALIBRATION_PLAN_REVISED': mass('planned', 'plannedG', 'plannedOrigin'); break;
     case 'CALIBRATION_ACCEPTED':

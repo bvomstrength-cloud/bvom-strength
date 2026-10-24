@@ -115,7 +115,13 @@ const faults=[
     to:"true &&"},
   {name:'SKIP-BODYWEIGHT-NUMERIC-EVIDENCE',
     from:"? slot.plannedG === undefined",
-    to:"? true"}
+    to:"? true"},
+  {name:'ALLOW-QUALITATIVE-LOCK-ORIGIN',
+    from:"else if (e.plannedOrigin !== undefined) fail('qualitative lock cannot have numeric origin');",
+    to:"else if (false && e.plannedOrigin !== undefined) fail('qualitative lock cannot have numeric origin');"},
+  {name:'SKIP-NUMERIC-LOCK-ORIGIN-VALIDATION',
+    from:"if (e.plannedG !== undefined) mass('planned', 'plannedG', 'plannedOrigin');",
+    to:"if (false && e.plannedG !== undefined) mass('planned', 'plannedG', 'plannedOrigin');"}
 ];
 let killed=0;
 for(const fault of faults) {
