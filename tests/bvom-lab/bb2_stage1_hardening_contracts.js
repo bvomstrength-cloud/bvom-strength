@@ -1085,5 +1085,83 @@ check('numeric exercise lock must still match its saved plan and numeric origin'
   assert.throws(()=>foldBB2Block(opening(),r.events),/invalid planned origin/);
 });
 
+
+check('bodyweight Start requires an explicit slot variation and assistance',()=>{
+  for(const field of ['variation','assistance']){
+    const r=log(),slot=bwSlot();delete slot[field];
+    r.append('WORKOUT_STARTED',{sessionId:'missing-slot-'+field,
+      templateId:'upper_a',kind:'NORMAL',slots:[slot]});
+    assert.throws(()=>foldBB2Block(opening(),r.events),
+      /invalid bodyweight slot identity/);
+  }
+  const r=log(),slot=bwSlot();slot.variation='  ';
+  r.append('WORKOUT_STARTED',{sessionId:'blank-variation',
+    templateId:'upper_a',kind:'NORMAL',slots:[slot]});
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /invalid bodyweight slot identity/);
+});
+check('pre-lock assistance-only edit is committed and used for same-session comparability',()=>{
+  const r=log();
+  r.append('WORKOUT_STARTED',{sessionId:'assisted',templateId:'upper_a',
+    kind:'NORMAL',slots:[bwSlot()]});
+  const edit=r.append('VARIATION_EDITED',{sessionId:'assisted',templateId:'upper_a',
+    roleSlotId:'vertical-pull',exerciseId:'chin-up',scope:'GLOBAL',
+    variation:'chin-up',assistance:'medium-band'});
+  for(let i=0;i<3;i++)r.append('SET_RECORDED',{sessionId:'assisted',
+    roleSlotId:'vertical-pull',exerciseId:'chin-up',setIndex:i,reps:7,
+    actualG:5000,actualOrigin:origin(5000),
+    variation:'chin-up',assistance:'medium-band',prescribed:true});
+  r.finish('assisted');
+  const p=foldBB2Block(opening(),r.events);
+  const q=p.progress[bodyweightProgressKey];
+  assert.deepEqual([q.variation,q.assistance,q.bestReps,q.stallCount],
+    ['chin-up','medium-band',21,0]);
+  assert.equal(q.epochId,'event:'+edit.eventId);
+  assert.equal(p.history[0].sets[0].assistance,'medium-band');
+  assert.deepEqual(p.pending,{});
+});
+check('no-op variation edit accounts for BOTH variation and assistance',()=>{
+  const r=log();r.append('WORKOUT_STARTED',{sessionId:'no-op',
+    templateId:'upper_a',kind:'NORMAL',slots:[bwSlot()]});
+  r.append('VARIATION_EDITED',{sessionId:'no-op',templateId:'upper_a',
+    roleSlotId:'vertical-pull',exerciseId:'chin-up',
+    scope:'GLOBAL',variation:'chin-up',assistance:'light-band'});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/no-op variation event/);
+  r.events.pop();
+  r.append('VARIATION_EDITED',{sessionId:'no-op',templateId:'upper_a',
+    roleSlotId:'vertical-pull',exerciseId:'chin-up',
+    scope:'GLOBAL',variation:'chin-up',assistance:'medium-band'});
+  assert.equal(foldBB2Block(opening(),r.events).progress[bodyweightProgressKey].assistance,
+    'medium-band');
+  r.append('VARIATION_EDITED',{sessionId:'no-op',templateId:'upper_a',
+    roleSlotId:'vertical-pull',exerciseId:'chin-up',
+    scope:'GLOBAL',variation:'chin-up',assistance:'medium-band'});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/no-op variation event/);
+});
+check('standalone future variation+assistance change starts one new epoch',()=>{
+  const r=bwJournal();
+  const before=foldBB2Block(opening(),r.events).progress[bodyweightProgressKey];
+  assert.equal(before.bestReps,20);
+  const edit=r.append('VARIATION_EDITED',{templateId:'upper_a',
+    roleSlotId:'vertical-pull',exerciseId:'chin-up',
+    scope:'GLOBAL',variation:'weighted-chin',assistance:'none'});
+  const changed=foldBB2Block(opening(),r.events).progress[bodyweightProgressKey];
+  assert.equal(changed.variation,'weighted-chin');
+  assert.equal(changed.assistance,'none');
+  assert.equal(changed.bestReps,null);
+  assert.equal(changed.stallCount,0);
+  assert.equal(changed.epochId,'event:'+edit.eventId);
+  assert.equal(before.variation,'chin-up');
+  assert.equal(before.assistance,'light-band');
+});
+check('malformed variation assistance cannot enter committed event stream',()=>{
+  const r=log();r.append('WORKOUT_STARTED',{sessionId:'bad-assist',
+    templateId:'upper_a',kind:'NORMAL',slots:[bwSlot()]});
+  r.append('VARIATION_EDITED',{sessionId:'bad-assist',
+    roleSlotId:'vertical-pull',exerciseId:'chin-up',
+    scope:'GLOBAL',variation:'chin-up',assistance:123});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/invalid variation assistance/);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);

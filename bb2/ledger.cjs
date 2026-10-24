@@ -253,6 +253,9 @@ function validateSlot(s) {
   positiveId(s.roleSlotId, 'slot'); positiveId(s.exerciseId, 'exercise');
   integer(s.sets, 'prescribed set count', 1); integer(s.ceiling, 'rep ceiling', 1);
   if (s.equipment !== 'loaded' && s.equipment !== 'bodyweight') fail('invalid equipment');
+  if (s.equipment === 'bodyweight' &&
+      (typeof s.variation !== 'string' || !s.variation.trim() ||
+       typeof s.assistance !== 'string')) fail('invalid bodyweight slot identity');
   if (s.plannedG !== undefined) validateMassOrigin(s.plannedG, s.plannedOrigin, 'planned');
   if (s.equipment === 'loaded' && s.plannedG === undefined) fail('missing planned grams');
   if (s.incrementG !== undefined) validateMassOrigin(s.incrementG, s.incrementOrigin, 'increment');
@@ -447,9 +450,16 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
           if (slot) { slot.incrementG = e.incrementG; slot.incrementOrigin = clone(e.incrementOrigin); }
         } else if (e.type === 'VARIATION_EDITED') {
           positiveId(e.variation, 'variation');
-          if (p.variation === e.variation) fail('no-op variation event');
-          p.variation = e.variation; p.bestReps = null; p.stallCount = 0; p.epochId = `event:${e.eventId}`;
-          if (slot) slot.variation = e.variation;
+          if (own(e, 'assistance') && typeof e.assistance !== 'string') {
+            fail('invalid variation assistance');
+          }
+          const nextAssistance = own(e, 'assistance') ? e.assistance : p.assistance;
+          if (p.variation === e.variation && p.assistance === nextAssistance) {
+            fail('no-op variation event');
+          }
+          p.variation = e.variation; p.assistance = nextAssistance;
+          p.bestReps = null; p.stallCount = 0; p.epochId = `event:${e.eventId}`;
+          if (slot) { slot.variation = e.variation; slot.assistance = nextAssistance; }
           boundary(key, e.commitOrdinal, 'explicit');
         } else {
           integer(e.loadG, 'working grams');

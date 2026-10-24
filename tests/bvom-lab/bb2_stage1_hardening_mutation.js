@@ -121,7 +121,16 @@ const faults=[
     to:"else if (false && e.plannedOrigin !== undefined) fail('qualitative lock cannot have numeric origin');"},
   {name:'SKIP-NUMERIC-LOCK-ORIGIN-VALIDATION',
     from:"if (e.plannedG !== undefined) mass('planned', 'plannedG', 'plannedOrigin');",
-    to:"if (false && e.plannedG !== undefined) mass('planned', 'plannedG', 'plannedOrigin');"}
+    to:"if (false && e.plannedG !== undefined) mass('planned', 'plannedG', 'plannedOrigin');"},
+  {name:'ALLOW-UNSPECIFIED-BODYWEIGHT-SLOT-IDENTITY',
+    from:"typeof s.assistance !== 'string')) fail('invalid bodyweight slot identity');",
+    to:"false)) fail('invalid bodyweight slot identity');"},
+  {name:'DROP-VARIATION-ASSISTANCE-EDIT',
+    from:"p.variation = e.variation; p.assistance = nextAssistance;",
+    to:"p.variation = e.variation;"},
+  {name:'ALLOW-NO-OP-ASSISTANCE-EDIT',
+    from:"if (p.variation === e.variation && p.assistance === nextAssistance) {",
+    to:"if (false && p.variation === e.variation && p.assistance === nextAssistance) {"}
 ];
 let killed=0;
 for(const fault of faults) {
