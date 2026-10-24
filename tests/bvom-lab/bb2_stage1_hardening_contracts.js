@@ -990,5 +990,61 @@ check('globally committed pre-lock edit survives Discard but cannot be forged af
   assert.throws(()=>foldBB2Block(opening(),forged),/edit references unknown session/);
 });
 
+
+check('bodyweight prescribed set must explicitly record variation and assistance',()=>{
+  const r=bwJournal();
+  const missing=structuredClone(r.events);
+  const first=missing.find(e=>e.type==='SET_RECORDED');
+  delete first.assistance;
+  assert.throws(()=>foldBB2Block(opening(),missing),/invalid recorded set/);
+  const blank=structuredClone(r.events);
+  blank.find(e=>e.type==='SET_RECORDED').variation='   ';
+  assert.throws(()=>foldBB2Block(opening(),blank),/invalid recorded set/);
+});
+check('numeric-plan bodyweight set cannot omit recorded added load',()=>{
+  const r=bwJournal();
+  const missing=structuredClone(r.events);
+  const first=missing.find(e=>e.type==='SET_RECORDED');
+  delete first.actualG;delete first.actualOrigin;
+  assert.throws(()=>foldBB2Block(opening(),missing),/invalid recorded set/);
+});
+check('zero added weight and explicit no-assistance remain valid bodyweight evidence',()=>{
+  const r=log();
+  r.append('WORKOUT_STARTED',{sessionId:'unloaded',
+    templateId:'upper_a',kind:'NORMAL',
+    slots:[{...bwSlot(),plannedG:0,plannedOrigin:origin(0),
+      assistance:'none'}]});
+  for(let i=0;i<3;i++)r.append('SET_RECORDED',{
+    sessionId:'unloaded',roleSlotId:'vertical-pull',exerciseId:'chin-up',
+    setIndex:i,reps:7,actualG:0,actualOrigin:origin(0),
+    variation:'chin-up',assistance:'none',prescribed:true
+  });
+  r.finish('unloaded');
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.history[0].validCount,3);
+  assert.equal(p.progress['upper_a|vertical-pull|chin-up'].calibrated,true);
+});
+check('qualitative bodyweight variant without numeric plan may omit numeric load',()=>{
+  const r=log(),slot=bwSlot();
+  delete slot.plannedG;delete slot.plannedOrigin;
+  r.append('WORKOUT_STARTED',{sessionId:'qualitative',templateId:'upper_a',
+    kind:'NORMAL',slots:[slot]});
+  for(let i=0;i<3;i++)r.append('SET_RECORDED',{
+    sessionId:'qualitative',roleSlotId:'vertical-pull',exerciseId:'chin-up',
+    setIndex:i,reps:7,variation:'chin-up',assistance:'none',prescribed:true
+  });
+  r.append('WORKOUT_INCOMPLETE',{sessionId:'qualitative'});
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.history[0].validCount,3);
+  assert.equal(p.history[0].status,'INCOMPLETE');
+});
+check('bodyweight correction cannot replace valid actual with missing required load',()=>{
+  const r=bwJournal();
+  r.append('SET_CORRECTED',{sessionId:'bw',
+    targetEventId:r.source[0].eventId,reps:7,
+    actualOrigin:origin(5000)});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/invalid corrected grams/);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);

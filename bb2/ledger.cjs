@@ -257,7 +257,15 @@ function validateSlot(s) {
 function validSet(record, slot) {
   if (!record || !Number.isSafeInteger(record.reps) || record.reps <= 0) return false;
   if (slot.equipment === 'loaded') return Number.isSafeInteger(record.actualG) && record.actualG >= 0;
-  return typeof record.variation === 'string' && record.variation.length > 0;
+  // Bodyweight work needs an explicit actual variation and assistance choice,
+  // including the explicit 'none' value. Numeric added load must be valid when
+  // the selected slot has a numeric plan; qualitative bodyweight variations
+  // may omit it, but may never invent an invalid numeric magnitude.
+  return typeof record.variation === 'string' && !!record.variation.trim() &&
+    typeof record.assistance === 'string' &&
+    (record.actualG === undefined
+      ? slot.plannedG === undefined
+      : Number.isSafeInteger(record.actualG) && record.actualG >= 0);
 }
 const sessionEligible = s => s.kind === 'NORMAL' || s.kind === 'EXTRA_NORMAL';
 function evidenceFor(s, roleSlotId, effectiveSets) {

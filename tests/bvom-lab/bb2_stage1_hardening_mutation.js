@@ -109,7 +109,13 @@ const faults=[
     to:"if (false && [...sessions.values()].some(x => !x.outcome)) fail('retrospective revision during active workout');"},
   {name:'ALLOW-CORRECTION-DURING-ACTIVE-WORKOUT',
     from:"if (!sessions.get(e.sessionId)?.outcome) fail('correction before Finish');\n        if ([...sessions.values()].some(x => !x.outcome)) fail('retrospective revision during active workout');",
-    to:"if (!sessions.get(e.sessionId)?.outcome) fail('correction before Finish');\n        if (false && [...sessions.values()].some(x => !x.outcome)) fail('retrospective revision during active workout');"}
+    to:"if (!sessions.get(e.sessionId)?.outcome) fail('correction before Finish');\n        if (false && [...sessions.values()].some(x => !x.outcome)) fail('retrospective revision during active workout');"},
+  {name:'SKIP-BODYWEIGHT-ASSISTANCE-VALIDATION',
+    from:"typeof record.assistance === 'string' &&",
+    to:"true &&"},
+  {name:'SKIP-BODYWEIGHT-NUMERIC-EVIDENCE',
+    from:"? slot.plannedG === undefined",
+    to:"? true"}
 ];
 let killed=0;
 for(const fault of faults) {
