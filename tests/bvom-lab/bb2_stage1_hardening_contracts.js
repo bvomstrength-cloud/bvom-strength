@@ -2,7 +2,8 @@
 // Intended to be run against an isolated ledger.cjs, not BB1 runtime.
 'use strict';
 const assert = require('node:assert/strict');
-const { createBB2Opening, foldBB2Block, planBB2Finish, commitBB2Transaction } = require('../../bb2/ledger.cjs');
+const { createBB2Opening, foldBB2Block, planBB2Finish, commitBB2Transaction,
+  createNextBB2Opening, discardBB2Session } = require('../../bb2/ledger.cjs');
 const origin = grams => ({ value: String(grams / 1000), unit: 'kg' });
 const slot = (sets) => ({
   roleSlotId:'bench', exerciseId:'barbell-bench', equipment:'loaded', sets,
@@ -371,6 +372,136 @@ check('RECOVERY B cannot supersede invalidated A acceptance',()=>{
   voidSet(r,'A',r.a[0]);
   const p=foldBB2Block(opening(),r.events);
   assert.deepEqual(p.requiredConsent.map(x=>x.choiceEventId),[r.choice.eventId]);
+});
+
+
+const sealedFixture=()=>{
+  const r=log();
+  for(const templateId of ['upper_a','lower_a','upper_b','lower_b']){
+    for(let i=1;i<=8;i++){
+      const sessionId=templateId+'-'+i;
+      r.append('WORKOUT_STARTED',{sessionId,templateId,kind:'NORMAL',slots:[slot(1)]});
+      r.append('SET_RECORDED',{sessionId,roleSlotId:'bench',exerciseId:'barbell-bench',
+        setIndex:0,reps:7,actualG:100000,actualOrigin:origin(100000),prescribed:true});
+      r.append('WORKOUT_FINISHED',{sessionId});
+      r.append('CREDIT_GRANTED',{sessionId,creditId:'credit-'+sessionId});
+    }
+  }
+  r.append('BLOCK_SEALED',{sealId:'seal-one'});
+  return r;
+};
+check('sealed prior block denies all training mutations, including recovery and swaps',()=>{
+  const r=sealedFixture();
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.sealed,true);
+  const forged=[
+    {type:'WORKOUT_STARTED',sessionId:'recovery-after-seal',kind:'RECOVERY',
+      templateId:'upper_a',slots:[slot(1)]},
+    {type:'INCREMENT_EDITED',templateId:'upper_a',roleSlotId:'bench',
+      exerciseId:'barbell-bench',incrementG:5000,incrementOrigin:origin(5000),scope:'GLOBAL'},
+    {type:'EXERCISE_SWAPPED',templateId:'upper_a',roleSlotId:'bench',exerciseId:'new-exercise'},
+    {type:'UNIT_METADATA',unit:'lb'},
+    {type:'STALL_OFFER_DISMISSED',templateId:'upper_a',roleSlotId:'bench',exerciseId:'barbell-bench'}
+  ];
+  for(const [i,fields] of forged.entries()){
+    const ev={...fields,eventId:'post-seal-'+i,commitOrdinal:r.events.length+1,
+      blockId:'test-block'};
+    assert.throws(()=>foldBB2Block(opening(),[...r.events,ev]),/sealed block.*read-only/,fields.type);
+  }
+});
+check('notes and History hide/unhide remain legal after seal without changing closing snapshot',()=>{
+  const r=sealedFixture();
+  const p=foldBB2Block(opening(),r.events);
+  r.append('NOTE_EDITED',{sessionId:'upper_a-1',text:'Corrected note after sealing'});
+  r.append('HISTORY_HIDDEN',{sessionId:'upper_a-1'});
+  let changed=foldBB2Block(opening(),r.events);
+  assert.deepEqual(changed.closingSnapshot,p.closingSnapshot);
+  assert.deepEqual(changed.progress,p.progress);
+  assert.deepEqual(changed.quotas,p.quotas);
+  assert.deepEqual(changed.activeCredits,p.activeCredits);
+  assert.equal(changed.sealRevision,p.sealRevision);
+  assert.equal(changed.history.find(x=>x.sessionId==='upper_a-1').hidden,true);
+  assert.equal(changed.history.find(x=>x.sessionId==='upper_a-1').note,'Corrected note after sealing');
+  r.append('HISTORY_UNHIDDEN',{sessionId:'upper_a-1'});
+  changed=foldBB2Block(opening(),r.events);
+  assert.equal(changed.history.find(x=>x.sessionId==='upper_a-1').hidden,false);
+  assert.deepEqual(changed.closingSnapshot,p.closingSnapshot);
+});
+check('sealing rejects unfinished active recovery despite full quotas',()=>{
+  const r=sealedFixture();
+  r.events.pop();
+  r.append('WORKOUT_STARTED',{sessionId:'ongoing-recovery',templateId:'upper_a',
+    kind:'RECOVERY',slots:[slot(1)]});
+  r.append('BLOCK_SEALED',{sealId:'seal-two'});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/cannot seal with unfinished workout/);
+});
+check('BLOCK_CREATED is optional, but when recorded must match opening at ordinal one',()=>{
+  const valid=log();
+  valid.append('BLOCK_CREATED',{ownerId:'test-owner',schemaVersion:1,
+    foldRulesVersion:1,openingSnapshotVersion:1});
+  valid.start('fresh',1);
+  assert.equal(foldBB2Block(opening(),valid.events).headOrdinal,2);
+  for(const change of [
+    {ownerId:'wrong-owner'},{schemaVersion:2},{foldRulesVersion:2},
+    {openingSnapshotVersion:2}
+  ]){
+    const broken=structuredClone(valid.events);
+    Object.assign(broken[0],change);
+    assert.throws(()=>foldBB2Block(opening(),broken),/block creation|unsupported|schema|rules/i);
+  }
+  const late=log();late.start('first',1);
+  late.append('BLOCK_CREATED',{ownerId:'test-owner',schemaVersion:1,
+    foldRulesVersion:1,openingSnapshotVersion:1});
+  assert.throws(()=>foldBB2Block(opening(),late.events),/block creation.*first ordinal/);
+});
+check('Discard tombstones require matching Discard and cannot retain set evidence',()=>{
+  const r=log();r.start('discard-me',1);r.sets('discard-me',1);
+  const discarded=discardBB2Session(r.events,'discard-me');
+  assert.equal(foldBB2Block(opening(),discarded).history.length,0);
+  const orphan=structuredClone(discarded);
+  orphan.at(-1).sessionId='different-session';
+  assert.throws(()=>foldBB2Block(opening(),orphan),/unlinked discard tombstone/);
+  const missing=structuredClone(discarded).filter(e=>e.type!=='TOMBSTONE');
+  missing.forEach((e,i)=>e.commitOrdinal=i+1);
+  assert.throws(()=>foldBB2Block(opening(),missing),/discard missing tombstones/);
+  const leaked=structuredClone(discarded);
+  leaked[0].reps=8;
+  assert.throws(()=>foldBB2Block(opening(),leaked),/tombstone cannot retain/);
+});
+check('next block preserves all 32 credits and sealed provenance with fresh identity',()=>{
+  const p=foldBB2Block(opening(),sealedFixture().events);
+  const next=createNextBB2Opening(p,'block-next');
+  assert.equal(next.previousSealId,'seal-one');
+  assert.equal(next.previousBlockId,'test-block');
+  assert.deepEqual([next.previousSchemaVersion,next.previousFoldRulesVersion,
+    next.previousOpeningSnapshotVersion],[1,1,1]);
+  assert.equal(next.sealRevision,1);
+  assert.equal(next.previousCreditIds.length,32);
+  assert.deepEqual(foldBB2Block(next,[]).quotas,
+    {upper_a:0,lower_a:0,upper_b:0,lower_b:0});
+  assert.throws(()=>createNextBB2Opening(p,'test-block'),/fresh ID/);
+});
+check('damaged sealed ancestry or restored next-opening credit lineage rejects cleanly',()=>{
+  const p=foldBB2Block(opening(),sealedFixture().events);
+  const mutations=[
+    x=>{x.closingSnapshot.priorQuotas.upper_a=7},
+    x=>{x.closingSnapshot.priorCreditIds.pop()},
+    x=>{x.closingSnapshot.priorCreditIds[0]='bogus-credit'},
+    x=>{x.closingSnapshot.sealedBlockId='wrong-block'},
+    x=>{x.closingSnapshot.sealId='stale-seal'},
+    x=>{x.closingSnapshot.foldRulesVersion=999}
+  ];
+  for(const modify of mutations){
+    const bad=structuredClone(p);modify(bad);
+    assert.throws(()=>createNextBB2Opening(bad,'block-next'),/invalid sealed block ancestry/);
+  }
+  const next=createNextBB2Opening(p,'block-next');
+  const corrupt=structuredClone(next);corrupt.previousCreditIds.pop();
+  assert.throws(()=>foldBB2Block(corrupt,[]),/invalid prior credit IDs/);
+  const reused=structuredClone(next);reused.previousBlockId='block-next';
+  assert.throws(()=>foldBB2Block(reused,[]),/fresh ID/);
+  const unsupported=structuredClone(next);unsupported.previousFoldRulesVersion=999;
+  assert.throws(()=>foldBB2Block(unsupported,[]),/invalid prior snapshot version/);
 });
 
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');

@@ -31,7 +31,22 @@ const faults=[
     to:"if (false && e.type === 'CREDIT_GRANTED' && priorCredits.length) fail('second first-grant; use regrant');"},
   {name:'DISABLE-RETRO-CALIBRATION-REAFFIRMATION',
     from:"if (info.onPlan && !info.harder) boundary(key, e.commitOrdinal, 'qualified-calibration');",
-    to:"if (false && info.onPlan && !info.harder) boundary(key, e.commitOrdinal, 'qualified-calibration');"}
+    to:"if (false && info.onPlan && !info.harder) boundary(key, e.commitOrdinal, 'qualified-calibration');"},
+  {name:'ALLOW-TRAINING-AFTER-SEAL',
+    from:"if (sealed && !['NOTE_EDITED', 'HISTORY_HIDDEN', 'HISTORY_UNHIDDEN'].includes(e.type)) {",
+    to:"if (false && sealed && !['NOTE_EDITED', 'HISTORY_HIDDEN', 'HISTORY_UNHIDDEN'].includes(e.type)) {"},
+  {name:'ALLOW-SEAL-DURING-UNFINISHED-WORKOUT',
+    from:"if ([...sessions.values()].some(x => !x.outcome)) fail('cannot seal with unfinished workout');",
+    to:"if (false && [...sessions.values()].some(x => !x.outcome)) fail('cannot seal with unfinished workout');"},
+  {name:'ALLOW-ORPHAN-DISCARD-TOMBSTONE',
+    from:"if (!ordinal || e.commitOrdinal >= ordinal) fail('unlinked discard tombstone');",
+    to:"if (false && (!ordinal || e.commitOrdinal >= ordinal)) fail('unlinked discard tombstone');"},
+  {name:'ALLOW-LATE-BLOCK-CREATION',
+    from:"if (e.type === 'BLOCK_CREATED' &&",
+    to:"if (false && e.type === 'BLOCK_CREATED' &&"},
+  {name:'REUSE-SEALED-PREVIOUS-BLOCK-ID',
+    from:"if (newBlockId === previousProjection.blockId) fail('next block must have a fresh ID');",
+    to:"if (false && newBlockId === previousProjection.blockId) fail('next block must have a fresh ID');"}
 ];
 let killed=0;
 for(const fault of faults) {

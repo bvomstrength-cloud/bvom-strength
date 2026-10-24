@@ -93,6 +93,20 @@ function validateOpening(opening) {
   if (opening.foldRulesVersion !== FOLD_RULES_VERSION) fail('unsupported foldRulesVersion');
   positiveId(opening.ownerId, 'owner'); positiveId(opening.blockId, 'block');
   integer(opening.sealRevision, 'seal revision');
+  if (opening.sealed !== false) fail('opening snapshot must be unsealed');
+  if (opening.previousSealId !== undefined) {
+    positiveId(opening.previousSealId, 'previous seal');
+    positiveId(opening.previousBlockId, 'previous block');
+    if (opening.previousBlockId === opening.blockId) fail('next block must have a fresh ID');
+    if (!opening.previousQuotas || !TEMPLATES.every(t => opening.previousQuotas[t] === 8)) fail('invalid prior quotas');
+    if (!Array.isArray(opening.previousCreditIds) || opening.previousCreditIds.length !== 32 ||
+        new Set(opening.previousCreditIds).size !== 32) fail('invalid prior credit IDs');
+    opening.previousCreditIds.forEach(id => positiveId(id, 'previous credit'));
+    if (opening.sealRevision < 1) fail('missing previous seal revision');
+    if (opening.previousSchemaVersion !== SCHEMA_VERSION ||
+        opening.previousFoldRulesVersion !== FOLD_RULES_VERSION ||
+        opening.previousOpeningSnapshotVersion !== 1) fail('invalid prior snapshot version');
+  }
   if (!opening.progress || typeof opening.progress !== 'object' || Array.isArray(opening.progress)) fail('invalid opening progress');
   for (const item of Object.values(opening.progress)) initialProgress(item);
 }
@@ -128,8 +142,20 @@ function validateEventPayload(e) {
     case 'UNIT_METADATA':
       if (!['kg', 'lb'].includes(e.unit)) fail('invalid display unit metadata');
       break;
+    case 'BLOCK_CREATED':
+      positiveId(e.ownerId, 'creator owner');
+      integer(e.schemaVersion, 'block created schema version', 1);
+      integer(e.foldRulesVersion, 'block created rules version', 1);
+      integer(e.openingSnapshotVersion, 'block created snapshot version', 1);
+      break;
+    case 'BLOCK_SEALED': positiveId(e.sealId, 'seal ID'); break;
     case 'WORKOUT_DISCARDED': positiveId(e.sessionId, 'discarded session'); break;
-    case 'TOMBSTONE': positiveId(e.discardedSessionId, 'discarded session'); break;
+    case 'TOMBSTONE':
+      positiveId(e.discardedSessionId, 'discarded session');
+      if (Object.keys(e).some(k => !['type', 'eventId', 'commitOrdinal', 'blockId', 'discardedSessionId'].includes(k))) {
+        fail('tombstone cannot retain discarded session content');
+      }
+      break;
     default: break;
   }
   if (['SET_RECORDED', 'EXTRA_SET_RECORDED', 'SET_CORRECTED'].includes(e.type) &&
@@ -150,7 +176,29 @@ function validateEvents(opening, events) {
     if (e.commitOrdinal !== i + 1) fail('missing, duplicate or non-consecutive event ordinal');
     if (e.blockId !== opening.blockId) fail('wrong block ID');
     validateEventPayload(e);
+    if (e.type === 'BLOCK_CREATED' &&
+        (i !== 0 || e.ownerId !== opening.ownerId ||
+         e.schemaVersion !== opening.schemaVersion ||
+         e.foldRulesVersion !== opening.foldRulesVersion ||
+         e.openingSnapshotVersion !== opening.openingSnapshotVersion)) {
+      fail('block creation must match opening at first ordinal');
+    }
   }
+  // Discard replaces each session-local event with its minimal immutable
+  // ID/ordinal tombstone. Neither isolated tombstones nor fake Discards
+  // may be accepted as authoritative history.
+  const discards = new Map();
+  for (const e of events) if (e.type === 'WORKOUT_DISCARDED') {
+    if (discards.has(e.sessionId)) fail('duplicate discard');
+    discards.set(e.sessionId, e.commitOrdinal);
+  }
+  const counts = new Map();
+  for (const e of events) if (e.type === 'TOMBSTONE') {
+    const ordinal = discards.get(e.discardedSessionId);
+    if (!ordinal || e.commitOrdinal >= ordinal) fail('unlinked discard tombstone');
+    counts.set(e.discardedSessionId, (counts.get(e.discardedSessionId) || 0) + 1);
+  }
+  for (const id of discards.keys()) if (!counts.has(id)) fail('discard missing tombstones');
 }
 function initialProgress(v = {}, plan = {}) {
   const p = {
@@ -277,7 +325,11 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
     return slot;
   };
   for (const e of chronologicalEvents) {
-    if (sealed && ['SET_CORRECTED', 'SET_VOIDED', 'SESSION_VOIDED', 'CREDIT_REVOKED', 'CREDIT_REGRANTED'].includes(e.type)) fail('sealed block correction');
+    // Sealing freezes *all* training-authoritative events in this block,
+    // not just corrections. Notes and History visibility remain editable.
+    if (sealed && !['NOTE_EDITED', 'HISTORY_HIDDEN', 'HISTORY_UNHIDDEN'].includes(e.type)) {
+      fail('sealed block training state is read-only');
+    }
     switch (e.type) {
       case 'WORKOUT_STARTED': {
         positiveId(e.sessionId, 'session');
@@ -502,6 +554,7 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
       case 'BLOCK_SEALED': {
         if (sealed) fail('duplicate block seal');
         if (!TEMPLATES.every(x => quotas[x] === 8)) fail('cannot seal incomplete block');
+        if ([...sessions.values()].some(x => !x.outcome)) fail('cannot seal with unfinished workout');
         sealed = true; sealId = positiveId(e.sealId, 'seal ID'); break;
       }
       case 'SET_CORRECTED':
@@ -596,13 +649,35 @@ function planBB2Finish(opening, previousEvents, sessionId, outcome = 'FINISH') {
 }
 
 function createNextBB2Opening(previousProjection, newBlockId) {
-  if (!previousProjection?.sealed || !previousProjection.closingSnapshot?.sealId) fail('unsealed previous block');
+  const closing = previousProjection?.closingSnapshot;
+  if (!previousProjection?.sealed || !closing?.sealId) fail('unsealed previous block');
+  positiveId(newBlockId, 'next block');
+  if (newBlockId === previousProjection.blockId) fail('next block must have a fresh ID');
+  if (previousProjection.sealId !== closing.sealId ||
+      previousProjection.blockId !== closing.sealedBlockId ||
+      previousProjection.schemaVersion !== closing.schemaVersion ||
+      previousProjection.foldRulesVersion !== closing.foldRulesVersion ||
+      closing.openingSnapshotVersion !== 1 ||
+      !TEMPLATES.every(t => previousProjection.quotas?.[t] === 8 &&
+        closing.priorQuotas?.[t] === 8) ||
+      !Array.isArray(closing.priorCreditIds) ||
+      closing.priorCreditIds.length !== 32 ||
+      new Set(closing.priorCreditIds).size !== 32 ||
+      closing.priorCreditIds.some(id => !positiveId(id, 'prior credit') ||
+        !Object.values(previousProjection.activeCredits || {}).includes(id))) {
+    fail('invalid sealed block ancestry');
+  }
   const next = createBB2Opening({ ownerId: previousProjection.ownerId, blockId: newBlockId,
-    progress: previousProjection.closingSnapshot.progress, sealRevision: previousProjection.sealRevision });
-  next.selections = clone(previousProjection.closingSnapshot.selections);
-  next.previousQuotas = clone(previousProjection.closingSnapshot.priorQuotas);
-  next.previousCreditIds = clone(previousProjection.closingSnapshot.priorCreditIds);
-  next.previousSealId = previousProjection.closingSnapshot.sealId;
+    progress: closing.progress, sealRevision: previousProjection.sealRevision });
+  next.selections = clone(closing.selections);
+  next.previousQuotas = clone(closing.priorQuotas);
+  next.previousCreditIds = clone(closing.priorCreditIds);
+  next.previousSealId = closing.sealId;
+  next.previousBlockId = closing.sealedBlockId;
+  next.previousSchemaVersion = closing.schemaVersion;
+  next.previousFoldRulesVersion = closing.foldRulesVersion;
+  next.previousOpeningSnapshotVersion = closing.openingSnapshotVersion;
+  validateOpening(next);
   return next;
 }
 
