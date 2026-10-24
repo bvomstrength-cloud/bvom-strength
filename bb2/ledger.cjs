@@ -396,6 +396,10 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
             const accepted = s.accepted.get(slot.roleSlotId);
             if (accepted) epoch(p, `calibration:${accepted.eventId}`, accepted.loadG, accepted.loadOrigin);
             else if (info.onPlan && !info.harder) epoch(p, `promote:${e.eventId}`, slot.plannedG, slot.plannedOrigin);
+            // Retroactive first calibration can also be a qualified, independent
+            // reaffirmation of its saved plan for historical consent precedence.
+            // It must not earn an automatic first-exposure weight increase.
+            if (info.onPlan && !info.harder) boundary(key, e.commitOrdinal, 'qualified-calibration');
             if (info.uniform && !info.harder && info.actualG === p.loadG) {
               p.bestReps = info.repSum; p.stallCount = 0;
             }

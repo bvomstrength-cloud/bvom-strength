@@ -272,5 +272,106 @@ check('initial valid grant may later revoke after correction; unaffected templat
   assert.equal(p.creditLedger['credit-s'].active,false);
 });
 
+
+const acceptedOffPlanJournal=(bMode='NORMAL',hardB=false)=>{
+  const r=log();
+  const planned=p=>({...slot(3),plannedG:p,plannedOrigin:origin(p)});
+  const record=(sessionId,load,hard=false)=>{
+    const refs=[];
+    for(let i=0;i<3;i++) refs.push(r.append('SET_RECORDED',{
+      sessionId,roleSlotId:'bench',exerciseId:'barbell-bench',
+      setIndex:i,reps:7,actualG:load,actualOrigin:origin(load),
+      harderThanIntended:i===0&&hard,prescribed:true
+    }));
+    return refs;
+  };
+  r.append('WORKOUT_STARTED',{sessionId:'A',templateId:'upper_a',
+    kind:'NORMAL',slots:[planned(60000)]});
+  const a=record('A',55000);
+  r.finish('A');
+  const choice=r.append('CHOICE_RESOLVED',{
+    sourceSessionId:'A',roleSlotId:'bench',exerciseId:'barbell-bench',
+    decision:'ACCEPT',loadG:55000,loadOrigin:origin(55000)
+  });
+  r.append('WORKOUT_STARTED',{sessionId:'B',templateId:'upper_a',
+    kind:bMode,slots:[planned(55000)]});
+  const b=record('B',55000,hardB);
+  if(bMode==='INCOMPLETE') r.append('WORKOUT_INCOMPLETE',{sessionId:'B'});
+  else r.finish('B');
+  return {...r,a,b,choice};
+};
+const voidSet=(r,sessionId,target)=>r.append('SET_VOIDED',
+  {sessionId,targetEventId:target.eventId});
+check('qualified B retroactive first calibration still supersedes invalidated A acceptance',()=>{
+  const r=acceptedOffPlanJournal();
+  voidSet(r,'A',r.a[0]);
+  const p=foldBB2Block(opening(),r.events);
+  assert.deepEqual(p.requiredConsent,[]);
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].loadG,55000);
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].calibrated,true);
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].bestReps,21);
+  assert.deepEqual(p.history.map(h=>h.status),
+    ['INCOMPLETE_CORRECTED','COMPLETED_NORMAL_NONCREDIT']);
+});
+check('correcting qualified B reactivates A consent and refuses an unconsented transaction',()=>{
+  const r=acceptedOffPlanJournal();
+  voidSet(r,'A',r.a[0]);
+  const before=foldBB2Block(opening(),r.events);
+  assert.deepEqual(before.requiredConsent,[]);
+  const prospective={type:'SET_VOIDED',eventId:'void-B',
+    commitOrdinal:r.events.length+1,blockId:'test-block',
+    sessionId:'B',targetEventId:r.b[0].eventId};
+  const saved=JSON.stringify(r.events);
+  assert.throws(()=>commitBB2Transaction(opening(),r.events,[prospective],
+    {ownerId:'test-owner',expectedHead:r.events.length,
+     sealRevision:0,activeWorkout:false,retrospective:true}),
+    /unresolved correction consent/);
+  assert.equal(JSON.stringify(r.events),saved);
+  const after=foldBB2Block(opening(),[...r.events,prospective]);
+  assert.equal(after.requiredConsent.length,1);
+  assert.equal(after.requiredConsent[0].choiceEventId,r.choice.eventId);
+});
+check('KEEP-as-manual during restored consent retains original choice ordinal, not a new weight event',()=>{
+  const r=acceptedOffPlanJournal();
+  voidSet(r,'A',r.a[0]);
+  const prospective={type:'SET_VOIDED',eventId:'void-B',
+    commitOrdinal:r.events.length+1,blockId:'test-block',
+    sessionId:'B',targetEventId:r.b[0].eventId};
+  const keep={type:'CHOICE_RECLASSIFIED',eventId:'consent-keep',
+    commitOrdinal:r.events.length+2,blockId:'test-block',
+    targetEventId:r.choice.eventId,decision:'KEEP_AS_MANUAL'};
+  const out=commitBB2Transaction(opening(),r.events,[prospective,keep],
+    {ownerId:'test-owner',expectedHead:r.events.length,
+     sealRevision:0,activeWorkout:false,retrospective:true});
+  const p=out.projection;
+  assert.deepEqual(p.requiredConsent,[]);
+  assert.deepEqual([p.progress['upper_a|bench|barbell-bench'].loadG,
+    p.progress['upper_a|bench|barbell-bench'].bestReps,
+    p.progress['upper_a|bench|barbell-bench'].stallCount],
+    [55000,null,0]);
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].epochId,
+    'choice:'+r.choice.eventId);
+  assert.equal(out.events.at(-1).type,'CHOICE_RECLASSIFIED');
+  assert.equal(out.events.at(-1).loadG,undefined);
+});
+check('saved INCOMPLETE B does not supersede original acceptance',()=>{
+  const r=acceptedOffPlanJournal('INCOMPLETE');
+  voidSet(r,'A',r.a[0]);
+  const p=foldBB2Block(opening(),r.events);
+  assert.deepEqual(p.requiredConsent.map(x=>x.choiceEventId),[r.choice.eventId]);
+});
+check('hard-effort B cannot supersede invalidated A acceptance despite valid quota sets',()=>{
+  const r=acceptedOffPlanJournal('NORMAL',true);
+  voidSet(r,'A',r.a[0]);
+  const p=foldBB2Block(opening(),r.events);
+  assert.deepEqual(p.requiredConsent.map(x=>x.choiceEventId),[r.choice.eventId]);
+});
+check('RECOVERY B cannot supersede invalidated A acceptance',()=>{
+  const r=acceptedOffPlanJournal('RECOVERY');
+  voidSet(r,'A',r.a[0]);
+  const p=foldBB2Block(opening(),r.events);
+  assert.deepEqual(p.requiredConsent.map(x=>x.choiceEventId),[r.choice.eventId]);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);

@@ -28,7 +28,10 @@ const faults=[
     to:"if (false && creditEligibleAt(sessions.get(e.sessionId), e.commitOrdinal)) {"},
   {name:'ALLOW-SECOND-FIRST-GRANT',
     from:"if (e.type === 'CREDIT_GRANTED' && priorCredits.length) fail('second first-grant; use regrant');",
-    to:"if (false && e.type === 'CREDIT_GRANTED' && priorCredits.length) fail('second first-grant; use regrant');"}
+    to:"if (false && e.type === 'CREDIT_GRANTED' && priorCredits.length) fail('second first-grant; use regrant');"},
+  {name:'DISABLE-RETRO-CALIBRATION-REAFFIRMATION',
+    from:"if (info.onPlan && !info.harder) boundary(key, e.commitOrdinal, 'qualified-calibration');",
+    to:"if (false && info.onPlan && !info.harder) boundary(key, e.commitOrdinal, 'qualified-calibration');"}
 ];
 let killed=0;
 for(const fault of faults) {
