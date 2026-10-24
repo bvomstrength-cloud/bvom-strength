@@ -44,9 +44,9 @@ const faults=[
   {name:'ALLOW-LATE-BLOCK-CREATION',
     from:"if (e.type === 'BLOCK_CREATED' &&",
     to:"if (false && e.type === 'BLOCK_CREATED' &&"},
-  {name:'REUSE-SEALED-PREVIOUS-BLOCK-ID',
-    from:"if (newBlockId === previousProjection.blockId) fail('next block must have a fresh ID');",
-    to:"if (false && newBlockId === previousProjection.blockId) fail('next block must have a fresh ID');"}
+  {name:'ALLOW-STALE-PRIOR-RULE-VERSION',
+    from:"opening.previousFoldRulesVersion !== FOLD_RULES_VERSION ||",
+    to:"false ||"}
 ];
 let killed=0;
 for(const fault of faults) {
