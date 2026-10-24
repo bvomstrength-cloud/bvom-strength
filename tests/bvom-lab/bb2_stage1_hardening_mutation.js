@@ -196,7 +196,16 @@ const faults=[
     to:"e.type === 'STALL_REDUCTION_ACCEPTED') {}"},
   {name:'DROP-CARRIED-SOURCE-REP-SUM',
     from:"sourceRepSum: evidence.repSum, sourceAllTop: evidence.allTop",
-    to:"sourceRepSum: 0, sourceAllTop: evidence.allTop"}
+    to:"sourceRepSum: 0, sourceAllTop: evidence.allTop"},
+  {name:'BYPASS-SEALED-OFFER-PROVENANCE',
+    from:"if (!carried || Object.entries(offered).some(([field, value]) =>",
+    to:"if (!carried || Object.entries(offered).some(([field, value]) => false &&"},
+  {name:'BYPASS-SEALED-SOURCE-REP-EVIDENCE',
+    from:"carried.sourceRepSum !== records.reduce((sum, x) => sum + x.reps, 0) ||",
+    to:"false ||"},
+  {name:'BYPASS-SEALED-SOURCE-TOP-EVIDENCE',
+    from:"carried.sourceAllTop !== records.every(x => x.reps >= slot.ceiling)) {",
+    to:"false) {"}
 ];
 let killed=0;
 for(const fault of faults) {

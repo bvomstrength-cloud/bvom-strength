@@ -1022,6 +1022,30 @@ function createNextBB2Opening(previousProjection, newBlockId) {
         !Object.values(previousProjection.activeCredits || {}).includes(id))) {
     fail('invalid sealed block ancestry');
   }
+  // Seal transition consumes a just-folded projection. A closing snapshot
+  // must not quietly invent or retarget a pending offer while retaining the
+  // same visible key; compare each source field against the current fold.
+  for (const [key, offered] of Object.entries(previousProjection.pending || {})) {
+    const carried = closing.pending?.[key];
+    if (!carried || Object.entries(offered).some(([field, value]) =>
+        carried[field] !== value) ||
+        carried.sourceBlockId !== (offered.sourceBlockId || previousProjection.blockId)) {
+      fail('invalid sealed pending provenance');
+    }
+    if (!offered.sourceBlockId && offered.kind === 'OFF_PLAN') {
+      const [, roleSlotId] = key.split('|');
+      const source = previousProjection.history?.find(h =>
+        h.sessionId === offered.sessionId && h.blockId === previousProjection.blockId);
+      const slot = source?.slots.find(x => x.roleSlotId === roleSlotId);
+      const records = source?.sets.filter(x =>
+        x.roleSlotId === roleSlotId && x.prescribed && x.setIndex < slot?.sets);
+      if (!slot || records?.length !== slot.sets ||
+          carried.sourceRepSum !== records.reduce((sum, x) => sum + x.reps, 0) ||
+          carried.sourceAllTop !== records.every(x => x.reps >= slot.ceiling)) {
+        fail('invalid sealed pending source evidence');
+      }
+    }
+  }
   const next = createBB2Opening({ ownerId: previousProjection.ownerId, blockId: newBlockId,
     progress: closing.progress, sealRevision: previousProjection.sealRevision });
   next.selections = clone(closing.selections);

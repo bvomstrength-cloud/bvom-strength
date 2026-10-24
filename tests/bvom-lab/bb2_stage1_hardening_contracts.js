@@ -1788,5 +1788,60 @@ check('damaged carried pending opening cannot bootstrap BB2 training',()=>{
   }
 });
 
+
+check('closing snapshot cannot silently retarget offered numeric weight',()=>{
+  const {projection}=blockWithFinalPending();
+  const forged=structuredClone(projection);
+  forged.closingSnapshot.pending['upper_a|bench|barbell-bench'].valueG=90000;
+  assert.throws(()=>createNextBB2Opening(forged,'forged-next'),
+    /invalid sealed pending provenance/);
+});
+check('closing snapshot rejects a forged offer source-block identity',()=>{
+  const {projection}=blockWithFinalPending();
+  const forged=structuredClone(projection);
+  forged.closingSnapshot.pending['upper_a|bench|barbell-bench'].sourceBlockId='unrelated-block';
+  assert.throws(()=>createNextBB2Opening(forged,'forged-next'),
+    /invalid sealed pending provenance/);
+});
+check('closing snapshot verifies original prescribed rep evidence for carried offer',()=>{
+  const {projection}=blockWithFinalPending();
+  for(const field of ['sourceRepSum','sourceAllTop']){
+    const forged=structuredClone(projection);
+    forged.closingSnapshot.pending['upper_a|bench|barbell-bench'][field]=
+      field==='sourceRepSum'?99:true;
+    assert.throws(()=>createNextBB2Opening(forged,'forged-next'),
+      /invalid sealed pending source evidence/);
+  }
+});
+check('sealed all-top off-plan carry accepts exact source and earns only explicit next-block increase',()=>{
+  const {r,finalSource}=blockWithFinalPending();
+  for(const item of r.events)if(item.type==='SET_RECORDED' && item.sessionId===finalSource) {
+    item.reps=8;
+  }
+  const original=foldBB2Block(opening(),r.events);
+  const next=createNextBB2Opening(original,'full-ceiling-next');
+  const key='upper_a|bench|barbell-bench';
+  assert.equal(next.pending[key].sourceRepSum,24);
+  assert.equal(next.pending[key].sourceAllTop,true);
+  const accept={type:'CHOICE_RESOLVED',eventId:'accept-full',
+    commitOrdinal:1,blockId:'full-ceiling-next',
+    sourceBlockId:'test-block',sourceSessionId:finalSource,
+    roleSlotId:'bench',exerciseId:'barbell-bench',decision:'ACCEPT',
+    loadG:95000,loadOrigin:origin(95000)};
+  const p=foldBB2Block(next,[accept]);
+  assert.equal(p.progress[key].loadG,97500);
+  assert.equal(p.progress[key].epochId,'earned-choice:accept-full');
+  assert.deepEqual(p.pending,{});
+  assert.equal(p.history.length,0);
+});
+check('opening carrying bodyweight offer rejects forged difficulty source fields',()=>{
+  const {projection}=blockWithFinalPending('DIFFICULTY');
+  const forged=structuredClone(projection);
+  const k='upper_a|vertical-pull|chin-up';
+  forged.closingSnapshot.pending[k].assistance='different-band';
+  assert.throws(()=>createNextBB2Opening(forged,'bad-bodyweight-next'),
+    /invalid sealed pending provenance/);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);
