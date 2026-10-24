@@ -151,7 +151,15 @@ The gate runs, in order:
 1. static
 2. behaviour
 3. sequence
-4. mutation + known-bad reference
+4. isolated BB2 Stage (i) golden contracts (`bb2_stage1_contracts.js`)
+5. mutation + known-bad reference
+
+BB2's independent contract tier checks original numeric-entry provenance alongside
+canonical integer grams: saved plans, increments, actuals and revisions require
+an immutable `*Origin` value/unit field. Unit display changes and unchanged
+rounded submissions cannot create a new load epoch; an explicitly different
+actual is a separate action. Malformed or contradictory origins fail closed.
+These are draft Stage (i) domain contracts, not live-app or cloud features.
 
 The final line must be:
 
