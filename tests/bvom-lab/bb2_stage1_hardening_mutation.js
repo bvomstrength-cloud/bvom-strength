@@ -205,7 +205,16 @@ const faults=[
     to:"false ||"},
   {name:'BYPASS-SEALED-SOURCE-TOP-EVIDENCE',
     from:"carried.sourceAllTop !== records.every(x => x.reps >= slot.ceiling)) {",
-    to:"false) {"}
+    to:"false) {"},
+  {name:'COMPARE-SEALED-PROGRESS-BY-KEY-ORDER',
+    from:"!sameCanonicalValue(previousProjection.progress, closing.progress) ||",
+    to:"JSON.stringify(previousProjection.progress) !== JSON.stringify(closing.progress) ||"},
+  {name:'IGNORE-TAMPERED-SEALED-PROGRESS',
+    from:"!sameCanonicalValue(previousProjection.progress, closing.progress) ||",
+    to:"false ||"},
+  {name:'IGNORE-TAMPERED-SEALED-SELECTIONS',
+    from:"!sameCanonicalValue(previousProjection.selections, closing.selections) ||",
+    to:"false ||"}
 ];
 let killed=0;
 for(const fault of faults) {

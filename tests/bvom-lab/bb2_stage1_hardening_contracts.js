@@ -1843,5 +1843,48 @@ check('opening carrying bodyweight offer rejects forged difficulty source fields
     /invalid sealed pending provenance/);
 });
 
+
+const reversedJsonObject=x=>{
+  if(Array.isArray(x))return x.map(reversedJsonObject);
+  if(x&&typeof x==='object')return Object.fromEntries(
+    Object.keys(x).reverse().map(k=>[k,reversedJsonObject(x[k])]));
+  return x;
+};
+check('sealed snapshot accepts JSON object reordering without changing training state',()=>{
+  const {projection}=blockWithFinalPending();
+  const rekeyed=structuredClone(projection);
+  rekeyed.closingSnapshot.progress=reversedJsonObject(rekeyed.closingSnapshot.progress);
+  rekeyed.closingSnapshot.selections=reversedJsonObject(rekeyed.closingSnapshot.selections);
+  const next=createNextBB2Opening(rekeyed,'rekeyed-next');
+  assert.deepEqual(next.progress,projection.progress);
+  assert.deepEqual(next.pending,projection.closingSnapshot.pending);
+  assert.deepEqual(next.previousCreditIds,projection.closingSnapshot.priorCreditIds);
+});
+check('reordered object with one changed prescription remains an invalid closing snapshot',()=>{
+  const {projection}=blockWithFinalPending();
+  const tampered=structuredClone(projection);
+  tampered.closingSnapshot.progress=reversedJsonObject(tampered.closingSnapshot.progress);
+  tampered.closingSnapshot.progress['upper_a|bench|barbell-bench'].loadG=101000;
+  assert.throws(()=>createNextBB2Opening(tampered,'tampered-next'),
+    /invalid sealed block ancestry/);
+});
+check('reordered selections with changed exercise identity are rejected',()=>{
+  const {projection}=blockWithFinalPending();
+  const copied=structuredClone(projection);
+  // Nonempty explicitly selected alternatives are legal in stored snapshots,
+  // but equality must compare values rather than property insertion order.
+  copied.selections={'upper_b|optional-press':'log-press',
+    'lower_a|optional-curl':'nordic-curl'};
+  copied.closingSnapshot.selections={
+    'lower_a|optional-curl':'nordic-curl',
+    'upper_b|optional-press':'log-press'
+  };
+  assert.deepEqual(createNextBB2Opening(copied,'reordered-selections').selections,
+    copied.closingSnapshot.selections);
+  copied.closingSnapshot.selections['upper_b|optional-press']='different-press';
+  assert.throws(()=>createNextBB2Opening(copied,'invalid-selections'),
+    /invalid sealed block ancestry/);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);

@@ -22,6 +22,19 @@ const TYPES = new Set(EVENT_TYPES);
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const clone = x => JSON.parse(JSON.stringify(x));
 const fail = message => { throw new Error(`BB2: ${message}`); };
+// Backup and JSONB object key order is not a training-state mutation.
+// Compare JSON values structurally, preserving array order and exact scalars.
+const sameCanonicalValue = (a, b) => {
+  if (Object.is(a, b)) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) &&
+      a.length === b.length && a.every((v, i) => sameCanonicalValue(v, b[i]));
+  }
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+  const keys = Object.keys(a), other = Object.keys(b);
+  return keys.length === other.length &&
+    keys.every(key => own(b, key) && sameCanonicalValue(a[key], b[key]));
+};
 const positiveId = (x, name) => { if (typeof x !== 'string' || !x.trim()) fail(`invalid ${name}`); return x; };
 const integer = (x, name, min = 0) => { if (!Number.isSafeInteger(x) || x < min) fail(`invalid ${name}`); return x; };
 const identity = (templateId, roleSlotId, exerciseId) =>
@@ -1009,10 +1022,10 @@ function createNextBB2Opening(previousProjection, newBlockId) {
       previousProjection.schemaVersion !== closing.schemaVersion ||
       previousProjection.foldRulesVersion !== closing.foldRulesVersion ||
       closing.openingSnapshotVersion !== 1 ||
-      JSON.stringify(previousProjection.progress) !== JSON.stringify(closing.progress) ||
-      JSON.stringify(previousProjection.selections) !== JSON.stringify(closing.selections) ||
-      JSON.stringify(Object.keys(previousProjection.pending || {}).sort()) !==
-        JSON.stringify(Object.keys(closing.pending || {}).sort()) ||
+      !sameCanonicalValue(previousProjection.progress, closing.progress) ||
+      !sameCanonicalValue(previousProjection.selections, closing.selections) ||
+      !sameCanonicalValue(Object.keys(previousProjection.pending || {}).sort(),
+        Object.keys(closing.pending || {}).sort()) ||
       !TEMPLATES.every(t => previousProjection.quotas?.[t] === 8 &&
         closing.priorQuotas?.[t] === 8) ||
       !Array.isArray(closing.priorCreditIds) ||
