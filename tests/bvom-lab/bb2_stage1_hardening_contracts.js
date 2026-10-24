@@ -2003,5 +2003,77 @@ check('reordered selections with changed exercise identity are rejected',()=>{
     /invalid sealed block ancestry/);
 });
 
+
+check('History retains immutable Start 100 and effective lock 105 after pre-lock edit',()=>{
+  const r=log();r.start('snapshot',3);
+  const original=structuredClone(r.events[0].slots[0]);
+  r.append('PRESCRIPTION_EDITED',{sessionId:'snapshot',scope:'GLOBAL',
+    roleSlotId:'bench',exerciseId:'barbell-bench',
+    loadG:105000,loadOrigin:origin(105000)});
+  const source=[];
+  for(let i=0;i<3;i++)source.push(r.append('SET_RECORDED',{
+    sessionId:'snapshot',roleSlotId:'bench',exerciseId:'barbell-bench',
+    setIndex:i,reps:7,actualG:105000,actualOrigin:origin(105000),prescribed:true}));
+  r.finish('snapshot');
+  const p=foldBB2Block(opening(),r.events),h=p.history[0];
+  assert.deepEqual(h.initialSlots[0],original);
+  assert.deepEqual([h.initialSlots[0].plannedG,h.effectiveSlots[0].plannedG,
+    h.slots[0].plannedG,p.progress['upper_a|bench|barbell-bench'].loadG],
+    [100000,105000,105000,105000]);
+  assert.deepEqual(h.effectiveSlots[0].plannedOrigin,origin(105000));
+  assert.deepEqual([h.prescribedCount,h.validCount,h.status],
+    [3,3,'COMPLETED_NORMAL_NONCREDIT']);
+  assert.deepEqual(r.events[0].slots[0],original);
+  r.append('SET_CORRECTED',{sessionId:'snapshot',targetEventId:source[0].eventId,
+    roleSlotId:'bench',exerciseId:'barbell-bench',setIndex:0,reps:8});
+  const corrected=foldBB2Block(opening(),r.events).history[0];
+  assert.deepEqual(corrected.initialSlots,h.initialSlots);
+  assert.deepEqual(corrected.effectiveSlots,h.effectiveSlots);
+  assert.deepEqual([corrected.sets[0].reps,corrected.sets[0].actualG],[8,105000]);
+  assert.deepEqual(corrected.sets[0].actualOrigin,origin(105000));
+});
+check('explicit exercise lock records the effective edited plan',()=>{
+  const r=log();r.start('lock-snapshot',3);
+  r.append('PRESCRIPTION_EDITED',{sessionId:'lock-snapshot',scope:'GLOBAL',
+    roleSlotId:'bench',exerciseId:'barbell-bench',
+    loadG:105000,loadOrigin:origin(105000)});
+  r.append('EXERCISE_LOCKED',{sessionId:'lock-snapshot',
+    roleSlotId:'bench',exerciseId:'barbell-bench',
+    plannedG:105000,plannedOrigin:origin(105000)});
+  for(let i=0;i<3;i++)r.append('SET_RECORDED',{
+    sessionId:'lock-snapshot',roleSlotId:'bench',exerciseId:'barbell-bench',
+    setIndex:i,reps:7,actualG:105000,actualOrigin:origin(105000),prescribed:true});
+  r.finish('lock-snapshot');
+  const h=foldBB2Block(opening(),r.events).history[0];
+  assert.deepEqual([h.initialSlots[0].plannedG,h.effectiveSlots[0].plannedG],
+    [100000,105000]);
+  assert.deepEqual(h.effectiveSlots[0].plannedOrigin,origin(105000));
+});
+check('calibration trials never rewrite first-set lock-time plan',()=>{
+  const r=log();r.start('trial-snapshot',3);
+  for(let i=0;i<3;i++){
+    const grams=(80+i*10)*1000;
+    r.append('SET_RECORDED',{sessionId:'trial-snapshot',roleSlotId:'bench',
+      exerciseId:'barbell-bench',setIndex:i,reps:7,
+      actualG:grams,actualOrigin:origin(grams),prescribed:true});
+    if(i<2){
+      const trial=(90+i*10)*1000;
+      r.append('CALIBRATION_PLAN_REVISED',{sessionId:'trial-snapshot',
+        roleSlotId:'bench',exerciseId:'barbell-bench',
+        plannedG:trial,plannedOrigin:origin(trial)});
+    }
+  }
+  r.append('CALIBRATION_ACCEPTED',{sessionId:'trial-snapshot',
+    roleSlotId:'bench',exerciseId:'barbell-bench',
+    loadG:100000,loadOrigin:origin(100000)});
+  r.finish('trial-snapshot');
+  const p=foldBB2Block(opening(),r.events),h=p.history[0];
+  assert.deepEqual([h.initialSlots[0].plannedG,h.effectiveSlots[0].plannedG,
+    h.slots[0].calibrationTrialG],[100000,100000,100000]);
+  assert.equal(Object.hasOwn(h.effectiveSlots[0],'calibrationTrialG'),false);
+  assert.deepEqual(h.sets.map(x=>x.actualG),[80000,90000,100000]);
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].bestReps,null);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);
