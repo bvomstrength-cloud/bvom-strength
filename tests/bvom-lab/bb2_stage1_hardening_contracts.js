@@ -1513,5 +1513,65 @@ check('second accepted stall reduction cannot reuse the consumed offer',()=>{
     /stall reduction lacks matching original offer/);
 });
 
+
+const bb2Extra = (r, sessionId, index, roleSlotId='bench', exerciseId='barbell-bench') =>
+  r.append('EXTRA_SET_RECORDED',{sessionId,roleSlotId,exerciseId,
+    setIndex:index,reps:8,actualG:100000,actualOrigin:origin(100000)});
+check('BB2 permits exactly 30 recorded extra working sets for one exercise',()=>{
+  const r=log();r.start('extras30',3);r.sets('extras30',3);
+  for(let i=0;i<30;i++)bb2Extra(r,'extras30',3+i);
+  r.finish('extras30');
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.history.length,1);
+  assert.equal(p.history[0].validCount,3);
+  assert.equal(p.history[0].prescribedCount,3);
+  assert.equal(p.history[0].sets.length,33);
+  assert.equal(p.history[0].sets.filter(x=>!x.prescribed).length,30);
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].bestReps,21);
+  assert.deepEqual(p.quotas,{upper_a:0,lower_a:0,upper_b:0,lower_b:0});
+});
+check('BB2 refuses a 31st extra set even without Finish',()=>{
+  const r=log();r.start('too-many',3);r.sets('too-many',3);
+  for(let i=0;i<30;i++)bb2Extra(r,'too-many',3+i);
+  bb2Extra(r,'too-many',33);
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /extra working set index exceeds limit/);
+});
+check('BB2 rejects a sparse far future extra set index',()=>{
+  const r=log();r.start('sparse',3);
+  bb2Extra(r,'sparse',3003);
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /extra working set index exceeds limit/);
+});
+check('extra set limit is per role/exercise, not a shared session allowance',()=>{
+  const r=log(),row={...slot(2),roleSlotId:'row',exerciseId:'barbell-row'};
+  r.append('WORKOUT_STARTED',{sessionId:'two-roles',templateId:'upper_a',
+    kind:'NORMAL',slots:[slot(3),row]});
+  for(const [role,exercise,n] of [['bench','barbell-bench',3],['row','barbell-row',2]]){
+    for(let i=0;i<30;i++)bb2Extra(r,'two-roles',n+i,role,exercise);
+  }
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.headOrdinal,61);
+  assert.equal(p.history.length,0);
+  bb2Extra(r,'two-roles',32,'row','barbell-row');
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /extra working set index exceeds limit/);
+});
+check('extra hard-effort sets do not affect ordinary on-plan rep evidence or stall',()=>{
+  const r=log();r.start('base',3);r.sets('base',3);r.finish('base');
+  r.start('with-extra',3);r.sets('with-extra',3);
+  r.append('EXTRA_SET_RECORDED',{sessionId:'with-extra',
+    roleSlotId:'bench',exerciseId:'barbell-bench',setIndex:3,
+    reps:20,actualG:50000,actualOrigin:origin(50000),
+    harderThanIntended:true});
+  r.finish('with-extra');
+  const p=foldBB2Block(opening(),r.events);
+  assert.deepEqual([p.progress['upper_a|bench|barbell-bench'].bestReps,
+    p.progress['upper_a|bench|barbell-bench'].stallCount],[21,1]);
+  assert.deepEqual(p.pending,{});
+  assert.equal(p.history[1].validCount,3);
+  assert.equal(p.history[1].sets.filter(x=>!x.prescribed).length,1);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);

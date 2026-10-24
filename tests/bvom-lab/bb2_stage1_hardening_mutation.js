@@ -166,7 +166,13 @@ const faults=[
     to:"false) {"},
   {name:'ALLOW-ACCEPTANCE-OF-DISMISSED-STALL-OFFER',
     from:"offered.kind !== 'OFFER' || offered.dismissed ||",
-    to:"offered.kind !== 'OFFER' || false ||"}
+    to:"offered.kind !== 'OFFER' || false ||"},
+  {name:'ALLOW-31ST-EXTRA-WORKING-SET',
+    from:"if (e.setIndex >= slot.sets + 30) fail('extra working set index exceeds limit');",
+    to:"if (e.setIndex >= slot.sets + 31) fail('extra working set index exceeds limit');"},
+  {name:'REJECT-LEGITIMATE-30TH-EXTRA-WORKING-SET',
+    from:"if (e.setIndex >= slot.sets + 30) fail('extra working set index exceeds limit');",
+    to:"if (e.setIndex >= slot.sets + 29) fail('extra working set index exceeds limit');"}
 ];
 let killed=0;
 for(const fault of faults) {

@@ -511,7 +511,13 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         const s = sessions.get(e.sessionId), slot = findSlot(s, e);
         if (s.outcome) fail('set after outcome');
         if (e.type === 'SET_RECORDED' && (e.setIndex >= slot.sets || e.prescribed !== true)) fail('set not prescribed');
-        if (e.type === 'EXTRA_SET_RECORDED' && e.setIndex < slot.sets) fail('extra set uses prescribed index');
+        if (e.type === 'EXTRA_SET_RECORDED') {
+          // Match BB1's hard maximum of 30 extra working sets per exercise.
+          // A void/correction retains the original slot index for audit; it
+          // must not free that ordinal for a second independent recorded set.
+          if (e.setIndex < slot.sets) fail('extra set uses prescribed index');
+          if (e.setIndex >= slot.sets + 30) fail('extra working set index exceeds limit');
+        }
         if (!validSet(e, slot)) fail('invalid recorded set');
         s.seenSets.add(slot.roleSlotId); s.locks.add(slot.roleSlotId); break;
       }
