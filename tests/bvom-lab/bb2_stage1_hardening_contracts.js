@@ -401,7 +401,8 @@ check('sealed prior block denies all training mutations, including recovery and 
       exerciseId:'barbell-bench',incrementG:5000,incrementOrigin:origin(5000),scope:'GLOBAL'},
     {type:'EXERCISE_SWAPPED',templateId:'upper_a',roleSlotId:'bench',exerciseId:'new-exercise'},
     {type:'UNIT_METADATA',unit:'lb'},
-    {type:'STALL_OFFER_DISMISSED',templateId:'upper_a',roleSlotId:'bench',exerciseId:'barbell-bench'}
+    {type:'STALL_OFFER_DISMISSED',templateId:'upper_a',roleSlotId:'bench',
+      exerciseId:'barbell-bench',epochId:'opening',stallCount:4}
   ];
   for(const [i,fields] of forged.entries()){
     const ev={...fields,eventId:'post-seal-'+i,commitOrdinal:r.events.length+1,
