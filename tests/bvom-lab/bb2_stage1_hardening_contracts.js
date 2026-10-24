@@ -1206,5 +1206,115 @@ check('cannot attach an invented variation edit to already discarded session',()
     /edit references unknown session/);
 });
 
+
+const stallJournal=(unimproved)=>{
+  const r=log();
+  for(let n=0;n<=unimproved;n++){
+    const sid='stall-'+n;
+    r.start(sid,3);r.sets(sid,3);r.finish(sid);
+  }
+  return r;
+};
+const benchStallKey='upper_a|bench|barbell-bench';
+check('three comparable unimproved sessions create nonmodal note, not a forced change',()=>{
+  const r=stallJournal(3),p=foldBB2Block(opening(),r.events);
+  assert.equal(p.progress[benchStallKey].loadG,100000);
+  assert.equal(p.progress[benchStallKey].bestReps,21);
+  assert.equal(p.progress[benchStallKey].stallCount,3);
+  assert.deepEqual(p.stallSignals[benchStallKey],
+    {kind:'NOTE',epochId:'opening',stallCount:3});
+  assert.equal(p.quotas.upper_a,0);
+  const earlier=foldBB2Block(opening(),stallJournal(2).events);
+  assert.equal(earlier.stallSignals[benchStallKey],undefined);
+});
+check('four unimproved sessions expose only nonblocking documented stall actions',()=>{
+  const r=stallJournal(4),p=foldBB2Block(opening(),r.events);
+  assert.equal(p.progress[benchStallKey].loadG,100000);
+  assert.equal(p.progress[benchStallKey].stallCount,4);
+  assert.deepEqual(p.stallSignals[benchStallKey],{
+    kind:'OFFER',epochId:'opening',stallCount:4,dismissed:false,
+    actions:['REDUCE_ABOUT_10_PERCENT','SWAP_MOVEMENT','RECOVERY_SESSION']
+  });
+  assert.deepEqual(p.pending,{});
+  assert.equal(p.history.length,5);
+});
+check('stall-offer dismissal is durable, inert to training, and specific to epoch+count',()=>{
+  const r=stallJournal(4),before=foldBB2Block(opening(),r.events);
+  r.append('STALL_OFFER_DISMISSED',{
+    templateId:'upper_a',roleSlotId:'bench',exerciseId:'barbell-bench',
+    epochId:before.progress[benchStallKey].epochId,
+    stallCount:before.progress[benchStallKey].stallCount
+  });
+  const after=foldBB2Block(opening(),r.events);
+  assert.equal(after.stallSignals[benchStallKey].dismissed,true);
+  for(const key of ['progress','quotas','activeCredits','history','pending','requiredConsent']){
+    assert.deepEqual(after[key],before[key],key);
+  }
+  const reread=foldBB2Block(opening(),structuredClone(r.events));
+  assert.deepEqual(reread.stallSignals,after.stallSignals);
+  r.start('stall-after-dismissal',3);
+  r.sets('stall-after-dismissal',3);
+  r.finish('stall-after-dismissal');
+  const next=foldBB2Block(opening(),r.events);
+  assert.equal(next.progress[benchStallKey].stallCount,5);
+  assert.equal(next.stallSignals[benchStallKey].dismissed,false);
+  assert.equal(next.progress[benchStallKey].loadG,100000);
+});
+check('explicit new prescription epoch clears old offer without changing prior sessions',()=>{
+  const r=stallJournal(4),before=foldBB2Block(opening(),r.events);
+  r.append('STALL_OFFER_DISMISSED',{
+    templateId:'upper_a',roleSlotId:'bench',exerciseId:'barbell-bench',
+    epochId:'opening',stallCount:4
+  });
+  const edit=r.append('PRESCRIPTION_EDITED',{
+    templateId:'upper_a',roleSlotId:'bench',exerciseId:'barbell-bench',
+    scope:'GLOBAL',loadG:102500,loadOrigin:origin(102500)
+  });
+  const after=foldBB2Block(opening(),r.events);
+  assert.equal(after.stallSignals[benchStallKey],undefined);
+  assert.equal(after.progress[benchStallKey].epochId,'event:'+edit.eventId);
+  assert.deepEqual([after.progress[benchStallKey].loadG,after.progress[benchStallKey].bestReps,
+    after.progress[benchStallKey].stallCount],[102500,null,0]);
+  assert.deepEqual(after.history,before.history);
+});
+check('malformed stall-offer dismissal cannot enter immutable event stream',()=>{
+  const r=stallJournal(4);
+  const good={templateId:'upper_a',roleSlotId:'bench',exerciseId:'barbell-bench',
+    epochId:'opening',stallCount:4};
+  for(const bad of [{stallCount:3},{stallCount:null},{epochId:''},
+                    {templateId:'unknown'},{roleSlotId:''}]){
+    const altered=structuredClone(r.events);
+    altered.push({type:'STALL_OFFER_DISMISSED',eventId:'invalid-stall',
+      commitOrdinal:altered.length+1,blockId:'test-block',...good,...bad});
+    assert.throws(()=>foldBB2Block(opening(),altered),
+      /stall offer|invalid.*stall/i);
+  }
+});
+
+
+check('stall dismissal cannot be forged before fourth eligible comparable stall',()=>{
+  const r=stallJournal(3);
+  r.append('STALL_OFFER_DISMISSED',{
+    templateId:'upper_a',roleSlotId:'bench',exerciseId:'barbell-bench',
+    epochId:'opening',stallCount:4
+  });
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /stall dismissal without original actionable offer/);
+});
+check('retrospective invalidation preserves originally legitimate stall dismissal evidence',()=>{
+  const r=stallJournal(4);
+  r.append('STALL_OFFER_DISMISSED',{
+    templateId:'upper_a',roleSlotId:'bench',exerciseId:'barbell-bench',
+    epochId:'opening',stallCount:4
+  });
+  const source=r.events.find(e=>e.type==='SET_RECORDED' && e.sessionId==='stall-0');
+  r.append('SET_VOIDED',{sessionId:'stall-0',targetEventId:source.eventId});
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.progress[benchStallKey].stallCount,3);
+  assert.deepEqual(p.stallSignals[benchStallKey],
+    {kind:'NOTE',epochId:'opening',stallCount:3});
+  assert.equal(p.history.length,5);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);

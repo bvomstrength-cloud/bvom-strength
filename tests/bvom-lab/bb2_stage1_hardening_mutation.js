@@ -133,7 +133,16 @@ const faults=[
     to:"if (false && p.variation === e.variation && p.assistance === nextAssistance) {"},
   {name:'TOMBSTONE-INDEPENDENT-VARIATION-EDIT',
     from:"'CALIBRATION_ACCEPTED', 'SET_RECORDED', 'EXTRA_SET_RECORDED']);",
-    to:"'CALIBRATION_ACCEPTED', 'SET_RECORDED', 'EXTRA_SET_RECORDED', 'VARIATION_EDITED']);"}
+    to:"'CALIBRATION_ACCEPTED', 'SET_RECORDED', 'EXTRA_SET_RECORDED', 'VARIATION_EDITED']);"},
+  {name:'HIDE-THREE-STALL-INFO-NOTE',
+    from:"if (!p.calibrated || p.stallCount < 3) continue;",
+    to:"if (!p.calibrated || p.stallCount < 4) continue;"},
+  {name:'IGNORE-STALL-OFFER-DISMISSAL',
+    from:"dismiss.stallCount === p.stallCount;",
+    to:"dismiss.stallCount !== p.stallCount;"},
+  {name:'ALLOW-PREMATURE-STALL-DISMISSAL',
+    from:"if (!offer || offer.kind !== 'OFFER' ||\n            offer.epochId !== e.epochId || offer.stallCount !== e.stallCount) {",
+    to:"if (false && (!offer || offer.kind !== 'OFFER' ||\n            offer.epochId !== e.epochId || offer.stallCount !== e.stallCount)) {"}
 ];
 let killed=0;
 for(const fault of faults) {

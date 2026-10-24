@@ -143,6 +143,13 @@ function validateEventPayload(e) {
     case 'NOTE_EDITED':
       if (typeof e.text !== 'string') fail('invalid note text');
       break;
+    case 'STALL_OFFER_DISMISSED':
+      if (!TEMPLATES.includes(e.templateId)) fail('invalid stall offer template');
+      positiveId(e.roleSlotId, 'stall offer slot');
+      positiveId(e.exerciseId, 'stall offer exercise');
+      positiveId(e.epochId, 'stall offer epoch');
+      integer(e.stallCount, 'stall offer count', 4);
+      break;
     case 'UNIT_METADATA':
       if (!['kg', 'lb'].includes(e.unit)) fail('invalid display unit metadata');
       break;
@@ -352,6 +359,10 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
     });
   }
   const selections = clone(opening.selections || {}), unitMetadata = [];
+  // Non-training presentation decisions are persisted as ledger events.
+  // Dismissals only hide the *same* epoch/count offer; a worse stall or new
+  // accepted prescription creates a new actionable state without load edits.
+  const stallDismissals = new Map();
   const grants = new Map(), activeCredits = new Map(), pending = {};
   const quotas = Object.fromEntries(TEMPLATES.map(x => [x, 0]));
   let sealed = !!opening.sealed, sealId = null;
@@ -699,9 +710,23 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         if ([...sessions.values()].some(x => !x.outcome)) fail('retrospective revision during active workout');
         break;
       }
+      case 'STALL_OFFER_DISMISSED': {
+        const key = identity(e.templateId, e.roleSlotId, e.exerciseId);
+        // Evidence is checked at the original commit ordinal. A later
+        // retrospective correction can remove that offer without turning a
+        // historically valid user dismissal into a forged event.
+        const historical = foldBB2Block(openingSnapshot,
+          chronologicalEvents.slice(0, e.commitOrdinal - 1));
+        const offer = historical.stallSignals[key];
+        if (!offer || offer.kind !== 'OFFER' ||
+            offer.epochId !== e.epochId || offer.stallCount !== e.stallCount) {
+          fail('stall dismissal without original actionable offer');
+        }
+        stallDismissals.set(key, { epochId: e.epochId, stallCount: e.stallCount });
+        break;
+      }
       case 'BLOCK_CREATED':
       case 'WORKOUT_DISCARDED':
-      case 'STALL_OFFER_DISMISSED':
       case 'TOMBSTONE': break;
       default: fail('unsupported event handling');
     }
@@ -745,11 +770,27 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
       harderThanIntended: !!record.harderThanIntended
     })).sort((a, b) => a.setIndex - b.setIndex))
   }));
+  // Derived hints are presentation-only; never feed them back into progress,
+  // quota, canonical sets, or the sealed closing training snapshot.
+  const stallSignals = {};
+  for (const [key, p] of Object.entries(progress)) {
+    if (!p.calibrated || p.stallCount < 3) continue;
+    const dismiss = stallDismissals.get(key);
+    if (p.stallCount === 3) {
+      stallSignals[key] = { kind: 'NOTE', epochId: p.epochId, stallCount: 3 };
+    } else {
+      const dismissed = !!dismiss && dismiss.epochId === p.epochId &&
+        dismiss.stallCount === p.stallCount;
+      stallSignals[key] = { kind: 'OFFER', epochId: p.epochId,
+        stallCount: p.stallCount, dismissed,
+        actions: ['REDUCE_ABOUT_10_PERCENT', 'SWAP_MOVEMENT', 'RECOVERY_SESSION'] };
+    }
+  }
   return { schemaVersion: SCHEMA_VERSION, foldRulesVersion: FOLD_RULES_VERSION, blockId: opening.blockId,
     ownerId: opening.ownerId, headOrdinal: chronologicalEvents.length, sealRevision: opening.sealRevision + (sealId ? 1 : 0),
     sealId, sealed, progress, quotas, activeCredits: Object.fromEntries(activeCredits),
     creditLedger: Object.fromEntries(grants), selections, unitMetadata,
-    pending, requiredConsent, history,
+    pending, requiredConsent, stallSignals, history,
     closingSnapshot: sealed ? { schemaVersion: SCHEMA_VERSION, foldRulesVersion: FOLD_RULES_VERSION,
       openingSnapshotVersion: 1, progress: clone(progress), selections: clone(selections),
       priorQuotas: clone(quotas), priorCreditIds: [...activeCredits.values()],
