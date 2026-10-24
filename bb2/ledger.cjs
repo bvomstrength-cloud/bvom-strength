@@ -182,6 +182,7 @@ function validateEventPayload(e) {
     case 'EXTRA_SET_RECORDED':
     case 'SET_CORRECTED':
       if (e.actualG !== undefined) mass('actual', 'actualG', 'actualOrigin');
+      else if (e.actualOrigin !== undefined) fail('actual origin requires numeric load');
       break;
     case 'NOTE_EDITED':
       if (typeof e.text !== 'string') fail('invalid note text');
@@ -375,14 +376,19 @@ function effectiveRevisions(events) {
       }
       if (e.type === 'SET_CORRECTED') {
         integer(e.reps, 'corrected reps', 1);
-        integer(e.actualG, 'corrected grams');
+        // A reps/effort/variation-only revision inherits existing load and
+        // immutable originating input metadata. Qualitative bodyweight sets
+        // have no numeric mass to fabricate during correction.
+        if (own(e, 'actualG')) integer(e.actualG, 'corrected grams');
       }
       // A reps/load-only revision must not erase bodyweight identity or effort.
       // Explicit values (including false) take precedence; omitted values
       // inherit the last revision, falling back to original after a void.
       const prior = records.get(key) || originals.get(key);
       records.set(key, e.type === 'SET_VOIDED' ? null : { ...prior,
-        reps: e.reps, actualG: e.actualG, actualOrigin: clone(e.actualOrigin),
+        reps: e.reps,
+        actualG: own(e, 'actualG') ? e.actualG : prior.actualG,
+        actualOrigin: own(e, 'actualG') ? clone(e.actualOrigin) : prior.actualOrigin,
         harderThanIntended: own(e, 'harderThanIntended') ? e.harderThanIntended : prior.harderThanIntended,
         variation: own(e, 'variation') ? e.variation : prior.variation,
         assistance: own(e, 'assistance') ? e.assistance : prior.assistance });
@@ -658,7 +664,7 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
             p.calibrated = true;
             const accepted = s.accepted.get(slot.roleSlotId);
             if (accepted) epoch(p, `calibration:${accepted.eventId}`, accepted.loadG, accepted.loadOrigin);
-            else if (info.onPlan && !info.harder) epoch(p, `promote:${e.eventId}`, slot.plannedG, slot.plannedOrigin);
+            else if (info.onPlan && !info.harder) epoch(p, `promote:${e.eventId}`, slot.plannedG ?? null, slot.plannedOrigin);
             // Retroactive first calibration can also be a qualified, independent
             // reaffirmation of its saved plan for historical consent precedence.
             // It must not earn an automatic first-exposure weight increase.
@@ -667,7 +673,9 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
               p.bestReps = info.repSum; p.stallCount = 0;
             }
           } else if (info.onPlan && !info.harder) {
-            if (p.loadG !== slot.plannedG) epoch(p, `promote:${e.eventId}:${key}`, slot.plannedG, slot.plannedOrigin);
+            if (p.loadG !== (slot.plannedG ?? null)) {
+              epoch(p, `promote:${e.eventId}:${key}`, slot.plannedG ?? null, slot.plannedOrigin);
+            }
             boundary(key, e.commitOrdinal, 'qualified-finish');
             const beforeStall = p.stallCount;
             if (slot.equipment === 'bodyweight' && info.allTop) {

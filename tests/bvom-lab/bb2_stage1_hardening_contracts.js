@@ -1103,12 +1103,65 @@ check('qualitative bodyweight variant without numeric plan may omit numeric load
   assert.equal(p.history[0].validCount,3);
   assert.equal(p.history[0].status,'INCOMPLETE');
 });
+check('qualitative bodyweight reps-only correction retains nonnumeric variation evidence',()=>{
+  const r=log(),chosen=bwSlot();
+  delete chosen.plannedG;delete chosen.plannedOrigin;
+  chosen.assistance='none';
+  r.append('WORKOUT_STARTED',{sessionId:'qual-correct',templateId:'upper_a',
+    kind:'NORMAL',slots:[chosen]});
+  let first;
+  for(let i=0;i<3;i++){
+    const logged=r.append('SET_RECORDED',{
+      sessionId:'qual-correct',roleSlotId:'vertical-pull',exerciseId:'chin-up',
+      setIndex:i,reps:7,variation:'chin-up',assistance:'none',prescribed:true});
+    if(i===0)first=logged;
+  }
+  r.finish('qual-correct');
+  r.append('SET_CORRECTED',{sessionId:'qual-correct',targetEventId:first.eventId,
+    roleSlotId:'vertical-pull',exerciseId:'chin-up',setIndex:0,reps:8});
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.history[0].status,'COMPLETED_NORMAL_NONCREDIT');
+  assert.equal(p.history[0].validCount,3);
+  assert.deepEqual([p.history[0].sets[0].reps,p.history[0].sets[0].variation,
+    p.history[0].sets[0].assistance,p.history[0].sets[0].actualG],
+    [8,'chin-up','none',undefined]);
+  assert.equal(p.progress['upper_a|vertical-pull|chin-up'].bestReps,22);
+  assert.deepEqual([p.progress['upper_a|vertical-pull|chin-up'].loadG,
+    p.progress['upper_a|vertical-pull|chin-up'].epochId],[null,'opening']);
+  r.append('WORKOUT_STARTED',{sessionId:'qual-later',templateId:'upper_a',
+    kind:'NORMAL',slots:[chosen]});
+  for(let i=0;i<3;i++)r.append('SET_RECORDED',{
+    sessionId:'qual-later',roleSlotId:'vertical-pull',exerciseId:'chin-up',
+    setIndex:i,reps:7,variation:'chin-up',assistance:'none',prescribed:true});
+  r.finish('qual-later');
+  const later=foldBB2Block(opening(),r.events).progress['upper_a|vertical-pull|chin-up'];
+  assert.deepEqual([later.loadG,later.bestReps,later.stallCount],
+    [null,22,1]); // No phantom null-to-undefined load epoch on a later Finish.
+  assert.equal(later.epochId,'opening');
+});
+check('numeric reps-only correction inherits original grams and input-unit evidence',()=>{
+  const r=creditJournal();
+  const original=r.source[0];
+  r.append('SET_CORRECTED',{sessionId:'s',targetEventId:original.eventId,
+    roleSlotId:'bench',exerciseId:'barbell-bench',setIndex:0,reps:8});
+  const p=foldBB2Block(opening(),r.events);
+  assert.deepEqual([p.history[0].sets[0].reps,p.history[0].sets[0].actualG],
+    [8,100000]);
+  assert.deepEqual(p.history[0].sets[0].actualOrigin,origin(100000));
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].bestReps,22);
+});
 check('bodyweight correction cannot replace valid actual with missing required load',()=>{
   const r=bwJournal();
   r.append('SET_CORRECTED',{sessionId:'bw',
     targetEventId:r.source[0].eventId,reps:7,
     actualOrigin:origin(5000)});
-  assert.throws(()=>foldBB2Block(opening(),r.events),/invalid corrected grams/);
+  assert.throws(()=>foldBB2Block(opening(),r.events),/actual origin requires numeric load/);
+});
+check('a newly specified corrected mass must supply matching original numeric metadata',()=>{
+  const r=bwJournal();
+  r.append('SET_CORRECTED',{sessionId:'bw',targetEventId:r.source[0].eventId,
+    reps:7,actualG:6000});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/invalid actual origin/);
 });
 
 
