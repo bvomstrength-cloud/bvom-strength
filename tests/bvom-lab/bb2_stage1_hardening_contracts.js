@@ -1424,5 +1424,94 @@ check('new manual exercise epoch makes previous stall milestone inapplicable',()
   assert.equal(p.progress[multiKeys[0]].loadG,102500);
 });
 
+
+const acceptStallReduction=(r,fields={})=>r.append('STALL_REDUCTION_ACCEPTED',{
+  templateId:'upper_a',roleSlotId:'bench',exerciseId:'barbell-bench',
+  scope:'GLOBAL',offerEpochId:'opening',offerStallCount:4,
+  loadG:90000,loadOrigin:origin(90000),...fields
+});
+check('stall reduction requires an actionable original fourth-stall offer',()=>{
+  for(const count of [2,3]){
+    const r=stallJournal(count);
+    acceptStallReduction(r);
+    assert.throws(()=>foldBB2Block(opening(),r.events),
+      /stall reduction lacks matching original offer/);
+  }
+});
+check('valid stall-reduction acceptance explicitly lowers only the future prescription',()=>{
+  const r=stallJournal(4);
+  const before=foldBB2Block(opening(),r.events);
+  const accepted=acceptStallReduction(r);
+  const p=foldBB2Block(opening(),r.events);
+  assert.deepEqual([p.progress[benchStallKey].loadG,
+    p.progress[benchStallKey].bestReps,p.progress[benchStallKey].stallCount,
+    p.progress[benchStallKey].epochId],
+    [90000,null,0,'event:'+accepted.eventId]);
+  assert.equal(p.stallSignals[benchStallKey],undefined);
+  assert.deepEqual(p.history,before.history);
+  assert.deepEqual(p.quotas,before.quotas);
+  assert.deepEqual(p.activeCredits,before.activeCredits);
+});
+check('stale offer epoch and stall count fail without rewriting original progression',()=>{
+  const r=stallJournal(4);
+  const recorded=JSON.stringify(r.events);
+  for(const fields of [
+    {offerEpochId:'another-epoch'},
+    {offerStallCount:5}
+  ]){
+    const forged=structuredClone(r.events);
+    forged.push({type:'STALL_REDUCTION_ACCEPTED',
+      eventId:'forged-stall-accept',commitOrdinal:forged.length+1,
+      blockId:'test-block',templateId:'upper_a',roleSlotId:'bench',
+      exerciseId:'barbell-bench',scope:'GLOBAL',loadG:90000,
+      loadOrigin:origin(90000),offerEpochId:'opening',offerStallCount:4,
+      ...fields});
+    assert.throws(()=>foldBB2Block(opening(),forged),
+      /stall reduction lacks matching original offer/);
+  }
+  assert.equal(JSON.stringify(r.events),recorded);
+});
+check('stall acceptance must reduce numeric load, not silently increase it',()=>{
+  const r=stallJournal(4);
+  acceptStallReduction(r,{loadG:102500,loadOrigin:origin(102500)});
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /stall reduction must lower the offered numeric load/);
+});
+check('dismissed or replaced stall offer may not be accepted from stale screen',()=>{
+  const dismissed=stallJournal(4);
+  dismissed.append('STALL_OFFER_DISMISSED',{
+    templateId:'upper_a',roleSlotId:'bench',exerciseId:'barbell-bench',
+    epochId:'opening',stallCount:4
+  });
+  acceptStallReduction(dismissed);
+  assert.throws(()=>foldBB2Block(opening(),dismissed.events),
+    /stall reduction lacks matching original offer/);
+  const changed=stallJournal(4);
+  changed.append('PRESCRIPTION_EDITED',{templateId:'upper_a',
+    roleSlotId:'bench',exerciseId:'barbell-bench',scope:'GLOBAL',
+    loadG:102500,loadOrigin:origin(102500)});
+  acceptStallReduction(changed);
+  assert.throws(()=>foldBB2Block(opening(),changed.events),
+    /stall reduction lacks matching original offer/);
+});
+check('accepted original stall reduction survives later retrospective invalidation',()=>{
+  const r=stallJournal(4);
+  const accepted=acceptStallReduction(r);
+  const source=r.events.find(x=>x.type==='SET_RECORDED' && x.sessionId==='stall-0');
+  r.append('SET_VOIDED',{sessionId:'stall-0',targetEventId:source.eventId});
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.progress[benchStallKey].loadG,90000);
+  assert.equal(p.progress[benchStallKey].epochId,'event:'+accepted.eventId);
+  assert.equal(p.progress[benchStallKey].stallCount,0);
+  assert.equal(p.stallSignals[benchStallKey],undefined);
+});
+check('second accepted stall reduction cannot reuse the consumed offer',()=>{
+  const r=stallJournal(4);
+  acceptStallReduction(r);
+  acceptStallReduction(r,{loadG:85000,loadOrigin:origin(85000)});
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /stall reduction lacks matching original offer/);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);

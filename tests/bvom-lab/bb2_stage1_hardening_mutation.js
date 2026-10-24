@@ -154,7 +154,19 @@ const faults=[
     to:"true && p &&"},
   {name:'COUNT-INCOMPLETE-AND-RECOVERY-IN-SUGGESTION-WINDOW',
     from:"if (s.eligible) eligibleNormalFinishes.push(s.sessionId);",
-    to:"if (s.outcome) eligibleNormalFinishes.push(s.sessionId);"}
+    to:"if (s.outcome) eligibleNormalFinishes.push(s.sessionId);"},
+  {name:'ALLOW-PREMATURE-STALL-REDUCTION-ACCEPTANCE',
+    from:"if (!offered || offered.kind !== 'OFFER' || offered.dismissed ||\n              offered.epochId !== e.offerEpochId ||\n              offered.stallCount !== e.offerStallCount) {",
+    to:"if (false) {"},
+  {name:'ALLOW-STALE-STALL-REDUCTION-COUNT',
+    from:"offered.stallCount !== e.offerStallCount) {",
+    to:"false) {"},
+  {name:'ALLOW-STALL-REDUCTION-TO-INCREASE-LOAD',
+    from:"e.loadG >= previousLoad) {",
+    to:"false) {"},
+  {name:'ALLOW-ACCEPTANCE-OF-DISMISSED-STALL-OFFER',
+    from:"offered.kind !== 'OFFER' || offered.dismissed ||",
+    to:"offered.kind !== 'OFFER' || false ||"}
 ];
 let killed=0;
 for(const fault of faults) {

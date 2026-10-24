@@ -127,9 +127,13 @@ function validateEventPayload(e) {
       else if (e.plannedOrigin !== undefined) fail('qualitative lock cannot have numeric origin');
       break;
     case 'CALIBRATION_PLAN_REVISED': mass('planned', 'plannedG', 'plannedOrigin'); break;
+    case 'STALL_REDUCTION_ACCEPTED':
+      mass('working load', 'loadG', 'loadOrigin');
+      positiveId(e.offerEpochId, 'stall reduction source epoch');
+      integer(e.offerStallCount, 'stall reduction source count', 4);
+      break;
     case 'CALIBRATION_ACCEPTED':
     case 'PRESCRIPTION_EDITED':
-    case 'STALL_REDUCTION_ACCEPTED':
     case 'CHOICE_RESOLVED':
     case 'CHOICE_REPLACED':
       if (e.loadG !== undefined) mass('working load', 'loadG', 'loadOrigin');
@@ -457,6 +461,24 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         const slot = session ? findSlot(session, e) : null;
         if (slot && (session.locks.has(slot.roleSlotId) || session.seenSets.has(slot.roleSlotId))) fail('edit after lock');
         const p = getProgress(key, slot);
+        if (e.type === 'STALL_REDUCTION_ACCEPTED') {
+          // A stalled-weight acceptance is not a generic manual weight edit.
+          // Prove that an offer existed at the exact ordinal of acceptance,
+          // so a later correction cannot erase a legitimate user decision.
+          const prior = foldBB2Block(openingSnapshot,
+            chronologicalEvents.slice(0, e.commitOrdinal - 1));
+          const offered = prior.stallSignals[key];
+          const previousLoad = prior.progress[key]?.loadG;
+          if (!offered || offered.kind !== 'OFFER' || offered.dismissed ||
+              offered.epochId !== e.offerEpochId ||
+              offered.stallCount !== e.offerStallCount) {
+            fail('stall reduction lacks matching original offer');
+          }
+          if (!Number.isSafeInteger(previousLoad) || previousLoad <= 0 ||
+              e.loadG >= previousLoad) {
+            fail('stall reduction must lower the offered numeric load');
+          }
+        }
         if (e.type === 'INCREMENT_EDITED') {
           integer(e.incrementG, 'increment grams', 1);
           if (p.incrementG === e.incrementG) fail('no-op increment event');
