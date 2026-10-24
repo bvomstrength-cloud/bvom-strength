@@ -167,6 +167,7 @@ function validateEventPayload(e) {
 function validateEvents(opening, events) {
   if (!Array.isArray(events)) fail('events must be an array');
   const ids = new Set();
+  const acceptedChoices = new Map(), revisedChoices = new Set();
   for (let i = 0; i < events.length; i++) {
     const e = events[i];
     if (!e || !TYPES.has(e.type)) fail('unsupported event type');
@@ -176,6 +177,26 @@ function validateEvents(opening, events) {
     if (e.commitOrdinal !== i + 1) fail('missing, duplicate or non-consecutive event ordinal');
     if (e.blockId !== opening.blockId) fail('wrong block ID');
     validateEventPayload(e);
+    // Consent revisions must identify exactly one earlier accepted choice;
+    // a forged/duplicate target cannot erase historical consent obligations.
+    if (e.type === 'CHOICE_RESOLVED' && e.decision === 'ACCEPT') {
+      acceptedChoices.set(e.eventId, e);
+    }
+    if (e.type === 'CHOICE_RECLASSIFIED' || e.type === 'CHOICE_REPLACED') {
+      const source = acceptedChoices.get(e.targetEventId);
+      if (!source) fail('choice revision must target a prior ACCEPT');
+      if (revisedChoices.has(e.targetEventId)) fail('duplicate choice revision');
+      if (e.type === 'CHOICE_REPLACED') {
+        if (e.decision !== 'REPLACE' ||
+            e.sourceSessionId !== source.sourceSessionId ||
+            e.roleSlotId !== source.roleSlotId ||
+            e.exerciseId !== source.exerciseId) {
+          fail('choice replacement source identity mismatch');
+        }
+        validateMassOrigin(e.loadG, e.loadOrigin, 'replacement load');
+      }
+      revisedChoices.add(e.targetEventId);
+    }
     if (e.type === 'BLOCK_CREATED' &&
         (i !== 0 || e.ownerId !== opening.ownerId ||
          e.schemaVersion !== opening.schemaVersion ||
@@ -613,12 +634,17 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
 
 function commitBB2Transaction(opening, previousEvents, proposedEvents, guard) {
   validateOpening(opening);
+  if (!Array.isArray(proposedEvents) || !proposedEvents.length) fail('invalid empty event transaction');
   const original = foldBB2Block(opening, previousEvents);
   if (!guard || guard.ownerId !== opening.ownerId) fail('owner mismatch');
+  if (guard.blockId !== opening.blockId || guard.foldRulesVersion !== opening.foldRulesVersion) {
+    fail('stale correction preview block or rules version');
+  }
   if (guard.expectedHead !== original.headOrdinal || guard.sealRevision !== original.sealRevision) fail('stale correction preview or seal');
   const retrospective = !!guard.retrospective || proposedEvents.some(e =>
     ['SET_CORRECTED', 'SET_VOIDED', 'SESSION_VOIDED', 'CHOICE_RECLASSIFIED', 'CHOICE_REPLACED'].includes(e.type));
-  if (retrospective && guard.activeWorkout) fail('active workout blocks correction');
+  // A missing active-workout answer is not equivalent to a verified clear.
+  if (retrospective && guard.activeWorkout !== false) fail('active workout blocks correction');
   if (original.sealed && retrospective) fail('sealed block correction');
   const events = [...previousEvents, ...proposedEvents];
   const projection = foldBB2Block(opening, events);

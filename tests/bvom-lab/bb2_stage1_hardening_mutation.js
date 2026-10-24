@@ -46,7 +46,19 @@ const faults=[
     to:"if (false && e.type === 'BLOCK_CREATED' &&"},
   {name:'ALLOW-STALE-PRIOR-RULE-VERSION',
     from:"opening.previousFoldRulesVersion !== FOLD_RULES_VERSION ||",
-    to:"false ||"}
+    to:"false ||"},
+  {name:'BYPASS-CORRECTION-BLOCK-TOKEN',
+    from:"if (guard.blockId !== opening.blockId || guard.foldRulesVersion !== opening.foldRulesVersion) {",
+    to:"if (false && (guard.blockId !== opening.blockId || guard.foldRulesVersion !== opening.foldRulesVersion)) {"},
+  {name:'BYPASS-ACTIVE-WORKOUT-RECHECK',
+    from:"if (retrospective && guard.activeWorkout !== false) fail('active workout blocks correction');",
+    to:"if (false && retrospective && guard.activeWorkout !== false) fail('active workout blocks correction');"},
+  {name:'BYPASS-CHOICE-REVISION-LINK',
+    from:"if (!source) fail('choice revision must target a prior ACCEPT');",
+    to:"if (false && !source) fail('choice revision must target a prior ACCEPT');"},
+  {name:'ALLOW-DUPLICATE-CHOICE-REVISION',
+    from:"if (revisedChoices.has(e.targetEventId)) fail('duplicate choice revision');",
+    to:"if (false && revisedChoices.has(e.targetEventId)) fail('duplicate choice revision');"}
 ];
 let killed=0;
 for(const fault of faults) {

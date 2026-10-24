@@ -324,7 +324,7 @@ check('correcting qualified B reactivates A consent and refuses an unconsented t
     sessionId:'B',targetEventId:r.b[0].eventId};
   const saved=JSON.stringify(r.events);
   assert.throws(()=>commitBB2Transaction(opening(),r.events,[prospective],
-    {ownerId:'test-owner',expectedHead:r.events.length,
+    {ownerId:'test-owner',blockId:'test-block',foldRulesVersion:1,expectedHead:r.events.length,
      sealRevision:0,activeWorkout:false,retrospective:true}),
     /unresolved correction consent/);
   assert.equal(JSON.stringify(r.events),saved);
@@ -342,7 +342,7 @@ check('KEEP-as-manual during restored consent retains original choice ordinal, n
     commitOrdinal:r.events.length+2,blockId:'test-block',
     targetEventId:r.choice.eventId,decision:'KEEP_AS_MANUAL'};
   const out=commitBB2Transaction(opening(),r.events,[prospective,keep],
-    {ownerId:'test-owner',expectedHead:r.events.length,
+    {ownerId:'test-owner',blockId:'test-block',foldRulesVersion:1,expectedHead:r.events.length,
      sealRevision:0,activeWorkout:false,retrospective:true});
   const p=out.projection;
   assert.deepEqual(p.requiredConsent,[]);
@@ -502,6 +502,93 @@ check('damaged sealed ancestry or restored next-opening credit lineage rejects c
   assert.throws(()=>foldBB2Block(reused,[]),/fresh ID/);
   const unsupported=structuredClone(next);unsupported.previousFoldRulesVersion=999;
   assert.throws(()=>foldBB2Block(unsupported,[]),/invalid prior snapshot version/);
+});
+
+
+const guardJournal=()=>{
+  const r=log();r.start('verified',3);const saved=r.sets('verified',3);r.finish('verified');
+  const proposed={type:'SET_CORRECTED',eventId:'guard-correction',
+    commitOrdinal:r.events.length+1,blockId:'test-block',
+    sessionId:'verified',targetEventId:saved[0].eventId,
+    reps:6,actualG:100000,actualOrigin:origin(100000)};
+  const guard={ownerId:'test-owner',blockId:'test-block',foldRulesVersion:1,
+    expectedHead:r.events.length,sealRevision:0,activeWorkout:false,retrospective:true};
+  return {r,proposed,guard};
+};
+check('correction preview binds owner/block/fold/head/seal without mutating input',()=>{
+  const {r,proposed,guard}=guardJournal(), old=JSON.stringify(r.events);
+  for(const broken of [
+    {ownerId:'other-owner'}, {blockId:'other-block'}, {blockId:undefined},
+    {foldRulesVersion:2},{foldRulesVersion:undefined},
+    {expectedHead:guard.expectedHead-1}, {sealRevision:1}
+  ]){
+    assert.throws(()=>commitBB2Transaction(opening(),r.events,[proposed],
+      {...guard,...broken}),/owner mismatch|stale correction preview/);
+  }
+  assert.equal(JSON.stringify(r.events),old);
+  const good=commitBB2Transaction(opening(),r.events,[proposed],guard);
+  assert.equal(good.projection.history[0].sets[0].reps,6);
+  assert.equal(good.projection.headOrdinal,r.events.length+1);
+});
+check('missing active-workout verification fails closed on retrospective changes',()=>{
+  const {r,proposed,guard}=guardJournal();
+  for(const value of [undefined,true,'false',null]){
+    assert.throws(()=>commitBB2Transaction(opening(),r.events,[proposed],
+      {...guard,activeWorkout:value}),/active workout blocks correction/);
+  }
+  const good=commitBB2Transaction(opening(),r.events,[proposed],guard);
+  assert.equal(good.events.at(-1).eventId,'guard-correction');
+});
+check('empty correction batch rejects without changing prior ledger',()=>{
+  const {r,guard}=guardJournal(), saved=JSON.stringify(r.events);
+  assert.throws(()=>commitBB2Transaction(opening(),r.events,[],guard),
+    /invalid empty event transaction/);
+  assert.throws(()=>commitBB2Transaction(opening(),r.events,null,guard),
+    /invalid empty event transaction/);
+  assert.equal(JSON.stringify(r.events),saved);
+});
+const linkedReplace=(r,choice,overrides={})=>r.append('CHOICE_REPLACED',{
+  targetEventId:choice.eventId,sourceSessionId:'A',roleSlotId:'bench',
+  exerciseId:'barbell-bench',decision:'REPLACE',loadG:57500,loadOrigin:origin(57500),
+  ...overrides
+});
+check('explicit replacement must target exact prior accepted choice identity',()=>{
+  const r=acceptedOffPlanJournal();
+  const replacement=linkedReplace(r,r.choice);
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].loadG,57500);
+  assert.deepEqual(p.requiredConsent,[]);
+  assert.ok(replacement.eventId);
+  for(const change of [
+    {targetEventId:'made-up-choice'},
+    {sourceSessionId:'B'},
+    {roleSlotId:'other-slot'},
+    {exerciseId:'other-exercise'},
+    {decision:'ACCEPT'},
+    {loadOrigin:{value:'58',unit:'kg'}}
+  ]){
+    const forged=structuredClone(r.events);
+    Object.assign(forged.at(-1),change);
+    assert.throws(()=>foldBB2Block(opening(),forged),
+      /choice revision|choice replacement|replacement load|origin/i);
+  }
+});
+check('choice revision cannot be duplicated or target a non-ACCEPT decision',()=>{
+  const r=acceptedOffPlanJournal();
+  linkedReplace(r,r.choice);
+  r.append('CHOICE_RECLASSIFIED',{targetEventId:r.choice.eventId,decision:'KEEP_AS_MANUAL'});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/duplicate choice revision/);
+  const first=acceptedOffPlanJournal();
+  first.append('CHOICE_RECLASSIFIED',{targetEventId:'not-an-accept',decision:'KEEP_AS_MANUAL'});
+  assert.throws(()=>foldBB2Block(opening(),first.events),/choice revision must target a prior ACCEPT/);
+});
+check('choice reclassification cannot be reused to suppress consent twice',()=>{
+  const r=acceptedOffPlanJournal();
+  r.append('CHOICE_RECLASSIFIED',{targetEventId:r.choice.eventId,decision:'KEEP_AS_MANUAL'});
+  const first=foldBB2Block(opening(),r.events);
+  assert.deepEqual(first.requiredConsent,[]);
+  r.append('CHOICE_RECLASSIFIED',{targetEventId:r.choice.eventId,decision:'KEEP_AS_MANUAL'});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/duplicate choice revision/);
 });
 
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');

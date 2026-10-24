@@ -227,8 +227,8 @@ check('stale correction preview or active BVOM workout is rejected atomically', 
   start(add, 's1', 'NORMAL', [slot('chest', 'bench', 3, 100000)]);
   const original = JSON.stringify(events);
   const extra = [{ type: 'NOTE_EDITED', eventId: 'note', commitOrdinal: 2, blockId: 'block-a', sessionId: 's1', text: 'test' }];
-  assert.throws(() => commitBB2Transaction(b, events, extra, { ownerId, expectedHead: 0, sealRevision: 0, activeWorkout: false }), /stale/i);
-  assert.throws(() => commitBB2Transaction(b, events, extra, { ownerId, expectedHead: 1, sealRevision: 0, activeWorkout: true, retrospective: true }), /active workout/i);
+  assert.throws(() => commitBB2Transaction(b, events, extra, { ownerId, blockId: 'block-a', foldRulesVersion: 1, expectedHead: 0, sealRevision: 0, activeWorkout: false }), /stale/i);
+  assert.throws(() => commitBB2Transaction(b, events, extra, { ownerId, blockId: 'block-a', foldRulesVersion: 1, expectedHead: 1, sealRevision: 0, activeWorkout: true, retrospective: true }), /active workout/i);
   assert.equal(JSON.stringify(events), original);
 });
 
@@ -282,7 +282,7 @@ check('ACCEPT 55 seeds same-exposure best; a later qualified same-value Finish s
   assert.deepEqual(r.requiredConsent, [{ choiceEventId: accept.eventId, sourceSessionId: 'A', key: K, valueG: 55000 }]);
   const still = JSON.stringify(events);
   assert.throws(() => commitBB2Transaction(b, events.slice(0, -2), events.slice(-2), {
-    ownerId, expectedHead: events.length - 2, sealRevision: 0, retrospective: true, activeWorkout: false
+    ownerId, blockId: 'block-a', foldRulesVersion: 1, expectedHead: events.length - 2, sealRevision: 0, retrospective: true, activeWorkout: false
   }), /consent/i);
   assert.equal(JSON.stringify(events), still);
   add('CHOICE_RECLASSIFIED', { targetEventId: accept.eventId, decision: 'KEEP_AS_MANUAL' });
