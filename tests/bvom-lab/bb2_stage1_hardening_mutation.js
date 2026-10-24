@@ -172,7 +172,16 @@ const faults=[
     to:"if (e.setIndex >= slot.sets + 31) fail('extra working set index exceeds limit');"},
   {name:'REJECT-LEGITIMATE-30TH-EXTRA-WORKING-SET',
     from:"if (e.setIndex >= slot.sets + 30) fail('extra working set index exceeds limit');",
-    to:"if (e.setIndex >= slot.sets + 29) fail('extra working set index exceeds limit');"}
+    to:"if (e.setIndex >= slot.sets + 29) fail('extra working set index exceeds limit');"},
+  {name:'ALLOW-FORGED-LOCK-FIELD',
+    from:"if (own(e, field) && e[field] !== slot[field]) {",
+    to:"if (false && own(e, field) && e[field] !== slot[field]) {"},
+  {name:'ALLOW-FORGED-LOAD-ORIGIN-IN-LOCK',
+    from:"if (own(e, 'plannedOrigin')) {",
+    to:"if (false && own(e, 'plannedOrigin')) {"},
+  {name:'ALLOW-FORGED-INCREMENT-ORIGIN-IN-LOCK',
+    from:"if (own(e, 'incrementOrigin')) {",
+    to:"if (false && own(e, 'incrementOrigin')) {"}
 ];
 let killed=0;
 for(const fault of faults) {

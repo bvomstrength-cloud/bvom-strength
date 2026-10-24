@@ -443,6 +443,34 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         if (s.locks.has(slot.roleSlotId)) fail('duplicate exercise lock');
         if (s.seenSets.has(slot.roleSlotId)) fail('late exercise lock');
         if (e.plannedG !== slot.plannedG) fail('lock plan differs from committed plan');
+        // Every supplied field in a saved lock is evidence, not a chance to
+        // silently alter the original Start or a permitted pre-lock edit.
+        for (const field of ['equipment', 'sets', 'ceiling', 'incrementG',
+          'variation', 'assistance']) {
+          if (own(e, field) && e[field] !== slot[field]) {
+            fail('lock field differs from effective session plan: ' + field);
+          }
+        }
+        if (own(e, 'plannedOrigin')) {
+          const expected = slot.plannedOrigin;
+          const actual = e.plannedOrigin;
+          if (!expected || !actual ||
+              Object.keys(actual).length !== Object.keys(expected).length ||
+              Object.keys(actual).some(field => !own(expected, field) ||
+                actual[field] !== expected[field])) {
+            fail('lock original load metadata differs from saved plan');
+          }
+        }
+        if (own(e, 'incrementOrigin')) {
+          const expected = slot.incrementOrigin;
+          const actual = e.incrementOrigin;
+          if (!expected || !actual ||
+              Object.keys(actual).length !== Object.keys(expected).length ||
+              Object.keys(actual).some(field => !own(expected, field) ||
+                actual[field] !== expected[field])) {
+            fail('lock increment origin differs from saved plan');
+          }
+        }
         s.locks.add(slot.roleSlotId); break;
       }
       case 'PRESCRIPTION_EDITED':

@@ -1573,5 +1573,78 @@ check('extra hard-effort sets do not affect ordinary on-plan rep evidence or sta
   assert.equal(p.history[1].sets.filter(x=>!x.prescribed).length,1);
 });
 
+
+check('full matching lock snapshot is legal and preserves recorded plan in History',()=>{
+  const r=log(),planned=slot(3);
+  r.start('lock-complete',3);
+  r.append('EXERCISE_LOCKED',{sessionId:'lock-complete',
+    roleSlotId:planned.roleSlotId,exerciseId:planned.exerciseId,
+    equipment:planned.equipment,sets:planned.sets,ceiling:planned.ceiling,
+    plannedG:planned.plannedG,plannedOrigin:planned.plannedOrigin,
+    incrementG:planned.incrementG,incrementOrigin:planned.incrementOrigin});
+  r.sets('lock-complete',3);r.finish('lock-complete');
+  const p=foldBB2Block(opening(),r.events);
+  assert.deepEqual(p.history[0].slots[0],planned);
+  assert.equal(p.history[0].validCount,3);
+});
+check('lock cannot forge prescribed set count, ceiling, equipment or increment',()=>{
+  for(const [field,value] of [
+    ['equipment','bodyweight'],['sets',2],['ceiling',15],['incrementG',5000]
+  ]){
+    const r=log();r.start('lock-'+field,3);
+    r.append('EXERCISE_LOCKED',{sessionId:'lock-'+field,
+      roleSlotId:'bench',exerciseId:'barbell-bench',
+      plannedG:100000,plannedOrigin:origin(100000),[field]:value});
+    assert.throws(()=>foldBB2Block(opening(),r.events),
+      /lock field differs from effective session plan/);
+  }
+});
+check('bodyweight lock cannot forge variation or assistance identity',()=>{
+  for(const [field,value] of [
+    ['variation','weighted-chin'],['assistance','different-band']
+  ]){
+    const r=log();r.append('WORKOUT_STARTED',{sessionId:'bw-lock',
+      templateId:'upper_a',kind:'NORMAL',slots:[bwSlot()]});
+    r.append('EXERCISE_LOCKED',{sessionId:'bw-lock',roleSlotId:'vertical-pull',
+      exerciseId:'chin-up',plannedG:5000,plannedOrigin:origin(5000),
+      [field]:value});
+    assert.throws(()=>foldBB2Block(opening(),r.events),
+      /lock field differs from effective session plan/);
+  }
+});
+check('lock cannot relabel original numeric input units or magnitude text',()=>{
+  const r=log();r.start('fake-unit',3);
+  r.append('EXERCISE_LOCKED',{sessionId:'fake-unit',
+    roleSlotId:'bench',exerciseId:'barbell-bench',
+    plannedG:100000,plannedOrigin:{value:'100.0',unit:'kg'}});
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /lock original load metadata differs from saved plan/);
+});
+check('lock cannot relabel saved increment origin',()=>{
+  const r=log();r.start('fake-increment',3);
+  r.append('EXERCISE_LOCKED',{sessionId:'fake-increment',
+    roleSlotId:'bench',exerciseId:'barbell-bench',
+    plannedG:100000,plannedOrigin:origin(100000),
+    incrementG:2500,incrementOrigin:{value:'2.500',unit:'kg'}});
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /lock increment origin differs from saved plan/);
+});
+check('lock must follow independently committed pre-lock prescription changes',()=>{
+  const r=log();r.start('updated-lock',3);
+  r.append('PRESCRIPTION_EDITED',{sessionId:'updated-lock',
+    templateId:'upper_a',roleSlotId:'bench',exerciseId:'barbell-bench',
+    scope:'GLOBAL',loadG:102500,loadOrigin:origin(102500)});
+  r.append('EXERCISE_LOCKED',{sessionId:'updated-lock',roleSlotId:'bench',
+    exerciseId:'barbell-bench',plannedG:102500,plannedOrigin:origin(102500),
+    sets:3,ceiling:8,incrementG:2500,incrementOrigin:origin(2500)});
+  r.sets('updated-lock',3);
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].loadG,102500);
+  r.append('PRESCRIPTION_EDITED',{sessionId:'updated-lock',
+    templateId:'upper_a',roleSlotId:'bench',exerciseId:'barbell-bench',
+    scope:'GLOBAL',loadG:105000,loadOrigin:origin(105000)});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/edit after lock/);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);
