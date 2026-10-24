@@ -76,7 +76,22 @@ const faults=[
     to:"if (pending[key]) fail('unresolved choice blocks same exercise');"},
   {name:'ALLOW-NEW-START-WITH-ACTUAL-PENDING-OFFER',
     from:"if (historical.pending[key]) fail('unresolved choice blocks same exercise');",
-    to:"if (false && historical.pending[key]) fail('unresolved choice blocks same exercise');"}
+    to:"if (false && historical.pending[key]) fail('unresolved choice blocks same exercise');"},
+  {name:'ALLOW-OVERLAPPING-WORKOUT-STARTS',
+    from:"if ([...sessions.values()].some(x => !x.outcome)) fail('another workout is active');",
+    to:"if (false && [...sessions.values()].some(x => !x.outcome)) fail('another workout is active');"},
+  {name:'ALLOW-SWAP-DURING-WORKOUT',
+    from:"if (e.sessionId || [...sessions.values()].some(x => !x.outcome)) {",
+    to:"if (e.sessionId) {"},
+  {name:'ALLOW-CALIBRATION-WITHOUT-TRIAL-SET',
+    from:"if (!s.seenSets.has(slot.roleSlotId)) fail('calibration needs a recorded trial set');",
+    to:"if (false && !s.seenSets.has(slot.roleSlotId)) fail('calibration needs a recorded trial set');"},
+  {name:'ALLOW-DUPLICATE-CALIBRATION-ACCEPTANCE',
+    from:"if (s.accepted.has(slot.roleSlotId)) fail('duplicate calibration acceptance');",
+    to:"if (false && s.accepted.has(slot.roleSlotId)) fail('duplicate calibration acceptance');"},
+  {name:'ALLOW-DUPLICATE-SESSION-VOID',
+    from:"if (voidSessions.has(e.sessionId)) fail('duplicate session void');",
+    to:"if (false && voidSessions.has(e.sessionId)) fail('duplicate session void');"}
 ];
 let killed=0;
 for(const fault of faults) {

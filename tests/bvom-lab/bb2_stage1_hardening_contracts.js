@@ -837,5 +837,65 @@ check('retroactive bodyweight all-top offer cannot invalidate already saved B St
   assert.equal(p.progress['upper_a|vertical-pull|chin-up'].variation,'chin-up');
 });
 
+
+check('second BB2 Start cannot overlap an unfinished workout',()=>{
+  const r=log();
+  r.start('active-one',3);
+  r.start('overlapping-two',3);
+  assert.throws(()=>foldBB2Block(opening(),r.events),/another workout is active/);
+});
+check('saved incomplete ends active session and permits another Start',()=>{
+  const r=log();
+  r.start('first',3);
+  r.append('WORKOUT_INCOMPLETE',{sessionId:'first'});
+  r.start('second',3);
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.history.length,1);
+  assert.equal(p.history[0].status,'INCOMPLETE');
+  assert.equal(p.quotas.upper_a,0);
+});
+check('exercise swap requires no active session, even when no sessionId is supplied',()=>{
+  const r=log();
+  r.start('working',3);
+  r.append('EXERCISE_SWAPPED',{templateId:'upper_a',
+    roleSlotId:'bench',exerciseId:'dumbbell-press'});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/exercise swap while workout active/);
+  const valid=log();
+  valid.append('EXERCISE_SWAPPED',{templateId:'upper_a',
+    roleSlotId:'bench',exerciseId:'dumbbell-press'});
+  valid.start('later',3);
+  assert.equal(foldBB2Block(opening(),valid.events).selections['upper_a|bench'],
+    'dumbbell-press');
+});
+check('calibration cannot be accepted before any trial set or duplicated',()=>{
+  const early=log();
+  early.start('early',3);
+  early.append('CALIBRATION_ACCEPTED',{sessionId:'early',
+    roleSlotId:'bench',exerciseId:'barbell-bench',
+    loadG:100000,loadOrigin:origin(100000)});
+  assert.throws(()=>foldBB2Block(opening(),early.events),
+    /calibration needs a recorded trial set/);
+  const repeated=log();
+  repeated.start('cal',3);
+  repeated.sets('cal',1);
+  repeated.append('CALIBRATION_ACCEPTED',{sessionId:'cal',
+    roleSlotId:'bench',exerciseId:'barbell-bench',
+    loadG:100000,loadOrigin:origin(100000)});
+  repeated.append('CALIBRATION_ACCEPTED',{sessionId:'cal',
+    roleSlotId:'bench',exerciseId:'barbell-bench',
+    loadG:102500,loadOrigin:origin(102500)});
+  assert.throws(()=>foldBB2Block(opening(),repeated.events),
+    /duplicate calibration acceptance/);
+});
+check('session void is idempotent by stable source session identity',()=>{
+  const r=log();
+  r.start('finished',3);r.sets('finished',3);r.finish('finished');
+  r.append('SESSION_VOIDED',{sessionId:'finished'});
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.history[0].status,'VOID');
+  r.append('SESSION_VOIDED',{sessionId:'finished'});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/duplicate session void/);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);

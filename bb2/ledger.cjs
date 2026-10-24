@@ -310,7 +310,10 @@ function effectiveRevisions(events) {
         variation: own(e, 'variation') ? e.variation : prior.variation,
         assistance: own(e, 'assistance') ? e.assistance : prior.assistance });
     }
-    if (e.type === 'SESSION_VOIDED') voidSessions.add(e.sessionId);
+    if (e.type === 'SESSION_VOIDED') {
+      if (voidSessions.has(e.sessionId)) fail('duplicate session void');
+      voidSessions.add(e.sessionId);
+    }
   }
   return { records, voidSessions };
 }
@@ -360,6 +363,7 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
       case 'WORKOUT_STARTED': {
         positiveId(e.sessionId, 'session');
         if (sessions.has(e.sessionId)) fail('duplicate session ID');
+        if ([...sessions.values()].some(x => !x.outcome)) fail('another workout is active');
         if (!TEMPLATES.includes(e.templateId) || !['NORMAL', 'EXTRA_NORMAL', 'RECOVERY'].includes(e.kind)) fail('invalid workout type');
         if (e.kind === 'NORMAL' && quotas[e.templateId] >= 8) fail('normal quota full; use EXTRA NORMAL');
         if (e.kind === 'EXTRA_NORMAL' && quotas[e.templateId] < 8) fail('EXTRA NORMAL requires filled template quota');
@@ -444,6 +448,8 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
       case 'CALIBRATION_ACCEPTED': {
         const s = sessions.get(e.sessionId), slot = findSlot(s, e);
         if (s.outcome) fail('calibration choice after outcome');
+        if (!s.seenSets.has(slot.roleSlotId)) fail('calibration needs a recorded trial set');
+        if (s.accepted.has(slot.roleSlotId)) fail('duplicate calibration acceptance');
         integer(e.loadG, 'accepted calibration grams');
         s.accepted.set(slot.roleSlotId, { loadG: e.loadG, loadOrigin: clone(e.loadOrigin), eventId: e.eventId });
         break;
@@ -623,7 +629,9 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
       case 'EXERCISE_SWAPPED': {
         if (!TEMPLATES.includes(e.templateId)) fail('invalid swap template');
         positiveId(e.roleSlotId, 'swap slot'); positiveId(e.exerciseId, 'selected exercise');
-        if (e.sessionId) fail('exercise swap after Start');
+        if (e.sessionId || [...sessions.values()].some(x => !x.outcome)) {
+          fail('exercise swap while workout active');
+        }
         selections[`${e.templateId}|${e.roleSlotId}`] = e.exerciseId;
         break;
       }
