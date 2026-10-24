@@ -354,7 +354,9 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         .filter(Boolean).length, 0);
     return valid >= Math.ceil(0.70 * prescribed);
   };
-  const getProgress = (key, plan) => progress[key] ||= initialProgress({}, plan);
+  // Discard may tombstone the original Start while leaving an independently
+  // committed GLOBAL edit at its ordinal; that edit has no live session slot.
+  const getProgress = (key, plan) => progress[key] ||= initialProgress({}, plan || {});
   const epoch = (p, id, nextLoad, origin = null) => { if (p.loadG !== nextLoad) {
     p.loadG = nextLoad;
     p.loadOrigin = origin ? clone(origin) : { kind: 'DERIVED', sourceEventId: id };
