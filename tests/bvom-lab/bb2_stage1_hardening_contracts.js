@@ -765,5 +765,77 @@ check('bodyweight replacement refuses missing variation or invalid assistance',(
   assert.ok(repl.eventId);
 });
 
+
+const retroPendingLoaded=(secondOutcome='FINISH')=>{
+  const r=log();
+  r.start('calibration',3);r.sets('calibration',3);r.finish('calibration');
+  r.start('A',3);const source=r.sets('A',3);r.finish('A');
+  r.start('B',3);r.sets('B',3);
+  if(secondOutcome==='INCOMPLETE')r.append('WORKOUT_INCOMPLETE',{sessionId:'B'});
+  else r.finish('B');
+  for(const original of source) r.append('SET_CORRECTED',{
+    sessionId:'A',targetEventId:original.eventId,
+    reps:7,actualG:95000,actualOrigin:origin(95000)
+  });
+  return {...r,source};
+};
+check('later corrections do not invalidate earlier legitimate Start with superseding B Finish',()=>{
+  const r=retroPendingLoaded();
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.history.length,3);
+  assert.equal(p.history.find(x=>x.sessionId==='B').status,'COMPLETED_NORMAL_NONCREDIT');
+  assert.equal(p.pending['upper_a|bench|barbell-bench'],undefined);
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].loadG,100000);
+  assert.equal(p.history.find(x=>x.sessionId==='A').sets[0].actualG,95000);
+});
+check('retroactive pending loaded offer survives historical incomplete B but does not erase it',()=>{
+  const r=retroPendingLoaded('INCOMPLETE');
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.history.length,3);
+  assert.equal(p.history.find(x=>x.sessionId==='B').status,'INCOMPLETE');
+  assert.deepEqual(p.pending['upper_a|bench|barbell-bench'],{
+    kind:'OFF_PLAN',sessionId:'A',valueG:95000,plannedG:100000
+  });
+});
+check('new Start must still refuse retroactively created unresolved offer',()=>{
+  const r=retroPendingLoaded('INCOMPLETE');
+  r.start('new-C',3);
+  assert.throws(()=>foldBB2Block(opening(),r.events),/unresolved choice blocks same exercise/);
+});
+check('resolving newly created pending offer permits next same-identity Start',()=>{
+  const r=retroPendingLoaded('INCOMPLETE');
+  r.append('CHOICE_RESOLVED',{sourceSessionId:'A',roleSlotId:'bench',
+    exerciseId:'barbell-bench',decision:'ACCEPT',loadG:95000,loadOrigin:origin(95000)});
+  let p=foldBB2Block(opening(),r.events);
+  assert.equal(p.pending['upper_a|bench|barbell-bench'],undefined);
+  r.start('new-C',3);
+  p=foldBB2Block(opening(),r.events);
+  assert.equal(p.headOrdinal,r.events.length);
+});
+check('retroactive bodyweight all-top offer cannot invalidate already saved B Start',()=>{
+  const r=bwJournal();
+  r.append('WORKOUT_STARTED',{sessionId:'A',templateId:'upper_a',kind:'NORMAL',slots:[bwSlot()]});
+  const a=[];
+  for(let i=0;i<3;i++)a.push(r.append('SET_RECORDED',{
+    sessionId:'A',roleSlotId:'vertical-pull',exerciseId:'chin-up',
+    setIndex:i,reps:i===0?7:8,actualG:5000,actualOrigin:origin(5000),
+    variation:'chin-up',assistance:'light-band',prescribed:true
+  }));
+  r.finish('A');
+  r.append('WORKOUT_STARTED',{sessionId:'B',templateId:'upper_a',kind:'NORMAL',slots:[bwSlot()]});
+  for(let i=0;i<3;i++)r.append('SET_RECORDED',{
+    sessionId:'B',roleSlotId:'vertical-pull',exerciseId:'chin-up',
+    setIndex:i,reps:7,actualG:5000,actualOrigin:origin(5000),
+    variation:'chin-up',assistance:'light-band',prescribed:true
+  });
+  r.finish('B');
+  r.append('SET_CORRECTED',{sessionId:'A',targetEventId:a[0].eventId,
+    reps:8,actualG:5000,actualOrigin:origin(5000)});
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.history.length,3);
+  assert.equal(p.pending['upper_a|vertical-pull|chin-up'],undefined);
+  assert.equal(p.progress['upper_a|vertical-pull|chin-up'].variation,'chin-up');
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);

@@ -369,7 +369,16 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         for (const s of slots) {
           validateSlot(s); if (names.has(s.roleSlotId)) fail('duplicate role slot'); names.add(s.roleSlotId);
           const key = identity(e.templateId, s.roleSlotId, s.exerciseId);
-          if (pending[key]) fail('unresolved choice blocks same exercise');
+          if (pending[key]) {
+            // A later correction may create a pending offer *retroactively*
+            // at an earlier Finish. A historical Start that was legal when
+            // committed must not be invalidated by that later correction.
+            // Evaluate the offer using the ledger prefix at this Start's
+            // original ordinal; new Starts still see today's unresolved offer.
+            const historical = foldBB2Block(openingSnapshot,
+              chronologicalEvents.slice(0, e.commitOrdinal - 1));
+            if (historical.pending[key]) fail('unresolved choice blocks same exercise');
+          }
         }
         sessions.set(e.sessionId, { sessionId: e.sessionId, templateId: e.templateId, kind: e.kind, slots,
           initialSlots: clone(slots), locks: new Set(), seenSets: new Set(), accepted: new Map(), outcome: null,

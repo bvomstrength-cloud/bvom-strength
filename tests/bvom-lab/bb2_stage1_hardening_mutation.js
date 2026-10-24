@@ -70,7 +70,13 @@ const faults=[
     to:"if (choice.decision !== 'ACCEPT' || choice.validOffer) continue;"},
   {name:'PRETEND-CORRECTED-DIFFICULTY-OFFER-STILL-VALID',
     from:"variation: e.variation, assistance: e.assistance,\n            validOffer, decision: e.decision });",
-    to:"variation: e.variation, assistance: e.assistance,\n            validOffer: true, decision: e.decision });"}
+    to:"variation: e.variation, assistance: e.assistance,\n            validOffer: true, decision: e.decision });"},
+  {name:'RETROACTIVELY-BLOCK-LEGAL-HISTORICAL-START',
+    from:"if (historical.pending[key]) fail('unresolved choice blocks same exercise');",
+    to:"if (pending[key]) fail('unresolved choice blocks same exercise');"},
+  {name:'ALLOW-NEW-START-WITH-ACTUAL-PENDING-OFFER',
+    from:"if (historical.pending[key]) fail('unresolved choice blocks same exercise');",
+    to:"if (false && historical.pending[key]) fail('unresolved choice blocks same exercise');"}
 ];
 let killed=0;
 for(const fault of faults) {
