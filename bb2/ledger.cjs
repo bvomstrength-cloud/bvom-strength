@@ -85,7 +85,7 @@ function createBB2Opening({ ownerId, blockId, progress = {}, sealRevision = 0 } 
   return {
     schemaVersion: SCHEMA_VERSION, foldRulesVersion: FOLD_RULES_VERSION,
     openingSnapshotVersion: 1, ownerId, blockId, sealRevision,
-    progress: clone(progress), previousQuotas: null, previousCreditIds: [], sealed: false
+    progress: clone(progress), pending: {}, previousQuotas: null, previousCreditIds: [], sealed: false
   };
 }
 function validateOpening(opening) {
@@ -109,6 +109,32 @@ function validateOpening(opening) {
   }
   if (!opening.progress || typeof opening.progress !== 'object' || Array.isArray(opening.progress)) fail('invalid opening progress');
   for (const item of Object.values(opening.progress)) initialProgress(item);
+  if (!opening.pending || typeof opening.pending !== 'object' || Array.isArray(opening.pending)) {
+    fail('invalid opening pending decisions');
+  }
+  if (Object.keys(opening.pending).length && !opening.previousSealId) {
+    fail('pending decisions lack previous sealed block');
+  }
+  for (const [key, offer] of Object.entries(opening.pending)) {
+    const parts = key.split('|');
+    if (parts.length !== 3 || !TEMPLATES.includes(parts[0]) ||
+        parts.some(x => !x.trim()) || !own(opening.progress, key) ||
+        !offer || typeof offer !== 'object' || Array.isArray(offer)) {
+      fail('invalid carried pending identity');
+    }
+    positiveId(offer.sourceBlockId, 'carried source block');
+    positiveId(offer.sessionId, 'carried source session');
+    if (offer.kind === 'OFF_PLAN') {
+      integer(offer.valueG, 'carried offered grams');
+      integer(offer.plannedG, 'carried planned grams');
+      integer(offer.sourceRepSum, 'carried source rep sum', 1);
+      if (typeof offer.sourceAllTop !== 'boolean') fail('invalid carried top-set evidence');
+    } else if (offer.kind === 'DIFFICULTY') {
+      positiveId(offer.variation, 'carried variation');
+      if (typeof offer.assistance !== 'string') fail('invalid carried assistance');
+      if (offer.addedWeightG !== undefined) integer(offer.addedWeightG, 'carried added weight');
+    } else fail('invalid carried decision kind');
+  }
 }
 function validateEventPayload(e) {
   const mass = (name, field, originField) => validateMassOrigin(e[field], e[originField], name);
@@ -370,7 +396,7 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
   // Progression-eligible finished sessions, not dates or recovery/incomplete
   // work, define the optional four-session multi-stall review window.
   const eligibleNormalFinishes = [], stallNoteMilestones = [];
-  const grants = new Map(), activeCredits = new Map(), pending = {};
+  const grants = new Map(), activeCredits = new Map(), pending = clone(opening.pending || {});
   const quotas = Object.fromEntries(TEMPLATES.map(x => [x, 0]));
   let sealed = !!opening.sealed, sealId = null;
   // Credit events must be valid at their own chronological ordinal, not only
@@ -532,6 +558,11 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
           if (slot) { slot.plannedG = e.loadG; slot.plannedOrigin = clone(e.loadOrigin); }
           boundary(key, e.commitOrdinal, 'explicit');
         }
+        // A deliberate future-load or variation change supersedes an
+        // unresolved carried offer for that *same* identity; increment-only
+        // edits do not decide a pending working-load/variation question.
+        if (e.type === 'PRESCRIPTION_EDITED' || e.type === 'VARIATION_EDITED' ||
+            e.type === 'STALL_REDUCTION_ACCEPTED') delete pending[key];
         break;
       }
       case 'SET_RECORDED':
@@ -635,6 +666,43 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
       case 'CHOICE_RESOLVED':
       case 'CHOICE_REPLACED': {
         const s = sessions.get(e.sourceSessionId);
+        if (!s && e.type === 'CHOICE_RESOLVED') {
+          // The source workout belongs to an already-sealed older block.
+          // Its pending offer and source identity were pinned into the next
+          // opening snapshot, so no old sealed sets are replayed or amended.
+          const matches = Object.entries(pending).filter(([key, offer]) =>
+            offer.sourceBlockId === e.sourceBlockId &&
+            offer.sessionId === e.sourceSessionId &&
+            key.endsWith('|'+e.roleSlotId+'|'+e.exerciseId));
+          if (matches.length !== 1) fail('missing or stale carried choice offer');
+          const [key, offer] = matches[0];
+          const p = progress[key];
+          if (!p) fail('carried choice missing prior prescription');
+          if (offer.kind === 'OFF_PLAN') {
+            if (!['ACCEPT','KEEP'].includes(e.decision)) fail('invalid carried numeric decision');
+            if (e.decision === 'ACCEPT') {
+              if (e.loadG !== offer.valueG) fail('carried acceptance differs from sealed offer');
+              epoch(p, `choice:${e.eventId}`, e.loadG, e.loadOrigin);
+              p.bestReps = offer.sourceRepSum; p.stallCount = 0;
+              if (offer.sourceAllTop && p.calibrated) {
+                epoch(p, `earned-choice:${e.eventId}`, p.loadG + p.incrementG);
+              }
+            }
+          } else {
+            if (!['HOLD','DIFFICULTY_ACCEPT'].includes(e.decision)) fail('invalid carried difficulty decision');
+            if (e.decision === 'DIFFICULTY_ACCEPT') {
+              positiveId(e.variation, 'accepted carried difficulty variation');
+              if (typeof e.assistance !== 'string') fail('invalid carried difficulty assistance');
+              integer(e.addedWeightG, 'accepted carried added weight');
+              p.variation = e.variation; p.assistance = e.assistance;
+              epoch(p, `choice:${e.eventId}`, e.addedWeightG, e.addedWeightOrigin);
+              p.epochId = `choice:${e.eventId}`; p.bestReps = null; p.stallCount = 0;
+            }
+          }
+          boundary(key, e.commitOrdinal, 'explicit');
+          delete pending[key];
+          break;
+        }
         if (!s || !s.finishOrdinal || e.commitOrdinal <= s.finishOrdinal) fail('choice before source Finish');
         const slot = findSlot(s, e), key = identity(s.templateId, slot.roleSlotId, slot.exerciseId);
         if (!['ACCEPT', 'KEEP', 'HOLD', 'DIFFICULTY_ACCEPT'].includes(e.decision) &&
@@ -874,6 +942,17 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
     pending, requiredConsent, stallSignals, multiStallRecovery, history,
     closingSnapshot: sealed ? { schemaVersion: SCHEMA_VERSION, foldRulesVersion: FOLD_RULES_VERSION,
       openingSnapshotVersion: 1, progress: clone(progress), selections: clone(selections),
+      pending: Object.fromEntries(Object.entries(pending).map(([key, offer]) => {
+        if (offer.sourceBlockId) return [key, clone(offer)];
+        if (offer.kind === 'OFF_PLAN') {
+          const source = sessions.get(offer.sessionId), [,roleSlotId] = key.split('|');
+          const evidence = source && evidenceFor(source, roleSlotId, records);
+          if (!evidence?.complete || !evidence.uniform) fail('cannot seal incomplete pending evidence');
+          return [key, { ...clone(offer), sourceBlockId: opening.blockId,
+            sourceRepSum: evidence.repSum, sourceAllTop: evidence.allTop }];
+        }
+        return [key, { ...clone(offer), sourceBlockId: opening.blockId }];
+      })),
       priorQuotas: clone(quotas), priorCreditIds: [...activeCredits.values()],
       sealId, sealedBlockId: opening.blockId } : null };
 }
@@ -930,6 +1009,10 @@ function createNextBB2Opening(previousProjection, newBlockId) {
       previousProjection.schemaVersion !== closing.schemaVersion ||
       previousProjection.foldRulesVersion !== closing.foldRulesVersion ||
       closing.openingSnapshotVersion !== 1 ||
+      JSON.stringify(previousProjection.progress) !== JSON.stringify(closing.progress) ||
+      JSON.stringify(previousProjection.selections) !== JSON.stringify(closing.selections) ||
+      JSON.stringify(Object.keys(previousProjection.pending || {}).sort()) !==
+        JSON.stringify(Object.keys(closing.pending || {}).sort()) ||
       !TEMPLATES.every(t => previousProjection.quotas?.[t] === 8 &&
         closing.priorQuotas?.[t] === 8) ||
       !Array.isArray(closing.priorCreditIds) ||
@@ -942,6 +1025,7 @@ function createNextBB2Opening(previousProjection, newBlockId) {
   const next = createBB2Opening({ ownerId: previousProjection.ownerId, blockId: newBlockId,
     progress: closing.progress, sealRevision: previousProjection.sealRevision });
   next.selections = clone(closing.selections);
+  next.pending = clone(closing.pending || {});
   next.previousQuotas = clone(closing.priorQuotas);
   next.previousCreditIds = clone(closing.priorCreditIds);
   next.previousSealId = closing.sealId;

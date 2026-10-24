@@ -1646,5 +1646,147 @@ check('lock must follow independently committed pre-lock prescription changes',(
   assert.throws(()=>foldBB2Block(opening(),r.events),/edit after lock/);
 });
 
+
+const blockWithFinalPending=(kind='OFF_PLAN')=>{
+  const r=log(), templates=['upper_a','lower_a','upper_b','lower_b'];
+  let finalSource=null;
+  for(const templateId of templates)for(let n=0;n<8;n++){
+    const id=templateId+'-'+n;
+    const bodyweight=kind==='DIFFICULTY' && templateId==='upper_a';
+    const selected=bodyweight?bwSlot():slot(3);
+    r.append('WORKOUT_STARTED',{sessionId:id,templateId,kind:'NORMAL',slots:[selected]});
+    for(let i=0;i<3;i++){
+      const last=templateId==='upper_a' && n===7;
+      r.append('SET_RECORDED',{sessionId:id,roleSlotId:selected.roleSlotId,
+        exerciseId:selected.exerciseId,setIndex:i,
+        reps:bodyweight && last?8:7,
+        actualG:bodyweight?5000:(last?95000:100000),
+        actualOrigin:origin(bodyweight?5000:(last?95000:100000)),
+        ...(bodyweight?{variation:'chin-up',assistance:'light-band'}:{}),
+        prescribed:true});
+    }
+    r.append('WORKOUT_FINISHED',{sessionId:id});
+    r.append('CREDIT_GRANTED',{sessionId:id,creditId:'credit-'+id});
+    if(templateId==='upper_a'&&n===7)finalSource=id;
+  }
+  r.append('BLOCK_SEALED',{sealId:'original-seal'});
+  const projection=foldBB2Block(opening(),r.events);
+  const next=createNextBB2Opening(projection,'block-next');
+  return {r,projection,next,finalSource};
+};
+const nextBlockEvent=(type,fields={})=>({
+  type,eventId:'next-'+type,commitOrdinal:1,blockId:'block-next',...fields
+});
+check('sealed 32-credit block retains an unresolved numeric choice through next opening',()=>{
+  const {projection,next,finalSource}=blockWithFinalPending();
+  const key='upper_a|bench|barbell-bench';
+  assert.equal(projection.sealed,true);
+  assert.equal(projection.closingSnapshot.pending[key].sourceBlockId,'test-block');
+  assert.equal(projection.closingSnapshot.pending[key].sourceRepSum,21);
+  assert.equal(projection.closingSnapshot.pending[key].sourceAllTop,false);
+  assert.deepEqual(projection.closingSnapshot.pending,next.pending);
+  assert.equal(next.pending[key].sessionId,finalSource);
+  const after=foldBB2Block(next,[]);
+  assert.deepEqual(after.pending,next.pending);
+  assert.deepEqual(after.quotas,{upper_a:0,lower_a:0,upper_b:0,lower_b:0});
+  assert.equal(after.history.length,0);
+  assert.equal(after.progress[key].loadG,100000);
+});
+check('carried pending load blocks next same-identity Start until explicitly resolved',()=>{
+  const {next,finalSource}=blockWithFinalPending();
+  const newStart=nextBlockEvent('WORKOUT_STARTED',{sessionId:'new-1',
+    templateId:'upper_a',kind:'NORMAL',slots:[slot(3)]});
+  assert.throws(()=>foldBB2Block(next,[newStart]),
+    /unresolved choice blocks same exercise/);
+  const resolve=nextBlockEvent('CHOICE_RESOLVED',{
+    sourceBlockId:'test-block',sourceSessionId:finalSource,roleSlotId:'bench',
+    exerciseId:'barbell-bench',decision:'ACCEPT',
+    loadG:95000,loadOrigin:origin(95000)
+  });
+  const accepted=foldBB2Block(next,[resolve]);
+  const key='upper_a|bench|barbell-bench';
+  assert.deepEqual(accepted.pending,{});
+  assert.equal(accepted.progress[key].loadG,95000);
+  assert.equal(accepted.progress[key].bestReps,21);
+  assert.equal(accepted.quotas.upper_a,0);
+  const newPlan={...slot(3),plannedG:95000,plannedOrigin:origin(95000)};
+  const started=foldBB2Block(next,[resolve,{...newStart,
+    eventId:'new-workout-start',commitOrdinal:2,slots:[newPlan]}]);
+  assert.equal(started.headOrdinal,2);
+});
+check('forged or stale carried source and retargeted weight are refused',()=>{
+  const {next,finalSource}=blockWithFinalPending();
+  const make=(extra={})=>nextBlockEvent('CHOICE_RESOLVED',{
+    sourceBlockId:'test-block',sourceSessionId:finalSource,
+    roleSlotId:'bench',exerciseId:'barbell-bench',decision:'ACCEPT',
+    loadG:95000,loadOrigin:origin(95000),...extra});
+  for(const altered of [
+    {sourceBlockId:'other-block'},{sourceSessionId:'other-session'},
+    {loadG:94000,loadOrigin:origin(94000)},
+    {decision:'DIFFICULTY_ACCEPT'}
+  ])assert.throws(()=>foldBB2Block(next,[make(altered)]),
+    /missing or stale carried choice offer|carried acceptance differs|invalid carried numeric decision/);
+  assert.throws(()=>foldBB2Block(next,[make(),{...make(),
+    eventId:'repeated-choice',commitOrdinal:2}]),
+    /missing or stale carried choice offer/);
+});
+check('carried numeric KEEP declines offer without rewriting past prescribed load',()=>{
+  const {next,finalSource}=blockWithFinalPending();
+  const e=nextBlockEvent('CHOICE_RESOLVED',{
+    sourceBlockId:'test-block',sourceSessionId:finalSource,
+    roleSlotId:'bench',exerciseId:'barbell-bench',decision:'KEEP'});
+  const p=foldBB2Block(next,[e]);
+  assert.deepEqual(p.pending,{});
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].loadG,100000);
+  assert.equal(p.history.length,0);
+});
+check('deliberate new-block working-load edit supersedes carried offer, increment edit does not',()=>{
+  const {next}=blockWithFinalPending();
+  const increment=nextBlockEvent('INCREMENT_EDITED',{
+    templateId:'upper_a',roleSlotId:'bench',exerciseId:'barbell-bench',
+    scope:'GLOBAL',incrementG:5000,incrementOrigin:origin(5000)});
+  const held=foldBB2Block(next,[increment]);
+  assert.ok(held.pending['upper_a|bench|barbell-bench']);
+  const change={...nextBlockEvent('PRESCRIPTION_EDITED',{
+    templateId:'upper_a',roleSlotId:'bench',exerciseId:'barbell-bench',
+    scope:'GLOBAL',loadG:97500,loadOrigin:origin(97500)}),
+    eventId:'manual-new-baseline',commitOrdinal:2};
+  const p=foldBB2Block(next,[increment,change]);
+  assert.deepEqual(p.pending,{});
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].loadG,97500);
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].incrementG,5000);
+});
+check('carried harder bodyweight direction requires explicit choice in next block',()=>{
+  const {next,finalSource}=blockWithFinalPending('DIFFICULTY');
+  const key='upper_a|vertical-pull|chin-up';
+  assert.equal(next.pending[key].kind,'DIFFICULTY');
+  assert.equal(next.pending[key].sourceBlockId,'test-block');
+  const accepted=nextBlockEvent('CHOICE_RESOLVED',{
+    sourceBlockId:'test-block',sourceSessionId:finalSource,
+    roleSlotId:'vertical-pull',exerciseId:'chin-up',decision:'DIFFICULTY_ACCEPT',
+    variation:'weighted-chin',assistance:'none',
+    addedWeightG:7500,addedWeightOrigin:origin(7500)
+  });
+  const p=foldBB2Block(next,[accepted]);
+  assert.deepEqual(p.pending,{});
+  assert.equal(p.progress[key].variation,'weighted-chin');
+  assert.equal(p.progress[key].assistance,'none');
+  assert.equal(p.progress[key].loadG,7500);
+  assert.equal(p.progress[key].epochId,'choice:'+accepted.eventId);
+});
+check('damaged carried pending opening cannot bootstrap BB2 training',()=>{
+  const {next}=blockWithFinalPending();
+  const key='upper_a|bench|barbell-bench';
+  for(const bad of [
+    {sourceBlockId:''},{sourceRepSum:'21'},{valueG:-1},
+    {kind:'unknown'}
+  ]){
+    const openingCopy=structuredClone(next);
+    Object.assign(openingCopy.pending[key],bad);
+    assert.throws(()=>foldBB2Block(openingCopy,[]),
+      /carried|pending|invalid/);
+  }
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);

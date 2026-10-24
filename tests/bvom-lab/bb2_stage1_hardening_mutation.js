@@ -181,7 +181,22 @@ const faults=[
     to:"if (false && own(e, 'plannedOrigin')) {"},
   {name:'ALLOW-FORGED-INCREMENT-ORIGIN-IN-LOCK',
     from:"if (own(e, 'incrementOrigin')) {",
-    to:"if (false && own(e, 'incrementOrigin')) {"}
+    to:"if (false && own(e, 'incrementOrigin')) {"},
+  {name:'DROP-CARRIED-PENDING-ON-NEXT-BLOCK',
+    from:"next.pending = clone(closing.pending || {});",
+    to:"next.pending = {};"},
+  {name:'ALLOW-INCORRECT-CARRIED-ACCEPTED-WEIGHT',
+    from:"if (e.loadG !== offer.valueG) fail('carried acceptance differs from sealed offer');",
+    to:"if (false && e.loadG !== offer.valueG) fail('carried acceptance differs from sealed offer');"},
+  {name:'ALLOW-FORGED-CARRIED-SOURCE-BLOCK',
+    from:"offer.sourceBlockId === e.sourceBlockId &&",
+    to:"true &&"},
+  {name:'LEAVE-CARRIED-OFFER-AFTER-MANUAL-EDIT',
+    from:"e.type === 'STALL_REDUCTION_ACCEPTED') delete pending[key];",
+    to:"e.type === 'STALL_REDUCTION_ACCEPTED') {}"},
+  {name:'DROP-CARRIED-SOURCE-REP-SUM',
+    from:"sourceRepSum: evidence.repSum, sourceAllTop: evidence.allTop",
+    to:"sourceRepSum: 0, sourceAllTop: evidence.allTop"}
 ];
 let killed=0;
 for(const fault of faults) {
