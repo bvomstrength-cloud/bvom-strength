@@ -323,6 +323,19 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
   const { records, voidSessions } = effectiveRevisions(chronologicalEvents);
   const progress = Object.fromEntries(Object.entries(opening.progress).map(([k, v]) => [k, initialProgress(v)]));
   const sessions = new Map(), choices = [], boundaries = [], notes = new Map(), hidden = new Set();
+  // Discard purges the session Start into a minimal tombstone, while separate
+  // pre-lock GLOBAL edits retain their original ordinal and session linkage.
+  // Restrict the missing-session exception to that original Discard window.
+  const discardedEditWindows = new Map();
+  for (const event of chronologicalEvents) if (event.type === 'WORKOUT_DISCARDED') {
+    const tombstones = chronologicalEvents.filter(x =>
+      x.type === 'TOMBSTONE' && x.discardedSessionId === event.sessionId &&
+      x.commitOrdinal < event.commitOrdinal);
+    if (tombstones.length) discardedEditWindows.set(event.sessionId, {
+      firstOrdinal: Math.min(...tombstones.map(x => x.commitOrdinal)),
+      discardOrdinal: event.commitOrdinal
+    });
+  }
   const selections = clone(opening.selections || {}), unitMetadata = [];
   const grants = new Map(), activeCredits = new Map(), pending = {};
   const quotas = Object.fromEntries(TEMPLATES.map(x => [x, 0]));
@@ -405,7 +418,10 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         const templateId = e.templateId ?? sessions.get(e.sessionId)?.templateId;
         const key = identity(templateId, e.roleSlotId, e.exerciseId);
         const session = e.sessionId ? sessions.get(e.sessionId) : null;
-        if (e.sessionId && !session) fail('edit references unknown session');
+        const window = e.sessionId ? discardedEditWindows.get(e.sessionId) : null;
+        const preservedDiscardEdit = window && e.scope === 'GLOBAL' &&
+          e.commitOrdinal > window.firstOrdinal && e.commitOrdinal < window.discardOrdinal;
+        if (e.sessionId && !session && !preservedDiscardEdit) fail('edit references unknown session');
         if (session?.outcome) fail('session edit after workout outcome');
         const slot = session ? findSlot(session, e) : null;
         if (slot && (session.locks.has(slot.roleSlotId) || session.seenSets.has(slot.roleSlotId))) fail('edit after lock');

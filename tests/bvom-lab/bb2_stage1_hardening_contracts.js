@@ -967,5 +967,28 @@ check('session void cannot be committed during a different active workout',()=>{
   assert.equal(foldBB2Block(opening(),r.events).history.find(h=>h.sessionId==='old').status,'VOID');
 });
 
+
+check('globally committed pre-lock edit survives Discard but cannot be forged afterward',()=>{
+  const r=log();r.start('discarded',3);
+  r.append('PRESCRIPTION_EDITED',{sessionId:'discarded',templateId:'upper_a',
+    roleSlotId:'bench',exerciseId:'barbell-bench',scope:'GLOBAL',
+    loadG:105000,loadOrigin:origin(105000)});
+  r.append('EXERCISE_LOCKED',{sessionId:'discarded',
+    roleSlotId:'bench',exerciseId:'barbell-bench',
+    plannedG:105000,plannedOrigin:origin(105000)});
+  const discarded=discardBB2Session(r.events,'discarded');
+  const p=foldBB2Block(opening(),discarded);
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].loadG,105000);
+  assert.equal(p.history.length,0);
+  const forged=[...discarded,{
+    type:'PRESCRIPTION_EDITED',eventId:'fabricated-global-late',
+    commitOrdinal:discarded.length+1,blockId:'test-block',
+    sessionId:'discarded',templateId:'upper_a',roleSlotId:'bench',
+    exerciseId:'barbell-bench',scope:'GLOBAL',
+    loadG:107500,loadOrigin:origin(107500)
+  }];
+  assert.throws(()=>foldBB2Block(opening(),forged),/edit references unknown session/);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);
