@@ -2,7 +2,7 @@
 // Intended to be run against an isolated ledger.cjs, not BB1 runtime.
 'use strict';
 const assert = require('node:assert/strict');
-const { createBB2Opening, foldBB2Block, planBB2Finish } = require('../../bb2/ledger.cjs');
+const { createBB2Opening, foldBB2Block, planBB2Finish, commitBB2Transaction } = require('../../bb2/ledger.cjs');
 const origin = grams => ({ value: String(grams / 1000), unit: 'kg' });
 const slot = (sets) => ({
   roleSlotId:'bench', exerciseId:'barbell-bench', equipment:'loaded', sets,
