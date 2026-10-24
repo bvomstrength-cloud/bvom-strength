@@ -13,7 +13,13 @@ const faults=[
   {name:'FLOOR-70-PERCENT',from:'const minimumValid = Math.ceil(.70 * count);',to:'const minimumValid = Math.floor(.70 * count);'},
   {name:'SKIP-CORRECTION-IDENTITY',
     from:"fail('correction target identity mismatch');",
-    to:"/* mutated: a mismatched correction is accepted */"}
+    to:"/* mutated: a mismatched correction is accepted */"},
+  {name:'WIPE-BODYWEIGHT-VARIATION',
+    from:"variation: own(e, 'variation') ? e.variation : prior.variation,",
+    to:"variation: e.variation,"},
+  {name:'WIPE-HARD-EFFORT',
+    from:"harderThanIntended: own(e, 'harderThanIntended') ? e.harderThanIntended : prior.harderThanIntended,",
+    to:"harderThanIntended: !!e.harderThanIntended,"}
 ];
 let killed=0;
 for(const fault of faults) {

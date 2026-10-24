@@ -101,5 +101,96 @@ check('Finish idempotence leaves one session and one credit',()=>{
   assert.equal(again.events.filter(e=>e.type==='CREDIT_GRANTED').length,1);
   assert.equal(again.projection.history.length,1);
 });
+
+const bwSlot=()=>({roleSlotId:'vertical-pull',exerciseId:'chin-up',equipment:'bodyweight',
+  sets:3,ceiling:8,variation:'chin-up',assistance:'light-band',
+  plannedG:5000,plannedOrigin:origin(5000),
+  incrementG:1000,incrementOrigin:origin(1000)});
+const bwJournal=(hard=false,extra=false)=>{
+  const r=log();
+  r.append('WORKOUT_STARTED',{sessionId:'bw',templateId:'upper_a',kind:'NORMAL',
+    slots:[bwSlot()]});
+  const source=[];
+  for(let i=0;i<3+(extra?1:0);i++) {
+    source.push(r.append(i===3?'EXTRA_SET_RECORDED':'SET_RECORDED',{
+      sessionId:'bw',roleSlotId:'vertical-pull',exerciseId:'chin-up',
+      setIndex:i,reps:i===0?6:7,actualG:5000,actualOrigin:origin(5000),
+      variation:'chin-up',assistance:'light-band',
+      harderThanIntended:i===0&&hard,...(i===3?{}:{prescribed:true})
+    }));
+  }
+  r.finish('bw');
+  return { ...r,source };
+};
+const correctBW=(r,target,fields={})=>r.append('SET_CORRECTED',{
+  sessionId:'bw',targetEventId:target.eventId,
+  roleSlotId:'vertical-pull',exerciseId:'chin-up',setIndex:target.setIndex,
+  reps:7,actualG:5000,actualOrigin:origin(5000),...fields
+});
+check('bodyweight reps-only correction preserves actual variation and assistance',()=>{
+  const r=bwJournal();
+  const original=structuredClone(r.source[0]);
+  correctBW(r,r.source[0]);
+  const p=foldBB2Block(opening(),r.events);
+  const entry=p.history[0].sets[0];
+  assert.equal(entry.variation,'chin-up');
+  assert.equal(entry.assistance,'light-band');
+  assert.equal(entry.reps,7);
+  assert.equal(entry.actualG,5000);
+  assert.deepEqual(r.source[0],original);
+  assert.equal(p.progress['upper_a|vertical-pull|chin-up'].bestReps,21);
+});
+check('explicit bodyweight variation update persists through later reps-only revision',()=>{
+  const r=bwJournal();
+  correctBW(r,r.source[0],{variation:'assisted-chin',assistance:'medium-band'});
+  const first=foldBB2Block(opening(),r.events).history[0].sets[0];
+  assert.equal(first.variation,'assisted-chin');
+  assert.equal(first.assistance,'medium-band');
+  correctBW(r,r.source[0],{reps:8});
+  const second=foldBB2Block(opening(),r.events).history[0].sets[0];
+  assert.deepEqual([second.reps,second.variation,second.assistance],[8,'assisted-chin','medium-band']);
+});
+check('hard-effort exclusion survives unrelated bodyweight reps correction',()=>{
+  const r=bwJournal(true);
+  correctBW(r,r.source[0]);
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.history[0].sets[0].harderThanIntended,true);
+  assert.equal(p.progress['upper_a|vertical-pull|chin-up'].calibrated,true);
+  assert.equal(p.progress['upper_a|vertical-pull|chin-up'].bestReps,null);
+});
+check('explicit false removes hard-effort flag and allows calibration reference',()=>{
+  const r=bwJournal(true);
+  correctBW(r,r.source[0],{harderThanIntended:false});
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.history[0].sets[0].harderThanIntended,false);
+  assert.equal(p.progress['upper_a|vertical-pull|chin-up'].bestReps,21);
+});
+check('extra bodyweight set revision keeps variation and never changes gating',()=>{
+  const r=bwJournal(false,true);
+  correctBW(r,r.source[3],{reps:9});
+  const p=foldBB2Block(opening(),r.events);
+  const extra=p.history[0].sets.find(s=>s.setIndex===3);
+  assert.deepEqual([extra.reps,extra.variation,extra.assistance,extra.prescribed],
+    [9,'chin-up','light-band',false]);
+  assert.equal(p.history[0].validCount,3);
+  assert.equal(p.progress['upper_a|vertical-pull|chin-up'].bestReps,20);
+});
+check('void then restore preserves original variation when not explicitly changed',()=>{
+  const r=bwJournal();
+  r.append('SET_VOIDED',{sessionId:'bw',targetEventId:r.source[0].eventId});
+  correctBW(r,r.source[0]);
+  const p=foldBB2Block(opening(),r.events);
+  assert.deepEqual([p.history[0].sets[0].variation,p.history[0].sets[0].assistance],
+    ['chin-up','light-band']);
+});
+check('malformed hard-effort boolean is rejected on set and correction',()=>{
+  const r=bwJournal();
+  const bad=structuredClone(r.events);
+  bad[1].harderThanIntended='false';
+  assert.throws(()=>foldBB2Block(opening(),bad),/harder-than-intended flag/);
+  correctBW(r,r.source[0],{harderThanIntended:'false'});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/harder-than-intended flag/);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);

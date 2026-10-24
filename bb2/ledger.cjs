@@ -132,6 +132,10 @@ function validateEventPayload(e) {
     case 'TOMBSTONE': positiveId(e.discardedSessionId, 'discarded session'); break;
     default: break;
   }
+  if (['SET_RECORDED', 'EXTRA_SET_RECORDED', 'SET_CORRECTED'].includes(e.type) &&
+      own(e, 'harderThanIntended') && typeof e.harderThanIntended !== 'boolean') {
+    fail('invalid harder-than-intended flag');
+  }
   if (e.addedWeightG !== undefined) mass('added weight', 'addedWeightG', 'addedWeightOrigin');
 }
 function validateEvents(opening, events) {
@@ -222,10 +226,15 @@ function effectiveRevisions(events) {
         integer(e.reps, 'corrected reps', 1);
         integer(e.actualG, 'corrected grams');
       }
-      records.set(key, e.type === 'SET_VOIDED' ? null : { ...originals.get(key),
+      // A reps/load-only revision must not erase bodyweight identity or effort.
+      // Explicit values (including false) take precedence; omitted values
+      // inherit the last revision, falling back to original after a void.
+      const prior = records.get(key) || originals.get(key);
+      records.set(key, e.type === 'SET_VOIDED' ? null : { ...prior,
         reps: e.reps, actualG: e.actualG, actualOrigin: clone(e.actualOrigin),
-        harderThanIntended: !!e.harderThanIntended,
-        variation: e.variation, assistance: e.assistance });
+        harderThanIntended: own(e, 'harderThanIntended') ? e.harderThanIntended : prior.harderThanIntended,
+        variation: own(e, 'variation') ? e.variation : prior.variation,
+        assistance: own(e, 'assistance') ? e.assistance : prior.assistance });
     }
     if (e.type === 'SESSION_VOIDED') voidSessions.add(e.sessionId);
   }
