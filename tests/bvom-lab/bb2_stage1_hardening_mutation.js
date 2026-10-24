@@ -142,7 +142,19 @@ const faults=[
     to:"dismiss.stallCount !== p.stallCount;"},
   {name:'ALLOW-PREMATURE-STALL-DISMISSAL',
     from:"if (!offer || offer.kind !== 'OFFER' ||\n            offer.epochId !== e.epochId || offer.stallCount !== e.stallCount) {",
-    to:"if (false && (!offer || offer.kind !== 'OFFER' ||\n            offer.epochId !== e.epochId || offer.stallCount !== e.stallCount)) {"}
+    to:"if (false && (!offer || offer.kind !== 'OFFER' ||\n            offer.epochId !== e.epochId || offer.stallCount !== e.stallCount)) {"},
+  {name:'ALLOW-STALE-FIVE-SESSION-RECOVERY-WINDOW',
+    from:"eligibleNormalFinishes.slice(-4)",
+    to:"eligibleNormalFinishes.slice(-5)"},
+  {name:'ALLOW-RECOVERY-FROM-ONE-STALLED-EXERCISE',
+    from:"relevantMilestones.size >= 2",
+    to:"relevantMilestones.size >= 1"},
+  {name:'IGNORE-CURRENT-RECOVERY-STALL-EPOCH',
+    from:"p.stallCount >= 3 && p.epochId === milestone.epochId",
+    to:"p.stallCount >= 3 && true"},
+  {name:'COUNT-INCOMPLETE-AND-RECOVERY-IN-SUGGESTION-WINDOW',
+    from:"if (s.eligible) eligibleNormalFinishes.push(s.sessionId);",
+    to:"if (s.outcome) eligibleNormalFinishes.push(s.sessionId);"}
 ];
 let killed=0;
 for(const fault of faults) {

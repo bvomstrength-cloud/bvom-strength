@@ -1317,5 +1317,112 @@ check('retrospective invalidation preserves originally legitimate stall dismissa
   assert.equal(p.history.length,5);
 });
 
+
+const multiStallJournal=(order)=>{
+  const r=log(),setsBySession=new Map();
+  const roles={
+    A:{...slot(3),roleSlotId:'bench',exerciseId:'barbell-bench'},
+    B:{...slot(3),roleSlotId:'row',exerciseId:'barbell-row'}
+  };
+  for(const [n,item] of order.entries()){
+    const mode=typeof item==='string'? 'FINISH':item.outcome;
+    const role=typeof item==='string'?item:item.role;
+    const selected=roles[role],sessionId='multi-'+n;
+    r.append('WORKOUT_STARTED',{sessionId,templateId:'upper_a',
+      kind:mode==='RECOVERY'?'RECOVERY':'NORMAL',slots:[selected]});
+    const saved=[];
+    for(let i=0;i<3;i++) saved.push(r.append('SET_RECORDED',{
+      sessionId,roleSlotId:selected.roleSlotId,exerciseId:selected.exerciseId,
+      setIndex:i,reps:7,actualG:100000,actualOrigin:origin(100000),
+      harderThanIntended:mode==='HARD'&&i===0,prescribed:true
+    }));
+    setsBySession.set(sessionId,saved);
+    r.append(mode==='INCOMPLETE'?'WORKOUT_INCOMPLETE':'WORKOUT_FINISHED',{sessionId});
+  }
+  return {...r,setsBySession};
+};
+const fullMultiSequence=['A','B','A','A','A','B','B','B'];
+const multiKeys=['upper_a|bench|barbell-bench','upper_a|row|barbell-row'];
+check('single stalled identity never forces or offers a multi-exercise recovery',()=>{
+  const r=multiStallJournal(['A','A','A','A']);
+  const p=foldBB2Block(opening(),r.events);
+  assert.deepEqual(p.stallSignals[multiKeys[0]],
+    {kind:'NOTE',epochId:'opening',stallCount:3});
+  assert.equal(p.multiStallRecovery,null);
+  assert.equal(p.quotas.upper_a,0);
+});
+check('two identities reaching three stalls inside four eligible finishes give optional recovery',()=>{
+  const r=multiStallJournal(fullMultiSequence);
+  const p=foldBB2Block(opening(),r.events);
+  assert.deepEqual(p.multiStallRecovery,{
+    kind:'OPTIONAL_RECOVERY',windowSize:4,
+    sessionIds:['multi-4','multi-5','multi-6','multi-7'],
+    identities:multiKeys
+  });
+  assert.equal(p.progress[multiKeys[0]].stallCount,3);
+  assert.equal(p.progress[multiKeys[1]].stallCount,3);
+  assert.equal(p.history.length,8);
+  assert.deepEqual(p.quotas,{upper_a:0,lower_a:0,upper_b:0,lower_b:0});
+});
+check('old stall milestone outside four eligible sessions cannot trigger recovery',()=>{
+  const r=multiStallJournal(['A','A','A','A','B','B','B','B']);
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.progress[multiKeys[0]].stallCount,3);
+  assert.equal(p.progress[multiKeys[1]].stallCount,3);
+  assert.equal(p.multiStallRecovery,null);
+});
+check('recovery and Save Incomplete do not consume the four-session recovery window',()=>{
+  const seq=[...fullMultiSequence.slice(0,5),
+    {role:'A',outcome:'INCOMPLETE'}, {role:'A',outcome:'RECOVERY'},
+    ...fullMultiSequence.slice(5)];
+  const r=multiStallJournal(seq),p=foldBB2Block(opening(),r.events);
+  assert.deepEqual(p.multiStallRecovery,{
+    kind:'OPTIONAL_RECOVERY',windowSize:4,
+    sessionIds:['multi-4','multi-7','multi-8','multi-9'],
+    identities:multiKeys
+  });
+  assert.equal(p.history.find(x=>x.sessionId==='multi-6').status,
+    'LOW_STRESS_RECOVERY');
+  assert.equal(p.history.find(x=>x.sessionId==='multi-5').status,
+    'INCOMPLETE');
+  assert.equal(p.quotas.upper_a,0);
+});
+check('retrospective correction removes and then restores correct optional recovery signal',()=>{
+  const r=multiStallJournal(fullMultiSequence);
+  const before=foldBB2Block(opening(),r.events);
+  assert.equal(before.multiStallRecovery.kind,'OPTIONAL_RECOVERY');
+  const first=r.setsBySession.get('multi-4')[0];
+  r.append('SET_VOIDED',{sessionId:'multi-4',targetEventId:first.eventId});
+  const corrected=foldBB2Block(opening(),r.events);
+  assert.equal(corrected.multiStallRecovery,null);
+  assert.equal(corrected.progress[multiKeys[0]].stallCount,2);
+  r.append('SET_CORRECTED',{sessionId:'multi-4',targetEventId:first.eventId,
+    reps:7,actualG:100000,actualOrigin:origin(100000)});
+  const restored=foldBB2Block(opening(),r.events);
+  assert.deepEqual(restored.multiStallRecovery,before.multiStallRecovery);
+  assert.deepEqual(restored.progress,before.progress);
+  assert.deepEqual(restored.quotas,before.quotas);
+  assert.deepEqual(restored.activeCredits,before.activeCredits);
+});
+check('excluded harder-than-intended evidence never earns a multi-stall milestone',()=>{
+  const r=multiStallJournal([...fullMultiSequence.slice(0,-1),
+    {role:'B',outcome:'HARD'}]);
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.progress[multiKeys[0]].stallCount,3);
+  assert.equal(p.progress[multiKeys[1]].stallCount,2);
+  assert.equal(p.multiStallRecovery,null);
+});
+check('new manual exercise epoch makes previous stall milestone inapplicable',()=>{
+  const r=multiStallJournal(fullMultiSequence);
+  r.append('PRESCRIPTION_EDITED',{templateId:'upper_a',
+    roleSlotId:'bench',exerciseId:'barbell-bench',scope:'GLOBAL',
+    loadG:102500,loadOrigin:origin(102500)});
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.multiStallRecovery,null);
+  assert.equal(p.progress[multiKeys[0]].stallCount,0);
+  assert.equal(p.progress[multiKeys[1]].stallCount,3);
+  assert.equal(p.progress[multiKeys[0]].loadG,102500);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);

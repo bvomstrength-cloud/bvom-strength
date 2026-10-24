@@ -363,6 +363,9 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
   // Dismissals only hide the *same* epoch/count offer; a worse stall or new
   // accepted prescription creates a new actionable state without load edits.
   const stallDismissals = new Map();
+  // Progression-eligible finished sessions, not dates or recovery/incomplete
+  // work, define the optional four-session multi-stall review window.
+  const eligibleNormalFinishes = [], stallNoteMilestones = [];
   const grants = new Map(), activeCredits = new Map(), pending = {};
   const quotas = Object.fromEntries(TEMPLATES.map(x => [x, 0]));
   let sealed = !!opening.sealed, sealId = null;
@@ -553,18 +556,24 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
           } else if (info.onPlan && !info.harder) {
             if (p.loadG !== slot.plannedG) epoch(p, `promote:${e.eventId}:${key}`, slot.plannedG, slot.plannedOrigin);
             boundary(key, e.commitOrdinal, 'qualified-finish');
+            const beforeStall = p.stallCount;
             if (slot.equipment === 'bodyweight' && info.allTop) {
               pending[key] = { kind: 'DIFFICULTY', sessionId: s.sessionId, variation: slot.variation,
                 assistance: slot.assistance, addedWeightG: slot.plannedG };
             } else if (slot.equipment === 'loaded' && info.allTop) epoch(p, `earned:${e.eventId}:${key}`, p.loadG + p.incrementG);
             else if (p.bestReps === null || info.repSum > p.bestReps) { p.bestReps = info.repSum; p.stallCount = 0; }
             else p.stallCount++;
+            if (beforeStall < 3 && p.stallCount === 3) {
+              stallNoteMilestones.push({ key, sessionId: s.sessionId,
+                epochId: p.epochId, ordinal: e.commitOrdinal });
+            }
             if (slot.equipment !== 'bodyweight' || !info.allTop) delete pending[key];
           } else if (info.uniform && !info.harder && !info.onPlan && slot.equipment === 'loaded') {
             pending[key] = { kind: 'OFF_PLAN', sessionId: s.sessionId, valueG: info.actualG, plannedG: slot.plannedG };
           }
           p.lastNormalSessionId = s.sessionId;
         }
+        if (s.eligible) eligibleNormalFinishes.push(s.sessionId);
         break;
       }
       case 'CHOICE_RESOLVED':
@@ -786,11 +795,27 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         actions: ['REDUCE_ABOUT_10_PERCENT', 'SWAP_MOVEMENT', 'RECOVERY_SESSION'] };
     }
   }
+  const recentEligibleSessionIds = eligibleNormalFinishes.slice(-4);
+  const recentEligibleSet = new Set(recentEligibleSessionIds);
+  const relevantMilestones = new Map();
+  for (const milestone of stallNoteMilestones) {
+    const p = progress[milestone.key];
+    if (recentEligibleSet.has(milestone.sessionId) && p &&
+        p.stallCount >= 3 && p.epochId === milestone.epochId) {
+      relevantMilestones.set(milestone.key, milestone);
+    }
+  }
+  const multiStallRecovery = relevantMilestones.size >= 2 ? {
+    kind: 'OPTIONAL_RECOVERY',
+    windowSize: 4,
+    sessionIds: recentEligibleSessionIds,
+    identities: [...relevantMilestones.keys()].sort()
+  } : null;
   return { schemaVersion: SCHEMA_VERSION, foldRulesVersion: FOLD_RULES_VERSION, blockId: opening.blockId,
     ownerId: opening.ownerId, headOrdinal: chronologicalEvents.length, sealRevision: opening.sealRevision + (sealId ? 1 : 0),
     sealId, sealed, progress, quotas, activeCredits: Object.fromEntries(activeCredits),
     creditLedger: Object.fromEntries(grants), selections, unitMetadata,
-    pending, requiredConsent, stallSignals, history,
+    pending, requiredConsent, stallSignals, multiStallRecovery, history,
     closingSnapshot: sealed ? { schemaVersion: SCHEMA_VERSION, foldRulesVersion: FOLD_RULES_VERSION,
       openingSnapshotVersion: 1, progress: clone(progress), selections: clone(selections),
       priorQuotas: clone(quotas), priorCreditIds: [...activeCredits.values()],
