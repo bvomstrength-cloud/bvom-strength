@@ -130,7 +130,10 @@ const faults=[
     to:"p.variation = e.variation;"},
   {name:'ALLOW-NO-OP-ASSISTANCE-EDIT',
     from:"if (p.variation === e.variation && p.assistance === nextAssistance) {",
-    to:"if (false && p.variation === e.variation && p.assistance === nextAssistance) {"}
+    to:"if (false && p.variation === e.variation && p.assistance === nextAssistance) {"},
+  {name:'TOMBSTONE-INDEPENDENT-VARIATION-EDIT',
+    from:"'CALIBRATION_ACCEPTED', 'SET_RECORDED', 'EXTRA_SET_RECORDED']);",
+    to:"'CALIBRATION_ACCEPTED', 'SET_RECORDED', 'EXTRA_SET_RECORDED', 'VARIATION_EDITED']);"}
 ];
 let killed=0;
 for(const fault of faults) {

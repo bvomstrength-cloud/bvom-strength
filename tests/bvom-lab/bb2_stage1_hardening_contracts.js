@@ -1163,5 +1163,48 @@ check('malformed variation assistance cannot enter committed event stream',()=>{
   assert.throws(()=>foldBB2Block(opening(),r.events),/invalid variation assistance/);
 });
 
+
+check('independently committed assistance edit survives discarded working session',()=>{
+  const r=bwJournal();
+  r.append('WORKOUT_STARTED',{sessionId:'discard-var',
+    templateId:'upper_a',kind:'NORMAL',slots:[bwSlot()]});
+  const edit=r.append('VARIATION_EDITED',{sessionId:'discard-var',
+    templateId:'upper_a',roleSlotId:'vertical-pull',exerciseId:'chin-up',
+    scope:'GLOBAL',variation:'chin-up',assistance:'medium-band'});
+  r.append('SET_RECORDED',{sessionId:'discard-var',
+    roleSlotId:'vertical-pull',exerciseId:'chin-up',setIndex:0,
+    reps:6,actualG:5000,actualOrigin:origin(5000),
+    variation:'chin-up',assistance:'medium-band',prescribed:true});
+  const before=foldBB2Block(opening(),r.events);
+  assert.equal(before.progress[bodyweightProgressKey].assistance,'medium-band');
+  const discarded=discardBB2Session(r.events,'discard-var');
+  const after=foldBB2Block(opening(),discarded);
+  assert.equal(after.progress[bodyweightProgressKey].assistance,'medium-band');
+  assert.equal(after.progress[bodyweightProgressKey].variation,'chin-up');
+  assert.equal(after.progress[bodyweightProgressKey].loadG,5000);
+  assert.equal(after.progress[bodyweightProgressKey].epochId,'event:'+edit.eventId);
+  assert.equal(after.progress[bodyweightProgressKey].bestReps,null);
+  assert.equal(after.history.length,1);
+  assert.equal(after.history[0].sessionId,'bw');
+  assert.equal(after.quotas.upper_a,0);
+  assert.equal(discarded.find(x=>x.eventId===edit.eventId).type,'VARIATION_EDITED');
+  assert.ok(discarded.some(x=>x.type==='TOMBSTONE'&&x.discardedSessionId==='discard-var'));
+  assert.deepEqual(discarded.map(e=>e.commitOrdinal),
+    Array.from({length:discarded.length},(_,i)=>i+1));
+});
+check('cannot attach an invented variation edit to already discarded session',()=>{
+  const r=bwJournal();
+  r.append('WORKOUT_STARTED',{sessionId:'gone',
+    templateId:'upper_a',kind:'NORMAL',slots:[bwSlot()]});
+  const discarded=discardBB2Session(r.events,'gone');
+  discarded.push({type:'VARIATION_EDITED',eventId:'forged-variation',
+    commitOrdinal:discarded.length+1,blockId:'test-block',
+    sessionId:'gone',templateId:'upper_a',roleSlotId:'vertical-pull',
+    exerciseId:'chin-up',scope:'GLOBAL',
+    variation:'weighted-chin',assistance:'none'});
+  assert.throws(()=>foldBB2Block(opening(),discarded),
+    /edit references unknown session/);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);
