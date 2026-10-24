@@ -469,6 +469,27 @@ check('Discard tombstones require matching Discard and cannot retain set evidenc
   leaked[0].reps=8;
   assert.throws(()=>foldBB2Block(opening(),leaked),/tombstone cannot retain/);
 });
+check('Discard purges notes and rejects hidden live session events in restored ledgers',()=>{
+  const r=log();r.start('discard-me',1);r.sets('discard-me',1);
+  r.append('NOTE_EDITED',{sessionId:'discard-me',text:'private training note'});
+  const discarded=discardBB2Session(r.events,'discard-me');
+  assert.equal(discarded.filter(e=>e.type==='TOMBSTONE').length,3);
+  assert.equal(foldBB2Block(opening(),discarded).history.length,0);
+  const leaking=structuredClone(discarded);
+  leaking[1]={...r.events[1]};
+  assert.throws(()=>foldBB2Block(opening(),leaking),/discard.*session.*event|discard.*tombstone/i);
+  const leakedStart=structuredClone(discarded);
+  leakedStart[0]={...r.events[0]};
+  assert.throws(()=>foldBB2Block(opening(),leakedStart),/discard.*session.*event|discard.*tombstone/i);
+});
+check('a discarded stable session ID can never be reused for another workout',()=>{
+  const r=log();r.start('same-id',1);r.sets('same-id',1);
+  const discarded=discardBB2Session(r.events,'same-id');
+  const replay=[...discarded,{type:'WORKOUT_STARTED',eventId:'new-start',
+    commitOrdinal:discarded.length+1,blockId:'test-block',sessionId:'same-id',
+    templateId:'upper_a',kind:'NORMAL',slots:[slot(1)]}];
+  assert.throws(()=>foldBB2Block(opening(),replay),/discarded session event|duplicate session ID/i);
+});
 check('next block preserves all 32 credits and sealed provenance with fresh identity',()=>{
   const p=foldBB2Block(opening(),sealedFixture().events);
   const next=createNextBB2Opening(p,'block-next');
@@ -618,6 +639,49 @@ check('real off-plan KEEP leaves normal prescription unchanged',()=>{
   const p=foldBB2Block(opening(),r.events);
   assert.equal(p.progress['upper_a|bench|barbell-bench'].loadG,100000);
   assert.equal(p.pending['upper_a|bench|barbell-bench'],undefined);
+});
+check('one off-plan source offer resolves only once, never earns a duplicate ACCEPT or KEEP',()=>{
+  for(const decisions of [['ACCEPT','ACCEPT'],['ACCEPT','KEEP'],['KEEP','ACCEPT']]){
+    const r=creditJournal();
+    for(const e of r.events.filter(e=>e.type==='SET_RECORDED')) {
+      e.actualG=95000;e.actualOrigin=origin(95000);
+    }
+    const fields=decision=>({sourceSessionId:'s',roleSlotId:'bench',
+      exerciseId:'barbell-bench',decision,
+      ...(decision==='ACCEPT'?{loadG:95000,loadOrigin:origin(95000)}:{})});
+    r.append('CHOICE_RESOLVED',fields(decisions[0]));
+    const legitimate=foldBB2Block(opening(),r.events);
+    assert.equal(legitimate.pending['upper_a|bench|barbell-bench'],undefined);
+    r.append('CHOICE_RESOLVED',fields(decisions[1]));
+    assert.throws(()=>foldBB2Block(opening(),r.events),/already resolved|stale.*offer/i);
+  }
+});
+check('a bodyweight HOLD consumes the offer even though it does not edit the prescription',()=>{
+  const r=log();
+  r.append('WORKOUT_STARTED',{sessionId:'bw-hold',templateId:'upper_a',
+    kind:'NORMAL',slots:[bwSlot()]});
+  for(let i=0;i<3;i++)r.append('SET_RECORDED',{
+    sessionId:'bw-hold',roleSlotId:'vertical-pull',exerciseId:'chin-up',
+    setIndex:i,reps:8,actualG:5000,actualOrigin:origin(5000),
+    variation:'chin-up',assistance:'light-band',prescribed:true});
+  r.finish('bw-hold');
+  const resolution={sourceSessionId:'bw-hold',roleSlotId:'vertical-pull',
+    exerciseId:'chin-up',decision:'HOLD'};
+  r.append('CHOICE_RESOLVED',resolution);
+  assert.equal(foldBB2Block(opening(),r.events).pending['upper_a|vertical-pull|chin-up'],undefined);
+  r.append('CHOICE_RESOLVED',resolution);
+  assert.throws(()=>foldBB2Block(opening(),r.events),/offer already resolved/);
+});
+check('a superseded pending choice cannot be ACCEPTed after a global prescription edit',()=>{
+  const r=creditJournal();
+  for(const e of r.events.filter(e=>e.type==='SET_RECORDED')) {
+    e.actualG=95000;e.actualOrigin=origin(95000);
+  }
+  r.append('PRESCRIPTION_EDITED',{templateId:'upper_a',roleSlotId:'bench',
+    exerciseId:'barbell-bench',loadG:97500,loadOrigin:origin(97500)});
+  r.append('CHOICE_RESOLVED',{sourceSessionId:'s',roleSlotId:'bench',
+    exerciseId:'barbell-bench',decision:'ACCEPT',loadG:95000,loadOrigin:origin(95000)});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/stale.*offer|no unresolved.*offer/i);
 });
 check('original ACCEPT remains historically valid after subsequent source correction',()=>{
   const r=acceptedOffPlanJournal();

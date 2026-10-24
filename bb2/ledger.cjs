@@ -279,6 +279,18 @@ function validateEvents(opening, events) {
     counts.set(e.discardedSessionId, (counts.get(e.discardedSessionId) || 0) + 1);
   }
   for (const id of discards.keys()) if (!counts.has(id)) fail('discard missing tombstones');
+  // A discarded ID remains reserved. Every session-scoped event has already
+  // been purged to a tombstone; only independently committed GLOBAL edits may
+  // retain their session linkage (and their original event ordinal).
+  const discardedSessionEvents = new Set([
+    'WORKOUT_STARTED', 'EXERCISE_LOCKED', 'CALIBRATION_PLAN_REVISED',
+    'CALIBRATION_ACCEPTED', 'SET_RECORDED', 'EXTRA_SET_RECORDED',
+    'NOTE_EDITED'
+  ]);
+  for (const e of events) if (discards.has(e.sessionId) &&
+      discardedSessionEvents.has(e.type)) {
+    fail('discarded session event must be a tombstone');
+  }
 }
 function initialProgress(v = {}, plan = {}) {
   const p = {
@@ -388,6 +400,7 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
   const { records, voidSessions } = effectiveRevisions(chronologicalEvents);
   const progress = Object.fromEntries(Object.entries(opening.progress).map(([k, v]) => [k, initialProgress(v)]));
   const sessions = new Map(), choices = [], boundaries = [], notes = new Map(), hidden = new Set();
+  const resolvedOffers = new Set();
   // Discard purges the session Start into a minimal tombstone, while separate
   // pre-lock GLOBAL edits retain their original ordinal and session linkage.
   // Restrict the missing-session exception to that original Discard window.
@@ -748,6 +761,19 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
             fail('difficulty choice has no eligible bodyweight offer');
           }
         }
+        if (e.type === 'CHOICE_RESOLVED') {
+          // Resolution is a one-shot decision linked to the precise source,
+          // never a generic future prescription edit. A later independent
+          // working-value decision or qualified Finish makes the old offer
+          // stale, whereas an increment-only edit does not.
+          const offerId = `${s.sessionId}|${key}`;
+          if (resolvedOffers.has(offerId)) fail('offer already resolved');
+          if (boundaries.some(b => b.key === key &&
+              b.ordinal > s.finishOrdinal && b.ordinal < e.commitOrdinal)) {
+            fail('stale offer superseded by later prescription');
+          }
+          resolvedOffers.add(offerId);
+        }
         const p = getProgress(key, slot);
         if (e.decision === 'ACCEPT' || e.decision === 'REPLACE') {
           integer(e.loadG, 'accepted grams'); epoch(p, `choice:${e.eventId}`, e.loadG, e.loadOrigin);
@@ -1079,7 +1105,7 @@ function discardBB2Session(events, sessionId) {
   if (!events.some(e => e.type === 'WORKOUT_STARTED' && e.sessionId === sessionId)) fail('discard unknown session');
   if (events.some(e => e.sessionId === sessionId && ['WORKOUT_FINISHED', 'WORKOUT_INCOMPLETE'].includes(e.type))) fail('cannot discard completed session');
   const localOnly = new Set(['WORKOUT_STARTED', 'EXERCISE_LOCKED', 'CALIBRATION_PLAN_REVISED',
-    'CALIBRATION_ACCEPTED', 'SET_RECORDED', 'EXTRA_SET_RECORDED']);
+    'CALIBRATION_ACCEPTED', 'SET_RECORDED', 'EXTRA_SET_RECORDED', 'NOTE_EDITED']);
   const next = events.map(e => e.sessionId === sessionId && localOnly.has(e.type) ?
     { type: 'TOMBSTONE', eventId: e.eventId, commitOrdinal: e.commitOrdinal, blockId: e.blockId, discardedSessionId: sessionId } : clone(e));
   next.push({ type: 'WORKOUT_DISCARDED', eventId: `discard:${sessionId}:${events.length + 1}`,
