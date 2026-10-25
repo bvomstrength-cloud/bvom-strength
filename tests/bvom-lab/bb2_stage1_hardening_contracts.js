@@ -475,6 +475,35 @@ check('notes and History hide/unhide remain legal after seal without changing cl
   assert.equal(changed.history.find(x=>x.sessionId==='upper_a-1').hidden,false);
   assert.deepEqual(changed.closingSnapshot,p.closingSnapshot);
 });
+check('restored 32-credit stream cannot seal with unresolved correction-time consent',()=>{
+  const r=sealedFixture();r.events.pop(); // full credits, still unsealed
+  const source=r.events.find(e=>e.type==='SET_RECORDED'&&e.sessionId==='lower_b-8');
+  source.actualG=95000;source.actualOrigin=origin(95000);
+  const choice=r.append('CHOICE_RESOLVED',{sourceSessionId:'lower_b-8',
+    roleSlotId:'bench',exerciseId:'barbell-bench',decision:'ACCEPT',
+    loadG:95000,loadOrigin:origin(95000)});
+  assert.deepEqual(foldBB2Block(opening(),r.events).requiredConsent,[]);
+  r.append('SET_CORRECTED',{sessionId:'lower_b-8',targetEventId:source.eventId,
+    reps:7,actualG:90000,actualOrigin:origin(90000)});
+  const beforeSeal=foldBB2Block(opening(),r.events);
+  assert.deepEqual(beforeSeal.requiredConsent,[{
+    choiceEventId:choice.eventId,sourceSessionId:'lower_b-8',
+    key:'lower_b|bench|barbell-bench',valueG:95000
+  }]);
+  r.append('BLOCK_SEALED',{sealId:'invalid-seal'});
+  assert.throws(()=>foldBB2Block(opening(),r.events),
+    /cannot seal with unresolved correction consent/i);
+  r.events.pop();
+  r.append('CHOICE_RECLASSIFIED',{targetEventId:choice.eventId,
+    decision:'KEEP_AS_MANUAL'});
+  r.append('BLOCK_SEALED',{sealId:'consented-seal'});
+  const resolved=foldBB2Block(opening(),r.events);
+  assert.equal(resolved.sealed,true);
+  assert.deepEqual(resolved.requiredConsent,[]);
+  assert.equal(resolved.closingSnapshot.progress['lower_b|bench|barbell-bench'].loadG,95000);
+  assert.equal(createNextBB2Opening(resolved,'next-after-consent').blockId,
+    'next-after-consent');
+});
 check('sealing rejects unfinished active recovery despite full quotas',()=>{
   const r=sealedFixture();
   r.events.pop();
@@ -549,6 +578,23 @@ check('next block preserves all 32 credits and sealed provenance with fresh iden
   assert.deepEqual(foldBB2Block(next,[]).quotas,
     {upper_a:0,lower_a:0,upper_b:0,lower_b:0});
   assert.throws(()=>createNextBB2Opening(p,'test-block'),/fresh ID/);
+});
+check('earned future load retains valid derived mass provenance into next block',()=>{
+  const r=sealedFixture();
+  const lastUpper=r.events.find(e=>e.type==='SET_RECORDED'&&e.sessionId==='upper_a-8');
+  lastUpper.reps=8;
+  const sealed=foldBB2Block(opening(),r.events);
+  const key='upper_a|bench|barbell-bench';
+  assert.equal(sealed.progress[key].loadG,102500);
+  assert.equal(sealed.progress[key].loadOrigin.kind,'DERIVED');
+  const earnedFrom=r.events.find(e=>e.type==='WORKOUT_FINISHED'&&e.sessionId==='upper_a-8');
+  assert.deepEqual(sealed.progress[key].loadOrigin,
+    {kind:'DERIVED',sourceEventId:earnedFrom.eventId});
+  const carried=createNextBB2Opening(sealed,'next-after-earned-load');
+  const replay=foldBB2Block(carried,[]);
+  assert.equal(replay.progress[key].loadG,102500);
+  assert.deepEqual(replay.progress[key].loadOrigin,sealed.progress[key].loadOrigin);
+  assert.equal(replay.quotas.upper_a,0);
 });
 check('damaged sealed ancestry or restored next-opening credit lineage rejects cleanly',()=>{
   const p=foldBB2Block(opening(),sealedFixture().events);

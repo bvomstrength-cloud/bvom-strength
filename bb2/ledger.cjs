@@ -748,7 +748,10 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
             if (slot.equipment === 'bodyweight' && info.allTop) {
               pending[key] = { kind: 'DIFFICULTY', sessionId: s.sessionId, variation: slot.variation,
                 assistance: slot.assistance, addedWeightG: slot.plannedG };
-            } else if (slot.equipment === 'loaded' && info.allTop) epoch(p, `earned:${e.eventId}:${key}`, p.loadG + p.incrementG);
+            } else if (slot.equipment === 'loaded' && info.allTop) {
+              epoch(p, `earned:${e.eventId}:${key}`, p.loadG + p.incrementG,
+                { kind: 'DERIVED', sourceEventId: e.eventId });
+            }
             else if (p.bestReps === null || info.repSum > p.bestReps) { p.bestReps = info.repSum; p.stallCount = 0; }
             else p.stallCount++;
             if (beforeStall < 3 && p.stallCount === 3) {
@@ -793,7 +796,8 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
               epoch(p, `choice:${e.eventId}`, e.loadG, e.loadOrigin);
               p.bestReps = offer.sourceRepSum; p.stallCount = 0;
               if (offer.sourceAllTop && p.calibrated) {
-                epoch(p, `earned-choice:${e.eventId}`, p.loadG + p.incrementG);
+                epoch(p, `earned-choice:${e.eventId}`, p.loadG + p.incrementG,
+                  { kind: 'DERIVED', sourceEventId: e.eventId });
               }
             }
           } else {
@@ -869,7 +873,8 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
           const validOffer = s.eligible && info.complete && info.uniform && !info.harder && info.actualG === e.loadG && !info.onPlan;
           if (e.decision === 'ACCEPT' && validOffer) {
             p.bestReps = info.repSum; p.stallCount = 0;
-            if (info.allTop) epoch(p, `earned-choice:${e.eventId}`, p.loadG + p.incrementG);
+            if (info.allTop) epoch(p, `earned-choice:${e.eventId}`, p.loadG + p.incrementG,
+              { kind: 'DERIVED', sourceEventId: e.eventId });
           }
           choices.push({ eventId: e.eventId, ordinal: e.commitOrdinal, sourceSessionId: s.sessionId,
             key, valueG: e.loadG, validOffer, decision: e.decision });
@@ -1013,6 +1018,10 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
   for (const e of chronologicalEvents.filter(x => x.type === 'CHOICE_RECLASSIFIED')) {
     if (e.decision !== 'KEEP_AS_MANUAL' || !choices.some(c => c.eventId === e.targetEventId && c.ordinal < e.commitOrdinal)) fail('invalid consent reclassification');
   }
+  // Even a restored or imported event stream must not close a block with
+  // invalidated, still-operative user choices awaiting explicit consent.
+  // The transaction guard catches this for new saves; the fold guards replay.
+  if (sealed && requiredConsent.length) fail('cannot seal with unresolved correction consent');
   const history = [...sessions.values()].filter(s => s.outcome).map(s => ({
     sessionId: s.sessionId, blockId: opening.blockId, templateId: s.templateId, kind: s.kind,
     finishOrdinal: s.finishOrdinal,

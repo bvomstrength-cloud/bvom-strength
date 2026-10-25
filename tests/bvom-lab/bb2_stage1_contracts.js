@@ -323,9 +323,10 @@ check('off-plan ACCEPT at the ceiling earns from actual 55, not hypothetical 60'
     const next = { ...events[0], eventId: 'new-start', commitOrdinal: events.length + 1, sessionId: 's2', slots: [slot('chest', 'bench', 3, 60000)] };
     foldBB2Block(b, [...events, next]);
   }, /unresolved choice/i);
-  add('CHOICE_RESOLVED', { sourceSessionId: 's1', roleSlotId: 'chest', exerciseId: 'bench', decision: 'ACCEPT', loadG: 55000 });
+  const accepted = add('CHOICE_RESOLVED', { sourceSessionId: 's1', roleSlotId: 'chest', exerciseId: 'bench', decision: 'ACCEPT', loadG: 55000 });
   const r = foldBB2Block(b, events);
   assert.deepEqual([r.progress[K].loadG, r.progress[K].bestReps, r.progress[K].stallCount], [57500, null, 0]);
+  assert.deepEqual(r.progress[K].loadOrigin, { kind: 'DERIVED', sourceEventId: accepted.eventId });
   assert.equal(r.quotas.upper_a, 1);
   assert.equal(Object.keys(r.pending).length, 0);
 });
