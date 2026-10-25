@@ -373,7 +373,7 @@ check('32 credits seal the prior block; inactive records and stable History surv
     { value: '100', unit: 'kg' });
   assert.equal(r.closingSnapshot.priorCreditIds.length, 32);
   assert.equal(r.sealRevision, 1);
-  const next = createNextBB2Opening(r, 'block-b');
+  const next = createNextBB2Opening(b, events, 'block-b');
   assert.equal(next.blockId, 'block-b');
   assert.deepEqual(next.previousQuotas, { upper_a: 8, lower_a: 8, upper_b: 8, lower_b: 8 });
   assert.equal(next.sealRevision, 1);

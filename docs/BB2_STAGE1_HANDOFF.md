@@ -41,4 +41,18 @@ Claude read Rev 3.5.1 but only the first ~1,000 lines of the pinned ledger; the 
 
 These cases are covered in `tests/bvom-lab/bb2_stage1_cold_audit_contracts.js` and included in the Lab gate and mutation harness. Existing goldens, hardening and replay-performance checks remain required. **Stage (i) is still unmerged and not yet approved to begin Stage (ii)** pending a truly complete source/spec cold re-audit of the latest exact candidate.
 
+## Claude cold audit, round 2 — 25 October 2026 (five findings addressed)
+
+Claude independently executed the full packaged Stage (i) source and tests at `3c010f0` and reported **GO WITH FINDINGS**, conditional on resolving three medium-risk integrity issues before schema freeze. The following fixes were reproduced with adversarial streams and added to the cold-audit regressions before this follow-up candidate:
+
+1. **Qualitative bodyweight REPLACE:** accepts a changed variation/assistance without fictitious kilograms; forces a fresh comparable epoch even at a null load.
+2. **Earned DERIVED provenance:** Start slots and on-plan recorded sets may preserve the original derived source-event ID; a set may not forge a different source or grams, and corrections may only inherit originally recorded derived provenance.
+3. **Next-block opening authority:** `createNextBB2Opening(previousOpening, previousEvents, newBlockId)` folds the exact sealed ledger internally. No exported API trusts a caller-supplied projection, even if a forged progress value matches a forged closing snapshot.
+4. **Closed opening shape:** opening snapshot, progress records, and carried pending offers reject unknown keys.
+5. **Atomic NORMAL Finish:** `commitBB2Transaction` refuses an eligible below-quota NORMAL Finish unless the same transaction grants its credit. The idempotent `planBB2Finish` path still creates the correct paired events and no-ops on retries.
+
+All modifications remain in the isolated `bb2/` module and dedicated Stage (i) tests. The earlier sealed-projection adversarial hardening checks still exercise the *private* snapshot checker from an isolated test-only VM; production callers can only use the replay-verified public next-block API. This round does **not** constitute independent final GO: re-run the full lab, browser, packaging and mutation gates and request another independent read of the exact new source after committing it.
+
+**Stage (ii) integration prerequisites (not implemented here):** a versioned catalogue validating newly appended Start plans against computed prescriptions and the four canonical template denominators; persistence of optional-curls selection before Start; a durable `(blockId, sessionId, eventRevision)` Finish/credit idempotence key; and routing *all* application writes through `planBB2Finish` and `commitBB2Transaction`. Historical Start snapshots must remain replayable without retrospective catalogue rejection.
+
 Items for Stage (ii) contract review rather than changes to the Stage (i) replay schema: persist the pre-Start optional-curls selection in the versioned setup catalogue; validate new Starts against that catalogue and computed prescribed ranges/denominators while preserving legal historical plan snapshots; and define the integration-side stable finish/commit idempotence key. `planBB2Finish` already treats duplicate Finish calls as no-ops, while the fold deliberately refuses duplicate imported Finish events. Loaded zero-gram actuals are currently permitted by the canonical nonnegative mass rule; confirm UI equipment constraints before enabling user input.

@@ -2,8 +2,18 @@
 // Intended to be run against an isolated ledger.cjs, not BB1 runtime.
 'use strict';
 const assert = require('node:assert/strict');
+const fs = require('node:fs'), vm = require('node:vm');
 const { createBB2Opening, foldBB2Block, planBB2Finish, commitBB2Transaction,
   createNextBB2Opening, discardBB2Session } = require('../../bb2/ledger.cjs');
+// Audit the private snapshot guard without exposing an unsafe projection
+// transition through the real module API. Mutation tests load the altered
+// ledger source here too, preserving tamper-check mutation coverage.
+const privateContext = { module: { exports: {} } };
+vm.runInNewContext(fs.readFileSync(require.resolve('../../bb2/ledger.cjs'), 'utf8') +
+  '\nmodule.exports.auditSnapshot = createNextBB2OpeningFromProjection;',
+  privateContext, { filename: 'bb2-private-snapshot-audit.cjs' });
+const inspectSealedProjection = (p, id) =>
+  JSON.parse(JSON.stringify(privateContext.module.exports.auditSnapshot(p, id)));
 const origin = grams => ({ value: String(grams / 1000), unit: 'kg' });
 const slot = (sets) => ({
   roleSlotId:'bench', exerciseId:'barbell-bench', equipment:'loaded', sets,
@@ -11,6 +21,7 @@ const slot = (sets) => ({
   incrementG:2500, incrementOrigin:origin(2500)
 });
 const opening = () => createBB2Opening({ownerId:'test-owner', blockId:'test-block'});
+const verifiedNext = (events, id) => createNextBB2Opening(opening(), events, id);
 const log = () => {
   const events=[];
   const append=(type,p={}) => {
@@ -501,7 +512,7 @@ check('restored 32-credit stream cannot seal with unresolved correction-time con
   assert.equal(resolved.sealed,true);
   assert.deepEqual(resolved.requiredConsent,[]);
   assert.equal(resolved.closingSnapshot.progress['lower_b|bench|barbell-bench'].loadG,95000);
-  assert.equal(createNextBB2Opening(resolved,'next-after-consent').blockId,
+  assert.equal(verifiedNext(r.events,'next-after-consent').blockId,
     'next-after-consent');
 });
 check('sealing rejects unfinished active recovery despite full quotas',()=>{
@@ -567,8 +578,8 @@ check('a discarded stable session ID can never be reused for another workout',()
   assert.throws(()=>foldBB2Block(opening(),replay),/discarded session event|duplicate session ID/i);
 });
 check('next block preserves all 32 credits and sealed provenance with fresh identity',()=>{
-  const p=foldBB2Block(opening(),sealedFixture().events);
-  const next=createNextBB2Opening(p,'block-next');
+  const r=sealedFixture();
+  const next=verifiedNext(r.events,'block-next');
   assert.equal(next.previousSealId,'seal-one');
   assert.equal(next.previousBlockId,'test-block');
   assert.deepEqual([next.previousSchemaVersion,next.previousFoldRulesVersion,
@@ -577,7 +588,7 @@ check('next block preserves all 32 credits and sealed provenance with fresh iden
   assert.equal(next.previousCreditIds.length,32);
   assert.deepEqual(foldBB2Block(next,[]).quotas,
     {upper_a:0,lower_a:0,upper_b:0,lower_b:0});
-  assert.throws(()=>createNextBB2Opening(p,'test-block'),/fresh ID/);
+  assert.throws(()=>verifiedNext(r.events,'test-block'),/fresh ID/);
 });
 check('earned future load retains valid derived mass provenance into next block',()=>{
   const r=sealedFixture();
@@ -590,14 +601,14 @@ check('earned future load retains valid derived mass provenance into next block'
   const earnedFrom=r.events.find(e=>e.type==='WORKOUT_FINISHED'&&e.sessionId==='upper_a-8');
   assert.deepEqual(sealed.progress[key].loadOrigin,
     {kind:'DERIVED',sourceEventId:earnedFrom.eventId});
-  const carried=createNextBB2Opening(sealed,'next-after-earned-load');
+  const carried=verifiedNext(r.events,'next-after-earned-load');
   const replay=foldBB2Block(carried,[]);
   assert.equal(replay.progress[key].loadG,102500);
   assert.deepEqual(replay.progress[key].loadOrigin,sealed.progress[key].loadOrigin);
   assert.equal(replay.quotas.upper_a,0);
 });
 check('damaged sealed ancestry or restored next-opening credit lineage rejects cleanly',()=>{
-  const p=foldBB2Block(opening(),sealedFixture().events);
+  const r=sealedFixture(), p=foldBB2Block(opening(),r.events);
   const mutations=[
     x=>{x.closingSnapshot.priorQuotas.upper_a=7},
     x=>{x.closingSnapshot.priorCreditIds.pop()},
@@ -608,9 +619,9 @@ check('damaged sealed ancestry or restored next-opening credit lineage rejects c
   ];
   for(const modify of mutations){
     const bad=structuredClone(p);modify(bad);
-    assert.throws(()=>createNextBB2Opening(bad,'block-next'),/invalid sealed block ancestry/);
+    assert.throws(()=>inspectSealedProjection(bad,'block-next'),/invalid sealed block ancestry/);
   }
-  const next=createNextBB2Opening(p,'block-next');
+  const next=verifiedNext(r.events,'block-next');
   const corrupt=structuredClone(next);corrupt.previousCreditIds.pop();
   assert.throws(()=>foldBB2Block(corrupt,[]),/invalid prior credit IDs/);
   const reused=structuredClone(next);reused.previousBlockId='block-next';
@@ -1889,7 +1900,7 @@ const blockWithFinalPending=(kind='OFF_PLAN')=>{
   }
   r.append('BLOCK_SEALED',{sealId:'original-seal'});
   const projection=foldBB2Block(opening(),r.events);
-  const next=createNextBB2Opening(projection,'block-next');
+  const next=verifiedNext(r.events,'block-next');
   return {r,projection,next,finalSource};
 };
 const nextBlockEvent=(type,fields={})=>({
@@ -2011,14 +2022,14 @@ check('closing snapshot cannot silently retarget offered numeric weight',()=>{
   const {projection}=blockWithFinalPending();
   const forged=structuredClone(projection);
   forged.closingSnapshot.pending['upper_a|bench|barbell-bench'].valueG=90000;
-  assert.throws(()=>createNextBB2Opening(forged,'forged-next'),
+  assert.throws(()=>inspectSealedProjection(forged,'forged-next'),
     /invalid sealed pending provenance/);
 });
 check('closing snapshot rejects a forged offer source-block identity',()=>{
   const {projection}=blockWithFinalPending();
   const forged=structuredClone(projection);
   forged.closingSnapshot.pending['upper_a|bench|barbell-bench'].sourceBlockId='unrelated-block';
-  assert.throws(()=>createNextBB2Opening(forged,'forged-next'),
+  assert.throws(()=>inspectSealedProjection(forged,'forged-next'),
     /invalid sealed pending provenance/);
 });
 check('closing snapshot verifies original prescribed rep evidence for carried offer',()=>{
@@ -2027,7 +2038,7 @@ check('closing snapshot verifies original prescribed rep evidence for carried of
     const forged=structuredClone(projection);
     forged.closingSnapshot.pending['upper_a|bench|barbell-bench'][field]=
       field==='sourceRepSum'?99:true;
-    assert.throws(()=>createNextBB2Opening(forged,'forged-next'),
+    assert.throws(()=>inspectSealedProjection(forged,'forged-next'),
       /invalid sealed pending source evidence/);
   }
 });
@@ -2037,7 +2048,7 @@ check('sealed all-top off-plan carry accepts exact source and earns only explici
     item.reps=8;
   }
   const original=foldBB2Block(opening(),r.events);
-  const next=createNextBB2Opening(original,'full-ceiling-next');
+  const next=verifiedNext(r.events,'full-ceiling-next');
   const key='upper_a|bench|barbell-bench';
   assert.equal(next.pending[key].sourceRepSum,24);
   assert.equal(next.pending[key].sourceAllTop,true);
@@ -2057,7 +2068,7 @@ check('opening carrying bodyweight offer rejects forged difficulty source fields
   const forged=structuredClone(projection);
   const k='upper_a|vertical-pull|chin-up';
   forged.closingSnapshot.pending[k].assistance='different-band';
-  assert.throws(()=>createNextBB2Opening(forged,'bad-bodyweight-next'),
+  assert.throws(()=>inspectSealedProjection(forged,'bad-bodyweight-next'),
     /invalid sealed pending provenance/);
 });
 
@@ -2073,7 +2084,7 @@ check('sealed snapshot accepts JSON object reordering without changing training 
   const rekeyed=structuredClone(projection);
   rekeyed.closingSnapshot.progress=reversedJsonObject(rekeyed.closingSnapshot.progress);
   rekeyed.closingSnapshot.selections=reversedJsonObject(rekeyed.closingSnapshot.selections);
-  const next=createNextBB2Opening(rekeyed,'rekeyed-next');
+  const next=inspectSealedProjection(rekeyed,'rekeyed-next');
   assert.deepEqual(next.progress,projection.progress);
   assert.deepEqual(next.pending,projection.closingSnapshot.pending);
   assert.deepEqual(next.previousCreditIds,projection.closingSnapshot.priorCreditIds);
@@ -2083,7 +2094,7 @@ check('reordered object with one changed prescription remains an invalid closing
   const tampered=structuredClone(projection);
   tampered.closingSnapshot.progress=reversedJsonObject(tampered.closingSnapshot.progress);
   tampered.closingSnapshot.progress['upper_a|bench|barbell-bench'].loadG=101000;
-  assert.throws(()=>createNextBB2Opening(tampered,'tampered-next'),
+  assert.throws(()=>inspectSealedProjection(tampered,'tampered-next'),
     /invalid sealed block ancestry/);
 });
 check('reordered selections with changed exercise identity are rejected',()=>{
@@ -2097,10 +2108,10 @@ check('reordered selections with changed exercise identity are rejected',()=>{
     'lower_a|optional-curl':'nordic-curl',
     'upper_b|optional-press':'log-press'
   };
-  assert.deepEqual(createNextBB2Opening(copied,'reordered-selections').selections,
+  assert.deepEqual(inspectSealedProjection(copied,'reordered-selections').selections,
     copied.closingSnapshot.selections);
   copied.closingSnapshot.selections['upper_b|optional-press']='different-press';
-  assert.throws(()=>createNextBB2Opening(copied,'invalid-selections'),
+  assert.throws(()=>inspectSealedProjection(copied,'invalid-selections'),
     /invalid sealed block ancestry/);
 });
 

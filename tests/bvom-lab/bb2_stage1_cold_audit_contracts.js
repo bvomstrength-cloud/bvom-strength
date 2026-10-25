@@ -4,7 +4,7 @@
 const assert = require('node:assert/strict');
 const { performance } = require('node:perf_hooks');
 const { EVENT_TYPES, createBB2Opening, foldBB2Block, createNextBB2Opening,
-  resolveNumericSubmission } = require('../../bb2/ledger.cjs');
+  resolveNumericSubmission, commitBB2Transaction, planBB2Finish } = require('../../bb2/ledger.cjs');
 
 const origin = grams => ({ value: String(grams / 1000), unit: 'kg' });
 const opening = () => createBB2Opening({ ownerId: 'audit-owner', blockId: 'audit-block' });
@@ -190,7 +190,7 @@ check('sealed qualitative difficulty carries to next block without invented gram
   const sealed = foldBB2Block(opening(), events);
   assert.equal(sealed.closingSnapshot.pending['upper_a|pull|chinup'].kind, 'DIFFICULTY');
   assert.equal(sealed.closingSnapshot.pending['upper_a|pull|chinup'].addedWeightG, undefined);
-  const next = createNextBB2Opening(sealed, 'next-block');
+  const next = createNextBB2Opening(opening(), events, 'next-block');
   const decision = { type: 'CHOICE_RESOLVED', eventId: 'carried-accept', commitOrdinal: 1,
     blockId: 'next-block', sourceBlockId: 'audit-block', sourceSessionId: 'upper_a-7',
     roleSlotId: 'pull', exerciseId: 'chinup', decision: 'DIFFICULTY_ACCEPT',
@@ -204,6 +204,128 @@ check('sealed qualitative difficulty carries to next block without invented gram
     addedWeightOrigin: origin(5000) };
   assert.equal(foldBB2Block(next, [loadedDecision]).progress['upper_a|pull|chinup'].loadG,
     5000, 'a next-block qualitative offer can be accepted with explicit added load');
+});
+
+check('qualitative difficulty correction may REPLACE with no fictitious grams', () => {
+  const { events, add } = journal();
+  const bw = { roleSlotId: 'pull', exerciseId: 'chinup', equipment: 'bodyweight',
+    sets: 1, ceiling: 8, variation: 'chinup', assistance: 'heavy-band' };
+  for (const id of ['A', 'B']) {
+    add('WORKOUT_STARTED', { sessionId: id, templateId: 'upper_a', kind: 'NORMAL', slots: [bw] });
+    const set = add('SET_RECORDED', { sessionId: id, roleSlotId: 'pull', exerciseId: 'chinup',
+      setIndex: 0, reps: 8, prescribed: true, variation: 'chinup', assistance: 'heavy-band' });
+    add('WORKOUT_FINISHED', { sessionId: id });
+    if (id === 'B') {
+      const accepted = add('CHOICE_RESOLVED', { sourceSessionId: id, roleSlotId: 'pull',
+        exerciseId: 'chinup', decision: 'DIFFICULTY_ACCEPT', variation: 'chinup',
+        assistance: 'light-band' });
+      add('SET_CORRECTED', { sessionId: id, targetEventId: set.eventId, reps: 7 });
+      assert.deepEqual(foldBB2Block(opening(), events).requiredConsent.map(x => x.choiceEventId),
+        [accepted.eventId]);
+      const replacement = add('CHOICE_REPLACED', { targetEventId: accepted.eventId,
+        sourceSessionId: 'B', roleSlotId: 'pull', exerciseId: 'chinup', decision: 'REPLACE',
+        variation: 'chinup', assistance: 'medium-band' });
+      const result = foldBB2Block(opening(), events);
+      const p = result.progress['upper_a|pull|chinup'];
+      assert.deepEqual(result.requiredConsent, []);
+      assert.deepEqual([p.loadG, p.loadOrigin, p.assistance, p.epochId, p.bestReps],
+        [null, null, 'medium-band', 'choice:' + replacement.eventId, null]);
+    }
+  }
+});
+
+check('earned DERIVED provenance survives Start and inherited actual recording', () => {
+  const computed = { kind: 'DERIVED', sourceEventId: 'source-finish' };
+  const b = createBB2Opening({ ownerId: 'audit-owner', blockId: 'audit-block',
+    progress: { 'upper_a|bench|bench': { loadG: 102500, loadOrigin: computed,
+      calibrated: true, incrementG: 2500, incrementOrigin: origin(2500) } } });
+  const { events, add } = journal();
+  const nextSlot = { ...slot('bench', 102500, 1), plannedOrigin: computed };
+  add('WORKOUT_STARTED', { sessionId: 'earned', templateId: 'upper_a', kind: 'NORMAL',
+    slots: [nextSlot] });
+  add('SET_RECORDED', { sessionId: 'earned', roleSlotId: 'bench', exerciseId: 'bench',
+    setIndex: 0, reps: 7, actualG: 102500, actualOrigin: computed, prescribed: true });
+  add('WORKOUT_FINISHED', { sessionId: 'earned' });
+  const result = foldBB2Block(b, events);
+  assert.deepEqual(result.history[0].slots[0].plannedOrigin, computed);
+  assert.deepEqual(result.history[0].sets[0].actualOrigin, computed);
+  assert.deepEqual(result.progress['upper_a|bench|bench'].loadOrigin, computed);
+  const forged = structuredClone(events);
+  forged[1].actualG = 102512;
+  assert.throws(() => foldBB2Block(b, forged), /derived.*inherit|source.*plan|actual.*origin/i);
+  const mismatchedSource = structuredClone(events);
+  mismatchedSource[1].actualOrigin = { kind: 'DERIVED', sourceEventId: 'different-finish' };
+  assert.throws(() => foldBB2Block(b, mismatchedSource), /derived.*inherit/i);
+  const corrected = [...events, { type: 'SET_CORRECTED', eventId: 'earned-correction',
+    blockId: 'audit-block', commitOrdinal: events.length + 1,
+    sessionId: 'earned', targetEventId: events[1].eventId, reps: 6 }];
+  assert.deepEqual(foldBB2Block(b, corrected).history[0].sets[0].actualOrigin, computed);
+  corrected.at(-1).actualG = 102500;
+  corrected.at(-1).actualOrigin = { kind: 'DERIVED', sourceEventId: 'forged-source' };
+  assert.throws(() => foldBB2Block(b, corrected), /corrected derived actual.*source/i);
+});
+
+function sealedLoadedFixture() {
+  const { events, add } = journal();
+  for (const templateId of ['upper_a', 'lower_a', 'upper_b', 'lower_b']) {
+    for (let i = 0; i < 8; i++) {
+      const sessionId = templateId + '-' + i;
+      add('WORKOUT_STARTED', { sessionId, templateId, kind: 'NORMAL', slots: [slot('bench', 60000, 1)] });
+      add('SET_RECORDED', { sessionId, roleSlotId: 'bench', exerciseId: 'bench',
+        setIndex: 0, reps: 7, actualG: 60000, actualOrigin: origin(60000), prescribed: true });
+      add('WORKOUT_FINISHED', { sessionId });
+      add('CREDIT_GRANTED', { sessionId, creditId: 'credit-' + sessionId });
+    }
+  }
+  add('BLOCK_SEALED', { sealId: 'audit-seal' });
+  return { events, opening: opening() };
+}
+
+check('next block is derived exclusively from its verified opening and sealed events', () => {
+  const prior = sealedLoadedFixture();
+  const projection = foldBB2Block(prior.opening, prior.events);
+  assert.equal(projection.progress['upper_a|bench|bench'].loadG, 60000);
+  const next = createNextBB2Opening(prior.opening, prior.events, 'next-audit');
+  assert.equal(next.progress['upper_a|bench|bench'].loadG, 60000);
+  const tampered = structuredClone(projection);
+  tampered.progress['upper_a|bench|bench'].loadG = 200000;
+  tampered.progress['upper_a|bench|bench'].loadOrigin = origin(200000);
+  tampered.closingSnapshot.progress['upper_a|bench|bench'].loadG = 200000;
+  tampered.closingSnapshot.progress['upper_a|bench|bench'].loadOrigin = origin(200000);
+  assert.throws(() => createNextBB2Opening(tampered, 'forged-next'),
+    /opening|events|verified|invalid/i, 'legacy caller-provided projection must not be trusted');
+});
+
+check('opening progress and carried pending reject unknown fields', () => {
+  const b = createBB2Opening({ ownerId: 'audit-owner', blockId: 'audit-block',
+    progress: { 'upper_a|bench|bench': { loadG: 60000, loadOrigin: origin(60000),
+      bogusProgressField: 'unlisted' } } });
+  assert.throws(() => foldBB2Block(b, []), /unknown.*progress|unknown.*field/i);
+  const prior = sealedLoadedFixture();
+  const next = createNextBB2Opening(prior.opening, prior.events, 'next-audit');
+  next.pending['upper_a|bench|bench'] = { kind: 'OFF_PLAN', sourceBlockId: 'audit-block',
+    sessionId: 'upper_a-7', valueG: 55000, plannedG: 60000, sourceRepSum: 7,
+    sourceAllTop: false, bogus: 'leak' };
+  assert.throws(() => foldBB2Block(next, []), /unknown.*pending|unknown.*field/i);
+});
+
+check('an eligible NORMAL Finish cannot commit without its credit grant', () => {
+  const { events, add } = journal();
+  add('WORKOUT_STARTED', { sessionId: 'credit-source', templateId: 'upper_a',
+    kind: 'NORMAL', slots: [slot('bench', 60000, 1)] });
+  add('SET_RECORDED', { sessionId: 'credit-source', roleSlotId: 'bench',
+    exerciseId: 'bench', setIndex: 0, reps: 7, actualG: 60000,
+    actualOrigin: origin(60000), prescribed: true });
+  const guard = { ownerId: 'audit-owner', blockId: 'audit-block', foldRulesVersion: 1,
+    expectedHead: events.length, sealRevision: 0, activeWorkout: false };
+  const bareFinish = { type: 'WORKOUT_FINISHED', eventId: 'bare-finish',
+    blockId: 'audit-block', commitOrdinal: events.length + 1, sessionId: 'credit-source' };
+  assert.throws(() => commitBB2Transaction(opening(), events, [bareFinish], guard),
+    /credit.*same.*transaction|Finish.*credit|missing.*grant/i);
+  const planned = planBB2Finish(opening(), events, 'credit-source');
+  const committed = commitBB2Transaction(opening(), events, planned.events.slice(events.length), guard);
+  assert.equal(committed.projection.quotas.upper_a, 1);
+  assert.equal(committed.projection.history[0].creditId, 'credit:credit-source');
 });
 
 if (failures) process.exitCode = 1;

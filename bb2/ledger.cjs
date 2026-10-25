@@ -170,6 +170,11 @@ function createBB2Opening({ ownerId, blockId, progress = {}, sealRevision = 0 } 
 }
 function validateOpening(opening) {
   if (!opening || opening.schemaVersion !== SCHEMA_VERSION || opening.openingSnapshotVersion !== 1) fail('unsupported schema version');
+  onlyFields(opening, ['schemaVersion', 'foldRulesVersion', 'openingSnapshotVersion',
+    'ownerId', 'blockId', 'sealRevision', 'progress', 'pending', 'previousQuotas',
+    'previousCreditIds', 'sealed', 'previousSealId', 'previousBlockId',
+    'previousSchemaVersion', 'previousFoldRulesVersion',
+    'previousOpeningSnapshotVersion', 'selections'], 'opening snapshot');
   if (opening.foldRulesVersion !== FOLD_RULES_VERSION) fail('unsupported foldRulesVersion');
   positiveId(opening.ownerId, 'owner'); positiveId(opening.blockId, 'block');
   integer(opening.sealRevision, 'seal revision');
@@ -222,11 +227,15 @@ function validateOpening(opening) {
     positiveId(offer.sourceBlockId, 'carried source block');
     positiveId(offer.sessionId, 'carried source session');
     if (offer.kind === 'OFF_PLAN') {
+      onlyFields(offer, ['kind', 'sourceBlockId', 'sessionId', 'valueG',
+        'plannedG', 'sourceRepSum', 'sourceAllTop'], 'carried pending');
       integer(offer.valueG, 'carried offered grams');
       integer(offer.plannedG, 'carried planned grams');
       integer(offer.sourceRepSum, 'carried source rep sum', 1);
       if (typeof offer.sourceAllTop !== 'boolean') fail('invalid carried top-set evidence');
     } else if (offer.kind === 'DIFFICULTY') {
+      onlyFields(offer, ['kind', 'sourceBlockId', 'sessionId', 'variation',
+        'assistance', 'addedWeightG'], 'carried pending');
       positiveId(offer.variation, 'carried variation');
       if (typeof offer.assistance !== 'string') fail('invalid carried assistance');
       if (offer.addedWeightG !== undefined) integer(offer.addedWeightG, 'carried added weight');
@@ -240,7 +249,8 @@ function validateEventPayload(e) {
     onlyFields(e, ['type', 'eventId', 'commitOrdinal', 'blockId', ...EVENT_FIELDS[e.type]],
       `${e.type} event`);
   }
-  const mass = (name, field, originField) => validateMassOrigin(e[field], e[originField], name);
+  const mass = (name, field, originField, allowDerived = false) =>
+    validateMassOrigin(e[field], e[originField], name, allowDerived);
   switch (e.type) {
     case 'WORKOUT_STARTED':
       positiveId(e.sessionId, 'session');
@@ -252,7 +262,7 @@ function validateEventPayload(e) {
       // A qualitative bodyweight variation deliberately has no numeric
       // working load. Its lock records identity/order, not fictitious kg.
       // When numeric, original magnitude/unit evidence remains mandatory.
-      if (e.plannedG !== undefined) mass('planned', 'plannedG', 'plannedOrigin');
+      if (e.plannedG !== undefined) mass('planned', 'plannedG', 'plannedOrigin', true);
       else if (e.plannedOrigin !== undefined) fail('qualitative lock cannot have numeric origin');
       break;
     case 'CALIBRATION_PLAN_REVISED': mass('planned', 'plannedG', 'plannedOrigin'); break;
@@ -266,12 +276,13 @@ function validateEventPayload(e) {
     case 'CHOICE_RESOLVED':
     case 'CHOICE_REPLACED':
       if (e.loadG !== undefined) mass('working load', 'loadG', 'loadOrigin');
+      else if (e.loadOrigin !== undefined) fail('working load origin requires numeric load');
       break;
     case 'INCREMENT_EDITED': mass('increment', 'incrementG', 'incrementOrigin'); break;
     case 'SET_RECORDED':
     case 'EXTRA_SET_RECORDED':
     case 'SET_CORRECTED':
-      if (e.actualG !== undefined) mass('actual', 'actualG', 'actualOrigin');
+      if (e.actualG !== undefined) mass('actual', 'actualG', 'actualOrigin', true);
       else if (e.actualOrigin !== undefined) fail('actual origin requires numeric load');
       break;
     case 'NOTE_EDITED':
@@ -339,7 +350,11 @@ function validateEvents(opening, events) {
             e.exerciseId !== source.exerciseId) {
           fail('choice replacement source identity mismatch');
         }
-        validateMassOrigin(e.loadG, e.loadOrigin, 'replacement load');
+        if (e.loadG === undefined) {
+          if (source.decision !== 'DIFFICULTY_ACCEPT' || e.loadOrigin !== undefined) {
+            fail('qualitative replacement requires a prior difficulty choice');
+          }
+        } else validateMassOrigin(e.loadG, e.loadOrigin, 'replacement load');
         if (source.decision === 'DIFFICULTY_ACCEPT') {
           positiveId(e.variation, 'replacement difficulty variation');
           if (typeof e.assistance !== 'string') fail('invalid replacement assistance');
@@ -384,6 +399,9 @@ function validateEvents(opening, events) {
   }
 }
 function initialProgress(v = {}, plan = {}) {
+  onlyFields(v, ['loadG', 'loadOrigin', 'incrementG', 'incrementOrigin',
+    'variation', 'assistance', 'calibrated', 'bestReps', 'stallCount',
+    'epochId', 'lastNormalSessionId'], 'opening progress');
   const p = {
     loadG: v.loadG ?? plan.plannedG ?? null,
     loadOrigin: v.loadOrigin ?? plan.plannedOrigin ?? null,
@@ -412,7 +430,7 @@ function validateSlot(s) {
   if (s.equipment === 'bodyweight' &&
       (typeof s.variation !== 'string' || !s.variation.trim() ||
        typeof s.assistance !== 'string')) fail('invalid bodyweight slot identity');
-  if (s.plannedG !== undefined) validateMassOrigin(s.plannedG, s.plannedOrigin, 'planned');
+  if (s.plannedG !== undefined) validateMassOrigin(s.plannedG, s.plannedOrigin, 'planned', true);
   if (s.equipment === 'loaded' && s.plannedG === undefined) fail('missing planned grams');
   if (s.incrementG !== undefined) validateMassOrigin(s.incrementG, s.incrementOrigin, 'increment');
   integer(s.incrementG ?? 2500, 'increment grams', 1);
@@ -478,6 +496,15 @@ function effectiveRevisions(events) {
       // Explicit values (including false) take precedence; omitted values
       // inherit the last revision, falling back to original after a void.
       const prior = records.get(key) || originals.get(key);
+      if (e.type === 'SET_CORRECTED' && e.actualOrigin?.kind === 'DERIVED') {
+        // A corrected set cannot impersonate an earned load: it may only
+        // restore provenance already recorded for this exact original set.
+        const original = originals.get(key);
+        if (![prior, original].some(row => row?.actualG === e.actualG &&
+            sameCanonicalValue(row.actualOrigin, e.actualOrigin))) {
+          fail('corrected derived actual must inherit its recorded source');
+        }
+      }
       records.set(key, e.type === 'SET_VOIDED' ? null : { ...prior,
         reps: e.reps,
         actualG: own(e, 'actualG') ? e.actualG : prior.actualG,
@@ -741,6 +768,11 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
       case 'EXTRA_SET_RECORDED': {
         const s = sessions.get(e.sessionId), slot = findSlot(s, e);
         if (s.outcome) fail('set after outcome');
+        if (e.actualOrigin?.kind === 'DERIVED' &&
+            (e.actualG !== slot.plannedG ||
+             !sameCanonicalValue(e.actualOrigin, slot.plannedOrigin))) {
+          fail('derived actual must inherit the saved exercise plan');
+        }
         if (e.type === 'SET_RECORDED' && (e.setIndex >= slot.sets || e.prescribed !== true)) fail('set not prescribed');
         if (e.type === 'EXTRA_SET_RECORDED') {
           // Match BB1's hard maximum of 30 extra working sets per exercise.
@@ -949,8 +981,11 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
         }
         const p = getProgress(key, slot);
         if (e.decision === 'ACCEPT' || e.decision === 'REPLACE') {
-          integer(e.loadG, 'accepted grams');
-          epoch(p, `choice:${e.eventId}`, e.loadG, e.loadOrigin,
+          const qualitativeReplacement = e.type === 'CHOICE_REPLACED' &&
+            slot.equipment === 'bodyweight' && e.loadG === undefined;
+          if (!qualitativeReplacement) integer(e.loadG, 'accepted grams');
+          epoch(p, `choice:${e.eventId}`,
+            qualitativeReplacement ? null : e.loadG, e.loadOrigin,
             e.decision === 'REPLACE');
           if (e.type === 'CHOICE_REPLACED' && slot.equipment === 'bodyweight') {
             positiveId(e.variation, 'replacement difficulty variation');
@@ -966,7 +1001,8 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
               { kind: 'DERIVED', sourceEventId: e.eventId });
           }
           choices.push({ eventId: e.eventId, ordinal: e.commitOrdinal, sourceSessionId: s.sessionId,
-            key, valueG: e.loadG, validOffer, decision: e.decision });
+            key, valueG: qualitativeReplacement ? undefined : e.loadG,
+            validOffer, decision: e.decision });
           boundary(key, e.commitOrdinal, 'explicit');
         } else if (e.decision === 'DIFFICULTY_ACCEPT') {
           positiveId(e.variation, 'accepted difficulty variation');
@@ -1210,6 +1246,22 @@ function commitBB2Transaction(opening, previousEvents, proposedEvents, guard) {
   if (original.sealed && retrospective) fail('sealed block correction');
   const events = [...previousEvents, ...proposedEvents];
   const projection = foldBB2Block(opening, events);
+  // Finish and its first quota credit are one atomic save. Without this
+  // pairing a caller could persist a complete NORMAL session without credit;
+  // later idempotent Finish retries would correctly no-op and never repair it.
+  for (const finish of proposedEvents.filter(e => e.type === 'WORKOUT_FINISHED')) {
+    const started = events.find(e => e.type === 'WORKOUT_STARTED' &&
+      e.sessionId === finish.sessionId);
+    if (started?.kind !== 'NORMAL') continue;
+    const atFinish = foldBB2Block(opening, events.slice(0, finish.commitOrdinal));
+    const status = atFinish.history.find(h => h.sessionId === finish.sessionId)?.status;
+    if (status === 'COMPLETED_NORMAL_NONCREDIT' &&
+        atFinish.quotas[started.templateId] < 8 &&
+        !proposedEvents.some(e => e.type === 'CREDIT_GRANTED' &&
+          e.sessionId === finish.sessionId)) {
+      fail('NORMAL Finish requires CREDIT_GRANTED in same transaction');
+    }
+  }
   if (projection.requiredConsent.length) fail('unresolved correction consent');
   return { events: clone(events), projection };
 }
@@ -1236,7 +1288,21 @@ function planBB2Finish(opening, previousEvents, sessionId, outcome = 'FINISH') {
   return { events, projection: projected, noOp: false };
 }
 
-function createNextBB2Opening(previousProjection, newBlockId) {
+function createNextBB2Opening(previousOpening, previousEvents, newBlockId) {
+  // Never let a caller supply a projection, even one whose internal fields
+  // have been forged to agree. The only authority is the opening + exact
+  // sealed chronological stream replayed by this implementation.
+  if (!Array.isArray(previousEvents)) {
+    fail('next block requires verified opening and events');
+  }
+  const previousProjection = foldBB2Block(previousOpening, previousEvents);
+  return createNextBB2OpeningFromProjection(previousProjection, newBlockId);
+}
+
+// Pure snapshot-integrity check retained behind the verified public boundary.
+// Export only createNextBB2Opening; cold tests may inspect this private guard
+// in an isolated source evaluation, never as a production entry point.
+function createNextBB2OpeningFromProjection(previousProjection, newBlockId) {
   const closing = previousProjection?.closingSnapshot;
   if (!previousProjection?.sealed || !closing?.sealId) fail('unsealed previous block');
   positiveId(newBlockId, 'next block');
