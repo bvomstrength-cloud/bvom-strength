@@ -2194,6 +2194,26 @@ check('session-scoped global edits cannot impersonate a different BB2 template',
   assert.equal(out.progress['upper_a|bench|barbell-bench'].incrementG,1250);
   assert.equal(out.progress['lower_a|bench|barbell-bench'],undefined);
 });
+check('unlinked global edit cannot bypass the matching active exercise plan lock',()=>{
+  for(const [type,fields] of [
+    ['PRESCRIPTION_EDITED',{loadG:105000,loadOrigin:origin(105000)}],
+    ['INCREMENT_EDITED',{incrementG:1250,incrementOrigin:origin(1250)}],
+    ['VARIATION_EDITED',{variation:'dumbbell-bench'}]
+  ]) {
+    const r=log();r.start('active',3);
+    r.append(type,{templateId:'upper_a',roleSlotId:'bench',
+      exerciseId:'barbell-bench',scope:'GLOBAL',...fields});
+    assert.throws(()=>foldBB2Block(opening(),r.events),
+      /active session requires linked global edit/i,type);
+  }
+  // A future edit for another, currently inactive template is independent.
+  const other=log();other.start('active',3);
+  other.append('PRESCRIPTION_EDITED',{templateId:'lower_a',roleSlotId:'bench',
+    exerciseId:'barbell-bench',scope:'GLOBAL',loadG:105000,loadOrigin:origin(105000)});
+  const valid=foldBB2Block(opening(),other.events);
+  assert.equal(valid.progress['lower_a|bench|barbell-bench'].loadG,105000);
+  assert.equal(valid.history.length,0);
+});
 check('opening exercise selections reject foreign, ambiguous or empty identities',()=>{
   for(const selections of [
     {'bodybuilding|bench':'barbell-bench'},

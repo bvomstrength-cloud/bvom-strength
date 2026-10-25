@@ -583,6 +583,14 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
           fail('session template mismatch on global edit');
         }
         const templateId = e.templateId ?? session?.templateId;
+        // A standalone global edit for the exercise being trained would
+        // bypass its session lock and leave the saved plan out of sync.
+        // Require explicit linkage so the ordinary pre-lock check applies.
+        const activeSession = [...sessions.values()].find(x => !x.outcome);
+        if (!session && activeSession && activeSession.templateId === templateId &&
+            activeSession.slots.some(s => s.roleSlotId === e.roleSlotId && s.exerciseId === e.exerciseId)) {
+          fail('active session requires linked global edit');
+        }
         const key = identity(templateId, e.roleSlotId, e.exerciseId);
         const window = e.sessionId ? discardedEditWindows.get(e.sessionId) : null;
         const preservedDiscardEdit = window && e.scope === 'GLOBAL' &&
