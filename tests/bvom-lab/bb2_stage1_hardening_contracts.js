@@ -412,6 +412,31 @@ const sealedFixture=()=>{
   r.append('BLOCK_SEALED',{sealId:'seal-one'});
   return r;
 };
+check('EXTRA NORMAL is allowed on a filled template only while the block remains open',()=>{
+  const incomplete=log();incomplete.append('WORKOUT_STARTED',{
+    sessionId:'premature-extra',templateId:'upper_a',kind:'EXTRA_NORMAL',slots:[slot(1)]});
+  assert.throws(()=>foldBB2Block(opening(),incomplete.events),/requires filled template quota/i);
+
+  const stillOpen=sealedFixture();
+  stillOpen.events.splice(-5); // Remove last Lower B workout and the unused seal.
+  const base=foldBB2Block(opening(),stillOpen.events);
+  assert.deepEqual(base.quotas,{upper_a:8,lower_a:8,upper_b:8,lower_b:7});
+  stillOpen.append('WORKOUT_STARTED',{sessionId:'intentional-extra',
+    templateId:'upper_a',kind:'EXTRA_NORMAL',slots:[slot(1)]});
+  stillOpen.append('SET_RECORDED',{sessionId:'intentional-extra',roleSlotId:'bench',
+    exerciseId:'barbell-bench',setIndex:0,reps:7,actualG:100000,
+    actualOrigin:origin(100000),prescribed:true});
+  stillOpen.append('WORKOUT_FINISHED',{sessionId:'intentional-extra'});
+  const extra=foldBB2Block(opening(),stillOpen.events);
+  assert.deepEqual(extra.quotas,base.quotas);
+  assert.equal(extra.history.at(-1).status,'COMPLETED_EXTRA_NORMAL');
+
+  const complete=sealedFixture();complete.events.pop(); // full 32 credits, before sealing
+  complete.append('WORKOUT_STARTED',{sessionId:'forbidden-extra',
+    templateId:'upper_a',kind:'EXTRA_NORMAL',slots:[slot(1)]});
+  assert.throws(()=>foldBB2Block(opening(),complete.events),
+    /block complete.*next block/i);
+});
 check('sealed prior block denies all training mutations, including recovery and swaps',()=>{
   const r=sealedFixture();
   const p=foldBB2Block(opening(),r.events);

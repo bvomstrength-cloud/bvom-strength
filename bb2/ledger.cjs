@@ -513,6 +513,9 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         if (!TEMPLATES.includes(e.templateId) || !['NORMAL', 'EXTRA_NORMAL', 'RECOVERY'].includes(e.kind)) fail('invalid workout type');
         if (e.kind === 'NORMAL' && quotas[e.templateId] >= 8) fail('normal quota full; use EXTRA NORMAL');
         if (e.kind === 'EXTRA_NORMAL' && quotas[e.templateId] < 8) fail('EXTRA NORMAL requires filled template quota');
+        if (e.kind === 'EXTRA_NORMAL' && TEMPLATES.every(t => quotas[t] === 8)) {
+          fail('block complete; start next block before extra normal training');
+        }
         if (sealed && e.kind !== 'RECOVERY') fail('sealed block only permits recovery');
         if (!Array.isArray(e.slots) || !e.slots.length) fail('missing session slots');
         const slots = clone(e.slots), names = new Set();
