@@ -21,6 +21,17 @@ const slot = (sets) => ({
   incrementG:2500, incrementOrigin:origin(2500)
 });
 const opening = () => createBB2Opening({ownerId:'test-owner', blockId:'test-block'});
+const calibratedOpening = (grams = 100000) => createBB2Opening({
+  ownerId:'test-owner', blockId:'test-block',
+  progress:{'upper_a|bench|barbell-bench':{
+    calibrated:true,loadG:grams,loadOrigin:origin(grams)}}
+});
+const calibratedBodyweightOpening = () => createBB2Opening({
+  ownerId:'test-owner', blockId:'test-block',
+  progress:{'upper_a|vertical-pull|chin-up':{
+    calibrated:true,loadG:5000,loadOrigin:origin(5000),
+    variation:'chin-up',assistance:'light-band'}}
+});
 const verifiedNext = (events, id) => createNextBB2Opening(opening(), events, id);
 const log = () => {
   const events=[];
@@ -332,14 +343,14 @@ const acceptedOffPlanJournal=(bMode='NORMAL',hardB=false)=>{
   const b=record('B',55000,hardB);
   if(bMode==='INCOMPLETE') r.append('WORKOUT_INCOMPLETE',{sessionId:'B'});
   else r.finish('B');
-  return {...r,a,b,choice};
+  return {...r,a,b,choice,choiceOpening:calibratedOpening(60000)};
 };
 const voidSet=(r,sessionId,target)=>r.append('SET_VOIDED',
   {sessionId,targetEventId:target.eventId});
 check('qualified B retroactive first calibration still supersedes invalidated A acceptance',()=>{
   const r=acceptedOffPlanJournal();
   voidSet(r,'A',r.a[0]);
-  const p=foldBB2Block(opening(),r.events);
+  const p=foldBB2Block(r.choiceOpening,r.events);
   assert.deepEqual(p.requiredConsent,[]);
   assert.equal(p.progress['upper_a|bench|barbell-bench'].loadG,55000);
   assert.equal(p.progress['upper_a|bench|barbell-bench'].calibrated,true);
@@ -350,18 +361,18 @@ check('qualified B retroactive first calibration still supersedes invalidated A 
 check('correcting qualified B reactivates A consent and refuses an unconsented transaction',()=>{
   const r=acceptedOffPlanJournal();
   voidSet(r,'A',r.a[0]);
-  const before=foldBB2Block(opening(),r.events);
+  const before=foldBB2Block(r.choiceOpening,r.events);
   assert.deepEqual(before.requiredConsent,[]);
   const prospective={type:'SET_VOIDED',eventId:'void-B',
     commitOrdinal:r.events.length+1,blockId:'test-block',
     sessionId:'B',targetEventId:r.b[0].eventId};
   const saved=JSON.stringify(r.events);
-  assert.throws(()=>commitBB2Transaction(opening(),r.events,[prospective],
+  assert.throws(()=>commitBB2Transaction(r.choiceOpening,r.events,[prospective],
     {ownerId:'test-owner',blockId:'test-block',foldRulesVersion:1,expectedHead:r.events.length,
      sealRevision:0,activeWorkout:false,retrospective:true}),
     /unresolved correction consent/);
   assert.equal(JSON.stringify(r.events),saved);
-  const after=foldBB2Block(opening(),[...r.events,prospective]);
+  const after=foldBB2Block(r.choiceOpening,[...r.events,prospective]);
   assert.equal(after.requiredConsent.length,1);
   assert.equal(after.requiredConsent[0].choiceEventId,r.choice.eventId);
 });
@@ -374,7 +385,7 @@ check('KEEP-as-manual during restored consent retains original choice ordinal, n
   const keep={type:'CHOICE_RECLASSIFIED',eventId:'consent-keep',
     commitOrdinal:r.events.length+2,blockId:'test-block',
     targetEventId:r.choice.eventId,decision:'KEEP_AS_MANUAL'};
-  const out=commitBB2Transaction(opening(),r.events,[prospective,keep],
+  const out=commitBB2Transaction(r.choiceOpening,r.events,[prospective,keep],
     {ownerId:'test-owner',blockId:'test-block',foldRulesVersion:1,expectedHead:r.events.length,
      sealRevision:0,activeWorkout:false,retrospective:true});
   const p=out.projection;
@@ -391,19 +402,19 @@ check('KEEP-as-manual during restored consent retains original choice ordinal, n
 check('saved INCOMPLETE B does not supersede original acceptance',()=>{
   const r=acceptedOffPlanJournal('INCOMPLETE');
   voidSet(r,'A',r.a[0]);
-  const p=foldBB2Block(opening(),r.events);
+  const p=foldBB2Block(r.choiceOpening,r.events);
   assert.deepEqual(p.requiredConsent.map(x=>x.choiceEventId),[r.choice.eventId]);
 });
 check('hard-effort B cannot supersede invalidated A acceptance despite valid quota sets',()=>{
   const r=acceptedOffPlanJournal('NORMAL',true);
   voidSet(r,'A',r.a[0]);
-  const p=foldBB2Block(opening(),r.events);
+  const p=foldBB2Block(r.choiceOpening,r.events);
   assert.deepEqual(p.requiredConsent.map(x=>x.choiceEventId),[r.choice.eventId]);
 });
 check('RECOVERY B cannot supersede invalidated A acceptance',()=>{
   const r=acceptedOffPlanJournal('RECOVERY');
   voidSet(r,'A',r.a[0]);
-  const p=foldBB2Block(opening(),r.events);
+  const p=foldBB2Block(r.choiceOpening,r.events);
   assert.deepEqual(p.requiredConsent.map(x=>x.choiceEventId),[r.choice.eventId]);
 });
 
@@ -689,7 +700,7 @@ const invalidatedAcceptedOffPlanJournal=()=>{
 check('explicit replacement must target exact prior accepted choice identity',()=>{
   const r=invalidatedAcceptedOffPlanJournal();
   const replacement=linkedReplace(r,r.choice);
-  const p=foldBB2Block(opening(),r.events);
+  const p=foldBB2Block(r.choiceOpening,r.events);
   assert.equal(p.progress['upper_a|bench|barbell-bench'].loadG,57500);
   assert.deepEqual(p.requiredConsent,[]);
   assert.ok(replacement.eventId);
@@ -703,7 +714,7 @@ check('explicit replacement must target exact prior accepted choice identity',()
   ]){
     const forged=structuredClone(r.events);
     Object.assign(forged.at(-1),change);
-    assert.throws(()=>foldBB2Block(opening(),forged),
+    assert.throws(()=>foldBB2Block(r.choiceOpening,forged),
       /choice revision|choice replacement|replacement load|origin/i);
   }
 });
@@ -711,29 +722,29 @@ check('choice revision cannot be duplicated or target a non-ACCEPT decision',()=
   const r=invalidatedAcceptedOffPlanJournal();
   linkedReplace(r,r.choice);
   r.append('CHOICE_RECLASSIFIED',{targetEventId:r.choice.eventId,decision:'KEEP_AS_MANUAL'});
-  assert.throws(()=>foldBB2Block(opening(),r.events),/duplicate choice revision/);
+  assert.throws(()=>foldBB2Block(r.choiceOpening,r.events),/duplicate choice revision/);
   const first=acceptedOffPlanJournal();
   first.append('CHOICE_RECLASSIFIED',{targetEventId:'not-an-accept',decision:'KEEP_AS_MANUAL'});
-  assert.throws(()=>foldBB2Block(opening(),first.events),/choice revision must target a prior ACCEPT/);
+  assert.throws(()=>foldBB2Block(first.choiceOpening,first.events),/choice revision must target a prior ACCEPT/);
 });
 check('choice reclassification cannot be reused to suppress consent twice',()=>{
   const r=invalidatedAcceptedOffPlanJournal();
   r.append('CHOICE_RECLASSIFIED',{targetEventId:r.choice.eventId,decision:'KEEP_AS_MANUAL'});
-  const first=foldBB2Block(opening(),r.events);
+  const first=foldBB2Block(r.choiceOpening,r.events);
   assert.deepEqual(first.requiredConsent,[]);
   r.append('CHOICE_RECLASSIFIED',{targetEventId:r.choice.eventId,decision:'KEEP_AS_MANUAL'});
-  assert.throws(()=>foldBB2Block(opening(),r.events),/duplicate choice revision/);
+  assert.throws(()=>foldBB2Block(r.choiceOpening,r.events),/duplicate choice revision/);
 });
 
 
 check('ACCEPT requires exact original offered off-plan value',()=>{
   const r=acceptedOffPlanJournal();
-  const valid=foldBB2Block(opening(),r.events);
+  const valid=foldBB2Block(r.choiceOpening,r.events);
   assert.equal(valid.progress['upper_a|bench|barbell-bench'].loadG,55000);
   const changed=structuredClone(r.events);
   const accept=changed.find(e=>e.eventId===r.choice.eventId);
   accept.loadG=54000;accept.loadOrigin=origin(54000);
-  assert.throws(()=>foldBB2Block(opening(),changed),/accepted value differs from original off-plan offer/);
+  assert.throws(()=>foldBB2Block(r.choiceOpening,changed),/accepted value differs from original off-plan offer/);
 });
 check('on-plan completed exercise does not issue an ACCEPT offer',()=>{
   const r=creditJournal();
@@ -748,7 +759,7 @@ check('real off-plan KEEP leaves normal prescription unchanged',()=>{
   }
   r.append('CHOICE_RESOLVED',{sourceSessionId:'s',roleSlotId:'bench',
     exerciseId:'barbell-bench',decision:'KEEP'});
-  const p=foldBB2Block(opening(),r.events);
+  const p=foldBB2Block(calibratedOpening(),r.events);
   assert.equal(p.progress['upper_a|bench|barbell-bench'].loadG,100000);
   assert.equal(p.pending['upper_a|bench|barbell-bench'],undefined);
 });
@@ -762,10 +773,10 @@ check('one off-plan source offer resolves only once, never earns a duplicate ACC
       exerciseId:'barbell-bench',decision,
       ...(decision==='ACCEPT'?{loadG:95000,loadOrigin:origin(95000)}:{})});
     r.append('CHOICE_RESOLVED',fields(decisions[0]));
-    const legitimate=foldBB2Block(opening(),r.events);
+    const legitimate=foldBB2Block(calibratedOpening(),r.events);
     assert.equal(legitimate.pending['upper_a|bench|barbell-bench'],undefined);
     r.append('CHOICE_RESOLVED',fields(decisions[1]));
-    assert.throws(()=>foldBB2Block(opening(),r.events),/already resolved|stale.*offer/i);
+    assert.throws(()=>foldBB2Block(calibratedOpening(),r.events),/already resolved|stale.*offer/i);
   }
 });
 check('a bodyweight HOLD consumes the offer even though it does not edit the prescription',()=>{
@@ -780,9 +791,9 @@ check('a bodyweight HOLD consumes the offer even though it does not edit the pre
   const resolution={sourceSessionId:'bw-hold',roleSlotId:'vertical-pull',
     exerciseId:'chin-up',decision:'HOLD'};
   r.append('CHOICE_RESOLVED',resolution);
-  assert.equal(foldBB2Block(opening(),r.events).pending['upper_a|vertical-pull|chin-up'],undefined);
+  assert.equal(foldBB2Block(calibratedBodyweightOpening(),r.events).pending['upper_a|vertical-pull|chin-up'],undefined);
   r.append('CHOICE_RESOLVED',resolution);
-  assert.throws(()=>foldBB2Block(opening(),r.events),/offer already resolved/);
+  assert.throws(()=>foldBB2Block(calibratedBodyweightOpening(),r.events),/offer already resolved/);
 });
 check('a superseded pending choice cannot be ACCEPTed after a global prescription edit',()=>{
   const r=creditJournal();
@@ -793,14 +804,14 @@ check('a superseded pending choice cannot be ACCEPTed after a global prescriptio
     exerciseId:'barbell-bench',loadG:97500,loadOrigin:origin(97500)});
   r.append('CHOICE_RESOLVED',{sourceSessionId:'s',roleSlotId:'bench',
     exerciseId:'barbell-bench',decision:'ACCEPT',loadG:95000,loadOrigin:origin(95000)});
-  assert.throws(()=>foldBB2Block(opening(),r.events),/stale.*offer|no unresolved.*offer/i);
+  assert.throws(()=>foldBB2Block(calibratedOpening(),r.events),/stale.*offer|no unresolved.*offer/i);
 });
 check('original ACCEPT remains historically valid after subsequent source correction',()=>{
   const r=acceptedOffPlanJournal();
   r.append('SET_CORRECTED',{sessionId:'A',targetEventId:r.a[0].eventId,
     roleSlotId:'bench',exerciseId:'barbell-bench',setIndex:0,
     reps:7,actualG:50000,actualOrigin:origin(50000)});
-  const p=foldBB2Block(opening(),r.events);
+  const p=foldBB2Block(r.choiceOpening,r.events);
   assert.deepEqual(p.requiredConsent,[]);
   assert.equal(p.progress['upper_a|bench|barbell-bench'].loadG,55000);
 });
@@ -808,7 +819,7 @@ check('ordinary resolution cannot masquerade as future replacement',()=>{
   const r=acceptedOffPlanJournal();
   r.append('CHOICE_RESOLVED',{sourceSessionId:'A',roleSlotId:'bench',
     exerciseId:'barbell-bench',decision:'REPLACE',loadG:57000,loadOrigin:origin(57000)});
-  assert.throws(()=>foldBB2Block(opening(),r.events),/invalid decision/);
+  assert.throws(()=>foldBB2Block(r.choiceOpening,r.events),/invalid decision/);
 });
 check('HOLD requires a genuine bodyweight offer',()=>{
   const r=creditJournal();
@@ -2312,13 +2323,13 @@ check('current-block choice events cannot forge their source block lineage',()=>
   const r=acceptedOffPlanJournal();
   const withSource=structuredClone(r.events);
   withSource.find(e=>e.eventId===r.choice.eventId).sourceBlockId='test-block';
-  assert.deepEqual(foldBB2Block(opening(),withSource).requiredConsent,[]);
+  assert.deepEqual(foldBB2Block(r.choiceOpening,withSource).requiredConsent,[]);
   const forged=structuredClone(withSource);
   forged.find(e=>e.eventId===r.choice.eventId).sourceBlockId='unrelated-block';
-  assert.throws(()=>foldBB2Block(opening(),forged),/choice source block mismatch/i);
+  assert.throws(()=>foldBB2Block(r.choiceOpening,forged),/choice source block mismatch/i);
   const replacement=acceptedOffPlanJournal();
   linkedReplace(replacement,replacement.choice,{sourceBlockId:'unrelated-block'});
-  assert.throws(()=>foldBB2Block(opening(),replacement.events),/choice source block mismatch/i);
+  assert.throws(()=>foldBB2Block(replacement.choiceOpening,replacement.events),/choice source block mismatch/i);
 });
 check('reselecting an unchanged exercise is a true no-op, not a new audit boundary',()=>{
   const r=log();
@@ -2335,11 +2346,11 @@ check('KEEP-as-manual and REPLACE cannot pre-authorise a future source correctio
     if(type==='CHOICE_RECLASSIFIED') {
       r.append(type,{targetEventId:r.choice.eventId,decision:'KEEP_AS_MANUAL'});
     } else linkedReplace(r,r.choice);
-    assert.throws(()=>foldBB2Block(opening(),r.events),/correction-time consent not required/i,type);
+    assert.throws(()=>foldBB2Block(r.choiceOpening,r.events),/correction-time consent not required/i,type);
     // A future correction cannot make the earlier forged consent legitimate.
     voidSet(r,'A',r.a[0]);
     voidSet(r,'B',r.b[0]);
-    assert.throws(()=>foldBB2Block(opening(),r.events),/correction-time consent not required/i,
+    assert.throws(()=>foldBB2Block(r.choiceOpening,r.events),/correction-time consent not required/i,
       type+' before later invalidation');
   }
 });

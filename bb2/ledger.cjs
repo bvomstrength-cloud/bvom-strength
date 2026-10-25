@@ -29,7 +29,7 @@ const EVENT_FIELDS = Object.freeze({
   BLOCK_SEALED: ['sealId'],
   WORKOUT_STARTED: ['sessionId', 'templateId', 'kind', 'slots'],
   EXERCISE_LOCKED: ['sessionId', 'roleSlotId', 'exerciseId', 'plannedG', 'plannedOrigin',
-    'incrementG', 'incrementOrigin', 'equipment', 'sets', 'ceiling', 'variation', 'assistance'],
+    'incrementG', 'incrementOrigin', 'equipment', 'sets', 'floor', 'ceiling', 'variation', 'assistance'],
   CALIBRATION_PLAN_REVISED: ['sessionId', 'roleSlotId', 'exerciseId', 'plannedG', 'plannedOrigin'],
   CALIBRATION_ACCEPTED: ['sessionId', 'roleSlotId', 'exerciseId', 'loadG', 'loadOrigin'],
   SET_RECORDED: ['sessionId', 'roleSlotId', 'exerciseId', 'setIndex', 'reps', 'prescribed',
@@ -421,11 +421,18 @@ function initialProgress(v = {}, plan = {}) {
   return p;
 }
 function validateSlot(s) {
-  onlyFields(s, ['roleSlotId', 'exerciseId', 'sets', 'ceiling', 'equipment',
+  onlyFields(s, ['roleSlotId', 'exerciseId', 'sets', 'floor', 'ceiling', 'equipment',
     'plannedG', 'plannedOrigin', 'incrementG', 'incrementOrigin',
     'variation', 'assistance'], 'workout slot');
   positiveId(s.roleSlotId, 'slot'); positiveId(s.exerciseId, 'exercise');
   integer(s.sets, 'prescribed set count', 1); integer(s.ceiling, 'rep ceiling', 1);
+  // Historical plans must retain both ends of an explicitly selected rep
+  // range. Older Stage (i) fixtures without a floor remain replayable;
+  // Stage (ii)'s versioned catalogue will require it for newly saved Starts.
+  if (s.floor !== undefined) {
+    integer(s.floor, 'rep floor', 1);
+    if (s.floor > s.ceiling) fail('rep floor exceeds ceiling');
+  }
   if (s.equipment !== 'loaded' && s.equipment !== 'bodyweight') fail('invalid equipment');
   if (s.equipment === 'bodyweight' &&
       (typeof s.variation !== 'string' || !s.variation.trim() ||
@@ -449,6 +456,10 @@ function validSet(record, slot) {
       : Number.isSafeInteger(record.actualG) && record.actualG >= 0);
 }
 const sessionEligible = s => s.kind === 'NORMAL' || s.kind === 'EXTRA_NORMAL';
+const difficultyActuallyChanges = (current, choice) => !!current &&
+  (current.variation !== choice.variation ||
+   current.assistance !== choice.assistance ||
+   (current.loadG ?? null) !== (choice.addedWeightG ?? null));
 function evidenceFor(s, roleSlotId, effectiveSets) {
   const slot = s.slots.find(x => x.roleSlotId === roleSlotId);
   const rows = [];
@@ -659,7 +670,7 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
         if (e.plannedG !== slot.plannedG) fail('lock plan differs from committed plan');
         // Every supplied field in a saved lock is evidence, not a chance to
         // silently alter the original Start or a permitted pre-lock edit.
-        for (const field of ['equipment', 'sets', 'ceiling', 'incrementG',
+        for (const field of ['equipment', 'sets', 'floor', 'ceiling', 'incrementG',
           'variation', 'assistance']) {
           if (own(e, field) && e[field] !== slot[field]) {
             fail('lock field differs from effective session plan: ' + field);
@@ -847,17 +858,40 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
             p.calibrated = true;
             const accepted = s.accepted.get(slot.roleSlotId);
             if (accepted) epoch(p, `calibration:${accepted.eventId}`, accepted.loadG, accepted.loadOrigin);
-            else if (info.onPlan && !info.harder) epoch(p, `promote:${e.eventId}`, slot.plannedG ?? null, slot.plannedOrigin);
+            else if (info.onPlan && !info.harder) {
+              const historicIdentityDiffers = p.loadG !== (slot.plannedG ?? null) ||
+                (slot.equipment === 'bodyweight' &&
+                  (p.variation !== slot.variation || p.assistance !== slot.assistance));
+              if (historicIdentityDiffers) {
+                epoch(p, `promote:${e.eventId}`, slot.plannedG ?? null,
+                  slot.plannedOrigin, true);
+                if (slot.equipment === 'bodyweight') {
+                  p.variation = slot.variation;
+                  p.assistance = slot.assistance;
+                }
+              }
+            }
             // Retroactive first calibration can also be a qualified, independent
             // reaffirmation of its saved plan for historical consent precedence.
             // It must not earn an automatic first-exposure weight increase.
             if (info.onPlan && !info.harder) boundary(key, e.commitOrdinal, 'qualified-calibration');
-            if (info.uniform && !info.harder && info.actualG === p.loadG) {
+            const matchesFinalIdentity = info.actualG === p.loadG &&
+              (slot.equipment !== 'bodyweight' || info.rows.every(row =>
+                row.variation === p.variation && row.assistance === p.assistance));
+            if (info.uniform && !info.harder && matchesFinalIdentity) {
               p.bestReps = info.repSum; p.stallCount = 0;
             }
           } else if (info.onPlan && !info.harder) {
-            if (p.loadG !== (slot.plannedG ?? null)) {
-              epoch(p, `promote:${e.eventId}:${key}`, slot.plannedG ?? null, slot.plannedOrigin);
+            const historicIdentityDiffers = p.loadG !== (slot.plannedG ?? null) ||
+              (slot.equipment === 'bodyweight' &&
+                (p.variation !== slot.variation || p.assistance !== slot.assistance));
+            if (historicIdentityDiffers) {
+              epoch(p, `promote:${e.eventId}:${key}`, slot.plannedG ?? null,
+                slot.plannedOrigin, true);
+              if (slot.equipment === 'bodyweight') {
+                p.variation = slot.variation;
+                p.assistance = slot.assistance;
+              }
             }
             boundary(key, e.commitOrdinal, 'qualified-finish');
             const beforeStall = p.stallCount;
@@ -922,6 +956,9 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
               positiveId(e.variation, 'accepted carried difficulty variation');
               if (typeof e.assistance !== 'string') fail('invalid carried difficulty assistance');
               if (e.addedWeightG !== undefined) integer(e.addedWeightG, 'accepted carried added weight');
+              if (!difficultyActuallyChanges(p, e)) {
+                fail('difficulty acceptance must change variation, assistance or added load');
+              }
               // A qualitative source may deliberately choose new added weight,
               // or a loaded bodyweight exercise may switch to band-only work.
               // Only the user's actual new choice supplies a numeric mass.
@@ -939,6 +976,14 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
         if (!['ACCEPT', 'KEEP', 'HOLD', 'DIFFICULTY_ACCEPT'].includes(e.decision) &&
             !(e.type === 'CHOICE_REPLACED' && e.decision === 'REPLACE')) fail('invalid decision');
         if (e.type === 'CHOICE_RESOLVED' && e.targetEventId !== undefined) fail('resolution may not target prior choice');
+        if (e.type === 'CHOICE_RESOLVED') {
+          const offerId = `${s.sessionId}|${key}`;
+          if (resolvedOffers.has(offerId)) fail('offer already resolved');
+          if (boundaries.some(b => b.key === key &&
+              b.ordinal > s.finishOrdinal && b.ordinal < e.commitOrdinal)) {
+            fail('stale offer superseded by later prescription');
+          }
+        }
         // A user may later correct the source; the explicit decision must still
         // have been earned by the evidence committed at its *own* ordinal.
         // Never validate a historical ACCEPT against the final corrected sets.
@@ -951,9 +996,18 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
               .filter(Boolean).length, 0) >=
           Math.ceil(.70 * s.slots.reduce((n, item) => n + item.sets, 0));
         const sourceEvidence = evidenceFor(s, slot.roleSlotId, atChoice.records);
+        // Validate the offer at its *original* choice ordinal. A correction
+        // appended later may invalidate present-day pending state but must
+        // not rewrite a genuinely earned historical consent event. Most
+        // importantly, first-exposure calibration never issues an off-plan
+        // ACCEPT/KEEP or bodyweight difficulty offer.
+        const historicalChoiceState = e.type === 'CHOICE_RESOLVED' ?
+          replayBefore(e.commitOrdinal) : null;
+        const originalOffer = historicalChoiceState?.pending[key];
         const offeredOffPlan = sourceEligible && sourceEvidence.complete &&
           sourceEvidence.uniform && !sourceEvidence.harder && !sourceEvidence.onPlan &&
-          slot.equipment === 'loaded';
+          slot.equipment === 'loaded' && originalOffer?.kind === 'OFF_PLAN' &&
+          originalOffer.sessionId === s.sessionId;
         if (e.type === 'CHOICE_RESOLVED' && ['ACCEPT', 'KEEP'].includes(e.decision)) {
           if (!offeredOffPlan) fail('choice has no original eligible off-plan offer');
           if (e.decision === 'ACCEPT' && e.loadG !== sourceEvidence.actualG) {
@@ -962,22 +1016,18 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
         }
         if (e.type === 'CHOICE_RESOLVED' && ['HOLD', 'DIFFICULTY_ACCEPT'].includes(e.decision)) {
           if (!(sourceEligible && sourceEvidence.complete && sourceEvidence.onPlan &&
-                !sourceEvidence.harder && sourceEvidence.allTop && slot.equipment === 'bodyweight')) {
+                !sourceEvidence.harder && sourceEvidence.allTop && slot.equipment === 'bodyweight' &&
+                originalOffer?.kind === 'DIFFICULTY' && originalOffer.sessionId === s.sessionId)) {
             fail('difficulty choice has no eligible bodyweight offer');
+          }
+          if (e.decision === 'DIFFICULTY_ACCEPT' &&
+              !difficultyActuallyChanges(historicalChoiceState.progress[key], e)) {
+            fail('difficulty acceptance must change variation, assistance or added load');
           }
         }
         if (e.type === 'CHOICE_RESOLVED') {
-          // Resolution is a one-shot decision linked to the precise source,
-          // never a generic future prescription edit. A later independent
-          // working-value decision or qualified Finish makes the old offer
-          // stale, whereas an increment-only edit does not.
-          const offerId = `${s.sessionId}|${key}`;
-          if (resolvedOffers.has(offerId)) fail('offer already resolved');
-          if (boundaries.some(b => b.key === key &&
-              b.ordinal > s.finishOrdinal && b.ordinal < e.commitOrdinal)) {
-            fail('stale offer superseded by later prescription');
-          }
-          resolvedOffers.add(offerId);
+          // Only the fully validated, one-shot original offer can be consumed.
+          resolvedOffers.add(`${s.sessionId}|${key}`);
         }
         const p = getProgress(key, slot);
         if (e.decision === 'ACCEPT' || e.decision === 'REPLACE') {

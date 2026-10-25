@@ -402,7 +402,9 @@ check('Finish planner is idempotent and credit grants exactly once', () => {
 });
 
 check('fixed consent golden: removing both superseders needs KEEP at later ordinal without repricing A', () => {
-  const b = open(), { events, add } = journal();
+  // A is a post-calibration off-plan exposure; first calibration cannot
+  // manufacture an ordinary ACCEPT/KEEP offer.
+  const b = open({ [K]: { calibrated: true, loadG: 60000 } }), { events, add } = journal();
   const bench = slot('chest', 'bench', 3, 60000);
   start(add, 'A', 'NORMAL', [bench]);
   const a = sets(add, 'A', 'chest', 'bench', [55000, 55000, 55000], [7, 7, 7]);
@@ -433,7 +435,7 @@ check('fixed consent golden: removing both superseders needs KEEP at later ordin
   }, {
     headOrdinal: 14, quotas: { upper_a: 0, lower_a: 0, upper_b: 0, lower_b: 0 },
     loadG: 55000, epochId: 'choice:event-6',
-    calibrated: false, bestReps: null, stallCount: 0, requiredConsent: [],
+    calibrated: true, bestReps: null, stallCount: 0, requiredConsent: [],
     history: [
       { sessionId: 'A', finishOrdinal: 5, status: 'INCOMPLETE_CORRECTED', validCount: 2, creditId: null },
       { sessionId: 'B', finishOrdinal: 11, status: 'INCOMPLETE_CORRECTED', validCount: 2, creditId: null }

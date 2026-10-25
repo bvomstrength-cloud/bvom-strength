@@ -87,6 +87,11 @@ check('qualitative bodyweight difficulty acceptance never fabricates zero grams'
 });
 
 check('REPLACE confirming equal grams resets comparable epoch and performance', () => {
+  // The source is a genuine post-calibration OFF_PLAN offer; first-exposure
+  // calibration deliberately cannot issue the ordinary ACCEPT/KEEP choice.
+  const b = createBB2Opening({ ownerId: 'audit-owner', blockId: 'audit-block',
+    progress: { 'upper_a|bench|bench': { calibrated: true, loadG: 60000,
+      loadOrigin: origin(60000) } } });
   const { events, add } = journal();
   add('WORKOUT_STARTED', { sessionId: 'source', templateId: 'upper_a', kind: 'NORMAL',
     slots: [slot('bench')] });
@@ -99,12 +104,12 @@ check('REPLACE confirming equal grams resets comparable epoch and performance', 
     exerciseId: 'bench', decision: 'ACCEPT', loadG: 55000, loadOrigin: origin(55000) });
   add('SET_CORRECTED', { sessionId: 'source', targetEventId: records[0].eventId,
     reps: 7, actualG: 50000, actualOrigin: origin(50000) });
-  assert.deepEqual(foldBB2Block(opening(), events).requiredConsent.map(x => x.choiceEventId),
+  assert.deepEqual(foldBB2Block(b, events).requiredConsent.map(x => x.choiceEventId),
     [accepted.eventId]);
   const replaced = add('CHOICE_REPLACED', { targetEventId: accepted.eventId,
     sourceSessionId: 'source', roleSlotId: 'bench', exerciseId: 'bench',
     decision: 'REPLACE', loadG: 55000, loadOrigin: origin(55000) });
-  const result = foldBB2Block(opening(), events);
+  const result = foldBB2Block(b, events);
   const p = result.progress['upper_a|bench|bench'];
   assert.deepEqual(result.requiredConsent, []);
   assert.deepEqual([p.loadG, p.epochId, p.bestReps, p.stallCount],
@@ -204,6 +209,10 @@ check('sealed qualitative difficulty carries to next block without invented gram
     addedWeightOrigin: origin(5000) };
   assert.equal(foldBB2Block(next, [loadedDecision]).progress['upper_a|pull|chinup'].loadG,
     5000, 'a next-block qualitative offer can be accepted with explicit added load');
+  const unchanged = { ...decision, assistance: 'heavy-band' };
+  assert.throws(() => foldBB2Block(next, [unchanged]),
+    /difficulty acceptance must change/i,
+    'a carried choice cannot reset the epoch without an actual difficulty change');
 });
 
 check('qualitative difficulty correction may REPLACE with no fictitious grams', () => {
@@ -326,6 +335,175 @@ check('an eligible NORMAL Finish cannot commit without its credit grant', () => 
   const committed = commitBB2Transaction(opening(), events, planned.events.slice(events.length), guard);
   assert.equal(committed.projection.quotas.upper_a, 1);
   assert.equal(committed.projection.history[0].creditId, 'credit:credit-source');
+});
+
+check('first-exposure off-plan choice cannot bypass calibration and earn an increase', () => {
+  const { events, add } = journal();
+  add('WORKOUT_STARTED', { sessionId: 'first-off-plan', templateId: 'upper_a',
+    kind: 'NORMAL', slots: [slot('bench', 60000, 1)] });
+  add('SET_RECORDED', { sessionId: 'first-off-plan', roleSlotId: 'bench', exerciseId: 'bench',
+    setIndex: 0, reps: 8, actualG: 55000, actualOrigin: origin(55000), prescribed: true });
+  add('WORKOUT_FINISHED', { sessionId: 'first-off-plan' });
+  assert.equal(foldBB2Block(opening(), events).pending['upper_a|bench|bench'], undefined);
+  add('CHOICE_RESOLVED', { sourceSessionId: 'first-off-plan', roleSlotId: 'bench',
+    exerciseId: 'bench', decision: 'ACCEPT', loadG: 55000, loadOrigin: origin(55000) });
+  assert.throws(() => foldBB2Block(opening(), events), /calibrat|offer|choice.*eligible/i);
+});
+
+check('first-exposure all-top bodyweight calibration cannot invent harder-direction offer', () => {
+  const { events, add } = journal();
+  const pull = { roleSlotId: 'pull', exerciseId: 'chinup', equipment: 'bodyweight',
+    sets: 1, ceiling: 12, variation: 'chinup', assistance: 'heavy-band' };
+  add('WORKOUT_STARTED', { sessionId: 'first-bw', templateId: 'upper_a',
+    kind: 'NORMAL', slots: [pull] });
+  add('SET_RECORDED', { sessionId: 'first-bw', roleSlotId: 'pull', exerciseId: 'chinup',
+    setIndex: 0, reps: 12, prescribed: true, variation: 'chinup', assistance: 'heavy-band' });
+  add('WORKOUT_FINISHED', { sessionId: 'first-bw' });
+  assert.equal(foldBB2Block(opening(), events).pending['upper_a|pull|chinup'], undefined);
+  add('CHOICE_RESOLVED', { sourceSessionId: 'first-bw', roleSlotId: 'pull',
+    exerciseId: 'chinup', decision: 'DIFFICULTY_ACCEPT', variation: 'chinup',
+    assistance: 'light-band' });
+  assert.throws(() => foldBB2Block(opening(), events), /difficulty choice.*offer|calibrat/i);
+});
+
+check('retroactive first calibration qualifying Finish can reaffirm an invalidated choice', () => {
+  const { events, add } = journal();
+  const record = (id, planned, actual) => {
+    add('WORKOUT_STARTED', { sessionId: id, templateId: 'upper_a',
+      kind: 'NORMAL', slots: [slot('bench', planned, 3)] });
+    const sets = Array.from({ length: 3 }, (_, i) => add('SET_RECORDED', {
+      sessionId: id, roleSlotId: 'bench', exerciseId: 'bench', setIndex: i,
+      reps: 7, actualG: actual, actualOrigin: origin(actual), prescribed: true }));
+    add('WORKOUT_FINISHED', { sessionId: id });
+    return sets;
+  };
+  const initial = record('original-calibration', 60000, 60000);
+  const acceptedSets = record('accepted-off-plan', 60000, 55000);
+  const choice = add('CHOICE_RESOLVED', { sourceSessionId: 'accepted-off-plan',
+    roleSlotId: 'bench', exerciseId: 'bench', decision: 'ACCEPT',
+    loadG: 55000, loadOrigin: origin(55000) });
+  record('later-reaffirmation', 55000, 55000);
+  add('SET_VOIDED', { sessionId: 'original-calibration', targetEventId: initial[0].eventId });
+  add('SET_VOIDED', { sessionId: 'accepted-off-plan', targetEventId: acceptedSets[0].eventId });
+  const projected = foldBB2Block(opening(), events);
+  assert.deepEqual(projected.requiredConsent, []);
+  assert.equal(projected.progress['upper_a|bench|bench'].loadG, 55000);
+  assert.equal(projected.progress['upper_a|bench|bench'].bestReps, 21);
+  assert.ok(projected.history.some(h => h.sessionId === 'later-reaffirmation'));
+  assert.ok(choice.eventId);
+});
+
+check('wrong assistance during first bodyweight calibration never seeds a carried baseline', () => {
+  const { events, add } = journal();
+  const pull = { roleSlotId: 'pull', exerciseId: 'chinup', equipment: 'bodyweight',
+    sets: 1, ceiling: 12, variation: 'chinup', assistance: 'light-band' };
+  add('WORKOUT_STARTED', { sessionId: 'wrong-band', templateId: 'upper_a',
+    kind: 'NORMAL', slots: [pull] });
+  add('SET_RECORDED', { sessionId: 'wrong-band', roleSlotId: 'pull', exerciseId: 'chinup',
+    setIndex: 0, reps: 8, prescribed: true, variation: 'chinup', assistance: 'heavy-band' });
+  add('WORKOUT_FINISHED', { sessionId: 'wrong-band' });
+  const key = 'upper_a|pull|chinup';
+  assert.equal(foldBB2Block(opening(), events).progress[key].bestReps, null);
+  add('CREDIT_GRANTED', { sessionId: 'wrong-band', creditId: 'wrong-band-credit' });
+  for (const templateId of ['upper_a', 'lower_a', 'upper_b', 'lower_b']) {
+    for (let i = templateId === 'upper_a' ? 1 : 0; i < 8; i++) {
+      const sessionId = templateId + '-fill-' + i;
+      add('WORKOUT_STARTED', { sessionId, templateId, kind: 'NORMAL', slots: [slot('bench', 60000, 1)] });
+      add('SET_RECORDED', { sessionId, roleSlotId: 'bench', exerciseId: 'bench',
+        setIndex: 0, reps: 7, actualG: 60000, actualOrigin: origin(60000), prescribed: true });
+      add('WORKOUT_FINISHED', { sessionId });
+      add('CREDIT_GRANTED', { sessionId, creditId: 'credit-' + sessionId });
+    }
+  }
+  add('BLOCK_SEALED', { sealId: 'wrong-band-seal' });
+  assert.equal(createNextBB2Opening(opening(), events, 'after-wrong-band').progress[key].bestReps, null);
+});
+
+check('unchanged bodyweight DIFFICULTY_ACCEPT cannot erase earned reference', () => {
+  const { events, add } = journal();
+  const pull = { roleSlotId: 'pull', exerciseId: 'chinup', equipment: 'bodyweight',
+    sets: 1, ceiling: 12, variation: 'chinup', assistance: 'medium-band' };
+  for (const [id, reps] of [['calibration', 8], ['all-top', 12]]) {
+    add('WORKOUT_STARTED', { sessionId: id, templateId: 'upper_a', kind: 'NORMAL', slots: [pull] });
+    add('SET_RECORDED', { sessionId: id, roleSlotId: 'pull', exerciseId: 'chinup',
+      setIndex: 0, reps, prescribed: true, variation: 'chinup', assistance: 'medium-band' });
+    add('WORKOUT_FINISHED', { sessionId: id });
+  }
+  const before = foldBB2Block(opening(), events).progress['upper_a|pull|chinup'];
+  assert.equal(before.bestReps, 8);
+  add('CHOICE_RESOLVED', { sourceSessionId: 'all-top', roleSlotId: 'pull',
+    exerciseId: 'chinup', decision: 'DIFFICULTY_ACCEPT', variation: 'chinup',
+    assistance: 'medium-band' });
+  assert.throws(() => foldBB2Block(opening(), events), /difficulty.*change|unchanged.*difficulty|same.*variation/i);
+});
+
+check('historical bodyweight Finish promotes assistance identity before stall evaluation', () => {
+  const key = 'upper_a|pull|chinup';
+  const b = createBB2Opening({ ownerId: 'audit-owner', blockId: 'audit-block',
+    progress: { [key]: { calibrated: true, variation: 'chinup', assistance: 'light-band',
+      bestReps: 18, stallCount: 0, epochId: 'old-band' } } });
+  const { events, add } = journal();
+  const oldPlan = { roleSlotId: 'pull', exerciseId: 'chinup', equipment: 'bodyweight',
+    sets: 2, ceiling: 12, variation: 'chinup', assistance: 'heavy-band' };
+  add('WORKOUT_STARTED', { sessionId: 'historical-band', templateId: 'upper_a',
+    kind: 'NORMAL', slots: [oldPlan] });
+  for (let i = 0; i < 2; i++) add('SET_RECORDED', { sessionId: 'historical-band',
+    roleSlotId: 'pull', exerciseId: 'chinup', setIndex: i, reps: 8,
+    variation: 'chinup', assistance: 'heavy-band', prescribed: true });
+  add('WORKOUT_FINISHED', { sessionId: 'historical-band' });
+  const p = foldBB2Block(b, events).progress[key];
+  assert.deepEqual([p.variation, p.assistance, p.bestReps, p.stallCount],
+    ['chinup', 'heavy-band', 16, 0]);
+  assert.equal(p.epochId, 'promote:audit-4:' + key);
+});
+
+check('retroactive first bodyweight calibration can promote a different saved assistance', () => {
+  const key = 'upper_a|pull|chinup';
+  const b = createBB2Opening({ ownerId: 'audit-owner', blockId: 'audit-block',
+    progress: { [key]: { variation: 'chinup', assistance: 'light-band',
+      calibrated: false, bestReps: null, stallCount: 0 } } });
+  const { events, add } = journal();
+  const historical = { roleSlotId: 'pull', exerciseId: 'chinup', equipment: 'bodyweight',
+    sets: 1, ceiling: 12, variation: 'chinup', assistance: 'heavy-band' };
+  add('WORKOUT_STARTED', { sessionId: 'retro-first-band', templateId: 'upper_a',
+    kind: 'NORMAL', slots: [historical] });
+  add('SET_RECORDED', { sessionId: 'retro-first-band', roleSlotId: 'pull',
+    exerciseId: 'chinup', setIndex: 0, reps: 9, prescribed: true,
+    variation: 'chinup', assistance: 'heavy-band' });
+  add('WORKOUT_FINISHED', { sessionId: 'retro-first-band' });
+  const p = foldBB2Block(b, events).progress[key];
+  assert.deepEqual([p.calibrated, p.assistance, p.bestReps, p.stallCount, p.epochId],
+    [true, 'heavy-band', 9, 0, 'promote:audit-3']);
+  const matching = createBB2Opening({ ownerId: 'audit-owner', blockId: 'audit-block',
+    progress: { [key]: { variation: 'chinup', assistance: 'heavy-band',
+      calibrated: false, bestReps: null, stallCount: 0 } } });
+  assert.equal(foldBB2Block(matching, events).progress[key].epochId, 'opening',
+    'a matching qualitative first calibration must not create a phantom epoch');
+});
+
+check('closed Start and lock snapshots retain an optional explicit rep floor', () => {
+  const { events, add } = journal();
+  const ranged = { ...slot('bench', 60000, 1), floor: 6 };
+  add('WORKOUT_STARTED', { sessionId: 'ranged', templateId: 'upper_a',
+    kind: 'NORMAL', slots: [ranged] });
+  add('SET_RECORDED', { sessionId: 'ranged', roleSlotId: 'bench', exerciseId: 'bench',
+    setIndex: 0, reps: 7, actualG: 60000, actualOrigin: origin(60000), prescribed: true });
+  add('WORKOUT_FINISHED', { sessionId: 'ranged' });
+  assert.equal(foldBB2Block(opening(), events).history[0].slots[0].floor, 6);
+  const locked = structuredClone(events);
+  locked.splice(1, 0, { type: 'EXERCISE_LOCKED', eventId: 'audit-ranged-lock',
+    blockId: 'audit-block', commitOrdinal: 2, sessionId: 'ranged', roleSlotId: 'bench',
+    exerciseId: 'bench', plannedG: 60000, plannedOrigin: origin(60000), floor: 6 });
+  locked.forEach((event, i) => { event.commitOrdinal = i + 1; });
+  const lockedHistory = foldBB2Block(opening(), locked).history[0];
+  assert.equal(lockedHistory.initialSlots[0].floor, 6);
+  assert.equal(lockedHistory.effectiveSlots[0].floor, 6);
+  const forgedLock = structuredClone(locked);
+  forgedLock[1].floor = 7;
+  assert.throws(() => foldBB2Block(opening(), forgedLock), /lock field differs|floor/i);
+  const impossible = structuredClone(events);
+  impossible[0].slots[0].floor = 9;
+  assert.throws(() => foldBB2Block(opening(), impossible), /rep floor|range|ceiling/i);
 });
 
 if (failures) process.exitCode = 1;
