@@ -402,6 +402,26 @@ function initialProgress(v = {}, plan = {}) {
   onlyFields(v, ['loadG', 'loadOrigin', 'incrementG', 'incrementOrigin',
     'variation', 'assistance', 'calibrated', 'bestReps', 'stallCount',
     'epochId', 'lastNormalSessionId'], 'opening progress');
+  // Restored/opening progress is authoritative training state. Do not coerce
+  // a malformed calibration flag, identity or stall reference into a valid
+  // progression record; a backup could otherwise bypass first exposure.
+  if (own(v, 'calibrated') && typeof v.calibrated !== 'boolean') fail('invalid calibrated flag');
+  if (own(v, 'epochId') && (typeof v.epochId !== 'string' || !v.epochId.trim())) {
+    fail('invalid progression epoch');
+  }
+  if (own(v, 'lastNormalSessionId') && v.lastNormalSessionId !== null) {
+    positiveId(v.lastNormalSessionId, 'last normal session');
+  }
+  if (own(v, 'variation') && v.variation !== null &&
+      (typeof v.variation !== 'string' || !v.variation.trim())) {
+    fail('invalid progression variation');
+  }
+  if (own(v, 'assistance') && v.assistance !== null &&
+      typeof v.assistance !== 'string') fail('invalid progression assistance');
+  if (v.loadOrigin != null && v.loadG == null) fail('orphan progress load origin');
+  if (v.incrementOrigin !== undefined && v.incrementG === undefined) {
+    fail('orphan progress increment origin');
+  }
   const p = {
     loadG: v.loadG ?? plan.plannedG ?? null,
     loadOrigin: v.loadOrigin ?? plan.plannedOrigin ?? null,
@@ -418,6 +438,7 @@ function initialProgress(v = {}, plan = {}) {
   integer(p.incrementG, 'increment grams', 1);
   if (p.bestReps !== null) integer(p.bestReps, 'best reps', 1);
   integer(p.stallCount, 'stall count');
+  if (p.bestReps === null && p.stallCount !== 0) fail('stall without baseline');
   return p;
 }
 function validateSlot(s) {
@@ -437,6 +458,12 @@ function validateSlot(s) {
   if (s.equipment === 'bodyweight' &&
       (typeof s.variation !== 'string' || !s.variation.trim() ||
        typeof s.assistance !== 'string')) fail('invalid bodyweight slot identity');
+  if (s.plannedG === undefined && s.plannedOrigin !== undefined) {
+    fail('orphan planned origin');
+  }
+  if (s.incrementG === undefined && s.incrementOrigin !== undefined) {
+    fail('orphan increment origin');
+  }
   if (s.plannedG !== undefined) validateMassOrigin(s.plannedG, s.plannedOrigin, 'planned', true);
   if (s.equipment === 'loaded' && s.plannedG === undefined) fail('missing planned grams');
   if (s.incrementG !== undefined) validateMassOrigin(s.incrementG, s.incrementOrigin, 'increment');
@@ -786,6 +813,9 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
         }
         if (e.type === 'SET_RECORDED' && (e.setIndex >= slot.sets || e.prescribed !== true)) fail('set not prescribed');
         if (e.type === 'EXTRA_SET_RECORDED') {
+          // Explicitly calling an extra set prescribed would contradict its
+          // immutable non-gating index even if the projection ignores the flag.
+          if (e.prescribed === true) fail('extra set cannot be prescribed');
           // Match BB1's hard maximum of 30 extra working sets per exercise.
           // A void/correction retains the original slot index for audit; it
           // must not free that ordinal for a second independent recorded set.
