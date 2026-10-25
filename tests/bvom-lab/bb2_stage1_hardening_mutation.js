@@ -374,7 +374,7 @@ const faults=[
     to:"if (false) fail('rep floor exceeds ceiling');"},
   {name:'ALLOW-LOCK-TO-REWRITE-REP-FLOOR',suite:'cold',
     from:"for (const field of ['equipment', 'sets', 'floor', 'ceiling', 'incrementG',",
-    to:"for (const field of ['equipment', 'sets', 'ceiling', 'incrementG',"}
+    to:"for (const field of ['equipment', 'sets', 'ceiling', 'incrementG',"},
   {name:'COERCE-RESTORED-CALIBRATED-STRING',suite:'cold',
     from:"if (own(v, 'calibrated') && typeof v.calibrated !== 'boolean') fail('invalid calibrated flag');",
     to:"if (false) fail('invalid calibrated flag');"},
