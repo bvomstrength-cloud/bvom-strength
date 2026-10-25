@@ -134,6 +134,18 @@ function validateOpening(opening) {
     identity(...parts);
     initialProgress(item);
   }
+  if (opening.selections !== undefined) {
+    if (!opening.selections || typeof opening.selections !== 'object' ||
+        Array.isArray(opening.selections)) fail('invalid opening selections');
+    for (const [key, exerciseId] of Object.entries(opening.selections)) {
+      const parts = key.split('|');
+      if (parts.length !== 2 || !TEMPLATES.includes(parts[0]) ||
+          !parts[1].trim() || typeof exerciseId !== 'string' ||
+          !exerciseId.trim() || exerciseId.includes('|')) {
+        fail('invalid opening selection identity');
+      }
+    }
+  }
   if (!opening.pending || typeof opening.pending !== 'object' || Array.isArray(opening.pending)) {
     fail('invalid opening pending decisions');
   }
@@ -558,9 +570,12 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
       case 'VARIATION_EDITED':
       case 'STALL_REDUCTION_ACCEPTED': {
         if (e.scope && e.scope !== 'GLOBAL') fail('non-global edit');
-        const templateId = e.templateId ?? sessions.get(e.sessionId)?.templateId;
-        const key = identity(templateId, e.roleSlotId, e.exerciseId);
         const session = e.sessionId ? sessions.get(e.sessionId) : null;
+        if (session && e.templateId !== undefined && e.templateId !== session.templateId) {
+          fail('session template mismatch on global edit');
+        }
+        const templateId = e.templateId ?? session?.templateId;
+        const key = identity(templateId, e.roleSlotId, e.exerciseId);
         const window = e.sessionId ? discardedEditWindows.get(e.sessionId) : null;
         const preservedDiscardEdit = window && e.scope === 'GLOBAL' &&
           e.commitOrdinal > window.firstOrdinal && e.commitOrdinal < window.discardOrdinal;
@@ -733,6 +748,9 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
       case 'CHOICE_RESOLVED':
       case 'CHOICE_REPLACED': {
         const s = sessions.get(e.sourceSessionId);
+        if (s && e.sourceBlockId !== undefined && e.sourceBlockId !== opening.blockId) {
+          fail('choice source block mismatch');
+        }
         if (!s && e.type === 'CHOICE_RESOLVED') {
           // The source workout belongs to an already-sealed older block.
           // Its pending offer and source identity were pinned into the next
@@ -902,7 +920,9 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         if (e.sessionId || [...sessions.values()].some(x => !x.outcome)) {
           fail('exercise swap while workout active');
         }
-        selections[`${e.templateId}|${e.roleSlotId}`] = e.exerciseId;
+        const selectedKey = `${e.templateId}|${e.roleSlotId}`;
+        if (selections[selectedKey] === e.exerciseId) fail('no-op exercise swap');
+        selections[selectedKey] = e.exerciseId;
         break;
       }
       case 'UNIT_METADATA': unitMetadata.push({ eventId: e.eventId, ordinal: e.commitOrdinal, unit: e.unit }); break;

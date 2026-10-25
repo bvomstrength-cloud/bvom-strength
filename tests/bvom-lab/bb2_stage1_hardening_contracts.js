@@ -2144,5 +2144,59 @@ check('later correction cannot criminalise historically lawful first-exposure ca
   assert.deepEqual(projected.history.map(h=>h.sessionId),['A','B']);
 });
 
+check('session-scoped global edits cannot impersonate a different BB2 template',()=>{
+  const editFields={sessionId:'active',templateId:'lower_a',scope:'GLOBAL',
+    roleSlotId:'bench',exerciseId:'barbell-bench'};
+  for(const [type,value] of [
+    ['PRESCRIPTION_EDITED',{loadG:105000,loadOrigin:origin(105000)}],
+    ['INCREMENT_EDITED',{incrementG:1250,incrementOrigin:origin(1250)}],
+    ['VARIATION_EDITED',{variation:'dumbbell-bench'}]
+  ]) {
+    const r=log();r.start('active',3);
+    r.append(type,{...editFields,...value});
+    assert.throws(()=>foldBB2Block(opening(),r.events),/session template mismatch/i,type);
+  }
+  const valid=log();valid.start('active',3);
+  valid.append('INCREMENT_EDITED',{sessionId:'active',scope:'GLOBAL',
+    roleSlotId:'bench',exerciseId:'barbell-bench',
+    incrementG:1250,incrementOrigin:origin(1250)});
+  const out=foldBB2Block(opening(),valid.events);
+  assert.equal(out.progress['upper_a|bench|barbell-bench'].incrementG,1250);
+  assert.equal(out.progress['lower_a|bench|barbell-bench'],undefined);
+});
+check('opening exercise selections reject foreign, ambiguous or empty identities',()=>{
+  for(const selections of [
+    {'bodybuilding|bench':'barbell-bench'},
+    {'upper_a|bench|extra':'barbell-bench'},
+    {'upper_a|bench':''}
+  ]) {
+    const b=opening();b.selections=selections;
+    assert.throws(()=>foldBB2Block(b,[]),/invalid opening selection/i);
+  }
+  const valid=opening();valid.selections={'upper_a|bench':'barbell-bench'};
+  assert.deepEqual(foldBB2Block(valid,[]).selections,valid.selections);
+});
+check('current-block choice events cannot forge their source block lineage',()=>{
+  const r=acceptedOffPlanJournal();
+  const withSource=structuredClone(r.events);
+  withSource.find(e=>e.eventId===r.choice.eventId).sourceBlockId='test-block';
+  assert.deepEqual(foldBB2Block(opening(),withSource).requiredConsent,[]);
+  const forged=structuredClone(withSource);
+  forged.find(e=>e.eventId===r.choice.eventId).sourceBlockId='unrelated-block';
+  assert.throws(()=>foldBB2Block(opening(),forged),/choice source block mismatch/i);
+  const replacement=acceptedOffPlanJournal();
+  linkedReplace(replacement,replacement.choice,{sourceBlockId:'unrelated-block'});
+  assert.throws(()=>foldBB2Block(opening(),replacement.events),/choice source block mismatch/i);
+});
+check('reselecting an unchanged exercise is a true no-op, not a new audit boundary',()=>{
+  const r=log();
+  r.append('EXERCISE_SWAPPED',{templateId:'upper_a',roleSlotId:'bench',
+    exerciseId:'dumbbell-bench'});
+  assert.equal(foldBB2Block(opening(),r.events).selections['upper_a|bench'],'dumbbell-bench');
+  r.append('EXERCISE_SWAPPED',{templateId:'upper_a',roleSlotId:'bench',
+    exerciseId:'dumbbell-bench'});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/no-op exercise swap/i);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);
