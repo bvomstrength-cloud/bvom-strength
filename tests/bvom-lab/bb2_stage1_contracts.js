@@ -514,4 +514,88 @@ check('fixed event-order golden: unit metadata, load/increment edits and swap re
   });
 });
 
+check('fixed correction consent plus credit golden: revoke B, KEEP A or REPLACE future', () => {
+  const b = open({ [K]: { loadG: 60000, incrementG: 2500,
+    calibrated: true, bestReps: 18, stallCount: 1, epochId: 'before-A' } });
+  const { events, add } = journal();
+  start(add, 'A', 'NORMAL', [slot('chest', 'bench', 3, 60000)]);
+  const sourceA = sets(add, 'A', 'chest', 'bench', [55000, 55000, 55000], [7, 7, 7]);
+  finish(add, 'A', 'credit-A');
+  const accepted = add('CHOICE_RESOLVED', { sourceSessionId: 'A',
+    roleSlotId: 'chest', exerciseId: 'bench', decision: 'ACCEPT', loadG: 55000 });
+  start(add, 'B', 'NORMAL', [slot('chest', 'bench', 3, 55000)]);
+  const sourceB = sets(add, 'B', 'chest', 'bench', [55000, 55000, 55000], [7, 7, 7]);
+  finish(add, 'B', 'credit-B');
+  const historical = foldBB2Block(b, events);
+  assert.deepEqual(historical.quotas, { upper_a: 2, lower_a: 0, upper_b: 0, lower_b: 0 });
+
+  // Corrected A is still creditable, and B initially reaffirms the old 55 choice.
+  const headBeforeCorrection = events.length;
+  add('SET_CORRECTED', { sessionId: 'A', targetEventId: sourceA[0].eventId,
+    reps: 7, actualG: 50000 });
+  add('SET_VOIDED', { sessionId: 'B', targetEventId: sourceB[2].eventId });
+  add('CREDIT_REVOKED', { sessionId: 'B', creditId: 'credit-B' });
+  const unresolved = foldBB2Block(b, events);
+  assert.deepEqual(unresolved.requiredConsent, [{
+    choiceEventId: accepted.eventId, sourceSessionId: 'A', key: K, valueG: 55000
+  }]);
+  const sourceJson = JSON.stringify(events);
+  assert.throws(() => commitBB2Transaction(b, events.slice(0, headBeforeCorrection),
+    events.slice(headBeforeCorrection), {
+      ownerId, blockId: 'block-a', foldRulesVersion: 1,
+      expectedHead: headBeforeCorrection, sealRevision: 0,
+      activeWorkout: false
+    }), /unresolved correction consent/i);
+  assert.equal(JSON.stringify(events), sourceJson);
+
+  const shared = {
+    ownerId, blockId: 'block-a', foldRulesVersion: 1,
+    expectedHead: headBeforeCorrection, sealRevision: 0, activeWorkout: false
+  };
+  const beforeConsent = structuredClone(events);
+  const keep = withOrigins({ type: 'CHOICE_RECLASSIFIED', eventId: 'event-17',
+    commitOrdinal: 17, blockId: 'block-a', targetEventId: accepted.eventId,
+    decision: 'KEEP_AS_MANUAL' });
+  const replace = withOrigins({ type: 'CHOICE_REPLACED', eventId: 'event-17',
+    commitOrdinal: 17, blockId: 'block-a', targetEventId: accepted.eventId,
+    sourceSessionId: 'A', roleSlotId: 'chest', exerciseId: 'bench',
+    decision: 'REPLACE', loadG: 62500 });
+  const expectedHistory = [
+    { sessionId: 'A', finishOrdinal: 5, status: 'COMPLETED_NORMAL',
+      validCount: 3, creditId: 'credit-A' },
+    { sessionId: 'B', finishOrdinal: 12, status: 'INCOMPLETE_CORRECTED',
+      validCount: 2, creditId: null }
+  ];
+  for (const [consent, expected] of [
+    [keep, { loadG: 55000, epochId: 'choice:event-7', bestReps: null, stallCount: 0 }],
+    [replace, { loadG: 62500, epochId: 'choice:event-17', bestReps: null, stallCount: 0 }]
+  ]) {
+    const finalEvents = [...beforeConsent, consent];
+    const out = foldBB2Block(b, finalEvents);
+    const transacted = commitBB2Transaction(b,
+      beforeConsent.slice(0, headBeforeCorrection),
+      finalEvents.slice(headBeforeCorrection), shared);
+    assert.deepEqual(transacted.projection, out, 'atomic projection equals independent replay');
+    assert.deepEqual({ headOrdinal: out.headOrdinal, quotas: out.quotas,
+      activeCredits: out.activeCredits, progress: {
+        loadG: out.progress[K].loadG, epochId: out.progress[K].epochId,
+        bestReps: out.progress[K].bestReps, stallCount: out.progress[K].stallCount
+      }, requiredConsent: out.requiredConsent,
+      history: out.history.map(h => ({ sessionId: h.sessionId,
+        finishOrdinal: h.finishOrdinal, status: h.status,
+        validCount: h.validCount, creditId: h.creditId }))
+    }, { headOrdinal: 17, quotas: { upper_a: 1, lower_a: 0, upper_b: 0, lower_b: 0 },
+      activeCredits: { A: 'credit-A' }, progress: expected,
+      requiredConsent: [], history: expectedHistory });
+    assert.deepEqual([out.creditLedger['credit-B'].grantOrdinal,
+      out.creditLedger['credit-B'].revokeOrdinal,
+      out.creditLedger['credit-B'].active], [13, 16, false]);
+    assert.equal(out.history[0].sets[0].actualG, 50000);
+    assert.equal(out.history[1].sets.length, 2);
+    assert.equal(finalEvents[6].loadG, 55000, 'original accepted value remains fixed');
+    assert.equal(finalEvents[6].commitOrdinal, 7, 'no backdated replacement');
+  }
+  assert.equal(keep.loadG, undefined, 'KEEP cannot introduce a duplicate load change');
+});
+
 if (!process.exitCode) process.stdout.write('BB2-STAGE1 GOLDEN: PASS\n');

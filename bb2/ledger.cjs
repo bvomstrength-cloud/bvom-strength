@@ -1089,7 +1089,8 @@ function commitBB2Transaction(opening, previousEvents, proposedEvents, guard) {
   }
   if (guard.expectedHead !== original.headOrdinal || guard.sealRevision !== original.sealRevision) fail('stale correction preview or seal');
   const retrospective = !!guard.retrospective || proposedEvents.some(e =>
-    ['SET_CORRECTED', 'SET_VOIDED', 'SESSION_VOIDED', 'CHOICE_RECLASSIFIED', 'CHOICE_REPLACED'].includes(e.type));
+    ['SET_CORRECTED', 'SET_VOIDED', 'SESSION_VOIDED', 'CHOICE_RECLASSIFIED',
+      'CHOICE_REPLACED', 'CREDIT_REVOKED', 'CREDIT_REGRANTED'].includes(e.type));
   // A missing active-workout answer is not equivalent to a verified clear.
   if (retrospective && guard.activeWorkout !== false) fail('active workout blocks correction');
   if (original.sealed && retrospective) fail('sealed block correction');

@@ -75,6 +75,28 @@ check('post-Finish correction can revoke credit without rewriting valid original
   assert.equal(projection.quotas.upper_a,0);
   assert.equal(projection.history[0].status,'INCOMPLETE_CORRECTED');
 });
+check('a standalone historical credit regrant respects the global active-workout guard',()=>{
+  const r=log();r.start('s',3);const saved=r.sets('s',3);r.finish('s');
+  r.append('CREDIT_GRANTED',{sessionId:'s',creditId:'credit-original'});
+  r.append('SET_VOIDED',{sessionId:'s',targetEventId:saved[0].eventId});
+  r.append('CREDIT_REVOKED',{sessionId:'s',creditId:'credit-original'});
+  r.append('SET_CORRECTED',{sessionId:'s',targetEventId:saved[0].eventId,reps:7});
+  const before=JSON.stringify(r.events), prior=foldBB2Block(opening(),r.events);
+  assert.equal(prior.quotas.upper_a,0);
+  const proposal={type:'CREDIT_REGRANTED',eventId:'regrant-after-recovery',
+    commitOrdinal:r.events.length+1,blockId:'test-block',sessionId:'s',creditId:'credit-restored'};
+  const token={ownerId:'test-owner',blockId:'test-block',foldRulesVersion:1,
+    expectedHead:prior.headOrdinal,sealRevision:prior.sealRevision};
+  assert.throws(()=>commitBB2Transaction(opening(),r.events,[proposal],{
+    ...token,activeWorkout:true}),/active workout blocks correction/i);
+  assert.throws(()=>commitBB2Transaction(opening(),r.events,[proposal],token),
+    /active workout blocks correction/i);
+  assert.equal(JSON.stringify(r.events),before);
+  const committed=commitBB2Transaction(opening(),r.events,[proposal],{
+    ...token,activeWorkout:false});
+  assert.equal(committed.projection.quotas.upper_a,1);
+  assert.equal(committed.projection.activeCredits.s,'credit-restored');
+});
 check('corrections cannot impersonate another slot/exercise/index',()=>{
   for(const forged of [{roleSlotId:'row'},{exerciseId:'curl'},{setIndex:1}]) {
     const r=log();r.start('s',3);const saved=r.sets('s',3);r.finish('s');
