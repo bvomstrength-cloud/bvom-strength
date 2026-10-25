@@ -400,4 +400,118 @@ check('Finish planner is idempotent and credit grants exactly once', () => {
   assert.equal(first.events.filter(e => e.type === 'CREDIT_GRANTED').length, 1);
 });
 
+check('fixed consent golden: removing both superseders needs KEEP at later ordinal without repricing A', () => {
+  const b = open(), { events, add } = journal();
+  const bench = slot('chest', 'bench', 3, 60000);
+  start(add, 'A', 'NORMAL', [bench]);
+  const a = sets(add, 'A', 'chest', 'bench', [55000, 55000, 55000], [7, 7, 7]);
+  finish(add, 'A');
+  const accepted = add('CHOICE_RESOLVED', { sourceSessionId: 'A', roleSlotId: 'chest',
+    exerciseId: 'bench', decision: 'ACCEPT', loadG: 55000 });
+  start(add, 'B', 'NORMAL', [slot('chest', 'bench', 3, 55000)]);
+  const later = sets(add, 'B', 'chest', 'bench', [55000, 55000, 55000], [7, 7, 7]);
+  finish(add, 'B');
+  add('SET_VOIDED', { sessionId: 'A', targetEventId: a[0].eventId });
+  assert.deepEqual(foldBB2Block(b, events).requiredConsent, []);
+  add('SET_VOIDED', { sessionId: 'B', targetEventId: later[0].eventId });
+  assert.deepEqual(foldBB2Block(b, events).requiredConsent, [
+    { choiceEventId: accepted.eventId, sourceSessionId: 'A',
+      key: K, valueG: 55000 }
+  ]);
+  add('CHOICE_RECLASSIFIED', { targetEventId: accepted.eventId,
+    decision: 'KEEP_AS_MANUAL' });
+  const out = foldBB2Block(b, events), p = progressAt(out);
+  assert.deepEqual({
+    headOrdinal: out.headOrdinal, quotas: out.quotas,
+    loadG: p.loadG, epochId: p.epochId,
+    calibrated: p.calibrated, bestReps: p.bestReps,
+    stallCount: p.stallCount, requiredConsent: out.requiredConsent,
+    history: out.history.map(h => ({ sessionId: h.sessionId,
+      finishOrdinal: h.finishOrdinal, status: h.status,
+      validCount: h.validCount, creditId: h.creditId }))
+  }, {
+    headOrdinal: 14, quotas: { upper_a: 0, lower_a: 0, upper_b: 0, lower_b: 0 },
+    loadG: 55000, epochId: 'choice:event-6',
+    calibrated: false, bestReps: null, stallCount: 0, requiredConsent: [],
+    history: [
+      { sessionId: 'A', finishOrdinal: 5, status: 'INCOMPLETE_CORRECTED', validCount: 2, creditId: null },
+      { sessionId: 'B', finishOrdinal: 11, status: 'INCOMPLETE_CORRECTED', validCount: 2, creditId: null }
+    ]
+  });
+  assert.equal(events.at(-1).loadG, undefined, 'KEEP is audit only, not a new weight event');
+});
+
+check('fixed credit golden: two revoke/regrant cycles preserve Finish and unique active lineage', () => {
+  const b = open(), { events, add } = journal();
+  start(add, 'A', 'NORMAL', [slot('chest', 'bench', 3, 100000)]);
+  const recorded = sets(add, 'A', 'chest', 'bench', [100000, 100000, 100000], [7, 7, 7]);
+  finish(add, 'A', 'credit-original');
+  for (let round = 1; round <= 2; round++) {
+    add('SET_VOIDED', { sessionId: 'A', targetEventId: recorded[0].eventId });
+    add('CREDIT_REVOKED', { sessionId: 'A',
+      creditId: round === 1 ? 'credit-original' : 'credit-regrant-1' });
+    add('SET_CORRECTED', { sessionId: 'A', targetEventId: recorded[0].eventId, reps: 7 });
+    add('CREDIT_REGRANTED', { sessionId: 'A', creditId: 'credit-regrant-' + round });
+  }
+  const out = foldBB2Block(b, events), p = progressAt(out);
+  assert.deepEqual({
+    headOrdinal: out.headOrdinal, quotas: out.quotas,
+    activeCredits: out.activeCredits, creditLedger: out.creditLedger,
+    loadG: p.loadG, calibrated: p.calibrated, bestReps: p.bestReps,
+    stallCount: p.stallCount,
+    history: out.history.map(h => ({ sessionId: h.sessionId,
+      finishOrdinal: h.finishOrdinal, status: h.status, creditId: h.creditId,
+      prescribedCount: h.prescribedCount, validCount: h.validCount }))
+  }, {
+    headOrdinal: 14, quotas: { upper_a: 1, lower_a: 0, upper_b: 0, lower_b: 0 },
+    activeCredits: { A: 'credit-regrant-2' },
+    creditLedger: {
+      'credit-original': { sessionId: 'A', templateId: 'upper_a', active: false,
+        grantEventId: 'event-6', grantOrdinal: 6, previousCreditId: null,
+        revokeEventId: 'event-8', revokeOrdinal: 8 },
+      'credit-regrant-1': { sessionId: 'A', templateId: 'upper_a', active: false,
+        grantEventId: 'event-10', grantOrdinal: 10, previousCreditId: 'credit-original',
+        revokeEventId: 'event-12', revokeOrdinal: 12 },
+      'credit-regrant-2': { sessionId: 'A', templateId: 'upper_a', active: true,
+        grantEventId: 'event-14', grantOrdinal: 14, previousCreditId: 'credit-regrant-1' }
+    },
+    loadG: 100000, calibrated: true, bestReps: 21, stallCount: 0,
+    history: [{ sessionId: 'A', finishOrdinal: 5, status: 'COMPLETED_NORMAL',
+      creditId: 'credit-regrant-2', prescribedCount: 3, validCount: 3 }]
+  });
+});
+
+check('fixed event-order golden: unit metadata, load/increment edits and swap retain independent effects', () => {
+  const b = open({ [K]: { loadG: 100000, incrementG: 2500,
+    calibrated: true, bestReps: 20, stallCount: 2, epochId: 'earlier-exposure' } });
+  const { events, add } = journal();
+  add('UNIT_METADATA', { unit: 'lb' });
+  add('PRESCRIPTION_EDITED', { templateId: 'upper_a', roleSlotId: 'chest',
+    exerciseId: 'bench', scope: 'GLOBAL', loadG: 105000 });
+  add('INCREMENT_EDITED', { templateId: 'upper_a', roleSlotId: 'chest',
+    exerciseId: 'bench', scope: 'GLOBAL', incrementG: 1250 });
+  add('EXERCISE_SWAPPED', { templateId: 'upper_a', roleSlotId: 'chest',
+    exerciseId: 'dumbbell-bench' });
+  add('UNIT_METADATA', { unit: 'kg' });
+  const out = foldBB2Block(b, events), p = progressAt(out);
+  assert.deepEqual({
+    headOrdinal: out.headOrdinal, quotas: out.quotas,
+    progress: { loadG: p.loadG, loadOrigin: p.loadOrigin,
+      incrementG: p.incrementG, incrementOrigin: p.incrementOrigin,
+      calibrated: p.calibrated, epochId: p.epochId,
+      bestReps: p.bestReps, stallCount: p.stallCount },
+    selections: out.selections, unitMetadata: out.unitMetadata,
+    history: out.history, pending: out.pending
+  }, {
+    headOrdinal: 5, quotas: { upper_a: 0, lower_a: 0, upper_b: 0, lower_b: 0 },
+    progress: { loadG: 105000, loadOrigin: { value: '105', unit: 'kg' },
+      incrementG: 1250, incrementOrigin: { value: '1.25', unit: 'kg' },
+      calibrated: true, epochId: 'event:event-2', bestReps: null, stallCount: 0 },
+    selections: { 'upper_a|chest': 'dumbbell-bench' },
+    unitMetadata: [{ eventId: 'event-1', ordinal: 1, unit: 'lb' },
+      { eventId: 'event-5', ordinal: 5, unit: 'kg' }],
+    history: [], pending: {}
+  });
+});
+
 if (!process.exitCode) process.stdout.write('BB2-STAGE1 GOLDEN: PASS\n');
