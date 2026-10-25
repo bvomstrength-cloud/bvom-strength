@@ -506,5 +506,80 @@ check('closed Start and lock snapshots retain an optional explicit rep floor', (
   assert.throws(() => foldBB2Block(opening(), impossible), /rep floor|range|ceiling/i);
 });
 
+
+check('restored opening progress retains fixed baseline and rejects forged types', () => {
+  const key = 'upper_a|bench|bench';
+  const b = createBB2Opening({ ownerId: 'audit-owner', blockId: 'audit-block',
+    progress: { [key]: { loadG: 100000, loadOrigin: origin(100000),
+      incrementG: 2500, incrementOrigin: origin(2500), calibrated: true,
+      bestReps: 21, stallCount: 2, epochId: 'baseline',
+      lastNormalSessionId: 'prior-session' } } });
+  const p = foldBB2Block(b, []).progress[key];
+  assert.deepEqual([p.loadG, p.calibrated, p.bestReps, p.stallCount,
+    p.epochId, p.lastNormalSessionId],
+    [100000, true, 21, 2, 'baseline', 'prior-session']);
+  const invalid = [
+    ['calibrated', 'false', /calibrated flag/],
+    ['calibrated', 1, /calibrated flag/],
+    ['epochId', { forged: true }, /progression epoch/],
+    ['lastNormalSessionId', 42, /last normal session/],
+    ['variation', 12, /progression variation/],
+    ['assistance', { band: 'heavy' }, /progression assistance/]
+  ];
+  for (const [field, value, message] of invalid) {
+    const altered = structuredClone(b);
+    altered.progress[key][field] = value;
+    assert.throws(() => foldBB2Block(altered, []), message, field);
+  }
+});
+
+check('restored opening cannot fabricate stalls without comparable rep evidence', () => {
+  const key = 'upper_a|bench|bench';
+  const b = createBB2Opening({ ownerId: 'audit-owner', blockId: 'audit-block',
+    progress: { [key]: { loadG: 100000, loadOrigin: origin(100000),
+      calibrated: true, bestReps: null, stallCount: 4 } } });
+  assert.throws(() => foldBB2Block(b, []), /stall without baseline/);
+  b.progress[key].bestReps = 21;
+  const p = foldBB2Block(b, []);
+  assert.deepEqual(p.stallSignals[key], { kind: 'OFFER', epochId: 'opening',
+    stallCount: 4, dismissed: false,
+    actions: ['REDUCE_ABOUT_10_PERCENT', 'SWAP_MOVEMENT', 'RECOVERY_SESSION'] });
+});
+
+check('orphan numeric origins cannot enter restored progress or saved plans', () => {
+  const key = 'upper_a|bench|bench';
+  const badLoad = createBB2Opening({ ownerId: 'audit-owner', blockId: 'audit-block',
+    progress: { [key]: { loadG: null, loadOrigin: origin(100000) } } });
+  assert.throws(() => foldBB2Block(badLoad, []), /orphan progress load origin/);
+  const badIncrement = createBB2Opening({ ownerId: 'audit-owner', blockId: 'audit-block',
+    progress: { [key]: { incrementOrigin: origin(2500) } } });
+  assert.throws(() => foldBB2Block(badIncrement, []), /orphan progress increment origin/);
+  const bw = { roleSlotId: 'pull', exerciseId: 'chinup', equipment: 'bodyweight',
+    sets: 1, ceiling: 12, variation: 'chinup', assistance: 'none',
+    plannedOrigin: origin(5000) };
+  const { events, add } = journal();
+  add('WORKOUT_STARTED', { sessionId: 'orphan-plan', templateId: 'upper_a',
+    kind: 'NORMAL', slots: [bw] });
+  assert.throws(() => foldBB2Block(opening(), events), /orphan planned origin/);
+  events[0].slots = [{ ...slot('bench', 60000, 1) }];
+  delete events[0].slots[0].incrementG;
+  assert.throws(() => foldBB2Block(opening(), events), /orphan increment origin/);
+});
+
+check('explicit extra-set prescribed flag cannot impersonate a gating set', () => {
+  const { events, add } = journal();
+  add('WORKOUT_STARTED', { sessionId: 'extra-flag', templateId: 'upper_a',
+    kind: 'NORMAL', slots: [slot('bench', 60000, 1)] });
+  add('EXTRA_SET_RECORDED', { sessionId: 'extra-flag', roleSlotId: 'bench',
+    exerciseId: 'bench', setIndex: 1, reps: 8, prescribed: true,
+    actualG: 60000, actualOrigin: origin(60000) });
+  add('WORKOUT_INCOMPLETE', { sessionId: 'extra-flag' });
+  assert.throws(() => foldBB2Block(opening(), events), /extra set cannot be prescribed/);
+  events[1].prescribed = false;
+  const out = foldBB2Block(opening(), events);
+  assert.deepEqual([out.quotas.upper_a, out.history[0].status,
+    out.history[0].sets[0].prescribed], [0, 'INCOMPLETE', false]);
+});
+
 if (failures) process.exitCode = 1;
 else console.log('BB2 STAGE (i) COLD AUDIT CONTRACTS: PASS');
