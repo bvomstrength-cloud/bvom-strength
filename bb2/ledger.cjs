@@ -480,6 +480,14 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
     const prior = foldBB2Block(openingSnapshot, chronologicalEvents.slice(0, ordinal - 1));
     return !!prior.progress[identity(s.templateId, slot.roleSlotId, slot.exerciseId)]?.calibrated;
   };
+  // An accepted choice can be reclassified/replaced only when an already
+  // committed correction has made that exact historical acceptance operative
+  // but invalid. Never allow an early consent event to pre-authorise some
+  // future correction. Check the original event prefix, not later evidence.
+  const requiresCorrectionConsentAt = (choiceEventId, ordinal) => {
+    const prior = foldBB2Block(openingSnapshot, chronologicalEvents.slice(0, ordinal - 1));
+    return prior.requiredConsent.some(request => request.choiceEventId === choiceEventId);
+  };
   const epoch = (p, id, nextLoad, origin = null) => { if (p.loadG !== nextLoad) {
     p.loadG = nextLoad;
     p.loadOrigin = origin ? clone(origin) : { kind: 'DERIVED', sourceEventId: id };
@@ -751,6 +759,10 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         if (s && e.sourceBlockId !== undefined && e.sourceBlockId !== opening.blockId) {
           fail('choice source block mismatch');
         }
+        if (e.type === 'CHOICE_REPLACED' &&
+            !requiresCorrectionConsentAt(e.targetEventId, e.commitOrdinal)) {
+          fail('correction-time consent not required for choice replacement');
+        }
         if (!s && e.type === 'CHOICE_RESOLVED') {
           // The source workout belongs to an already-sealed older block.
           // Its pending offer and source identity were pinned into the next
@@ -873,7 +885,12 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         delete pending[key];
         break;
       }
-      case 'CHOICE_RECLASSIFIED': break; // audit only, original choice keeps original effective ordinal
+      case 'CHOICE_RECLASSIFIED': {
+        if (!requiresCorrectionConsentAt(e.targetEventId, e.commitOrdinal)) {
+          fail('correction-time consent not required for choice reclassification');
+        }
+        break; // audit only, original choice keeps original effective ordinal
+      }
       case 'CREDIT_GRANTED':
       case 'CREDIT_REGRANTED': {
         const s = sessions.get(e.sessionId);

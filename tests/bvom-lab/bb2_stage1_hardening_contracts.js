@@ -574,8 +574,16 @@ const linkedReplace=(r,choice,overrides={})=>r.append('CHOICE_REPLACED',{
   exerciseId:'barbell-bench',decision:'REPLACE',loadG:57500,loadOrigin:origin(57500),
   ...overrides
 });
-check('explicit replacement must target exact prior accepted choice identity',()=>{
+const invalidatedAcceptedOffPlanJournal=()=>{
   const r=acceptedOffPlanJournal();
+  // Both the original source and its later qualified superseder must lose
+  // eligibility before a KEEP/REPLACE correction-time decision is needed.
+  voidSet(r,'A',r.a[0]);
+  voidSet(r,'B',r.b[0]);
+  return r;
+};
+check('explicit replacement must target exact prior accepted choice identity',()=>{
+  const r=invalidatedAcceptedOffPlanJournal();
   const replacement=linkedReplace(r,r.choice);
   const p=foldBB2Block(opening(),r.events);
   assert.equal(p.progress['upper_a|bench|barbell-bench'].loadG,57500);
@@ -596,7 +604,7 @@ check('explicit replacement must target exact prior accepted choice identity',()
   }
 });
 check('choice revision cannot be duplicated or target a non-ACCEPT decision',()=>{
-  const r=acceptedOffPlanJournal();
+  const r=invalidatedAcceptedOffPlanJournal();
   linkedReplace(r,r.choice);
   r.append('CHOICE_RECLASSIFIED',{targetEventId:r.choice.eventId,decision:'KEEP_AS_MANUAL'});
   assert.throws(()=>foldBB2Block(opening(),r.events),/duplicate choice revision/);
@@ -605,7 +613,7 @@ check('choice revision cannot be duplicated or target a non-ACCEPT decision',()=
   assert.throws(()=>foldBB2Block(opening(),first.events),/choice revision must target a prior ACCEPT/);
 });
 check('choice reclassification cannot be reused to suppress consent twice',()=>{
-  const r=acceptedOffPlanJournal();
+  const r=invalidatedAcceptedOffPlanJournal();
   r.append('CHOICE_RECLASSIFIED',{targetEventId:r.choice.eventId,decision:'KEEP_AS_MANUAL'});
   const first=foldBB2Block(opening(),r.events);
   assert.deepEqual(first.requiredConsent,[]);
@@ -2196,6 +2204,20 @@ check('reselecting an unchanged exercise is a true no-op, not a new audit bounda
   r.append('EXERCISE_SWAPPED',{templateId:'upper_a',roleSlotId:'bench',
     exerciseId:'dumbbell-bench'});
   assert.throws(()=>foldBB2Block(opening(),r.events),/no-op exercise swap/i);
+});
+check('KEEP-as-manual and REPLACE cannot pre-authorise a future source correction',()=>{
+  for(const type of ['CHOICE_RECLASSIFIED','CHOICE_REPLACED']) {
+    const r=acceptedOffPlanJournal();
+    if(type==='CHOICE_RECLASSIFIED') {
+      r.append(type,{targetEventId:r.choice.eventId,decision:'KEEP_AS_MANUAL'});
+    } else linkedReplace(r,r.choice);
+    assert.throws(()=>foldBB2Block(opening(),r.events),/correction-time consent not required/i,type);
+    // A future correction cannot make the earlier forged consent legitimate.
+    voidSet(r,'A',r.a[0]);
+    voidSet(r,'B',r.b[0]);
+    assert.throws(()=>foldBB2Block(opening(),r.events),/correction-time consent not required/i,
+      type+' before later invalidation');
+  }
 });
 
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
