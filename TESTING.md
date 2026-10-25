@@ -151,7 +151,9 @@ The gate runs, in order:
 1. static
 2. behaviour
 3. sequence
-4. isolated BB2 Stage (i) golden contracts (`bb2_stage1_contracts.js`)
+4. isolated BB2 Stage (i) golden contracts (`bb2_stage1_contracts.js`),
+   hardening contracts and independent cold-audit regressions
+   (`bb2_stage1_cold_audit_contracts.js`)
 5. mutation + known-bad reference
 
 BB2's independent contract tier checks original numeric-entry provenance alongside

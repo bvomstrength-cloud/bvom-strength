@@ -7,6 +7,7 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),
 const root=path.resolve(__dirname,'../..');
 const src=fs.readFileSync(path.join(root,'bb2/ledger.cjs'),'utf8');
 const contract=fs.readFileSync(path.join(__dirname,'bb2_stage1_hardening_contracts.js'),'utf8');
+const coldContract=fs.readFileSync(path.join(__dirname,'bb2_stage1_cold_audit_contracts.js'),'utf8');
 const faults=[
   {name:'ALLOW-BELOW-GATE',from:"if (s.outcome === 'FINISH' && sessionEligible(s) && originalValidCount < minimumValid)",
     to:"if (false && s.outcome === 'FINISH' && sessionEligible(s) && originalValidCount < minimumValid)"},
@@ -298,7 +299,28 @@ const faults=[
     to:"effectiveSlots: clone(s.initialSlots),"},
   {name:'IGNORE-TAMPERED-SEALED-SELECTIONS',
     from:"!sameCanonicalValue(previousProjection.selections, closing.selections) ||",
-    to:"false ||"}
+    to:"false ||"},
+  {name:'REPLAY-CALIBRATION-PREFIX-WITHOUT-CACHE',suite:'cold',timeout:6000,
+    from:'if (!prefixCache.has(length)) {',to:'if (true) {'},
+  {name:'REJECT-QUALITATIVE-BODYWEIGHT-ACCEPTANCE',suite:'cold',
+    from:"if (e.addedWeightG !== undefined) integer(e.addedWeightG, 'added bodyweight grams');",
+    to:"integer(e.addedWeightG, 'added bodyweight grams');"},
+  {name:'REJECT-QUALITATIVE-CARRIED-ACCEPTANCE',suite:'cold',
+    from:"if (e.addedWeightG !== undefined) integer(e.addedWeightG, 'accepted carried added weight');",
+    to:"integer(e.addedWeightG, 'accepted carried added weight');"},
+  {name:'SUPPRESS-SAME-LOAD-REPLACE-EPOCH',suite:'cold',
+    from:"e.decision === 'REPLACE');",to:'false);'},
+  {name:'ALLOW-RESTORED-REGRANT-DURING-ACTIVE-WORKOUT',suite:'cold',
+    from:"if ([...sessions.values()].some(x => !x.outcome)) {\n          fail('active workout blocks historical credit change');",
+    to:"if (false) {\n          fail('active workout blocks historical credit change');"},
+  {name:'ACCEPT-UNKNOWN-EVENT-FIELD',suite:'cold',
+    from:"if (e.type !== 'TOMBSTONE') {",to:'if (false) {'},
+  {name:'ACCEPT-UNKNOWN-SLOT-FIELD',suite:'cold',
+    from:'const allowed = new Set(names);',
+    to:"const allowed = new Set([...names, 'injectedPrescription', 'unrecognisedRepFloor', 'unexpectedFuturePayload', 'injected']);"},
+  {name:'LOSE-DERIVED-LOAD-SOURCE-ON-UNIT-RESUBMISSION',suite:'cold',
+    from:'const savedOrigin = original.origin ||',
+    to:'const savedOrigin = false && original.origin ||'}
 ];
 let killed=0;
 for(const fault of faults) {
@@ -307,10 +329,11 @@ for(const fault of faults) {
   try {
     fs.mkdirSync(path.join(dir,'bb2'));fs.mkdirSync(path.join(dir,'tests/bvom-lab'),{recursive:true});
     fs.writeFileSync(path.join(dir,'bb2/ledger.cjs'),src.replace(fault.from,fault.to));
-    fs.writeFileSync(path.join(dir,'tests/bvom-lab/bb2_stage1_hardening_contracts.js'),contract);
-    const run=cp.spawnSync(process.execPath,[path.join(dir,'tests/bvom-lab/bb2_stage1_hardening_contracts.js')],{
-      cwd:dir,encoding:'utf8',timeout:30000});
-    if(run.error) throw run.error;
+    const suiteFile=fault.suite==='cold'?'bb2_stage1_cold_audit_contracts.js':'bb2_stage1_hardening_contracts.js';
+    fs.writeFileSync(path.join(dir,'tests/bvom-lab',suiteFile),fault.suite==='cold'?coldContract:contract);
+    const run=cp.spawnSync(process.execPath,[path.join(dir,'tests/bvom-lab',suiteFile)],{
+      cwd:dir,encoding:'utf8',timeout:fault.timeout||30000});
+    if(run.error && run.error.code!=='ETIMEDOUT') throw run.error;
     if(run.status!==0) {killed++;console.log('KILLED BB2 '+fault.name);}
     else {console.error('SURVIVED BB2 '+fault.name);}
   } finally { fs.rmSync(dir,{recursive:true,force:true}); }

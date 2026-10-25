@@ -1,0 +1,210 @@
+// Independent-review regressions for BB2 Stage (i), Rev 3.5.1.
+// Run: node tests/bvom-lab/bb2_stage1_cold_audit_contracts.js
+'use strict';
+const assert = require('node:assert/strict');
+const { performance } = require('node:perf_hooks');
+const { EVENT_TYPES, createBB2Opening, foldBB2Block, createNextBB2Opening,
+  resolveNumericSubmission } = require('../../bb2/ledger.cjs');
+
+const origin = grams => ({ value: String(grams / 1000), unit: 'kg' });
+const opening = () => createBB2Opening({ ownerId: 'audit-owner', blockId: 'audit-block' });
+const slot = (name, plannedG = 60000, sets = 3) => ({
+  roleSlotId: name, exerciseId: name, equipment: 'loaded', sets, ceiling: 8,
+  plannedG, plannedOrigin: origin(plannedG), incrementG: 2500,
+  incrementOrigin: origin(2500)
+});
+const journal = () => {
+  const events = [];
+  const add = (type, fields = {}) => {
+    const event = { type, eventId: 'audit-' + (events.length + 1),
+      commitOrdinal: events.length + 1, blockId: 'audit-block', ...fields };
+    events.push(event);
+    return event;
+  };
+  return { events, add };
+};
+let failures = 0;
+function check(name, callback) {
+  try { callback(); console.log('PASS BB2-COLD ' + name); }
+  catch (error) { failures++; console.error('FAIL BB2-COLD ' + name + ': ' + error.stack); }
+}
+
+check('22 calibration choices complete within a bounded prefix-replay budget', () => {
+  const { events, add } = journal();
+  const slots = Array.from({ length: 22 }, (_, i) => slot('movement-' + i, 60000, 1));
+  add('WORKOUT_STARTED', { sessionId: 'first-exposure', templateId: 'upper_a', kind: 'NORMAL', slots });
+  for (const s of slots) {
+    add('SET_RECORDED', { sessionId: 'first-exposure', roleSlotId: s.roleSlotId,
+      exerciseId: s.exerciseId, setIndex: 0, reps: 7, prescribed: true,
+      actualG: 60000, actualOrigin: origin(60000) });
+    add('CALIBRATION_ACCEPTED', { sessionId: 'first-exposure',
+      roleSlotId: s.roleSlotId, exerciseId: s.exerciseId,
+      loadG: 60000, loadOrigin: origin(60000) });
+  }
+  add('WORKOUT_FINISHED', { sessionId: 'first-exposure' });
+  const before = performance.now();
+  const first = foldBB2Block(opening(), events);
+  const elapsed = performance.now() - before;
+  assert.ok(elapsed < 8000, 'prefix replay exceeded 8-second CI budget: ' + elapsed);
+  assert.equal(Object.values(first.progress).filter(p => p.calibrated).length, 22);
+  assert.deepEqual(foldBB2Block(opening(), events), first);
+});
+
+check('qualitative bodyweight difficulty acceptance never fabricates zero grams', () => {
+  const { events, add } = journal();
+  const bodyweight = { roleSlotId: 'pull', exerciseId: 'chinup', equipment: 'bodyweight',
+    sets: 1, ceiling: 8, variation: 'chinup', assistance: 'heavy-band' };
+  for (const id of ['first', 'second']) {
+    add('WORKOUT_STARTED', { sessionId: id, templateId: 'upper_a', kind: 'NORMAL',
+      slots: [bodyweight] });
+    add('SET_RECORDED', { sessionId: id, roleSlotId: 'pull', exerciseId: 'chinup',
+      setIndex: 0, reps: 8, variation: 'chinup', assistance: 'heavy-band', prescribed: true });
+    add('WORKOUT_FINISHED', { sessionId: id });
+  }
+  assert.equal(foldBB2Block(opening(), events).pending['upper_a|pull|chinup'].kind, 'DIFFICULTY');
+  const acceptance = add('CHOICE_RESOLVED', { sourceSessionId: 'second',
+    roleSlotId: 'pull', exerciseId: 'chinup', decision: 'DIFFICULTY_ACCEPT',
+    variation: 'chinup', assistance: 'light-band' });
+  const explicitlyLoaded = structuredClone(events);
+  explicitlyLoaded.at(-1).addedWeightG = 5000;
+  explicitlyLoaded.at(-1).addedWeightOrigin = origin(5000);
+  assert.equal(foldBB2Block(opening(), explicitlyLoaded).progress['upper_a|pull|chinup'].loadG,
+    5000, 'a consciously chosen added load must remain expressible');
+  const result = foldBB2Block(opening(), events);
+  assert.equal(result.progress['upper_a|pull|chinup'].loadG, null);
+  assert.equal(result.progress['upper_a|pull|chinup'].loadOrigin, null);
+  assert.equal(result.progress['upper_a|pull|chinup'].epochId, 'choice:' + acceptance.eventId);
+  assert.equal(result.progress['upper_a|pull|chinup'].assistance, 'light-band');
+  add('WORKOUT_STARTED', { sessionId: 'third', templateId: 'upper_a', kind: 'NORMAL',
+    slots: [{ ...bodyweight, assistance: 'light-band' }] });
+  add('SET_RECORDED', { sessionId: 'third', roleSlotId: 'pull', exerciseId: 'chinup',
+    setIndex: 0, reps: 7, variation: 'chinup', assistance: 'light-band', prescribed: true });
+  add('WORKOUT_FINISHED', { sessionId: 'third' });
+  const after = foldBB2Block(opening(), events).progress['upper_a|pull|chinup'];
+  assert.equal(after.loadG, null);
+  assert.equal(after.epochId, 'choice:' + acceptance.eventId,
+    'qualitative follow-up must not invent a different load epoch');
+});
+
+check('REPLACE confirming equal grams resets comparable epoch and performance', () => {
+  const { events, add } = journal();
+  add('WORKOUT_STARTED', { sessionId: 'source', templateId: 'upper_a', kind: 'NORMAL',
+    slots: [slot('bench')] });
+  const records = Array.from({ length: 3 }, (_, index) => add('SET_RECORDED', {
+    sessionId: 'source', roleSlotId: 'bench', exerciseId: 'bench', setIndex: index,
+    reps: 7, prescribed: true, actualG: 55000, actualOrigin: origin(55000)
+  }));
+  add('WORKOUT_FINISHED', { sessionId: 'source' });
+  const accepted = add('CHOICE_RESOLVED', { sourceSessionId: 'source', roleSlotId: 'bench',
+    exerciseId: 'bench', decision: 'ACCEPT', loadG: 55000, loadOrigin: origin(55000) });
+  add('SET_CORRECTED', { sessionId: 'source', targetEventId: records[0].eventId,
+    reps: 7, actualG: 50000, actualOrigin: origin(50000) });
+  assert.deepEqual(foldBB2Block(opening(), events).requiredConsent.map(x => x.choiceEventId),
+    [accepted.eventId]);
+  const replaced = add('CHOICE_REPLACED', { targetEventId: accepted.eventId,
+    sourceSessionId: 'source', roleSlotId: 'bench', exerciseId: 'bench',
+    decision: 'REPLACE', loadG: 55000, loadOrigin: origin(55000) });
+  const result = foldBB2Block(opening(), events);
+  const p = result.progress['upper_a|bench|bench'];
+  assert.deepEqual(result.requiredConsent, []);
+  assert.deepEqual([p.loadG, p.epochId, p.bestReps, p.stallCount],
+    [55000, 'choice:' + replaced.eventId, null, 0]);
+});
+
+check('restored credit regrant cannot be posted during another active workout', () => {
+  const { events, add } = journal();
+  add('WORKOUT_STARTED', { sessionId: 'A', templateId: 'upper_a', kind: 'NORMAL',
+    slots: [slot('bench')] });
+  const recorded = Array.from({ length: 3 }, (_, i) => add('SET_RECORDED', {
+    sessionId: 'A', roleSlotId: 'bench', exerciseId: 'bench', setIndex: i,
+    reps: 7, prescribed: true, actualG: 60000, actualOrigin: origin(60000) }));
+  add('WORKOUT_FINISHED', { sessionId: 'A' });
+  add('CREDIT_GRANTED', { sessionId: 'A', creditId: 'credit-A' });
+  add('SET_VOIDED', { sessionId: 'A', targetEventId: recorded[0].eventId });
+  add('CREDIT_REVOKED', { sessionId: 'A', creditId: 'credit-A' });
+  add('SET_CORRECTED', { sessionId: 'A', targetEventId: recorded[0].eventId, reps: 7 });
+  add('WORKOUT_STARTED', { sessionId: 'B', templateId: 'upper_b', kind: 'NORMAL',
+    slots: [slot('bench')] });
+  add('CREDIT_REGRANTED', { sessionId: 'A', creditId: 'credit-A-new' });
+  assert.throws(() => foldBB2Block(opening(), events), /active workout.*credit|credit.*active workout/i);
+});
+
+check('unknown event and slot fields are rejected rather than silently persisted', () => {
+  const { events, add } = journal();
+  add('WORKOUT_STARTED', { sessionId: 'A', templateId: 'upper_a', kind: 'NORMAL',
+    slots: [slot('bench')] });
+  const unknownEvent = structuredClone(events);
+  unknownEvent[0].injectedPrescription = 5;
+  assert.throws(() => foldBB2Block(opening(), unknownEvent), /unknown|unsupported|unexpected/i);
+  const unknownSlot = structuredClone(events);
+  unknownSlot[0].slots[0].unrecognisedRepFloor = 1;
+  assert.throws(() => foldBB2Block(opening(), unknownSlot), /unknown|unsupported|unexpected/i);
+  for (const type of EVENT_TYPES) {
+    const probe = [{ type, eventId: 'probe', commitOrdinal: 1,
+      blockId: 'audit-block', ...(type === 'TOMBSTONE' ? { discardedSessionId: 'lost' } : {}),
+      unexpectedFuturePayload: true }];
+    assert.throws(() => foldBB2Block(opening(), probe),
+      /unknown|unsupported|unexpected|tombstone cannot retain/i, type);
+  }
+  const unknownMassOrigin = structuredClone(events);
+  unknownMassOrigin[0].slots[0].plannedOrigin.injected = 'future';
+  assert.throws(() => foldBB2Block(opening(), unknownMassOrigin), /unknown.*origin.*field/i);
+});
+
+check('unchanged displayed earned weights inherit source-event provenance', () => {
+  const derived = { grams: 102500, displayed: '226', unit: 'lb',
+    origin: { kind: 'DERIVED', sourceEventId: 'finish-A' } };
+  for (const intent of ['PRESCRIPTION', 'ACTUAL', 'INCREMENT']) {
+    assert.deepEqual(resolveNumericSubmission(derived, '226', 'lb', intent), {
+      grams: 102500, origin: { kind: 'DERIVED', sourceEventId: 'finish-A' },
+      inherited: true, emitEvent: false
+    });
+  }
+  assert.deepEqual(resolveNumericSubmission(derived, '226', 'lb', 'DIFFERENT_ACTUAL'), {
+    grams: 102512, origin: { value: '226', unit: 'lb' },
+    inherited: false, emitEvent: true
+  });
+});
+
+check('sealed qualitative difficulty carries to next block without invented grams', () => {
+  const { events, add } = journal();
+  const bodyweight = { roleSlotId: 'pull', exerciseId: 'chinup', equipment: 'bodyweight',
+    sets: 1, ceiling: 8, variation: 'chinup', assistance: 'heavy-band' };
+  for (const templateId of ['upper_a', 'lower_a', 'upper_b', 'lower_b']) {
+    for (let i = 0; i < 8; i++) {
+      const sessionId = templateId + '-' + i;
+      const bw = templateId === 'upper_a';
+      const s = bw ? bodyweight : slot('movement');
+      add('WORKOUT_STARTED', { sessionId, templateId, kind: 'NORMAL', slots: [s] });
+      for (let index = 0; index < s.sets; index++) {
+        add('SET_RECORDED', { sessionId, roleSlotId: s.roleSlotId, exerciseId: s.exerciseId,
+          setIndex: index, reps: bw && i === 7 ? 8 : 7, prescribed: true,
+          ...(bw ? { variation: 'chinup', assistance: 'heavy-band' } :
+            { actualG: 60000, actualOrigin: origin(60000) }) });
+      }
+      add('WORKOUT_FINISHED', { sessionId });
+      add('CREDIT_GRANTED', { sessionId, creditId: 'credit-' + sessionId });
+    }
+  }
+  add('BLOCK_SEALED', { sealId: 'qualitative-seal' });
+  const sealed = foldBB2Block(opening(), events);
+  assert.equal(sealed.closingSnapshot.pending['upper_a|pull|chinup'].kind, 'DIFFICULTY');
+  assert.equal(sealed.closingSnapshot.pending['upper_a|pull|chinup'].addedWeightG, undefined);
+  const next = createNextBB2Opening(sealed, 'next-block');
+  const decision = { type: 'CHOICE_RESOLVED', eventId: 'carried-accept', commitOrdinal: 1,
+    blockId: 'next-block', sourceBlockId: 'audit-block', sourceSessionId: 'upper_a-7',
+    roleSlotId: 'pull', exerciseId: 'chinup', decision: 'DIFFICULTY_ACCEPT',
+    variation: 'chinup', assistance: 'light-band' };
+  const accepted = foldBB2Block(next, [decision]);
+  const p = accepted.progress['upper_a|pull|chinup'];
+  assert.deepEqual([p.loadG, p.loadOrigin, p.assistance, p.epochId],
+    [null, null, 'light-band', 'choice:carried-accept']);
+  assert.deepEqual(accepted.pending, {});
+  const loadedDecision = { ...decision, addedWeightG: 5000,
+    addedWeightOrigin: origin(5000) };
+  assert.equal(foldBB2Block(next, [loadedDecision]).progress['upper_a|pull|chinup'].loadG,
+    5000, 'a next-block qualitative offer can be accepted with explicit added load');
+});
+
+if (failures) process.exitCode = 1;
+else console.log('BB2 STAGE (i) COLD AUDIT CONTRACTS: PASS');

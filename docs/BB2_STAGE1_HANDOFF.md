@@ -27,3 +27,18 @@
 ## First development checkpoint
 
 Start with tests covering the **closed event inventory** and the **pure fold contract**, before wiring persistence or UI. Produce a draft PR with focused tests, exact source baseline, a full gate and independent review. **Stop before merging to `main`.**
+
+## Claude independent cold audit — 25 October 2026 (re-audit requested)
+
+Claude read Rev 3.5.1 but only the first ~1,000 lines of the pinned ledger; the remaining seal/transaction code and complete tests were inaccessible. Its **HOLD was a verification hold, not a verified release regression**. It identified issues that were reproduced with new local failing contracts before repair:
+
+- Repeated historical prefix folds caused exponential calibration replay. A single top-level fold now memoises its exact historical prefixes, without caching between changed event streams.
+- Unknown event/slot/origin fields previously passed validation. v1 has per-event closed payload fields, including immutable numeric-origin keys.
+- Qualitative bodyweight DIFFICULTY_ACCEPT now records variation/assistance without made-up grams; an explicitly chosen added load remains permitted. Test both current-block and sealed-to-next-block offers.
+- REPLACE explicitly starts a fresh comparable epoch even when it confirms the same canonical grams.
+- Restored credit grant/revoke/regrant events cannot modify older quota credits while another session is active, matching the transaction guard.
+- Displayed unchanged earned loads can inherit `{kind:'DERIVED', sourceEventId}` without inventing an original typed weight.
+
+These cases are covered in `tests/bvom-lab/bb2_stage1_cold_audit_contracts.js` and included in the Lab gate and mutation harness. Existing goldens, hardening and replay-performance checks remain required. **Stage (i) is still unmerged and not yet approved to begin Stage (ii)** pending a truly complete source/spec cold re-audit of the latest exact candidate.
+
+Items for Stage (ii) contract review rather than changes to the Stage (i) replay schema: persist the pre-Start optional-curls selection in the versioned setup catalogue; validate new Starts against that catalogue and computed prescribed ranges/denominators while preserving legal historical plan snapshots; and define the integration-side stable finish/commit idempotence key. `planBB2Finish` already treats duplicate Finish calls as no-ops, while the fold deliberately refuses duplicate imported Finish events. Loaded zero-gram actuals are currently permitted by the canonical nonnegative mass rule; confirm UI equipment constraints before enabling user input.

@@ -22,6 +22,59 @@ const TYPES = new Set(EVENT_TYPES);
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const clone = x => JSON.parse(JSON.stringify(x));
 const fail = message => { throw new Error(`BB2: ${message}`); };
+// Closed v1 payloads: imported/restored events may not smuggle unrecognised
+// training inputs into saved session plans or future versioned projections.
+const EVENT_FIELDS = Object.freeze({
+  BLOCK_CREATED: ['ownerId', 'schemaVersion', 'foldRulesVersion', 'openingSnapshotVersion'],
+  BLOCK_SEALED: ['sealId'],
+  WORKOUT_STARTED: ['sessionId', 'templateId', 'kind', 'slots'],
+  EXERCISE_LOCKED: ['sessionId', 'roleSlotId', 'exerciseId', 'plannedG', 'plannedOrigin',
+    'incrementG', 'incrementOrigin', 'equipment', 'sets', 'ceiling', 'variation', 'assistance'],
+  CALIBRATION_PLAN_REVISED: ['sessionId', 'roleSlotId', 'exerciseId', 'plannedG', 'plannedOrigin'],
+  CALIBRATION_ACCEPTED: ['sessionId', 'roleSlotId', 'exerciseId', 'loadG', 'loadOrigin'],
+  SET_RECORDED: ['sessionId', 'roleSlotId', 'exerciseId', 'setIndex', 'reps', 'prescribed',
+    'actualG', 'actualOrigin', 'variation', 'assistance', 'harderThanIntended'],
+  EXTRA_SET_RECORDED: ['sessionId', 'roleSlotId', 'exerciseId', 'setIndex', 'reps', 'prescribed',
+    'actualG', 'actualOrigin', 'variation', 'assistance', 'harderThanIntended'],
+  SET_CORRECTED: ['sessionId', 'targetEventId', 'roleSlotId', 'exerciseId', 'setIndex',
+    'reps', 'actualG', 'actualOrigin', 'variation', 'assistance', 'harderThanIntended'],
+  SET_VOIDED: ['sessionId', 'targetEventId', 'roleSlotId', 'exerciseId', 'setIndex'],
+  WORKOUT_FINISHED: ['sessionId'],
+  WORKOUT_INCOMPLETE: ['sessionId'],
+  WORKOUT_DISCARDED: ['sessionId'],
+  SESSION_VOIDED: ['sessionId'],
+  CHOICE_RESOLVED: ['sourceSessionId', 'sourceBlockId', 'roleSlotId', 'exerciseId',
+    'decision', 'loadG', 'loadOrigin', 'variation', 'assistance',
+    'addedWeightG', 'addedWeightOrigin'],
+  CHOICE_RECLASSIFIED: ['targetEventId', 'decision'],
+  CHOICE_REPLACED: ['targetEventId', 'sourceSessionId', 'sourceBlockId',
+    'roleSlotId', 'exerciseId', 'decision', 'loadG', 'loadOrigin',
+    'variation', 'assistance'],
+  PRESCRIPTION_EDITED: ['sessionId', 'templateId', 'roleSlotId', 'exerciseId',
+    'scope', 'loadG', 'loadOrigin'],
+  INCREMENT_EDITED: ['sessionId', 'templateId', 'roleSlotId', 'exerciseId',
+    'scope', 'incrementG', 'incrementOrigin'],
+  VARIATION_EDITED: ['sessionId', 'templateId', 'roleSlotId', 'exerciseId',
+    'scope', 'variation', 'assistance'],
+  EXERCISE_SWAPPED: ['templateId', 'roleSlotId', 'exerciseId'],
+  STALL_REDUCTION_ACCEPTED: ['sessionId', 'templateId', 'roleSlotId', 'exerciseId',
+    'scope', 'loadG', 'loadOrigin', 'offerEpochId', 'offerStallCount'],
+  UNIT_METADATA: ['unit'],
+  CREDIT_GRANTED: ['sessionId', 'creditId'],
+  CREDIT_REVOKED: ['sessionId', 'creditId'],
+  CREDIT_REGRANTED: ['sessionId', 'creditId'],
+  HISTORY_HIDDEN: ['sessionId'],
+  HISTORY_UNHIDDEN: ['sessionId'],
+  NOTE_EDITED: ['sessionId', 'text'],
+  STALL_OFFER_DISMISSED: ['templateId', 'roleSlotId', 'exerciseId', 'epochId', 'stallCount'],
+  TOMBSTONE: ['discardedSessionId']
+});
+const onlyFields = (object, names, context) => {
+  const allowed = new Set(names);
+  for (const key of Object.keys(object)) if (!allowed.has(key)) {
+    fail(`unknown ${context} field: ${key}`);
+  }
+};
 // Backup and JSONB object key order is not a training-state mutation.
 // Compare JSON values structurally, preserving array order and exact scalars.
 const sameCanonicalValue = (a, b) => {
@@ -73,28 +126,35 @@ function sameDecimal(a, b) {
 function validateMassOrigin(grams, origin, name, allowDerived = false) {
   integer(grams, `${name} grams`);
   if (allowDerived && origin?.kind === 'DERIVED') {
+    onlyFields(origin, ['kind', 'sourceEventId'], `${name} origin`);
     positiveId(origin.sourceEventId, `${name} derived source`);
   } else if (!origin || typeof origin.value !== 'string' ||
     !['kg', 'lb'].includes(origin.unit) || canonicalGrams(origin.value, origin.unit) !== grams) {
     fail(`invalid ${name} origin`);
+  } else {
+    onlyFields(origin, ['value', 'unit'], `${name} origin`);
   }
   return clone(origin);
 }
 function resolveNumericSubmission(original, submitted, unit, intent) {
   if (!['PRESCRIPTION', 'ACTUAL', 'DIFFERENT_ACTUAL', 'INCREMENT'].includes(intent)) fail('invalid numeric intent');
   if (!original || !Number.isSafeInteger(original.grams)) fail('invalid canonical origin');
-  validateMassOrigin(original.grams,
-    { value: String(original.originalValue), unit: original.originalUnit }, 'canonical');
+  // A calculated future load has DERIVED provenance, not a fictional typed
+  // decimal. The UI can pass the saved origin object directly, while older
+  // entered-load callers retain their originalValue/originalUnit interface.
+  const savedOrigin = original.origin ||
+    { value: String(original.originalValue), unit: original.originalUnit };
+  validateMassOrigin(original.grams, savedOrigin, 'canonical', true);
   if (intent !== 'DIFFERENT_ACTUAL' && unit === original.unit && sameDecimal(submitted, original.displayed)) {
     return { grams: original.grams,
-      origin: { value: String(original.originalValue), unit: original.originalUnit },
+      origin: clone(savedOrigin),
       inherited: true, emitEvent: false };
   }
   if (intent === 'ACTUAL') fail('different actual requires explicit different-actual control');
   const grams = canonicalGrams(submitted, unit);
   const unchanged = (intent === 'PRESCRIPTION' || intent === 'INCREMENT') && grams === original.grams;
   return { grams: unchanged ? original.grams : grams,
-    origin: unchanged ? { value: String(original.originalValue), unit: original.originalUnit } :
+    origin: unchanged ? clone(savedOrigin) :
       { value: String(submitted), unit },
     inherited: unchanged, emitEvent: !unchanged };
 }
@@ -174,6 +234,12 @@ function validateOpening(opening) {
   }
 }
 function validateEventPayload(e) {
+  // Keep the established privacy-specific Tombstone error for restored
+  // evidence, while the existing Tombstone branch enforces the same key set.
+  if (e.type !== 'TOMBSTONE') {
+    onlyFields(e, ['type', 'eventId', 'commitOrdinal', 'blockId', ...EVENT_FIELDS[e.type]],
+      `${e.type} event`);
+  }
   const mass = (name, field, originField) => validateMassOrigin(e[field], e[originField], name);
   switch (e.type) {
     case 'WORKOUT_STARTED':
@@ -337,6 +403,9 @@ function initialProgress(v = {}, plan = {}) {
   return p;
 }
 function validateSlot(s) {
+  onlyFields(s, ['roleSlotId', 'exerciseId', 'sets', 'ceiling', 'equipment',
+    'plannedG', 'plannedOrigin', 'incrementG', 'incrementOrigin',
+    'variation', 'assistance'], 'workout slot');
   positiveId(s.roleSlotId, 'slot'); positiveId(s.exerciseId, 'exercise');
   integer(s.sets, 'prescribed set count', 1); integer(s.ceiling, 'rep ceiling', 1);
   if (s.equipment !== 'loaded' && s.equipment !== 'bodyweight') fail('invalid equipment');
@@ -425,7 +494,23 @@ function effectiveRevisions(events) {
   return { records, voidSessions };
 }
 function foldBB2Block(openingSnapshot, chronologicalEvents) {
+  // Every top-level replay owns its prefix cache: never reuse a cached result
+  // across distinct corrected event streams, even when their lengths match.
+  return foldBB2BlockCached(openingSnapshot, chronologicalEvents, new Map());
+}
+function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
   validateOpening(openingSnapshot); validateEvents(openingSnapshot, chronologicalEvents);
+  // Historical legality must be checked against the exact original prefix.
+  // Without shared memoisation, nested prefix checks recursively revisit the
+  // same earlier calibrations/consents and grow exponentially.
+  const replayBefore = ordinal => {
+    const length = ordinal - 1;
+    if (!prefixCache.has(length)) {
+      prefixCache.set(length, foldBB2BlockCached(openingSnapshot,
+        chronologicalEvents.slice(0, length), prefixCache));
+    }
+    return prefixCache.get(length);
+  };
   const opening = clone(openingSnapshot);
   const { records, voidSessions } = effectiveRevisions(chronologicalEvents);
   const progress = Object.fromEntries(Object.entries(opening.progress).map(([k, v]) => [k, initialProgress(v)]));
@@ -477,7 +562,7 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
   // when originally recorded. Evaluate the original event prefix, not the
   // final retrospectively corrected projection.
   const hasPriorCalibrationAt = (s, slot, ordinal) => {
-    const prior = foldBB2Block(openingSnapshot, chronologicalEvents.slice(0, ordinal - 1));
+    const prior = replayBefore(ordinal);
     return !!prior.progress[identity(s.templateId, slot.roleSlotId, slot.exerciseId)]?.calibrated;
   };
   // An accepted choice can be reclassified/replaced only when an already
@@ -485,12 +570,13 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
   // but invalid. Never allow an early consent event to pre-authorise some
   // future correction. Check the original event prefix, not later evidence.
   const requiresCorrectionConsentAt = (choiceEventId, ordinal) => {
-    const prior = foldBB2Block(openingSnapshot, chronologicalEvents.slice(0, ordinal - 1));
+    const prior = replayBefore(ordinal);
     return prior.requiredConsent.some(request => request.choiceEventId === choiceEventId);
   };
-  const epoch = (p, id, nextLoad, origin = null) => { if (p.loadG !== nextLoad) {
+  const epoch = (p, id, nextLoad, origin = null, force = false) => { if (force || p.loadG !== nextLoad) {
     p.loadG = nextLoad;
-    p.loadOrigin = origin ? clone(origin) : { kind: 'DERIVED', sourceEventId: id };
+    p.loadOrigin = nextLoad === null ? null :
+      (origin ? clone(origin) : { kind: 'DERIVED', sourceEventId: id });
     p.epochId = id; p.bestReps = null; p.stallCount = 0;
   } };
   const boundary = (key, ordinal, kind) => boundaries.push({ key, ordinal, kind });
@@ -528,8 +614,7 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
             // committed must not be invalidated by that later correction.
             // Evaluate the offer using the ledger prefix at this Start's
             // original ordinal; new Starts still see today's unresolved offer.
-            const historical = foldBB2Block(openingSnapshot,
-              chronologicalEvents.slice(0, e.commitOrdinal - 1));
+            const historical = replayBefore(e.commitOrdinal);
             if (historical.pending[key]) fail('unresolved choice blocks same exercise');
           }
         }
@@ -607,8 +692,7 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
           // A stalled-weight acceptance is not a generic manual weight edit.
           // Prove that an offer existed at the exact ordinal of acceptance,
           // so a later correction cannot erase a legitimate user decision.
-          const prior = foldBB2Block(openingSnapshot,
-            chronologicalEvents.slice(0, e.commitOrdinal - 1));
+          const prior = replayBefore(e.commitOrdinal);
           const offered = prior.stallSignals[key];
           const previousLoad = prior.progress[key]?.loadG;
           if (!offered || offered.kind !== 'OFFER' || offered.dismissed ||
@@ -805,10 +889,13 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
             if (e.decision === 'DIFFICULTY_ACCEPT') {
               positiveId(e.variation, 'accepted carried difficulty variation');
               if (typeof e.assistance !== 'string') fail('invalid carried difficulty assistance');
-              integer(e.addedWeightG, 'accepted carried added weight');
+              if (e.addedWeightG !== undefined) integer(e.addedWeightG, 'accepted carried added weight');
+              // A qualitative source may deliberately choose new added weight,
+              // or a loaded bodyweight exercise may switch to band-only work.
+              // Only the user's actual new choice supplies a numeric mass.
               p.variation = e.variation; p.assistance = e.assistance;
-              epoch(p, `choice:${e.eventId}`, e.addedWeightG, e.addedWeightOrigin);
-              p.epochId = `choice:${e.eventId}`; p.bestReps = null; p.stallCount = 0;
+              epoch(p, `choice:${e.eventId}`, e.addedWeightG ?? null,
+                e.addedWeightOrigin, true);
             }
           }
           boundary(key, e.commitOrdinal, 'explicit');
@@ -862,7 +949,9 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         }
         const p = getProgress(key, slot);
         if (e.decision === 'ACCEPT' || e.decision === 'REPLACE') {
-          integer(e.loadG, 'accepted grams'); epoch(p, `choice:${e.eventId}`, e.loadG, e.loadOrigin);
+          integer(e.loadG, 'accepted grams');
+          epoch(p, `choice:${e.eventId}`, e.loadG, e.loadOrigin,
+            e.decision === 'REPLACE');
           if (e.type === 'CHOICE_REPLACED' && slot.equipment === 'bodyweight') {
             positiveId(e.variation, 'replacement difficulty variation');
             if (typeof e.assistance !== 'string') fail('invalid replacement assistance');
@@ -882,10 +971,10 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         } else if (e.decision === 'DIFFICULTY_ACCEPT') {
           positiveId(e.variation, 'accepted difficulty variation');
           if (typeof e.assistance !== 'string') fail('missing accepted assistance');
-          integer(e.addedWeightG, 'added bodyweight grams');
+          if (e.addedWeightG !== undefined) integer(e.addedWeightG, 'added bodyweight grams');
           p.variation = e.variation; p.assistance = e.assistance;
-          epoch(p, `choice:${e.eventId}`, e.addedWeightG, e.addedWeightOrigin);
-          p.epochId = `choice:${e.eventId}`; p.bestReps = null; p.stallCount = 0;
+          epoch(p, `choice:${e.eventId}`, e.addedWeightG ?? null,
+            e.addedWeightOrigin, true);
           // An accepted harder variation is an authoritative choice even if
           // a later set correction removes the qualifying all-at-top result.
           // Consent is evaluated against the corrected hypothetical replay.
@@ -909,6 +998,9 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
       }
       case 'CREDIT_GRANTED':
       case 'CREDIT_REGRANTED': {
+        if ([...sessions.values()].some(x => !x.outcome)) {
+          fail('active workout blocks historical credit change');
+        }
         const s = sessions.get(e.sessionId);
         if (!s || s.kind !== 'NORMAL' || s.outcome !== 'FINISH') fail('credit without normal Finish');
         positiveId(e.creditId, 'credit ID');
@@ -927,6 +1019,9 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         activeCredits.set(e.sessionId, e.creditId); quotas[s.templateId]++; break;
       }
       case 'CREDIT_REVOKED': {
+        if ([...sessions.values()].some(x => !x.outcome)) {
+          fail('active workout blocks historical credit change');
+        }
         const g = grants.get(e.creditId);
         if (!g || !g.active || g.sessionId !== e.sessionId) fail('invalid credit revocation');
         if (creditEligibleAt(sessions.get(e.sessionId), e.commitOrdinal)) {
@@ -981,8 +1076,7 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         // Evidence is checked at the original commit ordinal. A later
         // retrospective correction can remove that offer without turning a
         // historically valid user dismissal into a forged event.
-        const historical = foldBB2Block(openingSnapshot,
-          chronologicalEvents.slice(0, e.commitOrdinal - 1));
+        const historical = replayBefore(e.commitOrdinal);
         const offer = historical.stallSignals[key];
         if (!offer || offer.kind !== 'OFFER' ||
             offer.epochId !== e.epochId || offer.stallCount !== e.stallCount) {
