@@ -2075,5 +2075,74 @@ check('calibration trials never rewrite first-set lock-time plan',()=>{
   assert.equal(p.progress['upper_a|bench|barbell-bench'].bestReps,null);
 });
 
+check('calibration-only trial and acceptance events reject a previously calibrated exercise',()=>{
+  for(const extraType of ['CALIBRATION_PLAN_REVISED','CALIBRATION_ACCEPTED']) {
+    const r=log();r.start('first',3);r.sets('first',3);r.finish('first');
+    r.append('CREDIT_GRANTED',{sessionId:'first',creditId:'credit-first'});
+    r.start('second',3);r.sets('second',1);
+    r.append(extraType,{sessionId:'second',roleSlotId:'bench',exerciseId:'barbell-bench',
+      ...(extraType==='CALIBRATION_PLAN_REVISED'
+        ? {plannedG:105000,plannedOrigin:origin(105000)}
+        : {loadG:105000,loadOrigin:origin(105000)})});
+    assert.throws(()=>foldBB2Block(opening(),r.events),/calibration.*first exposure/i,extraType);
+  }
+});
+
+check('incomplete first exposure leaves calibration available to the next eligible workout',()=>{
+  const r=log();r.start('incomplete',3);r.sets('incomplete',1);
+  r.append('WORKOUT_INCOMPLETE',{sessionId:'incomplete'});
+  r.start('first-eligible',3);r.sets('first-eligible',1);
+  r.append('CALIBRATION_PLAN_REVISED',{sessionId:'first-eligible',
+    roleSlotId:'bench',exerciseId:'barbell-bench',
+    plannedG:102500,plannedOrigin:origin(102500)});
+  r.append('CALIBRATION_ACCEPTED',{sessionId:'first-eligible',
+    roleSlotId:'bench',exerciseId:'barbell-bench',
+    loadG:102500,loadOrigin:origin(102500)});
+  r.sets('first-eligible',2,1);r.finish('first-eligible');
+  const p=foldBB2Block(opening(),r.events);
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].calibrated,true);
+  assert.equal(p.progress['upper_a|bench|barbell-bench'].loadG,102500);
+  assert.deepEqual(p.history.map(h=>h.status),['INCOMPLETE','COMPLETED_NORMAL_NONCREDIT']);
+});
+
+check('foreign template cannot enter the isolated ledger by global edit or opening progress',()=>{
+  const r=log();
+  r.append('PRESCRIPTION_EDITED',{templateId:'bodybuilding',roleSlotId:'bench',
+    exerciseId:'barbell-bench',loadG:105000,loadOrigin:origin(105000),scope:'GLOBAL'});
+  assert.throws(()=>foldBB2Block(opening(),r.events),/invalid BB2 template/i);
+  const forged=createBB2Opening({ownerId:'test-owner',blockId:'test-block',
+    progress:{'bodybuilding|bench|barbell-bench':{loadG:105000,loadOrigin:origin(105000)}}});
+  assert.throws(()=>foldBB2Block(forged,[]),/invalid BB2 template/i);
+});
+check('delimited session and exercise identities cannot alias distinct records',()=>{
+  const r=log();r.start('session|other',3);
+  assert.throws(()=>foldBB2Block(opening(),r.events),/invalid session/i);
+  const s=log();s.start('valid',3);
+  s.events[0].slots[0].roleSlotId='bench|barbell';
+  assert.throws(()=>foldBB2Block(opening(),s.events),/invalid slot/i);
+});
+
+check('later correction cannot criminalise historically lawful first-exposure calibration events',()=>{
+  const r=log();r.start('A',3);const original=r.sets('A',3);r.finish('A');
+  r.append('CREDIT_GRANTED',{sessionId:'A',creditId:'credit-A'});
+  r.append('SET_VOIDED',{sessionId:'A',targetEventId:original[0].eventId});
+  r.append('CREDIT_REVOKED',{sessionId:'A',creditId:'credit-A'});
+  r.start('B',3);r.sets('B',1);
+  r.append('CALIBRATION_PLAN_REVISED',{sessionId:'B',roleSlotId:'bench',
+    exerciseId:'barbell-bench',plannedG:102500,plannedOrigin:origin(102500)});
+  r.append('CALIBRATION_ACCEPTED',{sessionId:'B',roleSlotId:'bench',
+    exerciseId:'barbell-bench',loadG:102500,loadOrigin:origin(102500)});
+  r.sets('B',2,1);r.finish('B');
+  r.append('CREDIT_GRANTED',{sessionId:'B',creditId:'credit-B'});
+  assert.equal(foldBB2Block(opening(),r.events).progress['upper_a|bench|barbell-bench'].loadG,102500);
+  r.append('SET_CORRECTED',{sessionId:'A',targetEventId:original[0].eventId,
+    reps:7,roleSlotId:'bench',exerciseId:'barbell-bench',setIndex:0});
+  r.append('CREDIT_REGRANTED',{sessionId:'A',creditId:'credit-A-restored'});
+  const projected=foldBB2Block(opening(),r.events);
+  assert.equal(projected.quotas.upper_a,2);
+  assert.equal(projected.history.length,2);
+  assert.deepEqual(projected.history.map(h=>h.sessionId),['A','B']);
+});
+
 console.log('BB2-HARDEN '+passes+' PASS / '+failures+' FAIL');
 if(failures) process.exit(1);

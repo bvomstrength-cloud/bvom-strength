@@ -35,10 +35,17 @@ const sameCanonicalValue = (a, b) => {
   return keys.length === other.length &&
     keys.every(key => own(b, key) && sameCanonicalValue(a[key], b[key]));
 };
-const positiveId = (x, name) => { if (typeof x !== 'string' || !x.trim()) fail(`invalid ${name}`); return x; };
+// Pipe is reserved for the stable template/slot/exercise and set-record keys.
+// Allowing it inside an ID makes distinct session or exercise records alias.
+const positiveId = (x, name) => {
+  if (typeof x !== 'string' || !x.trim() || x.includes('|')) fail(`invalid ${name}`);
+  return x;
+};
 const integer = (x, name, min = 0) => { if (!Number.isSafeInteger(x) || x < min) fail(`invalid ${name}`); return x; };
-const identity = (templateId, roleSlotId, exerciseId) =>
-  [positiveId(templateId, 'template'), positiveId(roleSlotId, 'slot'), positiveId(exerciseId, 'exercise')].join('|');
+const identity = (templateId, roleSlotId, exerciseId) => {
+  if (!TEMPLATES.includes(templateId)) fail('invalid BB2 template');
+  return [templateId, positiveId(roleSlotId, 'slot'), positiveId(exerciseId, 'exercise')].join('|');
+};
 
 // Decimal arithmetic, no dependence on binary float equality. 1 lb = 453.59237 g.
 function decimalParts(value) {
@@ -121,7 +128,12 @@ function validateOpening(opening) {
         opening.previousOpeningSnapshotVersion !== 1) fail('invalid prior snapshot version');
   }
   if (!opening.progress || typeof opening.progress !== 'object' || Array.isArray(opening.progress)) fail('invalid opening progress');
-  for (const item of Object.values(opening.progress)) initialProgress(item);
+  for (const [key, item] of Object.entries(opening.progress)) {
+    const parts = key.split('|');
+    if (parts.length !== 3) fail('invalid opening progression identity');
+    identity(...parts);
+    initialProgress(item);
+  }
   if (!opening.pending || typeof opening.pending !== 'object' || Array.isArray(opening.pending)) {
     fail('invalid opening pending decisions');
   }
@@ -448,6 +460,14 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
   // Discard may tombstone the original Start while leaving an independently
   // committed GLOBAL edit at its ordinal; that edit has no live session slot.
   const getProgress = (key, plan) => progress[key] ||= initialProgress({}, plan || {});
+  // Calibration permission is historical: a later correction may make an
+  // earlier exercise eligible without invalidating a trial that was legal
+  // when originally recorded. Evaluate the original event prefix, not the
+  // final retrospectively corrected projection.
+  const hasPriorCalibrationAt = (s, slot, ordinal) => {
+    const prior = foldBB2Block(openingSnapshot, chronologicalEvents.slice(0, ordinal - 1));
+    return !!prior.progress[identity(s.templateId, slot.roleSlotId, slot.exerciseId)]?.calibrated;
+  };
   const epoch = (p, id, nextLoad, origin = null) => { if (p.loadG !== nextLoad) {
     p.loadG = nextLoad;
     p.loadOrigin = origin ? clone(origin) : { kind: 'DERIVED', sourceEventId: id };
@@ -622,6 +642,9 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
       case 'CALIBRATION_PLAN_REVISED': {
         const s = sessions.get(e.sessionId), slot = findSlot(s, e);
         if (s.outcome || !s.seenSets.has(slot.roleSlotId)) fail('invalid calibration trial');
+        if (hasPriorCalibrationAt(s, slot, e.commitOrdinal)) {
+          fail('calibration trial is permitted only on first exposure');
+        }
         integer(e.plannedG, 'calibration grams');
         // Trial is session-only; it does not rewrite the historical initial or existing actuals.
         slot.calibrationTrialG = e.plannedG;
@@ -632,6 +655,9 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
         const s = sessions.get(e.sessionId), slot = findSlot(s, e);
         if (s.outcome) fail('calibration choice after outcome');
         if (!s.seenSets.has(slot.roleSlotId)) fail('calibration needs a recorded trial set');
+        if (hasPriorCalibrationAt(s, slot, e.commitOrdinal)) {
+          fail('calibration acceptance is permitted only on first exposure');
+        }
         if (s.accepted.has(slot.roleSlotId)) fail('duplicate calibration acceptance');
         integer(e.loadG, 'accepted calibration grams');
         s.accepted.set(slot.roleSlotId, { loadG: e.loadG, loadOrigin: clone(e.loadOrigin), eventId: e.eventId });
