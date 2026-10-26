@@ -48,6 +48,11 @@ async function open() {
     window.bb2TestEnable = false;
     window.bb2TestDeviceFence = false;
     const { createBB2AppSessionHost } = await import('/bb2/app-session.mjs');
+    const { createBB2LocalStore, setBB2OptionalCurls, createBB2Setup,
+      BB2_BROWSER_SOURCE_SHA256 } = await import('/bb2/browser-core.mjs');
+    window.bb2StaticCoreHash = BB2_BROWSER_SOURCE_SHA256;
+    window.bb2StaticOptionalCurls = setBB2OptionalCurls;
+    window.bb2StaticSetup = createBB2Setup;
     window.bb2AppRead = () => ({
       authUserId: window.__bvomAuthUserId,
       cloudUserId: bvomCloud.user?.id || null,
@@ -71,6 +76,8 @@ async function open() {
     });
     window.bb2AppHost = createBB2AppSessionHost({ runtime: window,
       ownerId: 'dummy-owner', readAppSnapshot: window.bb2AppRead });
+    window.bb2RealLocalStore = createBB2LocalStore({ ownerId: 'dummy-owner',
+      ...window.bb2AppHost });
   });
   return page;
 }
@@ -93,6 +100,12 @@ test('real app boots with both BB2 rollout gates shut; no local/cloud mutation',
     }));
     assert.equal((await status(p)).allowed, false);
     assert.match(await attempt(p), /writer disabled/);
+    assert.match(await p.evaluate(() => window.bb2StaticCoreHash), /^[0-9a-f]{64}$/);
+    assert.equal(await p.evaluate(() => window.bb2RealLocalStore.read()), null);
+    assert.match(await p.evaluate(async () => {
+      try { await window.bb2RealLocalStore.initialize('browser-block-1'); return 'unexpected'; }
+      catch (error) { return error.message; }
+    }), /writer disabled/);
     await p.evaluate(() => { window.bb2TestEnable = true; });
     assert.match(await attempt(p), /writer disabled/);
     assert.equal(await p.evaluate(() => localStorage.getItem(
@@ -114,9 +127,19 @@ test('test-only permitted BB2 write changes neither BVOM data nor cloud fingerpr
     await p.evaluate(() => { window.bb2TestEnable = true;
       window.bb2TestDeviceFence = true; });
     assert.deepEqual(await status(p), { allowed: true, reason: 'eligible' });
-    assert.equal(await attempt(p), true);
-    assert.equal(await p.evaluate(() => localStorage.getItem(
-      'bvom.bb2.local.v1.dummy-owner')), 'dummy-bb2');
+    assert.deepEqual(await p.evaluate(async () => {
+      const stored = await window.bb2RealLocalStore.initialize('browser-block-1');
+      return [stored.snapshot.revision, stored.snapshot.opening.blockId,
+        window.bb2RealLocalStore.read().setup.catalogueVersion];
+    }), [0, 'browser-block-1', 1]);
+    assert.equal(await p.evaluate(async () => {
+      const s = window.bb2StaticOptionalCurls(window.bb2StaticSetup(), true);
+      return (await window.bb2RealLocalStore.saveSetup(s,
+        { expectedRevision: 0, activeWorkout: false })).snapshot.revision;
+    }), 1);
+    assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem(
+      'bvom.bb2.local.v1.dummy-owner')).revision), 1);
+    assert.equal(await p.evaluate(() => window.bb2RealLocalStore.read().revision), 1);
     assert.deepEqual(await p.evaluate(() => ({
       raw: localStorage.getItem('bvom_data'),
       comparable: bvomCloudComparableFingerprint(bvomCloudPayload())

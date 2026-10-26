@@ -57,7 +57,7 @@ Focused proof: `node tests/bvom-lab/bb2_stage2_local_store_contracts.js` (13/13)
 
 Focused Node proof: `node tests/bvom-lab/bb2_stage2_browser_host_contracts.mjs` (8/8), including an actual call into the dormant `createBB2LocalStore`. Real Chromium proof: `node tests/bvom-lab/bb2_browser_host_browser.cjs` exercises two isolated tabs, contested write refusal and handoff, account switches during work, unsupported browser, read-only policy, and offline reload using an HTTP fixture. The latter runs in the Browser Runner CI workflow; it requires installed Playwright Chromium and is not a production app interaction.
 
-This does **not** yet authorize app installation. In particular, a callback supplied by a future production host must independently prove that its BVOM document is entitled, belongs to the current account, is on the supported writer protocol, and is not mid-account-switch. Existing older documents do not know about BB2, so the separated key keeps their ordinary state and cloud payloads untouched, but a multi-device writer/restore rule still needs proof. The CommonJS ledger/local writer also still needs a deliberately reviewed browser packaging strategy; no script is included in `index.html` and no BB2 UI is exposed.
+This does **not** yet authorize app installation. In particular, a callback supplied by a future production host must independently prove that its BVOM document is entitled, belongs to the current account, is on the supported writer protocol, and is not mid-account-switch. Existing older documents do not know about BB2, so the separated key keeps their ordinary state and cloud payloads untouched, but a multi-device writer/restore rule still needs proof. A static CommonJS browser packaging strategy is provided in the seventh checkpoint below; no script is included in `index.html` and no BB2 UI is exposed.
 
 ## Sixth checkpoint — real BVOM account/document guard contract, still dormant
 
@@ -65,9 +65,34 @@ This does **not** yet authorize app installation. In particular, a callback supp
 
 The source-mapping follows the existing `index.html` owner, auth, entitlement, recovery and cloud-fingerprint boundaries without modifying them. Node tests `bb2_stage2_app_session_contracts.mjs` exercise every false/missing signal, actual `createBB2LocalStore` commits under a dummy simulated approval, account changes, stale legacy state, a new active legacy workout and failure to read host state. The separate actual-app Chromium test `bb2_app_session_browser.cjs` boots BVOM with a dummy offline account, loads this dormant adapter **only in the fixture**, checks both rollout flags off, verifies account/older-tab/legacy-workout/stale-persistence refusal, and checks that an isolated test-only BB2 write leaves `bvom_data` bytes and its cloud-comparison fingerprint untouched. All external requests are blocked. It is a test of browser boundaries, **not evidence that multi-device cloud support already exists**.
 
-## Required next Stage (ii) contracts — not yet implemented
+## Seventh checkpoint — deterministic standalone browser core
 
-1. Finish the reviewed CommonJS-to-browser packaging and real host callback wiring, with user-visible BB2 still gated off. The dummy-app owner/document harness does not substitute for live multi-device proof; explicitly settle older-client/cloud-writer fencing before enabling `bb2WriterEnabled` and `multiDeviceFenceVerified`. Do not add BB2 data to unprotected cloud fingerprints or payloads.
+`scripts/build-bb2-browser.cjs` converts exactly five whitelisted, existing
+CommonJS modules into checked-in `bb2/browser-core.mjs` with a source SHA-256.
+The output is a **static** browser ES module: there is no runtime `eval`, network
+fetch, dependency download, or implicit Node `require`. The generator rejects
+unexpected or dynamic imports, exports the same module APIs, and supports
+`--check` to fail when the committed artifact diverges from the reviewed source.
+No Stage (i) source, fold rule, event schema, or old application shell changed.
+
+The focused Node contract `bb2_stage2_browser_bundle_contracts.mjs` compares
+byte-for-byte reproducibility and original-vs-browser ledger/setup outputs,
+falsifies forbidden imports, and proves the real bundled local writer remains
+disabled without both positive browser/account rollout fences. The actual BVOM
+Chromium test `bb2_app_session_browser.cjs` now imports this same generated
+core **only within the test fixture**, commits a real BB2 setup behind dummy
+test-only gates, and checks the legacy `bvom_data` blob and cloud comparison
+fingerprint are unchanged. The production 13-file packaging list excludes BB2.
+
+**Still dormant:** No `index.html` import, UI selector, cloud registration,
+real-user feature flag, or multi-device writer permission. The browser module
+is a development artifact and is not included in the production PWA or ZIP.
+Its source fingerprint is checked by the full Lab gate. Run
+`node scripts/build-bb2-browser.cjs --check` after any future BB2 source edit.
+
+## Remaining Stage (ii) integration contracts
+
+1. Wire the reviewed static browser core to real app host callbacks behind closed feature gates, with user-visible BB2 still disabled. The dummy-app owner/document harness does not substitute for live multi-device proof; explicitly settle older-client/cloud-writer fencing before enabling `bb2WriterEnabled` and `multiDeviceFenceVerified`. Do not add BB2 data to unprotected cloud fingerprints or payloads.
 2. Real app-side `WORKOUT_STARTED` planning, first-load entry, bodyweight assistance selection, exact Warm-up/Workout shared ordering, historical backup/restore and tab-scoped reload resume. Add a distinct low-stress RECOVERY planner.
 3. Seal/next-block rollover and archive retention with a full verified origin chain, plus performance hardening of large-history load/replay and tested corruption recovery.
 4. Independent adversarial audit and browser/mobile tests of the complete integration before any user-visible activation. Stage (i) fold schema and BB1 remain unchanged.
