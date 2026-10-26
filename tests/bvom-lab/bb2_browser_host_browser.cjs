@@ -100,6 +100,7 @@ test('authentication and local owner changes block reads and in-flight writes', 
 test('unsupported browser and disabled writer refuse without fallback', async () => {
   const a = await open();
   try {
+    const before = await raw(a);
     const results = await a.evaluate(async () => {
       const h = window.bb2Host;
       let disabled, unsupported, direct;
@@ -121,7 +122,7 @@ test('unsupported browser and disabled writer refuse without fallback', async ()
     assert.match(results.disabled, /writer disabled/);
     assert.match(results.direct, /without exclusive/);
     assert.match(results.unsupported, /Web Locks unavailable/);
-    assert.equal(await raw(a), null);
+    assert.equal(await raw(a), before);
   } finally { await a.close(); }
 });
 
