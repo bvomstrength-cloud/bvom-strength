@@ -110,7 +110,7 @@ the bridge for production accounts; `index.html` does not import it.
 
 ## Remaining Stage (ii) integration contracts
 
-1. Define and test the *actual* BVOM app callback wiring and eventual feature registration with rollout gates defaulting closed. The dummy-app owner/document harness does not substitute for live multi-device proof; explicitly settle older-client/cloud-writer fencing before enabling `bb2WriterEnabled` and `multiDeviceFenceVerified`. Do not add BB2 data to unprotected cloud fingerprints or payloads.
+1. Define and test the *actual* BVOM app callback wiring and eventual feature registration with rollout gates defaulting closed. `docs/BB2_CLOUD_COMPATIBILITY_DECISION.md` now documents two reproduced legacy whole-row overwrite/race hazards and recommends isolated BB2 cloud storage with server-side revision checks, **pending the owner's explicit architecture choice**. The dummy-app owner/document harness does not substitute for live multi-device proof; do not enable `bb2WriterEnabled` or `multiDeviceFenceVerified`, and do not add BB2 data to unprotected cloud fingerprints or payloads.
 2. Real app-side `WORKOUT_STARTED` planning, first-load entry, bodyweight assistance selection, exact Warm-up/Workout shared ordering, historical backup/restore and tab-scoped reload resume. Add a distinct low-stress RECOVERY planner.
 3. Seal/next-block rollover and archive retention with a full verified origin chain, plus performance hardening of large-history load/replay and tested corruption recovery.
 4. Independent adversarial audit and browser/mobile tests of the complete integration before any user-visible activation. Stage (i) fold schema and BB1 remain unchanged.
