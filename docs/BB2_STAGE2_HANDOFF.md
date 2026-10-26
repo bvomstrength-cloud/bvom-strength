@@ -90,9 +90,27 @@ is a development artifact and is not included in the production PWA or ZIP.
 Its source fingerprint is checked by the full Lab gate. Run
 `node scripts/build-bb2-browser.cjs --check` after any future BB2 source edit.
 
+## Eighth checkpoint — single guarded browser entry point, still dormant
+
+`bb2/app-bridge.mjs` composes the reviewed static browser ledger/store with
+`bb2/app-session.mjs` into one explicit, owner-scoped entry point. It exports
+`createBB2DormantAppBridge` only; importing it cannot initialize storage,
+write a workout, register a handler, or inspect an app session. All methods
+use the same account/document and exclusive Web Locks guards. The caller must
+provide an authoritative synchronous BVOM snapshot reader. No permissive
+fallback or implicit real-user enablement is possible.
+
+The focused `bb2_stage2_app_bridge_contracts.mjs` checks both rollout gates,
+stored setup revision, a full catalogue-validated Start/replay, active workout
+refusals, sign-out, competing tab, legacy workout, corrupted local envelope and
+unsupported Web Locks. The real-BVOM offline Chromium test now exercises the
+**same bridge** as its dummy account, proving setup persistence and full
+legacy-blob/cloud-fingerprint isolation. This is **not** permission to enable
+the bridge for production accounts; `index.html` does not import it.
+
 ## Remaining Stage (ii) integration contracts
 
-1. Wire the reviewed static browser core to real app host callbacks behind closed feature gates, with user-visible BB2 still disabled. The dummy-app owner/document harness does not substitute for live multi-device proof; explicitly settle older-client/cloud-writer fencing before enabling `bb2WriterEnabled` and `multiDeviceFenceVerified`. Do not add BB2 data to unprotected cloud fingerprints or payloads.
+1. Define and test the *actual* BVOM app callback wiring and eventual feature registration with rollout gates defaulting closed. The dummy-app owner/document harness does not substitute for live multi-device proof; explicitly settle older-client/cloud-writer fencing before enabling `bb2WriterEnabled` and `multiDeviceFenceVerified`. Do not add BB2 data to unprotected cloud fingerprints or payloads.
 2. Real app-side `WORKOUT_STARTED` planning, first-load entry, bodyweight assistance selection, exact Warm-up/Workout shared ordering, historical backup/restore and tab-scoped reload resume. Add a distinct low-stress RECOVERY planner.
 3. Seal/next-block rollover and archive retention with a full verified origin chain, plus performance hardening of large-history load/replay and tested corruption recovery.
 4. Independent adversarial audit and browser/mobile tests of the complete integration before any user-visible activation. Stage (i) fold schema and BB1 remain unchanged.

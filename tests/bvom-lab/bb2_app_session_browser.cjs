@@ -47,8 +47,8 @@ async function open() {
   await page.evaluate(async () => {
     window.bb2TestEnable = false;
     window.bb2TestDeviceFence = false;
-    const { createBB2AppSessionHost } = await import('/bb2/app-session.mjs');
-    const { createBB2LocalStore, setBB2OptionalCurls, createBB2Setup,
+    const { createBB2DormantAppBridge } = await import('/bb2/app-bridge.mjs');
+    const { setBB2OptionalCurls, createBB2Setup,
       BB2_BROWSER_SOURCE_SHA256 } = await import('/bb2/browser-core.mjs');
     window.bb2StaticCoreHash = BB2_BROWSER_SOURCE_SHA256;
     window.bb2StaticOptionalCurls = setBB2OptionalCurls;
@@ -74,19 +74,16 @@ async function open() {
       bb2WriterEnabled: window.bb2TestEnable === true,
       multiDeviceFenceVerified: window.bb2TestDeviceFence === true
     });
-    window.bb2AppHost = createBB2AppSessionHost({ runtime: window,
+    window.bb2RealLocalStore = createBB2DormantAppBridge({ runtime: window,
       ownerId: 'dummy-owner', readAppSnapshot: window.bb2AppRead });
-    window.bb2RealLocalStore = createBB2LocalStore({ ownerId: 'dummy-owner',
-      ...window.bb2AppHost });
   });
   return page;
 }
 
-const status = p => p.evaluate(() => window.bb2AppHost.status());
+const status = p => p.evaluate(() => window.bb2RealLocalStore.status());
 const attempt = p => p.evaluate(async () => {
-  const h = window.bb2AppHost;
   try {
-    await h.withExclusiveLock(h.key, () => h.storage.setItem(h.key, 'dummy-bb2'));
+    await window.bb2RealLocalStore.initialize('browser-block-1');
     return true;
   } catch (error) { return error.message; }
 });
