@@ -393,6 +393,42 @@ check('retroactive first calibration qualifying Finish can reaffirm an invalidat
   assert.ok(choice.eventId);
 });
 
+check('voiding earlier exposure never earns an automatic increase from a later accepted calibration', () => {
+  const { events, add } = journal();
+  const record = (sessionId, actualG) => {
+    add('WORKOUT_STARTED', { sessionId, templateId: 'upper_a', kind: 'NORMAL',
+      slots: [slot('bench', 60000, 2)] });
+    for (let i = 0; i < 2; i++) add('SET_RECORDED', {
+      sessionId, roleSlotId: 'bench', exerciseId: 'bench', setIndex: i,
+      reps: 8, actualG, actualOrigin: origin(actualG), prescribed: true });
+    add('WORKOUT_FINISHED', { sessionId });
+    add('CREDIT_GRANTED', { sessionId, creditId: 'credit-' + sessionId });
+  };
+  record('A', 60000);
+  record('B', 55000);
+  add('CHOICE_RESOLVED', { sourceSessionId: 'B', roleSlotId: 'bench', exerciseId: 'bench',
+    decision: 'ACCEPT', loadG: 55000, loadOrigin: origin(55000) });
+
+  // Control: with A intact, B truly is second exposure and the explicit
+  // off-plan ACCEPT may earn a 2.5 kg increase for its all-ceiling sets.
+  const before = foldBB2Block(opening(), events);
+  assert.equal(before.progress['upper_a|bench|bench'].loadG, 57500);
+  assert.equal(before.progress['upper_a|bench|bench'].bestReps, null);
+  assert.equal(before.quotas.upper_a, 2);
+
+  // The correction changes historical eligibility, not the validity of B's
+  // original choice. B now becomes first exposure, so no earned increment.
+  add('SESSION_VOIDED', { sessionId: 'A' });
+  add('CREDIT_REVOKED', { sessionId: 'A', creditId: 'credit-A' });
+  const after = foldBB2Block(opening(), events);
+  const p = after.progress['upper_a|bench|bench'];
+  assert.deepEqual([p.loadG, p.bestReps, p.stallCount], [55000, 16, 0]);
+  assert.equal(p.epochId, 'choice:audit-11');
+  assert.deepEqual(after.requiredConsent, []);
+  assert.equal(after.quotas.upper_a, 1);
+  assert.equal(after.history.find(h => h.sessionId === 'B').creditId, 'credit-B');
+});
+
 check('wrong assistance during first bodyweight calibration never seeds a carried baseline', () => {
   const { events, add } = journal();
   const pull = { roleSlotId: 'pull', exerciseId: 'chinup', equipment: 'bodyweight',

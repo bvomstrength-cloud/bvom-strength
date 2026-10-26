@@ -580,6 +580,11 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
   const { records, voidSessions } = effectiveRevisions(chronologicalEvents);
   const progress = Object.fromEntries(Object.entries(opening.progress).map(([k, v]) => [k, initialProgress(v)]));
   const sessions = new Map(), choices = [], boundaries = [], notes = new Map(), hidden = new Set();
+  // A retrospective void/correction can turn a historically second workout
+  // into this exercise's first qualifying exposure. Preserve that calibration
+  // identity until its previously valid choice is replayed: accepting an
+  // off-plan first exposure may seed a baseline but must not earn an increase.
+  const firstCalibrationExposures = new Set();
   const resolvedOffers = new Set();
   // Discard purges the session Start into a minimal tombstone, while separate
   // pre-lock GLOBAL edits retain their original ordinal and session linkage.
@@ -885,6 +890,7 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
           if (!info.complete) continue;
           const p = getProgress(key, slot), first = !p.calibrated;
           if (first) {
+            firstCalibrationExposures.add(`${s.sessionId}|${key}`);
             p.calibrated = true;
             const accepted = s.accepted.get(slot.roleSlotId);
             if (accepted) epoch(p, `calibration:${accepted.eventId}`, accepted.loadG, accepted.loadOrigin);
@@ -1077,8 +1083,10 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
           const validOffer = s.eligible && info.complete && info.uniform && !info.harder && info.actualG === e.loadG && !info.onPlan;
           if (e.decision === 'ACCEPT' && validOffer) {
             p.bestReps = info.repSum; p.stallCount = 0;
-            if (info.allTop) epoch(p, `earned-choice:${e.eventId}`, p.loadG + p.incrementG,
+            if (info.allTop && !firstCalibrationExposures.has(`${s.sessionId}|${key}`)) {
+              epoch(p, `earned-choice:${e.eventId}`, p.loadG + p.incrementG,
               { kind: 'DERIVED', sourceEventId: e.eventId });
+            }
           }
           choices.push({ eventId: e.eventId, ordinal: e.commitOrdinal, sourceSessionId: s.sessionId,
             key, valueG: qualitativeReplacement ? undefined : e.loadG,

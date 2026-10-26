@@ -108,6 +108,39 @@ check('first mixed calibration has no baseline; later identical exposure stalls 
   assert.deepEqual([progressAt(r).bestReps, progressAt(r).stallCount], [23, 1]);
 });
 
+const acceptedAllTopFixture = () => {
+  const { events, add } = journal();
+  for (const [sessionId, weight] of [['A', 60000], ['B', 55000]]) {
+    start(add, sessionId, 'NORMAL', [slot('chest', 'bench', 2, 60000)]);
+    sets(add, sessionId, 'chest', 'bench', [weight, weight], [8, 8]);
+    finish(add, sessionId, 'credit-' + sessionId);
+  }
+  const choice = add('CHOICE_RESOLVED', { sourceSessionId: 'B',
+    roleSlotId: 'chest', exerciseId: 'bench', decision: 'ACCEPT', loadG: 55000 });
+  return { events, add, choice };
+};
+
+check('golden: earned all-top ACCEPT after existing calibration progresses 55 to 57.5 kg', () => {
+  const { events, choice } = acceptedAllTopFixture();
+  const r = foldBB2Block(open(), events);
+  assert.deepEqual([progressAt(r).calibrated, progressAt(r).loadG, progressAt(r).bestReps,
+    progressAt(r).epochId, creditAt(r)],
+    [true, 57500, null, 'earned-choice:' + choice.eventId, 2]);
+  assert.deepEqual(r.requiredConsent, []);
+});
+
+check('golden: voided first session makes later ACCEPT calibration with 55 kg and 16 reps', () => {
+  const { events, add, choice } = acceptedAllTopFixture();
+  add('SESSION_VOIDED', { sessionId: 'A' });
+  add('CREDIT_REVOKED', { sessionId: 'A', creditId: 'credit-A' });
+  const r = foldBB2Block(open(), events);
+  assert.deepEqual([progressAt(r).calibrated, progressAt(r).loadG, progressAt(r).bestReps,
+    progressAt(r).epochId, creditAt(r)],
+    [true, 55000, 16, 'choice:' + choice.eventId, 1]);
+  assert.deepEqual(r.requiredConsent, []);
+  assert.equal(r.history.find(h => h.sessionId === 'B').creditId, 'credit-B');
+});
+
 check('corrected earlier progression never rewrites a later saved plan; only qualifying Finish promotes', () => {
   const b = open({ [K]: { loadG: 100000, incrementG: 2500, calibrated: true, bestReps: 22 } });
   const { events, add } = journal();

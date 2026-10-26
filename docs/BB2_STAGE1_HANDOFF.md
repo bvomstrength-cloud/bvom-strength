@@ -74,3 +74,17 @@ Older consent hardening fixtures that issued ordinary ACCEPT/KEEP on an uncalibr
 **Exact local candidate gate:** **GO** — 20/20 deterministic goldens, 156/156 hardening, 20/20 independent cold-audit regressions, **124/124 deliberate BB2 mutations killed**, replay performance PASS, and all static/behaviour/sequence/legacy mutation/known-bad reference tiers PASS. These are author-side results, not an independent cold-audit GO for this new revision.
 
 **Additional Stage (ii) restore contract:** validate imported/restored ledgers through the same atomic Finish+credit and versioned-start checks as append-time writes. Do not treat a successful raw fold alone as proof that a complete NORMAL Finish's credit was persisted.
+
+## Round 4 independent cold audit — 26 October 2026 (F1 repaired, re-audit pending)
+
+Claude independently executed the full `6841f69` package against the matching Rev 3.5.1 spec. All five Round 3 repairs passed approximately 45 independent adversarial probes, but Claude reported **HOLD** for one new Medium defect, F1, in retrospective calibration. The defect was independently reproduced RED in the new cold-audit regression before repair.
+
+- **F1, correction changes which workout was first:** workout A completes at 60 kg, B later completes 2×8 off-plan at 55 kg, and B legitimately ACCEPTs 55 kg after its original Finish. If A is subsequently SESSION_VOIDED and CREDIT_REVOKED, B becomes its exercise's first qualifying calibration exposure on replay. The original choice remains authoritative, but the old fold wrongly applied B's all-top earned increase, yielding **57.5 kg with no baseline**.
+- **Fix:** the fold records each first-calibration exposure by immutable `(sessionId, template|role|exercise)` identity. A once-valid ACCEPT may still seed its uniform **55 kg, 16-rep calibration baseline**, but the acceptance cannot automatically increase weight when retrospective corrections make its source the first calibration. The ordinary control (A remains eligible and B is a later exposure) must continue to progress to **57.5 kg**.
+- **Proof:** both sides are pinned as separate fixed-output golden contracts, a dedicated cold-audit replay regression covers the correction/credit/consent chain, and two mutation operators verify the historical-first guard cannot be accidentally removed.
+
+**Author-side pre-integration gate:** **GO** — 22/22 goldens, 156/156 hardening, 21/21 cold-audit regressions, 126/126 BB2 mutations killed, replay performance PASS, and all static/behaviour/sequence/legacy mutation/known-bad tiers PASS. Re-run after integrating any concurrent draft-branch changes and before packaging the exact head for independent review.
+
+**Exact combined-branch gate after preserving four intervening draft commits:** **GO** — 22/22 goldens, 156/156 hardening, **25/25 cold-audit regressions**, **137/137 BB2 mutants killed**, replay performance PASS, and all static/behaviour/sequence/legacy mutation/known-bad tiers PASS. The intervening commits also tighten restored-progress types and provenance and add independent extra-set evidence regressions; none was discarded during integration.
+
+No event shape, sealed-block contract, BB1 code, or Stage (ii) UI has changed. This repair still requires the full author-side gate, updated draft PR, and an independent read of the **new exact source head** before a Stage (i) schema-freeze GO. The Stage (ii) prerequisites and restore-time revalidation boundary above remain in force; no merge/deployment authorised.
