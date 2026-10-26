@@ -37,11 +37,25 @@ This is a validator for constructed new Start events, **not** an installed write
 
 Focused proof: `node tests/bvom-lab/bb2_stage2_restore_contracts.js`. Included in the full gate.
 
+## Fourth checkpoint — dormant owner-scoped local storage adapter
+
+`bb2/local-store.cjs` provides a **dependency-injected, not runtime-registered** local writer. Its host must supply a localStorage-style adapter and a real exclusive per-owner cross-tab lock. It never reads or writes the legacy BVOM `state`, cloud payload, comparison fingerprint, auth, or browser globals. The sole owner-namespaced key is `bvom.bb2.local.v1.<encoded owner ID>`.
+
+- `initialize` saves a versioned setup plus Stage (i) opening snapshot as one JSON value; it never resets or replaces a different existing block.
+- `saveSetup` durably commits optional curls / exercise choices before Start, rejecting active-workout changes or stale revisions. `commitStart` uses the **persisted** setup, never an unsaved UI draft, and delegates to the pure catalogue/lineage validator and Stage (i) transaction guard.
+- `appendEvents` uses `commitBB2Transaction` while blocking direct Start, Finish, first credit, and Seal bypasses. `commitFinish` plans Finish + any first credit together, saves the stable revision key and events in **one `setItem`**, and replays strictly upon load.
+- Writes return success only after verifying the exact serialized bytes can be read back. If storage throws after writing, the outcome is explicitly **uncertain**, never falsely rolled back. The same Finish key can safely be retried after re-reading the durable event stream.
+- All operations reject stale expected local revision within the required injected exclusive lock. Two competing tabs cannot silently overwrite each other; owner switching produces a separate key. Full restored-ledger and Finish-pair validation runs before trusting imported bytes.
+
+Focused proof: `node tests/bvom-lab/bb2_stage2_local_store_contracts.js` (13/13), including two-tab races, post-write exceptions, duplicate Finish, key-order-insensitive saved setup, malformed import, owner isolation and full 673-event history replay (~0.3–0.4 seconds locally). This is part of the full Lab gate.
+
+**Not live yet.** This module is a testable storage boundary, not a PWA integration. The actual browser wiring must prove Web Locks availability/fallback, offline reload, owner changes, input durability, older-client writer fencing, backup/restore, and cloud-payload/fingerprint exclusion. It currently stores one block only; rollover/archive wiring and performance at full real-user history sizes remain pending. Do not permit real users to write BB2 before these safety gates pass.
+
 ## Required next Stage (ii) contracts — not yet implemented
 
-1. Real application-side `WORKOUT_STARTED` planner and atomic persistence that call the pure guarded Start boundary, bind it to a **durably stored** pre-Start setup and enforce isolation from legacy save/restore and cloud comparison logic. Add a distinct low-stress RECOVERY Start planner.
-2. Durable local pre-Start setup persistence (exercise choices and optional curls), guarded for ownership/restore. Do not add new data to an unprotected cloud fingerprint or cloud payload.
-3. Bind the pure restore checker and stable `(blockId, sessionId, eventRevision)` key to **durable atomic storage** for Finish and credit. Arbitrary bare `foldBB2Block` must never be treated as trusted imported application state.
-4. Append through `planBB2Finish` and `commitBB2Transaction` with stale-head, ownership and sealed-block protection. Later UI and storage integration require separate gates, then an independent audit before enabling users.
+1. Browser wiring of the dormant writer, with proven Web Locks fallback behavior, single-key atomic persistence, ownership leases and **explicit older-client/cloud-writer fencing**. Do not add any BB2 data to unprotected cloud fingerprints or payloads, or expose the option to real users before the multi-device guard is independently proven.
+2. Real app-side `WORKOUT_STARTED` planning, first-load entry, bodyweight assistance selection, exact Warm-up/Workout shared ordering, historical backup/restore and tab-scoped reload resume. Add a distinct low-stress RECOVERY planner.
+3. Seal/next-block rollover and archive retention with a full verified origin chain, plus performance hardening of large-history load/replay and tested corruption recovery.
+4. Independent adversarial audit and browser/mobile tests of the complete integration before any user-visible activation. Stage (i) fold schema and BB1 remain unchanged.
 
 The Stage (i) event and fold rules remain frozen. Stage (ii) can introduce a new validated writer outside that ledger; any fold-rule change must follow the pinned `foldRulesVersion` mechanism. No merge, production deployment or Supabase access is authorised by this checkpoint.
