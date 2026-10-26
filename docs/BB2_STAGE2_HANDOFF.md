@@ -15,9 +15,23 @@
 
 Focused proof: `node tests/bvom-lab/bb2_stage2_catalogue_contracts.js`. Included in the full `tests/bvom-lab/gate.js` regression sequence.
 
+## Second checkpoint — guarded new NORMAL Start
+
+`bb2/start.cjs` is an app-independent, pure validator plus atomic-transaction adapter. It accepts only *new* NORMAL and EXTRA_NORMAL Starts; RECOVERY will have its own low-stress planner. It checks the exact catalogue version's slots, role order, set counts, both rep-range endpoints, equipment and optional-curls denominator before calling the frozen `commitBB2Transaction`.
+
+- An uncalibrated first loaded Start must contain a genuine, typed numeric origin and explicit increment. It cannot claim arbitrary `DERIVED` source metadata or silently use an LP setting.
+- A subsequent Start inherits its computed/current load and increment **exactly** from the folded event stream. DERIVED source lineage must correspond to an actual earning event and a verified load change.
+- A sealed predecessor's DERIVED load requires replay-verified sealed-block evidence (`priorSealedBlock.opening` plus its complete events); an unattested opening field is insufficient. Historical corrected snapshots remain read-only; this validator is **not** applied retroactively when replaying them.
+- A bodyweight Start requires explicit variation and assistance, with added numeric mass only when the user entered it. No guessed mass.
+- Commit requires an explicit inactive-workout guard, and Stage (i) still guards owner/block/rules/head/seal and overlapping workout state.
+
+Focused proof: `node tests/bvom-lab/bb2_stage2_start_contracts.js`, including a real 32-credit sealed block and adversarial forged-carry test. Included in the full Lab gate.
+
+This is a validator for constructed new Start events, **not** an installed writer or a runtime app integration. It does not yet persist setup or enforce at-rest import validation.
+
 ## Required next Stage (ii) contracts — not yet implemented
 
-1. Versioned append-time `WORKOUT_STARTED` planner/validator binding the snapshot to **this** catalogue and derived Stage (i) prescription without retroactively refusing legitimate historical snapshots. Explicitly check DERIVED lineage rather than accepting a forged source event, including carried provenance.
+1. Real application-side `WORKOUT_STARTED` planner and atomic persistence that call the pure guarded Start boundary, bind it to a **durably stored** pre-Start setup and enforce isolation from legacy save/restore and cloud comparison logic. Add a distinct low-stress RECOVERY Start planner.
 2. Durable local pre-Start setup persistence (exercise choices and optional curls), guarded for ownership/restore. Do not add new data to an unprotected cloud fingerprint or cloud payload.
 3. Persistent `(blockId, sessionId, eventRevision)` Finish/credit idempotence and a restore/import validation path that enforces eligible NORMAL Finish plus its credit together. Arbitrary bare `foldBB2Block` must never be treated as trusted imported application state.
 4. Append through `planBB2Finish` and `commitBB2Transaction` with stale-head, ownership and sealed-block protection. Later UI and storage integration require separate gates, then an independent audit before enabling users.
