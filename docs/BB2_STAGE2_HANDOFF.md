@@ -29,11 +29,19 @@ Focused proof: `node tests/bvom-lab/bb2_stage2_start_contracts.js`, including a 
 
 This is a validator for constructed new Start events, **not** an installed writer or a runtime app integration. It does not yet persist setup or enforce at-rest import validation.
 
+## Third checkpoint — replay-verifying restore and Finish key material
+
+`bb2/restore.cjs` validates a complete restored/imported block with the original frozen fold. It then checks each NORMAL Finish **at its original ordinal**: when that Finish was 70%-eligible under its quota, the next event must be the matching `CREDIT_GRANTED`. This rejects a bare Finish that the low-level fold can otherwise represent as `COMPLETED_NORMAL_NONCREDIT`; a later unrelated credit cannot disguise the omission. Legitimate future corrections plus revocation remain replayable. A below-70%-gate session records `WORKOUT_INCOMPLETE`, not a falsely credited Finish.
+
+`bb2FinishRevisionKey(blockId, sessionId, eventRevision)` produces deterministic, collision-free idempotence key material. **It is not durable on its own**: the eventual storage commit must atomically save the key and the Finish/credit events, with owner/head/lease guards. Structural adjacency is proof of pairing in the restored stream, not independent proof of original atomic disk writes.
+
+Focused proof: `node tests/bvom-lab/bb2_stage2_restore_contracts.js`. Included in the full gate.
+
 ## Required next Stage (ii) contracts — not yet implemented
 
 1. Real application-side `WORKOUT_STARTED` planner and atomic persistence that call the pure guarded Start boundary, bind it to a **durably stored** pre-Start setup and enforce isolation from legacy save/restore and cloud comparison logic. Add a distinct low-stress RECOVERY Start planner.
 2. Durable local pre-Start setup persistence (exercise choices and optional curls), guarded for ownership/restore. Do not add new data to an unprotected cloud fingerprint or cloud payload.
-3. Persistent `(blockId, sessionId, eventRevision)` Finish/credit idempotence and a restore/import validation path that enforces eligible NORMAL Finish plus its credit together. Arbitrary bare `foldBB2Block` must never be treated as trusted imported application state.
+3. Bind the pure restore checker and stable `(blockId, sessionId, eventRevision)` key to **durable atomic storage** for Finish and credit. Arbitrary bare `foldBB2Block` must never be treated as trusted imported application state.
 4. Append through `planBB2Finish` and `commitBB2Transaction` with stale-head, ownership and sealed-block protection. Later UI and storage integration require separate gates, then an independent audit before enabling users.
 
 The Stage (i) event and fold rules remain frozen. Stage (ii) can introduce a new validated writer outside that ledger; any fold-rule change must follow the pinned `foldRulesVersion` mechanism. No merge, production deployment or Supabase access is authorised by this checkpoint.
