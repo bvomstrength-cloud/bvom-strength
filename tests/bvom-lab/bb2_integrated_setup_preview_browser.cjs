@@ -134,11 +134,31 @@ const server=http.createServer((req,res)=>{
   await page.reload();
   await page.waitForSelector('#workout .warmrow:has-text("8 reps")');
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.events.length),2);
+  // This is the first eligible exposure. A between-set trial must remain
+  // session-scoped, survive reload and preserve the earlier 60 kg actual.
+  await page.waitForSelector('#workout [data-bb2-trial-save="0"]');
+  await page.locator('#workout [data-bb2-trial="0"]').fill('67.5');
+  await page.locator('#workout [data-bb2-trial-save="0"]').click();
+  assert.equal(await page.evaluate(()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   return b.events.at(-1).type==='CALIBRATION_PLAN_REVISED'&&b.events.at(-1).plannedG===67500;
+  }),true,'first-exposure calibration trial is a session-only ledger event');
+  await page.reload();
+  await page.waitForSelector('#workout [data-bb2-trial="0"]');
+  assert.equal(await page.locator('#workout [data-bb2-trial="0"]').inputValue(),'67.5');
+  await page.locator('#workout [data-bb2-reps="0|1"]').fill('8');
+  await page.locator('#workout [data-bb2-log="0|1"]').click();
+  assert.equal(await page.evaluate(()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   const rows=b.events.filter(e=>e.type==='SET_RECORDED');
+   return rows[0].actualG===60000&&rows[1].actualG===67500;
+  }),true,'reload and trial change only subsequent actual sets');
   await page.locator('#workout [data-bb2-discard]').click();
   const discarded=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
   assert.equal(discarded.bb2.activeSessionId,null);
   assert.equal(discarded.bb2.events[0].type,'TOMBSTONE');
   assert.equal(discarded.bb2.events[1].type,'TOMBSTONE');
+  assert.equal(discarded.bb2.events[2].type,'TOMBSTONE','Discard removes session-only calibration trial');
   assert.equal(discarded.history.length,fixture.history.length);
   // The same shared Workout/History surfaces now exercise the true Finish gate.
   await page.evaluate(()=>showSetup());
@@ -210,23 +230,8 @@ const server=http.createServer((req,res)=>{
    return b.events.at(-1).actualG;
   }),65000,'working actual inherits the edited canonical load');
   assert.equal(await page.locator('#workout [data-bb2-edit-save="0"]').isDisabled(),true);
-  await page.waitForSelector('#workout [data-bb2-trial-save="0"]');
-  await page.locator('#workout [data-bb2-trial="0"]').fill('67.5');
-  await page.locator('#workout [data-bb2-trial-save="0"]').click();
-  assert.equal(await page.evaluate(()=>{
-   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
-   return b.events.at(-1).type==='CALIBRATION_PLAN_REVISED'&&b.events.at(-1).plannedG===67500;
-  }),true,'first-exposure calibration trial is a session-only ledger event');
-  await page.reload();
-  await page.waitForSelector('#workout [data-bb2-trial="0"]');
-  assert.equal(await page.locator('#workout [data-bb2-trial="0"]').inputValue(),'67.5');
-  await page.locator('#workout [data-bb2-reps="0|1"]').fill('8');
-  await page.locator('#workout [data-bb2-log="0|1"]').click();
-  assert.equal(await page.evaluate(()=>{
-   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
-   const rows=b.events.filter(e=>e.type==='SET_RECORDED'&&e.roleSlotId===b.events.find(x=>x.type==='WORKOUT_STARTED'&&x.sessionId===b.activeSessionId).slots[0].roleSlotId);
-   return rows.at(-1).actualG===67500&&rows.at(-2).actualG===65000;
-  }),true,'reload and trial must change only subsequent actual sets');
+  assert.equal(await page.locator('#workout [data-bb2-trial-save="0"]').count(),0,
+   'already-calibrated exercise cannot reopen first-exposure trial controls');
   await page.locator('#workout [data-bb2-discard]').click();
   assert.equal(await page.evaluate(()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
