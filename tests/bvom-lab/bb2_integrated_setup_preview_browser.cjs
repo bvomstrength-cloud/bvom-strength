@@ -133,7 +133,15 @@ const server=http.createServer((req,res)=>{
   await page.locator('#setup [data-bb2-start]').click();
   await page.waitForSelector('#workout [data-bb2-finish]');
   assert.equal(await page.locator('#workout [data-bb2-finish]').isDisabled(),true,'Finish disabled under 70%');
-  for(const [i,j] of [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[3,0]]){
+  // Specialist overrides (e.g. log push press) alter set counts and order.
+  // Choose the first nine genuine prescribed indices from the immutable Start.
+  const prescribedPairs=await page.evaluate(()=>{
+   const d=JSON.parse(localStorage.getItem('bvom_data'));
+   const start=d.bb2.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===d.bb2.activeSessionId);
+   return start.slots.flatMap((slot,i)=>Array.from({length:slot.sets},(_,j)=>[i,j]));
+  });
+  assert.equal(prescribedPairs.length,12,'upper A has twelve prescribed sets');
+  for(const [i,j] of prescribedPairs.slice(0,9)){
    const k=i+'|'+j;
    await page.locator('#workout [data-bb2-reps="'+k+'"]').fill('8');
    await page.locator('#workout [data-bb2-log="'+k+'"]').click();
