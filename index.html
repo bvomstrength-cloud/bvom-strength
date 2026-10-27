@@ -5095,6 +5095,8 @@ function bvomBb2WorkingSlot(startSlot,events,sessionId){
    slot.plannedG=e.loadG;slot.plannedOrigin=e.loadOrigin;
   }else if(e.type==='INCREMENT_EDITED'){
    slot.incrementG=e.incrementG;slot.incrementOrigin=e.incrementOrigin;
+  }else if(e.type==='VARIATION_EDITED'){
+   slot.variation=e.variation;slot.assistance=e.assistance;
   }
  }
  return slot;
@@ -5167,6 +5169,46 @@ function bvomBb2EditWorkingLoad(i){
   if(!bvomBb2Commit({...b,events:tx.events}))return false;
   bvomBb2Workout();renderWarm();return true;
  }catch(error){console.error('BB2 working-weight edit rejected',error);return false}
+}
+function bvomBb2EditBodyweightPlan(i){
+ if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed()||
+    !bvomBb2PreviewModule||!Number.isSafeInteger(i))return false;
+ const b=state.bb2,m=bvomBb2PreviewModule;
+ const start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
+ const original=start?.slots[i];if(!original||original.equipment!=='bodyweight')return false;
+ const slot=bvomBb2WorkingSlot(original,b.events,b.activeSessionId);
+ if(b.events.some(e=>e.sessionId===b.activeSessionId&&e.roleSlotId===slot.roleSlotId&&
+    ['SET_RECORDED','EXTRA_SET_RECORDED','EXERCISE_LOCKED'].includes(e.type))||
+    bvomBb2WarmupTouched(b.activeSessionId,slot))return false;
+ const variation=String(document.querySelector('#workout [data-bb2-plan-variation="'+i+'"]')?.value??'').trim();
+ const assistance=String(document.querySelector('#workout [data-bb2-plan-assist="'+i+'"]')?.value??'').trim();
+ const raw=String(document.querySelector('#workout [data-bb2-plan-added="'+i+'"]')?.value??'').trim();
+ if(!variation||!assistance||variation.length>80||assistance.length>80)return false;
+ try{
+  const unit=state.unit==='lb'?'lb':'kg';
+  let nextLoad=slot.plannedG,nextOrigin=slot.plannedOrigin;
+  if(!raw&&slot.plannedG!==undefined){nextLoad=0;nextOrigin={value:'0',unit}}
+  else if(raw&&!(slot.plannedG!==undefined&&raw===bvomBb2DisplayLoad(slot.plannedG))){
+   nextLoad=m.BB2_BROWSER_MODULES.ledger.canonicalGrams(raw,unit);
+   nextOrigin={value:raw,unit};
+  }
+  const events=[];
+  const base={blockId:b.opening.blockId,sessionId:b.activeSessionId,
+   templateId:start.templateId,roleSlotId:slot.roleSlotId,exerciseId:slot.exerciseId,scope:'GLOBAL'};
+  if(variation!==slot.variation||assistance!==slot.assistance)events.push({
+   ...base,type:'VARIATION_EDITED',variation,assistance});
+  if(nextLoad!==slot.plannedG&&nextLoad!==undefined)events.push({
+   ...base,type:'PRESCRIPTION_EDITED',loadG:nextLoad,loadOrigin:nextOrigin});
+  if(!events.length)return true;
+  const before=m.foldBB2Block(b.opening,b.events);
+  const edits=events.map((e,k)=>({...e,eventId:'bwplan:'+b.activeSessionId+':'+(b.events.length+k),
+   commitOrdinal:b.events.length+k+1}));
+  const tx=m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(b.opening,b.events,edits,{
+   ownerId:b.opening.ownerId,blockId:b.opening.blockId,expectedHead:b.events.length,
+   foldRulesVersion:b.opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:true});
+  if(!bvomBb2Commit({...b,events:tx.events}))return false;
+  bvomBb2Workout();renderWarm();return true;
+ }catch(error){console.error('BB2 bodyweight plan edit rejected',error);return false}
 }
 function bvomBb2ReviseTrial(i){
  if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed()||
@@ -5270,6 +5312,11 @@ function bvomBb2Workout(){
    (s.equipment==='loaded'?'<div class="warmrow"><label>Working '+unitLabel()+
    ' <input type="number" min="0" step="any" data-bb2-edit="'+i+'" value="'+bvomEsc(bvomBb2DisplayLoad(s.plannedG))+'" '+(touched?'disabled':'')+'></label>'+
    '<button type="button" class="choice" data-bb2-edit-save="'+i+'" onclick="bvomBb2EditWorkingLoad('+i+')" '+(touched?'disabled':'')+'>SAVE WEIGHT</button></div>':'')+
+   (s.equipment==='bodyweight'?'<div class="warmrow"><label>Future variation<input type="text" maxlength="80" data-bb2-plan-variation="'+i+'" value="'+bvomEsc(s.variation)+'" '+(touched?'disabled':'')+'></label>'+
+    '<label>Future assistance<input type="text" maxlength="80" data-bb2-plan-assist="'+i+'" value="'+bvomEsc(s.assistance)+'" '+(touched?'disabled':'')+'></label>'+
+    '<label>Future added '+unitLabel()+' (optional)<input type="number" min="0" step="any" data-bb2-plan-added="'+i+'" value="'+
+     (s.plannedG===undefined?'':bvomEsc(bvomBb2DisplayLoad(s.plannedG)))+'" '+(touched?'disabled':'')+'></label>'+
+    '<button type="button" class="choice" data-bb2-plan-save="'+i+'" onclick="bvomBb2EditBodyweightPlan('+i+')" '+(touched?'disabled':'')+'>SAVE BW PLAN</button></div>':'')+
    (canRevise?'<div class="warmrow"><label>Next set trial '+unitLabel()+
     ' <input type="number" min="0" step="any" data-bb2-trial="'+i+'" value="'+
     bvomEsc(bvomBb2DisplayLoad(trial.grams))+'"></label>'+
@@ -5508,10 +5555,10 @@ function bvomBb2WarmupMark(slotIndex,index){
  }
  // The inactive Workout tab keeps its existing inputs. Lock only this slot's
  // future-prescription editor immediately after the durable preparation tick.
- const weightField=document.querySelector('#workout [data-bb2-edit="'+slotIndex+'"]');
- const saveButton=document.querySelector('#workout [data-bb2-edit-save="'+slotIndex+'"]');
- if(weightField)weightField.disabled=true;
- if(saveButton)saveButton.disabled=true;
+ for(const field of ['edit','edit-save','plan-variation','plan-assist','plan-added','plan-save']){
+  const control=document.querySelector('#workout [data-bb2-'+field+'="'+slotIndex+'"]');
+  if(control)control.disabled=true;
+ }
  bvomBb2WarmupRender();return true;
 }
 function bvomBb2WarmupRender(){

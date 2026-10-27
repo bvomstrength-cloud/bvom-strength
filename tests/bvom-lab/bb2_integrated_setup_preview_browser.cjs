@@ -159,9 +159,17 @@ const server=http.createServer((req,res)=>{
   });
   assert.ok(bodyweightIndex>=0,'real Upper A has a bodyweight slot');
   const bwKey=bodyweightIndex+'|0';
-  await page.locator('#workout [data-bb2-bw-variation="'+bwKey+'"]').fill('assisted pullup');
-  await page.locator('#workout [data-bb2-bw-assist="'+bwKey+'"]').fill('light band');
-  await page.locator('#workout [data-bb2-bw-added="'+bwKey+'"]').fill('2.5');
+  await page.locator('#workout [data-bb2-plan-variation="'+bodyweightIndex+'"]').fill('assisted pullup');
+  await page.locator('#workout [data-bb2-plan-assist="'+bodyweightIndex+'"]').fill('light band');
+  await page.locator('#workout [data-bb2-plan-added="'+bodyweightIndex+'"]').fill('2.5');
+  await page.locator('#workout [data-bb2-plan-save="'+bodyweightIndex+'"]').click();
+  assert.equal(await page.evaluate(()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   return b.events.at(-2).type==='VARIATION_EDITED'&&b.events.at(-1).type==='PRESCRIPTION_EDITED'&&
+    b.events.at(-1).loadG===2500;
+  }),true,'one pre-lock save persists bodyweight variation and external weight');
+  assert.equal(await page.locator('#workout [data-bb2-bw-variation="'+bwKey+'"]').inputValue(),'assisted pullup');
+  assert.equal(await page.locator('#workout [data-bb2-bw-assist="'+bwKey+'"]').inputValue(),'light band');
   await page.locator('#workout [data-bb2-reps="'+bwKey+'"]').fill('8');
   await page.locator('#workout [data-bb2-log="'+bwKey+'"]').click();
   assert.equal(await page.evaluate(()=>{
@@ -176,7 +184,9 @@ const server=http.createServer((req,res)=>{
   assert.equal(discarded.bb2.events[0].type,'TOMBSTONE');
   assert.equal(discarded.bb2.events[1].type,'TOMBSTONE');
   assert.equal(discarded.bb2.events[2].type,'TOMBSTONE','Discard removes session-only calibration trial');
-  assert.equal(discarded.bb2.events[4].type,'TOMBSTONE','Discard removes bodyweight actual while keeping legacy History');
+  assert.equal(discarded.bb2.events[4].type,'VARIATION_EDITED','Discard retains explicit future bodyweight identity');
+  assert.equal(discarded.bb2.events[5].type,'PRESCRIPTION_EDITED','Discard retains explicit future BW+load');
+  assert.equal(discarded.bb2.events[6].type,'TOMBSTONE','Discard removes bodyweight actual while keeping legacy History');
   assert.equal(discarded.history.length,fixture.history.length);
   // The same shared Workout/History surfaces now exercise the true Finish gate.
   await page.evaluate(()=>showSetup());

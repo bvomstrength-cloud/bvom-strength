@@ -692,4 +692,100 @@ function fixture({ls}={}){
  console.log('PASS: BB2 bodyweight-only actual after a planned BW+load prescription');
 }
 
-console.log('BB2 BVOM integrated setup preview: 15/15 PASS');
+{
+ const {h,before}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ctx.__bb2Plan={variation:'assisted pullup',assistance:'light band',added:'2.5'};
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const plan=selector.match(/data-bb2-plan-(variation|assist|added)="(\d+)"/);
+  if(plan)return {value:h.ctx.__bb2Plan[plan[1]==='assist'?'assistance':plan[1]],disabled:false};
+  const bw=selector.match(/data-bb2-bw-(variation|assist|added)="(\d+)\|(\d+)"/);
+  if(bw){const b=h.S().bb2,start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
+   const slot=h.ctx.bvomBb2WorkingSlot(start.slots[Number(bw[2])],b.events,b.activeSessionId);
+   return {value:bw[1]==='variation'?slot.variation:bw[1]==='assist'?slot.assistance:
+    slot.plannedG===undefined?'':h.ctx.bvomBb2DisplayLoad(slot.plannedG)};}
+  const field=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
+  if(field)return {value:field[1]==='load'?'60':field[1]==='inc'?'2.5':
+   field[1]==='assist'?'none':'8',checked:false};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ const start=h.S().bb2.events[0],i=start.slots.findIndex(s=>s.equipment==='bodyweight'),slot=start.slots[i];
+ assert.equal(slot.plannedG,undefined);assert.equal(slot.assistance,'none');
+ assert.equal(h.ctx.bvomBb2EditBodyweightPlan(i),true,'bodyweight prescription can be edited before work');
+ let ev=h.S().bb2.events;
+ assert.deepEqual(ev.slice(1).map(x=>x.type),['VARIATION_EDITED','PRESCRIPTION_EDITED']);
+ assert.ok(ev.slice(1).every(x=>x.scope==='GLOBAL'),'independent edits survive Discard');
+ assert.equal(ev[1].variation,'assisted pullup');assert.equal(ev[1].assistance,'light band');
+ assert.equal(ev[2].loadG,2500);
+ assert.equal(start.slots[i].variation,'pullup','Start snapshot stays immutable');
+ assert.equal(h.ctx.bvomBb2WorkingSlot(slot,ev,h.S().bb2.activeSessionId).assistance,'light band');
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/SAVE BW PLAN/);
+ assert.equal(h.ctx.bvomBb2EditBodyweightPlan(i),true,'unchanged BW plan is idempotent');
+ assert.equal(h.S().bb2.events.length,3);
+ h.ev("state.unit='lb'");h.ctx.__bb2Plan.added=h.ctx.bvomBb2DisplayLoad(2500);
+ assert.equal(h.ctx.bvomBb2EditBodyweightPlan(i),true,'rounded pounds resubmission is a no-op');
+ assert.equal(h.S().bb2.events.length,3);
+ h.ev("state.unit='kg'");
+ const saved=h.ls.getItem('bvom_data');h.ev('bvomWindowLockOwned=false');
+ h.ctx.__bb2Plan.assistance='strong band';
+ assert.equal(h.ctx.bvomBb2EditBodyweightPlan(i),false,'non-owner cannot edit BW plan');
+ assert.equal(h.ls.getItem('bvom_data'),saved);
+ h.ev('bvomWindowLockOwned=true');h.ctx.__bb2Plan.assistance='light band';
+ assert.equal(h.ctx.bvomBb2Log(i,0),true);
+ ev=h.S().bb2.events;const actual=ev.at(-1);
+ assert.equal(actual.actualG,2500);assert.equal(actual.variation,'assisted pullup');
+ assert.equal(actual.assistance,'light band');
+ assert.equal(h.ctx.bvomBb2EditBodyweightPlan(i),false,'recorded set locks BW future prescription');
+ assert.equal(h.ctx.bvomBb2Discard(),true);
+ ev=h.S().bb2.events;
+ assert.equal(ev[0].type,'TOMBSTONE','discard removes Start');
+ assert.equal(ev[1].type,'VARIATION_EDITED');assert.equal(ev[2].type,'PRESCRIPTION_EDITED');
+ assert.equal(ev.at(-2).type,'TOMBSTONE','discard removes session-only actual');
+ const projection=catalogue.foldBB2Block(h.S().bb2.opening,ev);
+ const id='upper_a|'+slot.roleSlotId+'|'+slot.exerciseId;
+ assert.equal(projection.progress[id].loadG,2500,'accepted global BW weight survives Discard');
+ assert.equal(projection.progress[id].assistance,'light band');
+ assert.equal(h.S().history.length,JSON.parse(before).history.length);
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ console.log('PASS: BB2 pre-lock bodyweight prescription, unit no-op, actual inheritance and Discard');
+}
+
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const plan=selector.match(/data-bb2-plan-(variation|assist|added)="\d+"/);
+  if(plan)return {value:plan[1]==='variation'?'assisted pullup':
+   plan[1]==='assist'?'light band':'2.5'};
+  const field=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
+  if(field)return {value:field[1]==='load'?'60':field[1]==='inc'?'2.5':
+   field[1]==='assist'?'none':'8',checked:false};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ const i=h.S().bb2.events[0].slots.findIndex(s=>s.equipment==='bodyweight');
+ const saved=h.ls.getItem('bvom_data'),old=h.S().bb2.events.length;
+ const setItem=h.ls.setItem;
+ h.ls.setItem=(key,value)=>{if(key==='bvom_data')throw Error('simulated disk quota');return setItem(key,value)};
+ assert.equal(h.ctx.bvomBb2EditBodyweightPlan(i),false,
+  'joint BW variation/load edit cannot partially commit on write failure');
+ h.ls.setItem=setItem;
+ assert.equal(h.S().bb2.events.length,old,'both failed edit events rolled back');
+ assert.equal(h.ls.getItem('bvom_data'),saved,'joint edit failure leaves durable document unchanged');
+ console.log('PASS: BB2 atomic two-event bodyweight plan edit rollback');
+}
+
+console.log('BB2 BVOM integrated setup preview: 17/17 PASS');
