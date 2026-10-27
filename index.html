@@ -487,7 +487,7 @@ function save(options){
   }else if(!bvomReleaseWorkoutTabOwnerIfThisTab())throw Error('Workout owner cleanup failed');
  }catch(e){bvomPostCommitOwnerFailureNotice();return true}
  // A post-write notification must not turn a durable commit into a rejected transaction.
- try{if(activityCommitted&&bvomRecoveryMessage)bvomRecoveryStatus(hlmTxt('Workout activity saved. Continue this workout.','ワークアウトの操作を保存しました。トレーニングを続けられます。'));if(window.__bvomCloudBooted&&typeof bvomCloudMaybeScheduleFromSave==='function')bvomCloudMaybeScheduleFromSave(persisted);
+ try{if(activityCommitted&&bvomRecoveryMessage)bvomRecoveryStatus(hlmTxt('Workout activity saved. Continue this workout.','ワークアウトの操作を保存しました。トレーニングを続けられます。'));if(!options?.localOnly&&window.__bvomCloudBooted&&typeof bvomCloudMaybeScheduleFromSave==='function')bvomCloudMaybeScheduleFromSave(persisted);
  if(window.__bvomCloudBooted&&typeof bvomMaybeApplyPendingEntitlementLock==='function')bvomMaybeApplyPendingEntitlementLock()}catch(e){console.warn('BVOM post-save notification failed',e)}
  return true
 }
@@ -4889,11 +4889,12 @@ const bvomOrderBaseWarm=renderWarm;
 renderWarm=function(...args){const out=bvomOrderBaseWarm(...args);bvomOrderApply('warmup');return out};
 /* ===== END EXERCISE DISPLAY ORDER ===== */
 
-/* ===== BB2: developer-only preview inside the existing BVOM program chooser =====
- * The frozen engine/catalogue is reused; this preview never changes BVOM state,
- * starts a workout, creates a BB2 storage key, or touches cloud sync.
+/* ===== BB2: developer-only setup inside the existing BVOM program chooser =====
+ * The frozen engine/catalogue is reused. Only a validated setup is saved in
+ * BVOM's normal local document; no workout, sidecar key or cloud upload.
  */
 let bvomBb2PreviewModule=null,bvomBb2PreviewDraft=null,bvomBb2PreviewOpen=false,bvomBb2PreviewLoading=false;
+let bvomBb2PreviewOriginalMode=null,bvomBb2PreviewSaved=false;
 function bvomBb2PreviewEnabled(){
  const host=String(location.origin||'').replace(/^https?:\/\//,'').split(':')[0];
  return (host==='localhost'||host==='127.0.0.1')&&/(?:^|[?&])bb2Preview=1(?:&|$)/.test(String(location.search||''));
@@ -4920,7 +4921,11 @@ async function bvomBb2OpenPreview(){
   const module=bvomBb2PreviewModule||await import('./bb2/browser-core.mjs');
   if(!bvomBb2PreviewEnabled()||!bvomWorkoutActionAllowed()||
      bvomStateWorkoutActive(state)||state.programMode!==originalMode)return;
-  bvomBb2PreviewModule=module;bvomBb2PreviewDraft=module.createBB2Setup();
+  bvomBb2PreviewModule=module;
+  const stored=state.bb2?.setup;
+  if(stored)module.validateBB2Setup(stored);
+  bvomBb2PreviewDraft=stored?module.createBB2Setup(stored):module.createBB2Setup();
+  bvomBb2PreviewOriginalMode=state.programMode;bvomBb2PreviewSaved=!!stored;
   bvomBb2PreviewOpen=true;bvomBb2RenderPreview();
  }catch(e){console.error('BB2 setup preview unavailable',e);
   bvomBeeModal(hlmTxt('BB2 PREVIEW UNAVAILABLE','BB2プレビューを表示できません'),
@@ -4944,23 +4949,49 @@ function bvomBb2RenderPreview(){
   return `<div class="card" data-bb2-template="${templateId}"><b>${headings[templateId]}</b><div class="small">${prescribed.prescribedCount} ${hlmTxt('working sets','ワーキングセット')} · ${hlmTxt('minimum to finish','完了に必要な最低セット数')} ${prescribed.minimumToFinish}</div>${rows}</div>`;
  }).join('');
  const el=document.querySelector('#setup');document.querySelector('#app').classList.add('hidden');el.classList.remove('hidden');
- el.innerHTML=`<div class="setupBee"><img src="./icon-192.png" alt="Power Bee"><div class="setupBeeTag">BEST VERSION OF MYSELF</div></div><div class="card"><b>${hlmTxt('BODYBUILDING 2 · SETUP PREVIEW','ボディビルディング2 · 設定プレビュー')}</b><p class="small">${hlmTxt('Development preview only. Exercise choices are temporary: no training data is saved, and Start is not enabled yet.','開発用プレビューです。種目の選択は一時的で、トレーニングデータは保存されません。開始機能はまだ無効です。')}</p><label class="toggle"><input type="checkbox" data-bb2-curls ${setup.optionalUpperBCurls?'checked':''} onchange="bvomBb2PreviewCurls(this.checked)"><span>${hlmTxt('Include optional Upper B curls','Upper Bのカール種目を追加')}</span></label></div>${templates}<button type="button" class="secondary wide" data-bb2-back onclick="bvomBb2ClosePreview()">${hlmTxt('BACK TO PROGRAMS','プログラム選択に戻る')}</button>`;
+ el.innerHTML=`<div class="setupBee"><img src="./icon-192.png" alt="Power Bee"><div class="setupBeeTag">BEST VERSION OF MYSELF</div></div><div class="card"><b>${hlmTxt('BODYBUILDING 2 · SETUP PREVIEW','ボディビルディング2 · 設定プレビュー')}</b><p class="small">${hlmTxt('Development setup only. Save keeps choices on this device and in exported BVOM backup files. They are not sent to BVOM Cloud yet. Workout Start is disabled.','開発中の設定画面です。選択内容はこの端末と書き出したBVOMバックアップに保存されます。BVOMクラウドにはまだ送信されません。ワークアウト開始は無効です。')}</p><label class="toggle"><input type="checkbox" data-bb2-curls ${setup.optionalUpperBCurls?'checked':''} onchange="bvomBb2PreviewCurls(this.checked)"><span>${hlmTxt('Include optional Upper B curls','Upper Bのカール種目を追加')}</span></label></div>${templates}<button type="button" class="primary wide" data-bb2-save onclick="bvomBb2SaveSetup()">${bvomBb2PreviewSaved?hlmTxt('SAVED ON THIS DEVICE','この端末に保存済み'):hlmTxt('SAVE BB2 SETUP','BB2設定を保存')}</button><button type="button" class="secondary wide" data-bb2-back onclick="bvomBb2ClosePreview()">${hlmTxt('BACK TO PROGRAMS','プログラム選択に戻る')}</button>`;
 }
 function bvomBb2PreviewChoose(templateId,roleSlotId,exerciseId){
  if(!bvomBb2PreviewOpen||!bvomBb2PreviewModule||!bvomBb2PreviewDraft)return;
  try{bvomBb2PreviewDraft=bvomBb2PreviewModule.BB2_BROWSER_MODULES.catalogue.chooseBB2Exercise(
-  bvomBb2PreviewDraft,templateId,roleSlotId,exerciseId);bvomBb2RenderPreview()}
+  bvomBb2PreviewDraft,templateId,roleSlotId,exerciseId);bvomBb2PreviewSaved=false;bvomBb2RenderPreview()}
  catch(e){console.error('BB2 preview choice rejected',e)}
 }
 function bvomBb2PreviewCurls(enabled){
  if(!bvomBb2PreviewOpen||!bvomBb2PreviewModule||!bvomBb2PreviewDraft)return;
  bvomBb2PreviewDraft=bvomBb2PreviewModule.setBB2OptionalCurls(bvomBb2PreviewDraft,enabled);
- bvomBb2RenderPreview();
+ bvomBb2PreviewSaved=false;bvomBb2RenderPreview();
+}
+function bvomBb2SaveSetup(){
+ if(!bvomBb2PreviewEnabled()||!bvomBb2PreviewOpen||!bvomBb2PreviewModule||
+    !bvomBb2PreviewDraft||state.programMode!==bvomBb2PreviewOriginalMode||
+    !bvomWorkoutActionAllowed()||bvomStateWorkoutActive(state))return false;
+ bvomBb2PreviewModule.validateBB2Setup(bvomBb2PreviewDraft);
+ const snapshot=JSON.parse(JSON.stringify(bvomBb2PreviewDraft));
+ if(JSON.stringify(state.bb2?.setup)===JSON.stringify(snapshot)){
+  bvomBb2PreviewSaved=true;bvomBb2RenderPreview();return true;
+ }
+ const before=state.bb2;
+ state.bb2={...(before&&typeof before==='object'&&!Array.isArray(before)?before:{}),setup:snapshot};
+ if(!save({durable:true,localOnly:true})){
+  if(before===undefined)delete state.bb2;else state.bb2=before;
+  bvomBeeModal(hlmTxt('BB2 SETUP NOT SAVED','BB2設定を保存できません'),
+   hlmTxt('BVOM could not safely save these choices. Your previous setup remains intact.',
+    'BVOMはこの選択内容を安全に保存できませんでした。以前の設定は保持されています。'));
+  return false;
+ }
+ if(bvomPersistenceBlocked())return false;
+ bvomBb2PreviewSaved=true;bvomBb2RenderPreview();return true;
 }
 function bvomBb2ClosePreview(){
  if(!bvomBb2PreviewOpen)return;
- bvomBb2PreviewOpen=false;bvomBb2PreviewDraft=null;showSetup();
+ bvomBb2PreviewOpen=false;bvomBb2PreviewDraft=null;bvomBb2PreviewOriginalMode=null;showSetup();
 }
+// Development-only BB2 setup is part of BVOM's local backup, not the current
+// whole-row cloud payload. Remote unknown BB2 fields remain visible to the
+// existing conflict fingerprint; do not normalise them away.
+const bvomBb2BaseCloudPayload=bvomCloudPayload;
+bvomCloudPayload=function(){const d=bvomBb2BaseCloudPayload();delete d.bb2;return d};
 /* ===== END BB2 DEVELOPER PREVIEW ===== */
 
 bvomHideMainSurfaces();if("serviceWorker" in navigator){

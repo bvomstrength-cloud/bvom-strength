@@ -9,8 +9,8 @@ const H=require('./lib/bvom_harness');
 const path=require('node:path');
 const root=path.resolve(import.meta.dirname,'../..');
 
-function fixture(){
- const h=H.boot(H.loadBuild(root));H.configureLP(h);
+function fixture({ls}={}){
+ const h=H.boot(H.loadBuild(root),ls?{ls}:{});if(!ls)H.configureLP(h);
  const before=h.ls.getItem('bvom_data');
  const document=h.ctx.document,query=document.querySelector;
  const row={children:[],appendChild(el){this.children.push(el);return el},
@@ -43,7 +43,7 @@ function fixture(){
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
   'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
-  'bvomBb2PreviewOpen=true;bvomBb2RenderPreview()');
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;bvomBb2RenderPreview()');
  const html=()=>h.ctx.document.querySelector('#setup').innerHTML;
  assert.match(html(),/BODYBUILDING 2 · SETUP PREVIEW/);
  for(const template of ['upper_a','lower_a','upper_b','lower_b']){
@@ -55,10 +55,61 @@ function fixture(){
  h.ctx.bvomBb2PreviewCurls(true);
  assert.match(html(),/data-bb2-role="upper_b\|biceps_curl"/);
  assert.equal(h.ls.getItem('bvom_data'),before,'editing the preview never writes BVOM state');
+ const normalCloudBefore=JSON.stringify(h.ctx.bvomCloudPayload());
+ h.ctx.__bvomCloudBooted=true;h.ctx.__bb2CloudSchedules=0;
+ h.ev('bvomCloudMaybeScheduleFromSave=function(){globalThis.__bb2CloudSchedules++}');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true,'explicit save through existing BVOM persistence');
+ assert.equal(h.ctx.__bb2CloudSchedules,0,'development-only setup save does not schedule a cloud upload');
+ assert.equal(JSON.stringify(h.ctx.bvomCloudPayload()),normalCloudBefore,'ordinary cloud document is byte-identical');
+ const stored=JSON.parse(h.ls.getItem('bvom_data'));
+ assert.equal(stored.bb2.setup.selections['upper_a|shoulder_press'],'log_push_press');
+ assert.equal(stored.bb2.setup.optionalUpperBCurls,true);
+ assert.equal(stored.programMode,'lprpt','BB2 setup does not switch the active program');
+ assert.equal(stored.history.length,JSON.parse(before).history.length,'no synthetic workout History');
+ assert.match(html(),/SAVED ON THIS DEVICE/);
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true,'repeated save is idempotent');
+ assert.equal(h.ls.getItem('bvom_data'),JSON.stringify(stored),'idempotent save does not touch storage');
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined,'development state is excluded from cloud payloads');
+ assert.notEqual(h.ctx.bvomCloudComparableFingerprint(stored),h.ctx.bvomCloudComparableFingerprint(h.ctx.bvomCloudPayload()),'cloud fingerprint retains unknown BB2 data for conflict detection');
+ assert.equal(h.ev('save()'),true,'an ordinary BVOM save still succeeds');
+ assert.equal(h.ctx.__bb2CloudSchedules,1,'normal BVOM saves still schedule cloud sync');
  h.ctx.bvomBb2ClosePreview();
- assert.equal(h.ls.getItem('bvom_data'),before,'closing cannot write a workout');
+ assert.equal(h.ls.getItem('bvom_data'),JSON.stringify(stored),'closing cannot write a workout');
  assert.equal(h.S().programMode,'lprpt','active program remains LP');
- console.log('PASS: one chooser entry, four days, log override, optional curls, no persisted edits');
+ const restarted=fixture({ls:h.ls});
+ assert.deepEqual(JSON.parse(JSON.stringify(restarted.h.S().bb2.setup)),stored.bb2.setup,'normal app boot restores BB2 selections');
+ restarted.h.ctx.location.origin='http://localhost:8000';
+ restarted.h.ctx.location.search='?bb2Preview=1';
+ restarted.h.ctx.__bb2CatalogueForTest=catalogue;
+ restarted.h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest; bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup(state.bb2.setup); bvomBb2PreviewOpen=true; bvomBb2PreviewSaved=true; bvomBb2RenderPreview()');
+ const reopened=restarted.h.ctx.document.querySelector('#setup').innerHTML;
+ assert.match(reopened,/data-bb2-curls checked/,'reopened setup retains optional curls');
+ assert.match(reopened,/option value="log_push_press" selected/,'reopened setup retains selected press');
+ console.log('PASS: chooser entry, four days, explicit shared save, backup state, cloud exclusion, reload');
+}
+
+{
+ const {h,before}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ h.ctx.bvomBb2PreviewChoose('upper_a','shoulder_press','log_push_press');
+ h.ev('bvomWindowLockOwned=false');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),false,'window lock rejection refuses setup');
+ assert.equal(h.S().bb2,undefined,'rejected save rolls back state');
+ assert.equal(h.ls.getItem('bvom_data'),before,'rejected save does not alter original blob');
+ h.ev('bvomWindowLockOwned=true');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true,'retry after recovered guard succeeds');
+ const first=h.S().bb2.setup;
+ h.ctx.bvomBb2PreviewCurls(true);
+ const raw=h.ls.getItem('bvom_data');
+ h.ev('bvomWindowLockOwned=false');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),false,'second rejected save refuses replacement');
+ assert.equal(h.S().bb2.setup,first,'previous persisted setup remains in memory');
+ assert.equal(h.ls.getItem('bvom_data'),raw,'previous persisted setup remains on disk');
+ console.log('PASS: rejected saves roll back without changing earlier valid setup');
 }
 
 {
@@ -73,4 +124,4 @@ function fixture(){
  console.log('PASS: active workout cannot open BB2 preview');
 }
 
-console.log('BB2 BVOM integrated setup preview: 3/3 PASS');
+console.log('BB2 BVOM integrated setup preview: 4/4 PASS');

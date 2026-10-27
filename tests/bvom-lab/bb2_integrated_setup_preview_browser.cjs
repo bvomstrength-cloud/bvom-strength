@@ -1,6 +1,7 @@
 'use strict';
 // BB2 Stage (ii): the real BVOM chooser opens the versioned catalogue only on
-// loopback with an explicit preview flag. No app-state or cloud mutation occurs.
+// loopback with an explicit preview flag. Only an explicit setup save changes
+// the existing BVOM local document, never the current cloud payload.
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const http=require('node:http');
@@ -61,23 +62,42 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('#setup [data-bb2-template]').count(),4,'four BB2 training days');
   assert.equal(await page.locator('#setup [data-bb2-role]').count(),20,'optional curl omitted initially');
   assert.equal(await page.locator('#setup button:has-text("START BODYBUILDING 2")').count(),0,'no active Start button');
-  assert.match(await page.locator('#setup').textContent(),/no training data is saved/i);
+  assert.match(await page.locator('#setup').textContent(),/save keeps choices on this device/i);
 
   await page.locator('#setup [data-bb2-role="upper_a|shoulder_press"]').selectOption('log_push_press');
   assert.match(await page.locator('#setup [data-bb2-template="upper_a"]').textContent(),/2 × 4–6 reps/);
   await page.locator('#setup [data-bb2-curls]').click();
   assert.equal(await page.locator('#setup [data-bb2-role]').count(),21,'optional curls appear in Upper B');
   assert.equal(await page.evaluate(()=>localStorage.getItem('bvom_data')),savedBefore,'preview edits never persist');
+  await page.locator('#setup [data-bb2-save]').click();
+  assert.match(await page.locator('#setup [data-bb2-save]').textContent(),/SAVED ON THIS DEVICE/);
+  const savedAfter=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
+  assert.equal(savedAfter.bb2.setup.optionalUpperBCurls,true,'explicit save persists curls in normal state');
+  assert.equal(savedAfter.bb2.setup.selections['upper_a|shoulder_press'],'log_push_press');
+  assert.equal(savedAfter.programMode,fixture.programMode,'saving BB2 does not change the active program');
+  assert.equal(savedAfter.history.length,fixture.history.length,'saving BB2 does not add a workout');
+  assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false,'BB2 setup is absent from cloud payload');
   await page.locator('#setup [data-bb2-back]').click();
   assert.equal(await page.locator('#setup [data-bb2-preview]').count(),1,'return to the normal chooser');
-  assert.equal(await page.evaluate(()=>localStorage.getItem('bvom_data')),savedBefore,'closing the preview is a no-op');
+  assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.setup),savedAfter.bb2.setup,'closing the preview does not clear the saved setup');
 
   await page.locator('#setup [data-bb2-preview]').click();
   await page.waitForSelector('#setup [data-bb2-template]');
-  assert.equal(await page.locator('#setup [data-bb2-curls]').isChecked(),false,'preview draft reset on reopen');
-  assert.equal(await page.locator('#setup [data-bb2-role="upper_a|shoulder_press"]').inputValue(),'overhead_press');
+  assert.equal(await page.locator('#setup [data-bb2-curls]').isChecked(),true,'saved curls restored on reopen');
+  assert.equal(await page.locator('#setup [data-bb2-role="upper_a|shoulder_press"]').inputValue(),'log_push_press');
+  await page.reload();
+  await page.waitForSelector('#app:not(.hidden)');
+  await page.evaluate(()=>showSetup());
+  await page.locator('#setup [data-bb2-preview]').click();
+  await page.waitForSelector('#setup [data-bb2-template]');
+  assert.equal(await page.locator('#setup [data-bb2-curls]').isChecked(),true,'saved curls survive complete reload');
+  assert.equal(await page.locator('#setup [data-bb2-role="upper_a|shoulder_press"]').inputValue(),'log_push_press');
+  await page.goto(origin+'/index.html');
+  await page.waitForSelector('#app:not(.hidden)');
+  await page.evaluate(()=>showSetup());
+  assert.equal(await page.locator('#setup [data-bb2-preview]').count(),0,'stored preview does not expose BB2 in normal app');
   assert.deepEqual(errors,[],'no application JavaScript errors');
-  console.log('PASS BB2 integrated setup preview: dev-only chooser, genuine catalogue, temporary edits, no Start or app writes');
+  console.log('PASS BB2 integrated setup preview: dev-only chooser, explicit shared save, reload, cloud exclusion, no Start');
   await context.close();
  }finally{
   if(browser)await browser.close();
