@@ -27,6 +27,12 @@ function fixture({ls}={}){
  h.ctx.location.search='?bb2Preview=1';
  h.ctx.bvomBb2InjectProgramChoice();
  assert.equal(row.children.length,0,'even a URL flag cannot expose BB2 on production');
+ h.ev("state.bb2={activeSessionId:'imported-developer-session'}");
+ h.ctx.renderWarm();h.ctx.renderWorkout();
+ assert.doesNotMatch(h.ctx.document.querySelector('#warmup').innerHTML,/BODYBUILDING 2/,
+  'imported developer data cannot hijack the normal Warm-up tab');
+ assert.doesNotMatch(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-log/,
+  'imported developer data cannot hijack the normal Workout tab');
  console.log('PASS: BB2 development preview not visible on normal or production URLs');
 }
 
@@ -280,6 +286,22 @@ function fixture({ls}={}){
  assert.equal(plans.find(x=>x.kind==='FEEDER').sets.length>0,true,'FEEDER provides lighter prep');
  assert.equal(plans.find(x=>x.kind==='QUALITATIVE').sets.length,0,'bodyweight advice has no fake weights');
  assert.equal(plans.find(x=>x.kind==='NONE').sets.length,0,'isolation work has no dedicated prep');
+ const dumbbell={...started.slots[0],exerciseId:'dumbbell_flat_press'};
+ const dbPlan=h.ctx.bvomBb2WarmupPlan(dumbbell,{warmup:'FULL'});
+ assert.match(dbPlan.note,/per hand/,'dumbbells describe per-hand load');
+ assert.ok(dbPlan.sets.length>0&&dbPlan.sets.every(([weight])=>weight<60));
+ assert.ok(!dbPlan.sets.some(([weight])=>weight===20),'dumbbell ramps do not invent a bar weight');
+ const machine={...started.slots[0],exerciseId:'machine_chest_press'};
+ const machinePlan=h.ctx.bvomBb2WarmupPlan(machine,{warmup:'FULL'});
+ assert.match(machinePlan.note,/no assumed bar or stack weight/);
+ assert.ok(machinePlan.sets.length>0);
+ const logPlan=h.ctx.bvomBb2WarmupPlan({...started.slots[0],exerciseId:'log_push_press'},
+  {warmup:'FULL'});
+ assert.equal(logPlan.kind,'FULL','log push press keeps specialist warm-up class');
+ assert.ok(logPlan.sets.length>0);
+ const unloaded=h.ctx.bvomBb2WarmupPlan({...dumbbell,plannedG:undefined},
+  {warmup:'FULL'});
+ assert.equal(unloaded.sets.length,0,'missing reliable working load never creates kg advice');
  const rendered=h.ctx.document.querySelector('#warmup').innerHTML;
  assert.match(rendered,/BODYBUILDING 2 · WARM-UP/);
  assert.match(rendered,/data-bb2-warm-tick="0\|0"/);
@@ -289,8 +311,14 @@ function fixture({ls}={}){
  assert.equal(h.ctx.bvomBb2WarmupMark(0,999),false,'unprescribed warmup index rejected');
  assert.equal(h.ls.getItem('bvom_data'),beforeTick);
  assert.equal(h.ctx.bvomBb2WarmupMark(0,0),true,'warmup tick saved through shared BVOM document');
- const key='BB2|'+started.sessionId+'|'+started.slots[0].roleSlotId+'|'+started.slots[0].exerciseId;
+ const key=h.ctx.bvomBb2WarmupKey(started.sessionId,started.slots[0],plans[0]);
  assert.equal(h.S().warmupDone[key][0],true);
+ const changedLoad={...started.slots[0],plannedG:started.slots[0].plannedG+2500};
+ const revised=h.ctx.bvomBb2WarmupPlan(changedLoad,roles[0]);
+ assert.notEqual(key,h.ctx.bvomBb2WarmupKey(started.sessionId,changedLoad,revised),
+  'changing an upcoming working load cannot reuse previous warm-up ticks');
+ assert.notEqual(key,h.ctx.bvomBb2WarmupKey(started.sessionId,started.slots[0],
+  {...plans[0],sets:plans[0].sets.slice(1)}),'different preparation plans cannot reuse ticks');
  assert.equal(h.S().bb2.events.length,1,'preparation does not create a working-set event');
  assert.equal(JSON.stringify(h.S().session),legacySession,'no legacy working-set session changed');
  assert.equal(h.S().history.length,JSON.parse(before).history.length,'History is unchanged');
@@ -314,4 +342,34 @@ function fixture({ls}={}){
  console.log('PASS: BB2 FULL/FEEDER/QUALITATIVE/NONE, durable ticks, reload, rollback and ledger separation');
 }
 
-console.log('BB2 BVOM integrated setup preview: 8/8 PASS');
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const hit=selector.match(/data-bb2-(load|inc|assist)="([^"]+)"/);
+  if(hit)return {value:hit[1]==='load'?'60':hit[1]==='inc'?'2.5':'none'};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ const before=h.ls.getItem('bvom_data');
+ const priorWarm=JSON.stringify(h.S().warmupDone);
+ const originalSet=h.ls.setItem;
+ h.ls.setItem=(key,value)=>{
+  if(key==='bvom_data')throw Error('simulated storage quota failure');
+  return originalSet(key,value);
+ };
+ assert.equal(h.ctx.bvomBb2WarmupMark(0,0),false,'failed durable save refuses the tick');
+ assert.equal(h.ls.getItem('bvom_data'),before,'failure cannot alter persisted BVOM data');
+ assert.equal(JSON.stringify(h.S().warmupDone),priorWarm,'in-memory warm-up ticks roll back');
+ assert.equal(h.S().bb2.events.length,1,'no ledger events created by a failed warm-up save');
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined,'failed write cannot send BB2 to cloud');
+ console.log('PASS: BB2 warm-up storage failure rolls back ticks and preserves ledger');
+}
+
+console.log('BB2 BVOM integrated setup preview: 9/9 PASS');

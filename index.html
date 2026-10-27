@@ -5209,7 +5209,7 @@ renderHistory=function(...args){
 };
 
 const bvomBb2OldRenderWorkout=renderWorkout;
-renderWorkout=function(...args){return bvomBb2Active()?bvomBb2Workout():bvomBb2OldRenderWorkout(...args)};
+renderWorkout=function(...args){return bvomBb2PreviewEnabled()&&bvomBb2Active()?bvomBb2Workout():bvomBb2OldRenderWorkout(...args)};
 // BB2 preparation uses the existing Warm-up tab and BVOM strength warmups()
 // for recognised barbell lifts. All preparation is separate from the frozen
 // BB2 working-set ledger and cannot change progression or block credits.
@@ -5252,8 +5252,12 @@ function bvomBb2WarmupPlan(slot,role){
  }
  return {kind,sets,note,work,unit};
 }
-function bvomBb2WarmupKey(sessionId,slot){
- return 'BB2|'+sessionId+'|'+slot.roleSlotId+'|'+slot.exerciseId;
+function bvomBb2WarmupKey(sessionId,slot,plan){
+ // A future weight or equipment edit must not inherit ticks from a different
+ // prescription. The plan itself is the key material; no ledger event is made.
+ const planScope=JSON.stringify([slot.plannedG??null,slot.incrementG??null,
+  plan.kind,plan.unit||state.unit,plan.sets]);
+ return 'BB2|'+sessionId+'|'+slot.roleSlotId+'|'+slot.exerciseId+'|'+planScope;
 }
 function bvomBb2WarmupMark(slotIndex,index){
  if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed()||
@@ -5266,7 +5270,7 @@ function bvomBb2WarmupMark(slotIndex,index){
  if(!role)return false;
  const plan=bvomBb2WarmupPlan(slot,role);
  if(!Number.isSafeInteger(index)||index<0||index>=plan.sets.length)return false;
- const key=bvomBb2WarmupKey(start.sessionId,slot),before=state.warmupDone;
+ const key=bvomBb2WarmupKey(start.sessionId,slot,plan),before=state.warmupDone;
  const marks={...(before?.[key]||{})};
  if(marks[index])delete marks[index];else marks[index]=true;
  const next={...(before||{})};
@@ -5295,7 +5299,7 @@ function bvomBb2WarmupRender(){
  const cards=start.slots.map((slot,i)=>{
   const role=rx.slots.find(x=>x.roleSlotId===slot.roleSlotId&&x.exerciseId===slot.exerciseId);
   const plan=bvomBb2WarmupPlan(slot,role);
-  const done=state.warmupDone?.[bvomBb2WarmupKey(start.sessionId,slot)]||{};
+  const done=state.warmupDone?.[bvomBb2WarmupKey(start.sessionId,slot,plan)]||{};
   const rows=plan.sets.map(([weight,reps],j)=>
    '<div class="warmrow"><button type="button" class="set '+(done[j]?'done':'')+
    '" data-bb2-warm-tick="'+i+'|'+j+'" onclick="bvomBb2WarmupMark('+i+','+j+')">✓</button>'+
@@ -5316,11 +5320,11 @@ function bvomBb2WarmupRender(){
 }
 const bvomBb2OldRenderWarm=renderWarm;
 renderWarm=function(...args){
- if(bvomBb2Active())return bvomBb2WarmupRender();
+ if(bvomBb2PreviewEnabled()&&bvomBb2Active())return bvomBb2WarmupRender();
  return bvomBb2OldRenderWarm(...args);
 };
 const bvomBb2OldFinish=finishWorkout;
-finishWorkout=function(...args){return bvomBb2Active()?bvomBb2End('FINISH'):bvomBb2OldFinish(...args)};
+finishWorkout=function(...args){return bvomBb2PreviewEnabled()&&bvomBb2Active()?bvomBb2End('FINISH'):bvomBb2OldFinish(...args)};
 
 /* ===== END BB2 DEVELOPER PREVIEW ===== */
 
