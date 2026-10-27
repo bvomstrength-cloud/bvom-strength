@@ -4889,6 +4889,80 @@ const bvomOrderBaseWarm=renderWarm;
 renderWarm=function(...args){const out=bvomOrderBaseWarm(...args);bvomOrderApply('warmup');return out};
 /* ===== END EXERCISE DISPLAY ORDER ===== */
 
+/* ===== BB2: developer-only preview inside the existing BVOM program chooser =====
+ * The frozen engine/catalogue is reused; this preview never changes BVOM state,
+ * starts a workout, creates a BB2 storage key, or touches cloud sync.
+ */
+let bvomBb2PreviewModule=null,bvomBb2PreviewDraft=null,bvomBb2PreviewOpen=false,bvomBb2PreviewLoading=false;
+function bvomBb2PreviewEnabled(){
+ const host=String(location.origin||'').replace(/^https?:\/\//,'').split(':')[0];
+ return (host==='localhost'||host==='127.0.0.1')&&/(?:^|[?&])bb2Preview=1(?:&|$)/.test(String(location.search||''));
+}
+function bvomBb2PreviewLabel(id){return String(id).replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase())}
+function bvomBb2InjectProgramChoice(){
+ if(!bvomBb2PreviewEnabled())return;
+ const row=document.querySelector('#setup [data-bb-program]')?.parentElement;
+ if(!row||row.querySelector('[data-bb2-preview]'))return;
+ const button=document.createElement('button');button.type='button';button.className='choice';
+ button.dataset.bb2Preview='1';button.textContent='BODYBUILDING 2 · PREVIEW';
+ button.onclick=bvomBb2OpenPreview;row.appendChild(button);
+}
+const bvomBb2BaseInjectProgramChoice=bvomBbInjectProgramChoice;
+bvomBbInjectProgramChoice=function(...args){
+ const result=bvomBb2BaseInjectProgramChoice(...args);bvomBb2InjectProgramChoice();return result;
+};
+async function bvomBb2OpenPreview(){
+ if(!bvomBb2PreviewEnabled()||bvomBb2PreviewLoading||bvomBb2PreviewOpen||
+    !bvomWorkoutActionAllowed()||bvomStateWorkoutActive(state))return;
+ bvomBb2PreviewLoading=true;
+ const originalMode=state.programMode;
+ try{
+  const module=bvomBb2PreviewModule||await import('./bb2/browser-core.mjs');
+  if(!bvomBb2PreviewEnabled()||!bvomWorkoutActionAllowed()||
+     bvomStateWorkoutActive(state)||state.programMode!==originalMode)return;
+  bvomBb2PreviewModule=module;bvomBb2PreviewDraft=module.createBB2Setup();
+  bvomBb2PreviewOpen=true;bvomBb2RenderPreview();
+ }catch(e){console.error('BB2 setup preview unavailable',e);
+  bvomBeeModal(hlmTxt('BB2 PREVIEW UNAVAILABLE','BB2プレビューを表示できません'),
+   hlmTxt('The development catalogue could not be loaded. Your BVOM data has not changed.',
+    '開発用カタログを読み込めませんでした。BVOMのデータは変更されていません。'));
+ }finally{bvomBb2PreviewLoading=false}
+}
+function bvomBb2RenderPreview(){
+ if(!bvomBb2PreviewOpen||!bvomBb2PreviewModule||!bvomBb2PreviewDraft)return;
+ const m=bvomBb2PreviewModule,setup=bvomBb2PreviewDraft;
+ const headings={upper_a:'UPPER A',lower_a:'LOWER A',upper_b:'UPPER B',lower_b:'LOWER B'};
+ const templates=m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.map(templateId=>{
+  const prescribed=m.getBB2TemplatePrescription(setup,templateId);
+  const rows=m.BB2_BROWSER_MODULES.catalogue.CATALOGUE[templateId].filter(role=>
+   !role.optional||setup.optionalUpperBCurls).map(role=>{
+    const key=templateId+'|'+role.roleSlotId,selected=setup.selections[key];
+    const slot=prescribed.slots.find(s=>s.roleSlotId===role.roleSlotId);
+    const options=role.options.map(o=>`<option value="${bvomEsc(o.id)}" ${o.id===selected?'selected':''}>${bvomEsc(bvomBb2PreviewLabel(o.id))}</option>`).join('');
+    return `<label style="display:block;margin:10px 0"><b>${bvomEsc(bvomBb2PreviewLabel(role.roleSlotId))}</b><select data-bb2-role="${bvomEsc(key)}" onchange="bvomBb2PreviewChoose('${templateId}','${role.roleSlotId}',this.value)" style="width:100%;margin-top:6px">${options}</select><span class="small">${slot.sets} × ${slot.floor}–${slot.ceiling} ${hlmTxt('reps','回')} · ${slot.warmup}</span></label>`;
+   }).join('');
+  return `<div class="card" data-bb2-template="${templateId}"><b>${headings[templateId]}</b><div class="small">${prescribed.prescribedCount} ${hlmTxt('working sets','ワーキングセット')} · ${hlmTxt('minimum to finish','完了に必要な最低セット数')} ${prescribed.minimumToFinish}</div>${rows}</div>`;
+ }).join('');
+ const el=document.querySelector('#setup');document.querySelector('#app').classList.add('hidden');el.classList.remove('hidden');
+ el.innerHTML=`<div class="setupBee"><img src="./icon-192.png" alt="Power Bee"><div class="setupBeeTag">BEST VERSION OF MYSELF</div></div><div class="card"><b>${hlmTxt('BODYBUILDING 2 · SETUP PREVIEW','ボディビルディング2 · 設定プレビュー')}</b><p class="small">${hlmTxt('Development preview only. Exercise choices are temporary: no training data is saved, and Start is not enabled yet.','開発用プレビューです。種目の選択は一時的で、トレーニングデータは保存されません。開始機能はまだ無効です。')}</p><label class="toggle"><input type="checkbox" data-bb2-curls ${setup.optionalUpperBCurls?'checked':''} onchange="bvomBb2PreviewCurls(this.checked)"><span>${hlmTxt('Include optional Upper B curls','Upper Bのカール種目を追加')}</span></label></div>${templates}<button type="button" class="secondary wide" data-bb2-back onclick="bvomBb2ClosePreview()">${hlmTxt('BACK TO PROGRAMS','プログラム選択に戻る')}</button>`;
+}
+function bvomBb2PreviewChoose(templateId,roleSlotId,exerciseId){
+ if(!bvomBb2PreviewOpen||!bvomBb2PreviewModule||!bvomBb2PreviewDraft)return;
+ try{bvomBb2PreviewDraft=bvomBb2PreviewModule.BB2_BROWSER_MODULES.catalogue.chooseBB2Exercise(
+  bvomBb2PreviewDraft,templateId,roleSlotId,exerciseId);bvomBb2RenderPreview()}
+ catch(e){console.error('BB2 preview choice rejected',e)}
+}
+function bvomBb2PreviewCurls(enabled){
+ if(!bvomBb2PreviewOpen||!bvomBb2PreviewModule||!bvomBb2PreviewDraft)return;
+ bvomBb2PreviewDraft=bvomBb2PreviewModule.setBB2OptionalCurls(bvomBb2PreviewDraft,enabled);
+ bvomBb2RenderPreview();
+}
+function bvomBb2ClosePreview(){
+ if(!bvomBb2PreviewOpen)return;
+ bvomBb2PreviewOpen=false;bvomBb2PreviewDraft=null;showSetup();
+}
+/* ===== END BB2 DEVELOPER PREVIEW ===== */
+
 bvomHideMainSurfaces();if("serviceWorker" in navigator){
   window.addEventListener("load", async ()=>{
     try{

@@ -146,6 +146,8 @@ jobs:
         run: node tests/bvom-lab/bb2_browser_host_browser.cjs
       - name: Prove dormant BB2 guards against real BVOM account and browser state
         run: node tests/bvom-lab/bb2_app_session_browser.cjs
+      - name: Check developer-only BB2 setup preview in the real BVOM program chooser
+        run: node tests/bvom-lab/bb2_integrated_setup_preview_browser.cjs
       - name: Run isolated deferred Starting Setup interactions
         run: node tests/bvom-lab/starting_setup_browser.cjs
 
