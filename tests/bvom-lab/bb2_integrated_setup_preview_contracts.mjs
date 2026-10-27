@@ -153,15 +153,6 @@ function fixture({ls}={}){
  assert.equal(h.S().history.length,JSON.parse(before).history.length);
  assert.equal(h.S().bb2.events.length,1);
  assert.equal(h.ctx.bvomCloudWorkoutActive(),true,'BB2 active workout blocks normal cloud activity');
- const bb2GuardDiagnostic={
-  preview:h.ctx.bvomBb2PreviewEnabled(),active:h.ctx.bvomBb2Active(),
-  allowed:h.ctx.bvomWorkoutActionAllowed(),events:h.S().bb2.events.length,
-  validStart:!!h.S().bb2.events.find(e=>e.type==='WORKOUT_STARTED'),
-  repsInput:h.ctx.document.querySelector('#workout [data-bb2-reps="0|0"]')?.value,
-  owned:h.ev('bvomWindowLockOwned'),writeConflict:h.ev('bvomLocalWriteConflictActive'),
-  storedOwner:h.ls.getItem('bvom_workout_tab_owner')
- };
- console.log('BB2 Start/set guard diagnostics',JSON.stringify(bb2GuardDiagnostic));
  assert.equal(h.ctx.bvomBb2Log(0,0),true,'prescribed on-plan set committed');
  assert.equal(h.S().bb2.events.length,2);
  assert.equal(h.ctx.bvomBb2Log(0,0),false,'duplicate set refused');

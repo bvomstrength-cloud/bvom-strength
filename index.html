@@ -5115,7 +5115,7 @@ function bvomBb2Log(i,j){
  if(!slot||j<0||j>=slot.sets||b.events.some(e=>e.type==='SET_RECORDED'&&e.sessionId===b.activeSessionId&&e.roleSlotId===slot.roleSlotId&&e.setIndex===j))return false;
  const key=i+'|'+j,raw=String(document.querySelector('#workout [data-bb2-reps="'+key+'"]')?.value||'');
  if(!/^[1-9][0-9]*$/.test(raw)||!Number.isSafeInteger(Number(raw)))return false;
- const e={type:'SET_RECORDED',eventId:'set:'+b.activeSessionId+':'+key,
+ const e={type:'SET_RECORDED',eventId:'set:'+b.activeSessionId+':'+i+'-'+j,
   commitOrdinal:b.events.length+1,blockId:b.opening.blockId,sessionId:b.activeSessionId,
   roleSlotId:slot.roleSlotId,exerciseId:slot.exerciseId,setIndex:j,reps:Number(raw),
   prescribed:true,harderThanIntended:!!document.querySelector('#workout [data-bb2-hard="'+key+'"]')?.checked};
@@ -5128,7 +5128,7 @@ function bvomBb2Log(i,j){
    foldRulesVersion:b.opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:true});
   if(!bvomBb2Commit({...b,events:tx.events}))return false;
   bvomBb2Workout();return true;
- }catch(error){console.error('BB2 set rejected',error);throw error}
+ }catch(error){console.error('BB2 set rejected',error);return false}
 }
 function bvomBb2Discard(){
  if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed()||!bvomBb2PreviewModule)return false;
