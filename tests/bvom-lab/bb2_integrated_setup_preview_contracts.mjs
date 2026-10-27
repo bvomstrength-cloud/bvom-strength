@@ -447,4 +447,110 @@ function fixture({ls}={}){
  console.log('PASS: BB2 pre-lock load edit, warm-up refresh, actual inheritance, lock and discard');
 }
 
-console.log('BB2 BVOM integrated setup preview: 10/10 PASS');
+{
+ const {h,before}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;h.ctx.__bb2TrialLoad='65';
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const hit=selector.match(/data-bb2-(load|inc|assist|reps|hard|trial)="([^"]+)"/);
+  if(hit){
+   if(hit[1]==='hard')return {checked:false};
+   return {value:hit[1]==='load'?'60':hit[1]==='inc'?'2.5':
+    hit[1]==='reps'?'8':hit[1]==='trial'?h.ctx.__bb2TrialLoad:'none'};
+  }
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ const original=h.S().bb2.events[0].slots[0];
+ assert.equal(h.ctx.bvomBb2ReviseTrial(0),false,'cannot revise trial before recorded work');
+ assert.equal(h.ctx.bvomBb2AcceptTrial(0),false,'cannot accept untested weight');
+ assert.equal(h.ctx.bvomBb2Log(0,0),true);
+ assert.equal(h.ctx.bvomBb2AcceptTrial(0),false,'acceptance waits for prescribed sets');
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-trial-save="0"/);
+ assert.equal(h.ctx.bvomBb2ReviseTrial(0),true);
+ let events=h.S().bb2.events;
+ assert.equal(events.at(-1).type,'CALIBRATION_PLAN_REVISED');
+ assert.equal(events.at(-1).plannedG,65000);
+ assert.equal(events[0].slots[0].plannedG,60000,'immutable Start weight retained');
+ assert.equal(events[1].actualG,60000,'first actual load retained');
+ assert.equal(h.ctx.bvomBb2ReviseTrial(0),true,'unchanged trial is idempotent');
+ assert.equal(h.S().bb2.events.length,3);
+ h.ev("state.unit='lb'");
+ h.ctx.__bb2TrialLoad=h.ctx.bvomBb2DisplayLoad(65000);
+ assert.equal(h.ctx.bvomBb2ReviseTrial(0),true,'rounded pounds are a no-op trial');
+ assert.equal(h.S().bb2.events.length,3,'unit round-trip preserves original grams');
+ h.ev("state.unit='kg'");
+ h.ctx.__bb2TrialLoad='67.5';
+ assert.equal(h.ctx.bvomBb2ReviseTrial(0),true);
+ assert.equal(h.ctx.bvomBb2Log(0,1),true);
+ events=h.S().bb2.events;
+ assert.equal(events.find(e=>e.type==='SET_RECORDED'&&e.setIndex===1).actualG,67500,
+  'subsequent set uses session trial rather than rewriting first set');
+ h.ev('bvomWindowLockOwned=false');h.ctx.__bb2TrialLoad='70';
+ assert.equal(h.ctx.bvomBb2ReviseTrial(0),false,'non-owner cannot change trial');
+ h.ev('bvomWindowLockOwned=true');
+ assert.equal(h.ctx.bvomBb2Log(0,2),true);
+ assert.equal(h.ctx.bvomBb2ReviseTrial(0),false,'no trial after all planned sets');
+ assert.equal(h.ctx.bvomBb2AcceptTrial(0),true,'first exposure may accept tested load');
+ assert.equal(h.ctx.bvomBb2AcceptTrial(0),false,'acceptance is one-time');
+ assert.equal(h.S().bb2.events.at(-1).loadG,67500);
+ assert.equal(h.S().bb2.events.at(-1).type,'CALIBRATION_ACCEPTED');
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/Calibration load accepted/);
+ const reloaded=fixture({ls:h.ls});
+ reloaded.h.ctx.location.origin='http://localhost:8000';
+ reloaded.h.ctx.location.search='?bb2Preview=1';
+ reloaded.h.ctx.__bb2CatalogueForTest=catalogue;
+ reloaded.h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest');
+ const next=reloaded.h.S().bb2;
+ assert.equal(reloaded.h.ctx.bvomBb2SessionTrial(next.events[0].slots[0],next.events,next.activeSessionId).grams,
+  67500,'trial load survives offline app reload');
+ const more=h.S().bb2.events.find(e=>e.type==='WORKOUT_STARTED').slots.flatMap((slot,i)=>
+  i===0?[]:Array.from({length:slot.sets},(_,j)=>[i,j])).slice(0,6);
+ assert.equal(more.length,6);
+ for(const [i,j] of more)assert.equal(h.ctx.bvomBb2Log(i,j),true,`BB2 remaining prescribed set ${i}|${j}`);
+ assert.equal(h.ctx.bvomBb2End('FINISH'),true);
+ const b=h.S().bb2,projection=catalogue.foldBB2Block(b.opening,b.events);
+ const id='upper_a|'+original.roleSlotId+'|'+original.exerciseId;
+ assert.equal(projection.progress[id].calibrated,true);
+ assert.equal(projection.progress[id].loadG,67500,'accepted calibration becomes future working plan');
+ assert.equal(b.events[0].slots[0].plannedG,60000,'historical Start unaffected');
+ assert.equal(JSON.stringify(h.S().warmupDone),'{}','calibration events never create warm-up ticks');
+ assert.equal(h.S().history.length,JSON.parse(before).history.length,'BB1 History untouched');
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ console.log('PASS: BB2 session-only calibration trials, actual isolation, acceptance, reload and Finish');
+}
+
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const hit=selector.match(/data-bb2-(load|inc|assist|reps|hard|trial)="([^"]+)"/);
+  if(hit)return {value:hit[1]==='trial'?'67.5':hit[1]==='inc'?'2.5':
+   hit[1]==='reps'?'8':hit[1]==='assist'?'none':'60',checked:false};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ assert.equal(h.ctx.bvomBb2Log(0,0),true);
+ const saved=h.ls.getItem('bvom_data'),priorCount=h.S().bb2.events.length;
+ const originalSet=h.ls.setItem;
+ h.ls.setItem=(key,value)=>{if(key==='bvom_data')throw Error('simulated storage quota failure');return originalSet(key,value)};
+ assert.equal(h.ctx.bvomBb2ReviseTrial(0),false,'failed calibration trial refuses write');
+ h.ls.setItem=originalSet;
+ assert.equal(h.ls.getItem('bvom_data'),saved,'failed trial cannot alter persisted data');
+ assert.equal(h.S().bb2.events.length,priorCount,'failed trial rolls back memory');
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ console.log('PASS: BB2 calibration trial storage failure leaves document unchanged');
+}
+
+console.log('BB2 BVOM integrated setup preview: 12/12 PASS');

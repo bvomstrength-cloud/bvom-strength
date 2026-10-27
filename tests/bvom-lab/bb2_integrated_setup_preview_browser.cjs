@@ -210,6 +210,23 @@ const server=http.createServer((req,res)=>{
    return b.events.at(-1).actualG;
   }),65000,'working actual inherits the edited canonical load');
   assert.equal(await page.locator('#workout [data-bb2-edit-save="0"]').isDisabled(),true);
+  await page.waitForSelector('#workout [data-bb2-trial-save="0"]');
+  await page.locator('#workout [data-bb2-trial="0"]').fill('67.5');
+  await page.locator('#workout [data-bb2-trial-save="0"]').click();
+  assert.equal(await page.evaluate(()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   return b.events.at(-1).type==='CALIBRATION_PLAN_REVISED'&&b.events.at(-1).plannedG===67500;
+  }),true,'first-exposure calibration trial is a session-only ledger event');
+  await page.reload();
+  await page.waitForSelector('#workout [data-bb2-trial="0"]');
+  assert.equal(await page.locator('#workout [data-bb2-trial="0"]').inputValue(),'67.5');
+  await page.locator('#workout [data-bb2-reps="0|1"]').fill('8');
+  await page.locator('#workout [data-bb2-log="0|1"]').click();
+  assert.equal(await page.evaluate(()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   const rows=b.events.filter(e=>e.type==='SET_RECORDED'&&e.roleSlotId===b.events.find(x=>x.type==='WORKOUT_STARTED'&&x.sessionId===b.activeSessionId).slots[0].roleSlotId);
+   return rows.at(-1).actualG===67500&&rows.at(-2).actualG===65000;
+  }),true,'reload and trial must change only subsequent actual sets');
   await page.locator('#workout [data-bb2-discard]').click();
   assert.equal(await page.evaluate(()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
@@ -220,7 +237,7 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>showSetup());
   assert.equal(await page.locator('#setup [data-bb2-preview]').count(),0,'stored preview does not expose BB2 in normal app');
   assert.deepEqual(errors,[],'no application JavaScript errors');
-  console.log('PASS BB2 integrated setup preview: dev-only chooser, shared save, reload, cloud exclusion, Start/Record/Discard/Finish, History, warm-up and pre-lock weight edit');
+  console.log('PASS BB2 integrated setup preview: dev-only chooser, shared save, reload, cloud exclusion, Start/Record/Discard/Finish, History, warm-up, pre-lock edit and first-exposure calibration trial');
   await context.close();
  }finally{
   if(browser)await browser.close();

@@ -5093,6 +5093,32 @@ function bvomBb2WorkingSlot(startSlot,events,sessionId){
  }
  return slot;
 }
+function bvomBb2SessionTrial(slot,events,sessionId){
+ // First-exposure trials affect only subsequent sets in this session.
+ // Neither immutable Start nor a globally committed working plan is rewritten.
+ let grams=slot.plannedG,origin=slot.plannedOrigin;
+ for(const e of events){
+  if(e.type==='CALIBRATION_PLAN_REVISED'&&e.sessionId===sessionId&&
+     e.roleSlotId===slot.roleSlotId&&e.exerciseId===slot.exerciseId){
+   grams=e.plannedG;origin=e.plannedOrigin;
+  }
+ }
+ return {grams,origin};
+}
+function bvomBb2CalibrationEligible(slot,events,sessionId,projection,templateId){
+ const key=templateId+'|'+slot.roleSlotId+'|'+slot.exerciseId;
+ return slot.equipment==='loaded'&&!projection.progress[key]?.calibrated&&
+  events.some(e=>e.type==='SET_RECORDED'&&e.sessionId===sessionId&&
+    e.roleSlotId===slot.roleSlotId)&&
+  events.filter(e=>e.type==='SET_RECORDED'&&e.sessionId===sessionId&&
+    e.roleSlotId===slot.roleSlotId).length<slot.sets&&
+  !events.some(e=>e.type==='CALIBRATION_ACCEPTED'&&e.sessionId===sessionId&&
+    e.roleSlotId===slot.roleSlotId);
+}
+function bvomBb2CalibrationSetsComplete(slot,events,sessionId){
+ return Array.from({length:slot.sets},(_,i)=>events.some(e=>e.type==='SET_RECORDED'&&
+  e.sessionId===sessionId&&e.roleSlotId===slot.roleSlotId&&e.setIndex===i)).every(Boolean);
+}
 function bvomBb2DisplayLoad(grams){
  if(!Number.isSafeInteger(grams))return '';
  return state.unit==='lb'?String(Math.round(grams/453.59237)):
@@ -5136,6 +5162,58 @@ function bvomBb2EditWorkingLoad(i){
   bvomBb2Workout();renderWarm();return true;
  }catch(error){console.error('BB2 working-weight edit rejected',error);return false}
 }
+function bvomBb2ReviseTrial(i){
+ if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed()||
+    !bvomBb2PreviewModule||!Number.isSafeInteger(i))return false;
+ const b=state.bb2,m=bvomBb2PreviewModule;
+ const start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
+ const slot=start?.slots[i]&&bvomBb2WorkingSlot(start.slots[i],b.events,b.activeSessionId);
+ if(!slot)return false;
+ try{
+  const before=m.foldBB2Block(b.opening,b.events);
+  if(!bvomBb2CalibrationEligible(slot,b.events,b.activeSessionId,before,start.templateId))return false;
+  const raw=String(document.querySelector('#workout [data-bb2-trial="'+i+'"]')?.value??'').trim();
+  if(!raw)return false;
+  const prior=bvomBb2SessionTrial(slot,b.events,b.activeSessionId);
+  if(raw===bvomBb2DisplayLoad(prior.grams))return true;
+  const unit=state.unit==='lb'?'lb':'kg',grams=m.BB2_BROWSER_MODULES.ledger.canonicalGrams(raw,unit);
+  if(!Number.isSafeInteger(grams)||grams<=0)return false;
+  if(grams===prior.grams)return true;
+  const e={type:'CALIBRATION_PLAN_REVISED',eventId:'trial:'+b.activeSessionId+':'+b.events.length,
+   commitOrdinal:b.events.length+1,blockId:b.opening.blockId,
+   sessionId:b.activeSessionId,roleSlotId:slot.roleSlotId,exerciseId:slot.exerciseId,
+   plannedG:grams,plannedOrigin:{value:raw,unit}};
+  const tx=m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(b.opening,b.events,[e],{
+   ownerId:b.opening.ownerId,blockId:b.opening.blockId,expectedHead:b.events.length,
+   foldRulesVersion:b.opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:true});
+  if(!bvomBb2Commit({...b,events:tx.events}))return false;
+  bvomBb2Workout();return true;
+ }catch(error){console.error('BB2 calibration trial rejected',error);return false}
+}
+function bvomBb2AcceptTrial(i){
+ if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed()||
+    !bvomBb2PreviewModule||!Number.isSafeInteger(i))return false;
+ const b=state.bb2,m=bvomBb2PreviewModule;
+ const start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
+ const slot=start?.slots[i]&&bvomBb2WorkingSlot(start.slots[i],b.events,b.activeSessionId);
+ if(!slot||slot.equipment!=='loaded'||!bvomBb2CalibrationSetsComplete(slot,b.events,b.activeSessionId)||
+    b.events.some(e=>e.type==='CALIBRATION_ACCEPTED'&&e.sessionId===b.activeSessionId&&
+     e.roleSlotId===slot.roleSlotId))return false;
+ try{
+  const before=m.foldBB2Block(b.opening,b.events);
+  if(before.progress[start.templateId+'|'+slot.roleSlotId+'|'+slot.exerciseId]?.calibrated)return false;
+  const trial=bvomBb2SessionTrial(slot,b.events,b.activeSessionId);
+  const e={type:'CALIBRATION_ACCEPTED',eventId:'accept:'+b.activeSessionId+':'+b.events.length,
+   commitOrdinal:b.events.length+1,blockId:b.opening.blockId,sessionId:b.activeSessionId,
+   roleSlotId:slot.roleSlotId,exerciseId:slot.exerciseId,
+   loadG:trial.grams,loadOrigin:trial.origin};
+  const tx=m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(b.opening,b.events,[e],{
+   ownerId:b.opening.ownerId,blockId:b.opening.blockId,expectedHead:b.events.length,
+   foldRulesVersion:b.opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:true});
+  if(!bvomBb2Commit({...b,events:tx.events}))return false;
+  bvomBb2Workout();return true;
+ }catch(error){console.error('BB2 calibration acceptance rejected',error);return false}
+}
 function bvomBb2Workout(){
  const el=document.querySelector('#workout');if(!el)return;
  if(!bvomBb2PreviewEnabled()){el.innerHTML='<div class="card">BB2 development mode not available.</div>';return}
@@ -5155,6 +5233,12 @@ function bvomBb2Workout(){
   const key=start.templateId+'|'+s.roleSlotId+'|'+s.exerciseId;
   const p=projection.progress[key],signal=projection.stallSignals[key];
   const calibration=!p?.calibrated;
+  const trial=bvomBb2SessionTrial(s,b.events,b.activeSessionId);
+  const canRevise=bvomBb2CalibrationEligible(s,b.events,b.activeSessionId,projection,start.templateId);
+  const canAccept=calibration&&s.equipment==='loaded'&&
+   bvomBb2CalibrationSetsComplete(s,b.events,b.activeSessionId)&&
+   !b.events.some(e=>e.type==='CALIBRATION_ACCEPTED'&&e.sessionId===b.activeSessionId&&
+    e.roleSlotId===s.roleSlotId);
   const feedback=calibration?'First eligible exposure calibrates this lift; no automatic increase.':
    signal?.kind==='OFFER'?'Stall review available: load reduction, exercise swap or recovery are optional.':
    signal?.kind==='NOTE'?'Three comparable exposures without a new rep best.':
@@ -5174,6 +5258,16 @@ function bvomBb2Workout(){
    (s.equipment==='loaded'?'<div class="warmrow"><label>Working '+unitLabel()+
    ' <input type="number" min="0" step="any" data-bb2-edit="'+i+'" value="'+bvomEsc(bvomBb2DisplayLoad(s.plannedG))+'" '+(touched?'disabled':'')+'></label>'+
    '<button type="button" class="choice" data-bb2-edit-save="'+i+'" onclick="bvomBb2EditWorkingLoad('+i+')" '+(touched?'disabled':'')+'>SAVE WEIGHT</button></div>':'')+
+   (canRevise?'<div class="warmrow"><label>Next set trial '+unitLabel()+
+    ' <input type="number" min="0" step="any" data-bb2-trial="'+i+'" value="'+
+    bvomEsc(bvomBb2DisplayLoad(trial.grams))+'"></label>'+
+    '<button type="button" class="choice" data-bb2-trial-save="'+i+'" onclick="bvomBb2ReviseTrial('+i+')">USE FOR NEXT SET</button></div>':'')+
+   (canAccept?'<div class="warmrow"><span class="small">Keep '+
+    bvomEsc(bvomBb2DisplayLoad(trial.grams))+' '+unitLabel()+' as the future working plan?</span>'+
+    '<button type="button" class="choice" data-bb2-trial-accept="'+i+'" onclick="bvomBb2AcceptTrial('+i+')">ACCEPT CALIBRATION</button></div>':'')+
+   (!canAccept&&calibration&&b.events.some(e=>e.type==='CALIBRATION_ACCEPTED'&&
+    e.sessionId===b.activeSessionId&&e.roleSlotId===s.roleSlotId)?
+    '<p class="small">Calibration load accepted for evaluation at Finish.</p>':'')+
    '<p class="small">'+bvomEsc(feedback)+'</p>'+rows+'</div>';
  }).join('');
  const count=start.slots.reduce((n,s)=>n+s.sets,0),minimum=Math.ceil(.70*count);
@@ -5199,7 +5293,8 @@ function bvomBb2Log(i,j){
   commitOrdinal:b.events.length+1,blockId:b.opening.blockId,sessionId:b.activeSessionId,
   roleSlotId:slot.roleSlotId,exerciseId:slot.exerciseId,setIndex:j,reps:Number(raw),
   prescribed:true,harderThanIntended:!!document.querySelector('#workout [data-bb2-hard="'+key+'"]')?.checked};
- if(slot.plannedG!==undefined){e.actualG=slot.plannedG;e.actualOrigin=slot.plannedOrigin}
+ if(slot.plannedG!==undefined){const trial=bvomBb2SessionTrial(slot,b.events,b.activeSessionId);
+  e.actualG=trial.grams;e.actualOrigin=trial.origin}
  if(slot.equipment==='bodyweight'){e.variation=slot.variation;e.assistance=slot.assistance}
  try{
   const before=m.foldBB2Block(b.opening,b.events);
