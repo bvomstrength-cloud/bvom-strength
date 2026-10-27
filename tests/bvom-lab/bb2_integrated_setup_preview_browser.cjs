@@ -92,12 +92,43 @@ const server=http.createServer((req,res)=>{
   await page.waitForSelector('#setup [data-bb2-template]');
   assert.equal(await page.locator('#setup [data-bb2-curls]').isChecked(),true,'saved curls survive complete reload');
   assert.equal(await page.locator('#setup [data-bb2-role="upper_a|shoulder_press"]').inputValue(),'log_push_press');
+  assert.equal(await page.locator('#setup [data-bb2-day="upper_a"]').count(),1);
+  const loads=page.locator('#setup [data-bb2-load]');
+  const increments=page.locator('#setup [data-bb2-inc]');
+  assert.equal(await loads.count(),4,'Upper A has four loaded movements');
+  for(let i=0;i<4;i++){
+   await loads.nth(i).fill('60');
+   await increments.nth(i).fill('2.5');
+  }
+  await page.locator('#setup [data-bb2-start]').click();
+  await page.waitForSelector('#workout [data-bb2-log="0|0"]');
+  const started=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
+  assert.ok(started.bb2.activeSessionId);
+  assert.equal(started.bb2.events[0].type,'WORKOUT_STARTED');
+  assert.equal(started.programMode,fixture.programMode);
+  assert.equal(await page.evaluate(()=>bvomCloudWorkoutActive()),true);
+  await page.locator('#workout [data-bb2-reps="0|0"]').fill('8');
+  await page.locator('#workout [data-bb2-log="0|0"]').click();
+  await page.waitForSelector('#workout .warmrow:has-text("8 reps")');
+  const logged=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
+  assert.equal(logged.bb2.events[1].type,'SET_RECORDED');
+  assert.equal(logged.bb2.events[1].actualG,60000);
+  assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
+  await page.reload();
+  await page.waitForSelector('#workout .warmrow:has-text("8 reps")');
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.events.length),2);
+  await page.locator('#workout [data-bb2-discard]').click();
+  const discarded=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
+  assert.equal(discarded.bb2.activeSessionId,null);
+  assert.equal(discarded.bb2.events[0].type,'TOMBSTONE');
+  assert.equal(discarded.bb2.events[1].type,'TOMBSTONE');
+  assert.equal(discarded.history.length,fixture.history.length);
   await page.goto(origin+'/index.html');
   await page.waitForSelector('#app:not(.hidden)');
   await page.evaluate(()=>showSetup());
   assert.equal(await page.locator('#setup [data-bb2-preview]').count(),0,'stored preview does not expose BB2 in normal app');
   assert.deepEqual(errors,[],'no application JavaScript errors');
-  console.log('PASS BB2 integrated setup preview: dev-only chooser, explicit shared save, reload, cloud exclusion, no Start');
+  console.log('PASS BB2 integrated setup preview: dev-only chooser, explicit shared save, reload, cloud exclusion, guarded Start/record/Discard');
   await context.close();
  }finally{
   if(browser)await browser.close();
