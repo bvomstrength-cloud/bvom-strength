@@ -5103,9 +5103,15 @@ function bvomBb2Workout(){
    '<div class="small">'+s.sets+' × '+s.floor+'–'+s.ceiling+' reps · '+
    (s.plannedG===undefined?bvomEsc(s.assistance):bvomEsc(s.plannedOrigin.value)+' '+s.plannedOrigin.unit)+'</div>'+rows+'</div>';
  }).join('');
+ const count=start.slots.reduce((n,s)=>n+s.sets,0),minimum=Math.ceil(.70*count);
+ const done=b.events.filter(e=>e.type==='SET_RECORDED'&&e.sessionId===b.activeSessionId).length;
  el.innerHTML='<div class="toprow"><b>BODYBUILDING 2 · '+bvomEsc(bvomBb2PreviewLabel(start.templateId))+
-  '</b></div><div class="notice">Development-only: sets are saved locally. Finish, credits and cloud upload are disabled.</div>'+
-  html+'<button class="secondary wide" data-bb2-discard onclick="bvomBb2Discard()">DISCARD TEST WORKOUT</button>';
+  '</b></div><div class="notice">Development-only: '+done+'/'+count+' prescribed sets recorded; '+minimum+
+  ' required for Finish. BB2 is local-only; cloud upload is disabled.</div>'+html+
+  '<button type="button" class="primary wide" data-bb2-finish '+(done<minimum?'disabled':'')+
+  ' onclick="bvomBb2End(\'FINISH\')">FINISH WORKOUT</button>'+
+  '<button type="button" class="secondary wide" data-bb2-incomplete onclick="bvomBb2End(\'INCOMPLETE\')">END AS INCOMPLETE</button>'+
+  '<button class="secondary wide" data-bb2-discard onclick="bvomBb2Discard()">DISCARD TEST WORKOUT</button>';
 }
 function bvomBb2Log(i,j){
  if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed())return false;
@@ -5140,6 +5146,68 @@ function bvomBb2Discard(){
   renderAll();return true;
  }catch(error){console.error('BB2 discard rejected',error);return false}
 }
+
+// The frozen Finish planner alone decides if a NORMAL workout earns its
+// template credit. The whole Finish + credit pair and active-session close are
+// one guarded BVOM local save, never a second history/credit write.
+function bvomBb2End(outcome='FINISH'){
+ if(!['FINISH','INCOMPLETE'].includes(outcome)||!bvomBb2PreviewEnabled()||
+    !bvomBb2Active()||!bvomWorkoutActionAllowed()||!bvomBb2PreviewModule)return false;
+ const b=state.bb2,m=bvomBb2PreviewModule;
+ try{
+  const planned=m.planBB2Finish(b.opening,b.events,b.activeSessionId,outcome);
+  if(planned.noOp)return false;
+  const prior=m.foldBB2Block(b.opening,b.events);
+  const added=planned.events.slice(b.events.length);
+  const tx=m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(b.opening,b.events,added,{
+   ownerId:b.opening.ownerId,blockId:b.opening.blockId,
+   expectedHead:b.events.length,foldRulesVersion:b.opening.foldRulesVersion,
+   sealRevision:prior.sealRevision,activeWorkout:true});
+  if(!bvomBb2Commit({...b,events:tx.events,activeSessionId:null}))return false;
+  renderAll();return true;
+ }catch(error){console.error('BB2 Finish rejected',error);return false}
+}
+function bvomBb2RenderHistory(){
+ if(!bvomBb2PreviewEnabled()||!state.bb2?.opening||!Array.isArray(state.bb2.events))return;
+ const m=bvomBb2PreviewModule;
+ if(!m){
+  import('./bb2/browser-core.mjs').then(x=>{
+   if(!bvomBb2PreviewEnabled())return;
+   bvomBb2PreviewModule=x;bvomBb2RenderHistory();
+  }).catch(e=>console.error('BB2 History load rejected',e));
+  return;
+ }
+ const el=document.querySelector('#history');if(!el)return;
+ let projection;
+ try{projection=m.foldBB2Block(state.bb2.opening,state.bb2.events)}
+ catch(e){console.error('BB2 History replay rejected',e);return}
+ const rows=projection.history.filter(x=>!x.hidden&&x.status!=='VOID');
+ if(!rows.length)return;
+ const counts=m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.map(
+  day=>bvomEsc(bvomBb2PreviewLabel(day))+': '+projection.quotas[day]+'/8').join(' · ');
+ const cards=rows.slice().reverse().map(h=>{
+  const sets=h.sets.map(s=>'<div class="histLift"><b>'+
+   bvomEsc(bvomBb2PreviewLabel(s.exerciseId))+'</b> · '+
+   s.reps+' reps'+(s.actualOrigin?' · '+bvomEsc(s.actualOrigin.value)+' '+
+    bvomEsc(s.actualOrigin.unit):'')+'</div>').join('');
+  return '<div class="histCard" data-bb2-history="'+bvomEsc(h.sessionId)+'">'+
+   '<div class="histHead"><b>'+bvomEsc(bvomBb2PreviewLabel(h.templateId))+
+   '</b><span>'+bvomEsc(h.status)+'</span></div>'+
+   '<div class="small">'+h.validCount+'/'+h.prescribedCount+' prescribed sets'+
+   (h.creditId?' · Credit awarded':' · No credit')+'</div>'+
+   sets+'</div>';
+ }).join('');
+ // Rerenders are idempotent. BVOM legacy history is never amended or duplicated.
+ if(el.innerHTML.includes('data-bb2-history-section'))return;
+ el.innerHTML+='<section data-bb2-history-section><div class="card">'+
+  '<b>BODYBUILDING 2</b><p class="small">'+counts+'</p></div>'+cards+'</section>';
+}
+const bvomBb2OldRenderHistory=renderHistory;
+renderHistory=function(...args){
+ const result=bvomBb2OldRenderHistory(...args);
+ bvomBb2RenderHistory();return result;
+};
+
 const bvomBb2OldRenderWorkout=renderWorkout;
 renderWorkout=function(...args){return bvomBb2Active()?bvomBb2Workout():bvomBb2OldRenderWorkout(...args)};
 const bvomBb2OldRenderWarm=renderWarm;
@@ -5150,7 +5218,7 @@ renderWarm=function(...args){
  return bvomBb2OldRenderWarm(...args);
 };
 const bvomBb2OldFinish=finishWorkout;
-finishWorkout=function(...args){return bvomBb2Active()?false:bvomBb2OldFinish(...args)};
+finishWorkout=function(...args){return bvomBb2Active()?bvomBb2End('FINISH'):bvomBb2OldFinish(...args)};
 
 /* ===== END BB2 DEVELOPER PREVIEW ===== */
 

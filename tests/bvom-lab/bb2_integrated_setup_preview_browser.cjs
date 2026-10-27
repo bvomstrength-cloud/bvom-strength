@@ -123,12 +123,41 @@ const server=http.createServer((req,res)=>{
   assert.equal(discarded.bb2.events[0].type,'TOMBSTONE');
   assert.equal(discarded.bb2.events[1].type,'TOMBSTONE');
   assert.equal(discarded.history.length,fixture.history.length);
+  // The same shared Workout/History surfaces now exercise the true Finish gate.
+  await page.evaluate(()=>showSetup());
+  await page.locator('#setup [data-bb2-preview]').click();
+  await page.waitForSelector('#setup [data-bb2-start]');
+  const nextLoads=page.locator('#setup [data-bb2-load]');
+  const nextIncrements=page.locator('#setup [data-bb2-inc]');
+  for(let i=0;i<4;i++){await nextLoads.nth(i).fill('60');await nextIncrements.nth(i).fill('2.5')}
+  await page.locator('#setup [data-bb2-start]').click();
+  await page.waitForSelector('#workout [data-bb2-finish]');
+  assert.equal(await page.locator('#workout [data-bb2-finish]').isDisabled(),true,'Finish disabled under 70%');
+  for(const [i,j] of [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[3,0]]){
+   const k=i+'|'+j;
+   await page.locator('#workout [data-bb2-reps="'+k+'"]').fill('8');
+   await page.locator('#workout [data-bb2-log="'+k+'"]').click();
+  }
+  await page.waitForSelector('#workout [data-bb2-finish]:not([disabled])');
+  await page.locator('#workout [data-bb2-finish]').click();
+  await page.waitForSelector('#history [data-bb2-history]',{state:'attached'});
+  const finished=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
+  assert.equal(finished.bb2.activeSessionId,null);
+  assert.equal(finished.bb2.events.filter(e=>e.type==='WORKOUT_FINISHED').length,1);
+  assert.equal(finished.bb2.events.filter(e=>e.type==='CREDIT_GRANTED').length,1,'single credit on real Finish');
+  assert.equal(finished.history.length,fixture.history.length,'legacy History unchanged after BB2 Finish');
+  assert.equal(await page.evaluate(()=>bvomBb2End('FINISH')),false,'repeat Finish is idempotent');
+  assert.match(await page.locator('#history').textContent(),/Credit awarded/);
+  await page.reload();
+  await page.waitForSelector('#history [data-bb2-history]',{state:'attached'});
+  assert.match(await page.locator('#history').textContent(),/Credit awarded/);
+  assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
   await page.goto(origin+'/index.html');
   await page.waitForSelector('#app:not(.hidden)');
   await page.evaluate(()=>showSetup());
   assert.equal(await page.locator('#setup [data-bb2-preview]').count(),0,'stored preview does not expose BB2 in normal app');
   assert.deepEqual(errors,[],'no application JavaScript errors');
-  console.log('PASS BB2 integrated setup preview: dev-only chooser, explicit shared save, reload, cloud exclusion, guarded Start/record/Discard');
+  console.log('PASS BB2 integrated setup preview: dev-only chooser, explicit shared save, reload, cloud exclusion, Start/Record/Discard/Finish, History reload');
   await context.close();
  }finally{
   if(browser)await browser.close();

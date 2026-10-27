@@ -181,4 +181,76 @@ function fixture({ls}={}){
  console.log('PASS: BB2 Start, set, duplicate fence, reload, cloud guard, lock refusal and Discard');
 }
 
-console.log('BB2 BVOM integrated setup preview: 5/5 PASS');
+
+{
+ const {h,before}=fixture();
+ h.ctx.location.origin='http://localhost:8000';
+ h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const hit=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
+  if(hit)return hit[1]==='hard'?{checked:false}:{value:hit[1]==='load'?'60':hit[1]==='inc'?'2.5':hit[1]==='assist'?'none':'8'};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ const id=h.S().bb2.activeSessionId;
+ assert.equal(h.ctx.bvomBb2Log(0,0),true);
+ assert.equal(h.ctx.bvomBb2End('FINISH'),false,'below-70%-threshold Finish is refused');
+ assert.equal(h.S().bb2.activeSessionId,id,'failed Finish keeps original active session');
+ assert.equal(h.S().bb2.events.length,2,'failed Finish cannot append credit or outcome');
+ // Nine distinct prescribed working sets meet the 70% threshold for Upper A (9/12).
+ for(const [slot,set] of [[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[3,0]]){
+  assert.equal(h.ctx.bvomBb2Log(slot,set),true,'recorded required set '+slot+'/'+set);
+ }
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/9\/12 prescribed sets recorded/);
+ assert.equal(h.ctx.bvomBb2End('FINISH'),true,'70% Finish succeeds with credit transaction');
+ const state=h.S(),bb=state.bb2;
+ assert.equal(bb.activeSessionId,null,'active BB2 session closed');
+ assert.equal(bb.events.filter(e=>e.type==='WORKOUT_FINISHED').length,1);
+ assert.equal(bb.events.filter(e=>e.type==='CREDIT_GRANTED').length,1,'exactly one credit earned');
+ const proj=catalogue.foldBB2Block(bb.opening,bb.events);
+ assert.equal(proj.quotas.upper_a,1);
+ assert.equal(proj.history[0].status,'COMPLETED_NORMAL');
+ assert.equal(proj.history[0].validCount,9);
+ assert.equal(state.history.length,JSON.parse(before).history.length,'legacy History stays byte-level separate');
+ assert.match(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-history-section/);
+ assert.match(h.ctx.document.querySelector('#history').innerHTML,/Credit awarded/);
+ const saved=h.ls.getItem('bvom_data');
+ assert.equal(h.ctx.bvomBb2End('FINISH'),false,'second Finish cannot award duplicate');
+ assert.equal(h.ls.getItem('bvom_data'),saved,'second Finish leaves bytes untouched');
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined,'cloud payload excludes completed BB2');
+ console.log('PASS: BB2 70% gate, atomic Finish/credit, integrated History, idempotence and cloud exclusion');
+}
+{
+ const {h,before}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const hit=selector.match(/data-bb2-(load|inc|assist)="([^"]+)"/);
+  if(hit)return {value:hit[1]==='load'?'60':hit[1]==='inc'?'2.5':'none'};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ const prior=h.ls.getItem('bvom_data');
+ h.ev('bvomWindowLockOwned=false');
+ assert.equal(h.ctx.bvomBb2End('INCOMPLETE'),false,'lost lock blocks incomplete Finish');
+ assert.equal(h.ls.getItem('bvom_data'),prior,'failed Finish leaves saved stream intact');
+ h.ev('bvomWindowLockOwned=true');
+ assert.equal(h.ctx.bvomBb2End('INCOMPLETE'),true,'explicit incomplete record closes session');
+ assert.equal(h.S().bb2.events.filter(e=>e.type==='CREDIT_GRANTED').length,0);
+ assert.equal(catalogue.foldBB2Block(h.S().bb2.opening,h.S().bb2.events).history[0].status,'INCOMPLETE');
+ assert.equal(h.S().history.length,JSON.parse(before).history.length);
+ console.log('PASS: rejected Finish and incomplete session preserve legacy data and never award credit');
+}
+
+console.log('BB2 BVOM integrated setup preview: 7/7 PASS');
