@@ -385,7 +385,11 @@ function fixture({ls}={}){
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
+ const editField={get value(){return h.ctx.__bb2EditLoad},disabled:false};
+ const editSaveButton={disabled:false};
  h.ctx.document.querySelector=selector=>{
+  if(selector==='#workout [data-bb2-edit="0"]')return editField;
+  if(selector==='#workout [data-bb2-edit-save="0"]')return editSaveButton;
   const hit=selector.match(/data-bb2-(load|inc|assist|edit|reps|hard)="([^"]+)"/);
   if(hit){
    if(hit[1]==='hard')return {checked:false};
@@ -422,6 +426,8 @@ function fixture({ls}={}){
  assert.equal(h.ls.getItem('bvom_data'),saved);
  h.ev('bvomWindowLockOwned=true');
  assert.equal(h.ctx.bvomBb2WarmupMark(0,0),true);
+ assert.equal(editField.disabled,true,'warm-up immediately disables stale Workout weight input');
+ assert.equal(editSaveButton.disabled,true,'warm-up immediately disables stale save control');
  assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),false,'warm-up tick locks ordinary edit');
  assert.equal(h.ctx.bvomBb2WarmupMark(0,0),true,'user may untick optional preparation');
  assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),false,

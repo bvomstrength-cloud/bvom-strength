@@ -5378,6 +5378,12 @@ function bvomBb2WarmupMark(slotIndex,index){
   state.bb2=beforeBB2;
   return false;
  }
+ // The inactive Workout tab keeps its existing inputs. Lock only this slot's
+ // future-prescription editor immediately after the durable preparation tick.
+ const weightField=document.querySelector('#workout [data-bb2-edit="'+slotIndex+'"]');
+ const saveButton=document.querySelector('#workout [data-bb2-edit-save="'+slotIndex+'"]');
+ if(weightField)weightField.disabled=true;
+ if(saveButton)saveButton.disabled=true;
  bvomBb2WarmupRender();return true;
 }
 function bvomBb2WarmupRender(){
