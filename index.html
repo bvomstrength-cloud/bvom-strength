@@ -2828,7 +2828,7 @@ async function bvomCloudVerifyCode(){
  bvomCloud.busy=false;if(error){bvomCloud.message=error.message||hlmTxt('That code could not be verified.','コードを確認できませんでした。');bvomCloud.error=true}else{bvomCloud.user=data.user||data.session?.user||null;window.__bvomAuthUserId=bvomCloud.user?.id||null;bvomCloud.codeSent=false;bvomCloud.message=hlmTxt('Signed in successfully.','サインインしました。');setTimeout(()=>bvomPublicContinueAfterSignIn('existing'),0)}renderSettings();
 }
 function bvomCloudUseDifferentEmail(){bvomCloud.codeSent=false;bvomCloud.message='';bvomCloud.error=false;renderSettings()}
-function bvomStateWorkoutActive(s){if(s?.workoutStartedAt)return true;for(const obj of Object.values(s?.session||{})){for(const set of Object.values(obj||{})){if(set&&set.reps!==undefined)return true}}for(const x of Object.values(s?.gppSession||{})){if(x&&(x.started||x.status==='running'||x.status==='paused'||x.status==='stopped'||(x.sets&&x.sets.length)))return true}return false}
+function bvomStateWorkoutActive(s){if(s?.bb2?.activeSessionId)return true;if(s?.workoutStartedAt)return true;for(const obj of Object.values(s?.session||{})){for(const set of Object.values(obj||{})){if(set&&set.reps!==undefined)return true}}for(const x of Object.values(s?.gppSession||{})){if(x&&(x.started||x.status==='running'||x.status==='paused'||x.status==='stopped'||(x.sets&&x.sets.length)))return true}return false}
 function bvomCloudWorkoutActive(){return bvomStateWorkoutActive(state)}
 function bvomStoredWorkoutActive(){try{const raw=localStorage.getItem(BVOM_DATA_KEY);return raw?bvomStateWorkoutActive(JSON.parse(raw)):false}catch(e){return bvomCloudWorkoutActive()}}
 function bvomAnyWorkoutActive(){return bvomCloudWorkoutActive()||bvomStoredWorkoutActive()}
@@ -4949,7 +4949,7 @@ function bvomBb2RenderPreview(){
   return `<div class="card" data-bb2-template="${templateId}"><b>${headings[templateId]}</b><div class="small">${prescribed.prescribedCount} ${hlmTxt('working sets','ワーキングセット')} · ${hlmTxt('minimum to finish','完了に必要な最低セット数')} ${prescribed.minimumToFinish}</div>${rows}</div>`;
  }).join('');
  const el=document.querySelector('#setup');document.querySelector('#app').classList.add('hidden');el.classList.remove('hidden');
- el.innerHTML=`<div class="setupBee"><img src="./icon-192.png" alt="Power Bee"><div class="setupBeeTag">BEST VERSION OF MYSELF</div></div><div class="card"><b>${hlmTxt('BODYBUILDING 2 · SETUP PREVIEW','ボディビルディング2 · 設定プレビュー')}</b><p class="small">${hlmTxt('Development setup only. Save keeps choices on this device and in exported BVOM backup files. They are not sent to BVOM Cloud yet. Workout Start is disabled.','開発中の設定画面です。選択内容はこの端末と書き出したBVOMバックアップに保存されます。BVOMクラウドにはまだ送信されません。ワークアウト開始は無効です。')}</p><label class="toggle"><input type="checkbox" data-bb2-curls ${setup.optionalUpperBCurls?'checked':''} onchange="bvomBb2PreviewCurls(this.checked)"><span>${hlmTxt('Include optional Upper B curls','Upper Bのカール種目を追加')}</span></label></div>${templates}<button type="button" class="primary wide" data-bb2-save onclick="bvomBb2SaveSetup()">${bvomBb2PreviewSaved?hlmTxt('SAVED ON THIS DEVICE','この端末に保存済み'):hlmTxt('SAVE BB2 SETUP','BB2設定を保存')}</button><button type="button" class="secondary wide" data-bb2-back onclick="bvomBb2ClosePreview()">${hlmTxt('BACK TO PROGRAMS','プログラム選択に戻る')}</button>`;
+ el.innerHTML=`<div class="setupBee"><img src="./icon-192.png" alt="Power Bee"><div class="setupBeeTag">BEST VERSION OF MYSELF</div></div><div class="card"><b>${hlmTxt('BODYBUILDING 2 · SETUP PREVIEW','ボディビルディング2 · 設定プレビュー')}</b><p class="small">${hlmTxt('Development setup only. Save keeps choices on this device and in exported BVOM backup files. They are not sent to BVOM Cloud yet. Workout Start is disabled.','開発中の設定画面です。選択内容はこの端末と書き出したBVOMバックアップに保存されます。BVOMクラウドにはまだ送信されません。ワークアウト開始は無効です。')}</p><label class="toggle"><input type="checkbox" data-bb2-curls ${setup.optionalUpperBCurls?'checked':''} onchange="bvomBb2PreviewCurls(this.checked)"><span>${hlmTxt('Include optional Upper B curls','Upper Bのカール種目を追加')}</span></label></div>${templates}<button type="button" class="primary wide" data-bb2-save onclick="bvomBb2SaveSetup()">${bvomBb2PreviewSaved?hlmTxt('SAVED ON THIS DEVICE','この端末に保存済み'):hlmTxt('SAVE BB2 SETUP','BB2設定を保存')}</button>${bvomBb2StartForm()}<button type="button" class="secondary wide" data-bb2-back onclick="bvomBb2ClosePreview()">${hlmTxt('BACK TO PROGRAMS','プログラム選択に戻る')}</button>`;
 }
 function bvomBb2PreviewChoose(templateId,roleSlotId,exerciseId){
  if(!bvomBb2PreviewOpen||!bvomBb2PreviewModule||!bvomBb2PreviewDraft)return;
@@ -4992,6 +4992,166 @@ function bvomBb2ClosePreview(){
 // existing conflict fingerprint; do not normalise them away.
 const bvomBb2BaseCloudPayload=bvomCloudPayload;
 bvomCloudPayload=function(){const d=bvomBb2BaseCloudPayload();delete d.bb2;return d};
+
+// BB2 Stage (ii): local-only Start, prescribed sets, reload and Discard.
+// The existing BVOM data document remains authoritative; no Finish or credits.
+let bvomBb2Day='upper_a';
+function bvomBb2Active(s=state){return !!s?.bb2?.activeSessionId}
+function bvomBb2Commit(next){
+ const before=state.bb2;state.bb2=next;
+ if(!save({durable:true,localOnly:true})){
+  if(before===undefined)delete state.bb2;else state.bb2=before;
+  return false;
+ }
+ return true;
+}
+function bvomBb2ChooseDay(day){
+ if(!bvomBb2PreviewOpen||!bvomBb2PreviewModule?.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.includes(day))return;
+ bvomBb2Day=day;bvomBb2RenderPreview();
+}
+function bvomBb2StartForm(){
+ if(!bvomBb2PreviewSaved||!bvomBb2PreviewModule||!state.bb2?.setup)return '';
+ const m=bvomBb2PreviewModule,units=state.unit==='lb'?'lb':'kg';
+ const p=m.getBB2TemplatePrescription(state.bb2.setup,bvomBb2Day);
+ const days=m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.map(d=>
+  '<button type="button" class="choice '+(d===bvomBb2Day?'on':'')+
+  '" data-bb2-day="'+d+'" onclick="bvomBb2ChooseDay(\''+d+'\')">'+bvomEsc(bvomBb2PreviewLabel(d))+'</button>').join('');
+ const rows=p.slots.map((s,i)=>'<div class="review"><b>'+bvomEsc(bvomBb2PreviewLabel(s.exerciseId))+
+  '</b><div class="small">'+s.sets+' × '+s.floor+'–'+s.ceiling+' reps</div>'+
+  (s.equipment==='loaded'
+   ? '<label>Starting '+units+'<input type="number" step="any" data-bb2-load="'+i+'"></label>'+
+     '<label>Increase '+units+'<input type="number" step="any" data-bb2-inc="'+i+'"></label>'
+   : '<label>Assistance (none if unassisted)<input type="text" data-bb2-assist="'+i+'" value="none"></label>')+
+  '</div>').join('');
+ return '<div class="card"><b>BB2 DEVELOPMENT START</b><p class="small">Enter actual starting weights and increases. No BB1 values are inferred. Finish is disabled.</p>'+
+  '<div class="choiceRow">'+days+'</div>'+rows+
+  '<button type="button" class="primary wide" data-bb2-start onclick="bvomBb2Begin()">START TEST WORKOUT</button></div>';
+}
+function bvomBb2Begin(){
+ if(!bvomBb2PreviewEnabled()||!bvomBb2PreviewOpen||!bvomBb2PreviewSaved||
+    !bvomBb2PreviewModule||!bvomWorkoutActionAllowed()||bvomStateWorkoutActive(state)||
+    state.programMode!==bvomBb2PreviewOriginalMode)return false;
+ const m=bvomBb2PreviewModule,old=state.bb2;
+ if(!old?.setup||JSON.stringify(old.setup)!==JSON.stringify(bvomBb2PreviewDraft))return false;
+ try{
+  const opening=old.opening||m.createBB2Opening({
+   ownerId:localStorage.getItem(BVOM_DATA_OWNER_KEY)||'bb2-test-owner',
+   blockId:'bb2-preview-'+Date.now()});
+  const events=old.events||[],before=m.foldBB2Block(opening,events);
+  const id='bb2-preview-session-'+Date.now()+'-'+events.length;
+  const unit=state.unit==='lb'?'lb':'kg';
+  const plan=m.getBB2TemplatePrescription(old.setup,bvomBb2Day);
+  const slots=plan.slots.map((s,i)=>{
+   const a={roleSlotId:s.roleSlotId,exerciseId:s.exerciseId,sets:s.sets,
+    floor:s.floor,ceiling:s.ceiling,equipment:s.equipment};
+   const p=before.progress[bvomBb2Day+'|'+s.roleSlotId+'|'+s.exerciseId];
+   if(s.equipment==='loaded'){
+    if(p){a.plannedG=p.loadG;a.plannedOrigin=p.loadOrigin;
+     a.incrementG=p.incrementG;a.incrementOrigin=p.incrementOrigin}
+    else{
+     const v=String(document.querySelector('#setup [data-bb2-load="'+i+'"]')?.value||'');
+     const n=String(document.querySelector('#setup [data-bb2-inc="'+i+'"]')?.value||'');
+     if(!v||!n)throw Error('Enter weight and increment for '+s.exerciseId);
+     a.plannedG=m.BB2_BROWSER_MODULES.ledger.canonicalGrams(v,unit);
+     a.plannedOrigin={value:v,unit};
+     a.incrementG=m.BB2_BROWSER_MODULES.ledger.canonicalGrams(n,unit);
+     if(a.incrementG<=0)throw Error('Increment must be positive');
+     a.incrementOrigin={value:n,unit};
+    }
+   }else{
+    a.variation=p?.variation||s.exerciseId;
+    a.assistance=p?.assistance??String(document.querySelector('#setup [data-bb2-assist="'+i+'"]')?.value??'none');
+    if(p?.loadG!=null){a.plannedG=p.loadG;a.plannedOrigin=p.loadOrigin}
+    if(p?.incrementG!==undefined){a.incrementG=p.incrementG;a.incrementOrigin=p.incrementOrigin}
+   }
+   return a;
+  });
+  const e={type:'WORKOUT_STARTED',eventId:'start:'+id,commitOrdinal:events.length+1,
+   blockId:opening.blockId,sessionId:id,templateId:bvomBb2Day,kind:'NORMAL',slots};
+  const tx=m.BB2_BROWSER_MODULES.start.commitBB2Start(opening,events,old.setup,e,{
+   ownerId:opening.ownerId,blockId:opening.blockId,expectedHead:events.length,
+   foldRulesVersion:opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:false});
+  if(!bvomBb2Commit({...old,opening,events:tx.events,activeSessionId:id}))return false;
+  bvomBb2PreviewOpen=false;bvomBb2PreviewDraft=null;
+  document.querySelector('#setup').classList.add('hidden');
+  document.querySelector('#app').classList.remove('hidden');
+  renderAll();return true;
+ }catch(e){console.error('BB2 Start rejected',e);return false}
+}
+function bvomBb2Workout(){
+ const el=document.querySelector('#workout');if(!el)return;
+ if(!bvomBb2PreviewEnabled()){el.innerHTML='<div class="card">BB2 development mode not available.</div>';return}
+ const m=bvomBb2PreviewModule;
+ if(!m){
+  el.innerHTML='<div class="card">Loading BB2 local workout…</div>';
+  import('./bb2/browser-core.mjs').then(x=>{bvomBb2PreviewModule=x;bvomBb2Workout()}).catch(console.error);
+  return;
+ }
+ const b=state.bb2,start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
+ try{m.foldBB2Block(b.opening,b.events)}catch(e){
+  el.innerHTML='<div class="card">BB2 local record could not be verified. Editing is disabled.</div>';return;
+ }
+ const html=start.slots.map((s,i)=>{
+  const rows=Array.from({length:s.sets},(_,j)=>{
+   const id=i+'|'+j,done=b.events.find(e=>e.type==='SET_RECORDED'&&e.sessionId===b.activeSessionId&&e.roleSlotId===s.roleSlotId&&e.setIndex===j);
+   return done?'<div class="warmrow">Set '+(j+1)+': '+done.reps+' reps ✓</div>':
+    '<div class="warmrow"><b>Set '+(j+1)+'</b><input type="number" min="1" step="1" data-bb2-reps="'+id+'" style="width:90px" placeholder="reps">'+
+    '<label><input type="checkbox" data-bb2-hard="'+id+'"> Hard</label>'+
+    '<button type="button" class="choice" data-bb2-log="'+id+'" onclick="bvomBb2Log('+i+','+j+')">SAVE SET</button></div>';
+  }).join('');
+  return '<div class="exercise"><div class="exhead"><b>'+bvomEsc(bvomBb2PreviewLabel(s.exerciseId))+'</b></div>'+
+   '<div class="small">'+s.sets+' × '+s.floor+'–'+s.ceiling+' reps · '+
+   (s.plannedG===undefined?bvomEsc(s.assistance):bvomEsc(s.plannedOrigin.value)+' '+s.plannedOrigin.unit)+'</div>'+rows+'</div>';
+ }).join('');
+ el.innerHTML='<div class="toprow"><b>BODYBUILDING 2 · '+bvomEsc(bvomBb2PreviewLabel(start.templateId))+
+  '</b></div><div class="notice">Development-only: sets are saved locally. Finish, credits and cloud upload are disabled.</div>'+
+  html+'<button class="secondary wide" data-bb2-discard onclick="bvomBb2Discard()">DISCARD TEST WORKOUT</button>';
+}
+function bvomBb2Log(i,j){
+ if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed())return false;
+ const b=state.bb2,m=bvomBb2PreviewModule;
+ if(!m)return false;
+ const start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId),slot=start?.slots[i];
+ if(!slot||j<0||j>=slot.sets||b.events.some(e=>e.type==='SET_RECORDED'&&e.sessionId===b.activeSessionId&&e.roleSlotId===slot.roleSlotId&&e.setIndex===j))return false;
+ const key=i+'|'+j,raw=String(document.querySelector('#workout [data-bb2-reps="'+key+'"]')?.value||'');
+ if(!/^[1-9][0-9]*$/.test(raw)||!Number.isSafeInteger(Number(raw)))return false;
+ const e={type:'SET_RECORDED',eventId:'set:'+b.activeSessionId+':'+key,
+  commitOrdinal:b.events.length+1,blockId:b.opening.blockId,sessionId:b.activeSessionId,
+  roleSlotId:slot.roleSlotId,exerciseId:slot.exerciseId,setIndex:j,reps:Number(raw),
+  prescribed:true,harderThanIntended:!!document.querySelector('#workout [data-bb2-hard="'+key+'"]')?.checked};
+ if(slot.plannedG!==undefined){e.actualG=slot.plannedG;e.actualOrigin=slot.plannedOrigin}
+ if(slot.equipment==='bodyweight'){e.variation=slot.variation;e.assistance=slot.assistance}
+ try{
+  const before=m.foldBB2Block(b.opening,b.events);
+  const tx=m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(b.opening,b.events,[e],{
+   ownerId:b.opening.ownerId,blockId:b.opening.blockId,expectedHead:b.events.length,
+   foldRulesVersion:b.opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:true});
+  if(!bvomBb2Commit({...b,events:tx.events}))return false;
+  bvomBb2Workout();return true;
+ }catch(error){console.error('BB2 set rejected',error);return false}
+}
+function bvomBb2Discard(){
+ if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed()||!bvomBb2PreviewModule)return false;
+ const b=state.bb2,m=bvomBb2PreviewModule;
+ try{
+  const events=m.BB2_BROWSER_MODULES.ledger.discardBB2Session(b.events,b.activeSessionId);
+  m.foldBB2Block(b.opening,events);
+  if(!bvomBb2Commit({...b,events,activeSessionId:null}))return false;
+  renderAll();return true;
+ }catch(error){console.error('BB2 discard rejected',error);return false}
+}
+const bvomBb2OldRenderWorkout=renderWorkout;
+renderWorkout=function(...args){return bvomBb2Active()?bvomBb2Workout():bvomBb2OldRenderWorkout(...args)};
+const bvomBb2OldRenderWarm=renderWarm;
+renderWarm=function(...args){
+ if(bvomBb2Active()){
+  document.querySelector('#warmup').innerHTML='<div class="card">BB2 warm-up integration is not enabled in this development test.</div>';return;
+ }
+ return bvomBb2OldRenderWarm(...args);
+};
+const bvomBb2OldFinish=finishWorkout;
+finishWorkout=function(...args){return bvomBb2Active()?false:bvomBb2OldFinish(...args)};
+
 /* ===== END BB2 DEVELOPER PREVIEW ===== */
 
 bvomHideMainSurfaces();if("serviceWorker" in navigator){

@@ -124,4 +124,59 @@ function fixture({ls}={}){
  console.log('PASS: active workout cannot open BB2 preview');
 }
 
-console.log('BB2 BVOM integrated setup preview: 4/4 PASS');
+
+{
+ const {h,before}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;bvomBb2RenderPreview()');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ assert.match(h.ctx.document.querySelector('#setup').innerHTML,/data-bb2-start/);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  let found=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
+  if(found){
+   if(found[1]==='load')return {value:'60'};
+   if(found[1]==='inc')return {value:'2.5'};
+   if(found[1]==='assist')return {value:'none'};
+   if(found[1]==='reps')return {value:'8'};
+   if(found[1]==='hard')return {checked:false};
+  }
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true,'Start uses shared BVOM local saving');
+ const active=h.S().bb2.activeSessionId;
+ assert.ok(active);
+ assert.equal(h.S().programMode,'lprpt','legacy program unchanged');
+ assert.equal(h.S().history.length,JSON.parse(before).history.length);
+ assert.equal(h.S().bb2.events.length,1);
+ assert.equal(h.ctx.bvomCloudWorkoutActive(),true,'BB2 active workout blocks normal cloud activity');
+ assert.equal(h.ctx.bvomBb2Log(0,0),true,'prescribed on-plan set committed');
+ assert.equal(h.S().bb2.events.length,2);
+ assert.equal(h.ctx.bvomBb2Log(0,0),false,'duplicate set refused');
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined,'development record absent from cloud');
+ const written=h.ls.getItem('bvom_data');
+ h.ev('bvomWindowLockOwned=false');
+ assert.equal(h.ctx.bvomBb2Log(0,1),false,'no work can save without owning document');
+ assert.equal(h.ls.getItem('bvom_data'),written,'lock refusal leaves disk intact');
+ h.ev('bvomWindowLockOwned=true');
+ const restarted=fixture({ls:h.ls});
+ assert.equal(restarted.h.S().bb2.activeSessionId,active,'reload retains active BB2 session');
+ assert.equal(restarted.h.S().bb2.events.length,2);
+ restarted.h.ctx.location.origin='http://localhost:8000';
+ restarted.h.ctx.location.search='?bb2Preview=1';
+ restarted.h.ctx.__bb2CatalogueForTest=catalogue;
+ restarted.h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest');
+ assert.equal(restarted.h.ctx.bvomBb2Discard(),true,'Discard makes session tombstones');
+ assert.equal(restarted.h.S().bb2.activeSessionId,null);
+ assert.equal(restarted.h.S().bb2.events[0].type,'TOMBSTONE');
+ assert.equal(restarted.h.S().bb2.events[1].type,'TOMBSTONE');
+ assert.equal(restarted.h.S().bb2.events.at(-1).type,'WORKOUT_DISCARDED');
+ assert.equal(restarted.h.S().history.length,JSON.parse(before).history.length);
+ assert.equal(restarted.h.ctx.bvomCloudPayload().bb2,undefined);
+ console.log('PASS: BB2 Start, set, duplicate fence, reload, cloud guard, lock refusal and Discard');
+}
+
+console.log('BB2 BVOM integrated setup preview: 5/5 PASS');
