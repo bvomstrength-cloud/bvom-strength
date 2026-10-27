@@ -226,6 +226,9 @@ function fixture({ls}={}){
  assert.equal(state.history.length,JSON.parse(before).history.length,'legacy History stays byte-level separate');
  assert.match(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-history-section/);
  assert.match(h.ctx.document.querySelector('#history').innerHTML,/Credit awarded/);
+ assert.match(h.ctx.document.querySelector('#history').innerHTML,/CURRENT BB2 WORKING PLANS/);
+ assert.match(h.ctx.document.querySelector('#history').innerHTML,/Bench Press: 60 kg/,
+  'History shows the folded current plan rather than guessing an increase from calibration');
  const saved=h.ls.getItem('bvom_data');
  assert.equal(h.ctx.bvomBb2End('FINISH'),false,'second Finish cannot award duplicate');
  assert.equal(h.ls.getItem('bvom_data'),saved,'second Finish leaves bytes untouched');
@@ -367,9 +370,75 @@ function fixture({ls}={}){
  assert.equal(h.ctx.bvomBb2WarmupMark(0,0),false,'failed durable save refuses the tick');
  assert.equal(h.ls.getItem('bvom_data'),before,'failure cannot alter persisted BVOM data');
  assert.equal(JSON.stringify(h.S().warmupDone),priorWarm,'in-memory warm-up ticks roll back');
+ assert.equal(h.S().bb2.warmupTouched,undefined,'failed tick cannot leave a phantom edit lock');
  assert.equal(h.S().bb2.events.length,1,'no ledger events created by a failed warm-up save');
  assert.equal(h.ctx.bvomCloudPayload().bb2,undefined,'failed write cannot send BB2 to cloud');
  console.log('PASS: BB2 warm-up storage failure rolls back ticks and preserves ledger');
 }
 
-console.log('BB2 BVOM integrated setup preview: 9/9 PASS');
+{
+ const {h,before}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;h.ctx.__bb2EditLoad='65';
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const hit=selector.match(/data-bb2-(load|inc|assist|edit|reps|hard)="([^"]+)"/);
+  if(hit){
+   if(hit[1]==='hard')return {checked:false};
+   return {value:hit[1]==='edit'?h.ctx.__bb2EditLoad:
+    hit[1]==='load'?'60':hit[1]==='inc'?'2.5':hit[1]==='reps'?'8':'none'};
+  }
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ const id=h.S().bb2.activeSessionId;
+ const first=h.S().bb2.events[0].slots[0];
+ assert.equal(first.plannedG,60000);
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/First eligible exposure calibrates/);
+ assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),true,'untouched working weight can be edited');
+ let events=h.S().bb2.events;
+ assert.equal(events.length,2);
+ assert.equal(events[1].type,'PRESCRIPTION_EDITED');
+ assert.equal(events[1].scope,'GLOBAL','pre-lock edit survives session Discard');
+ assert.equal(events[1].loadG,65000);
+ assert.equal(events[0].slots[0].plannedG,60000,'immutable Start plan survives edit');
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/65 kg/);
+ assert.match(h.ctx.document.querySelector('#warmup').innerHTML,/Working: 65 kg/);
+ assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),true,'unchanged edit is an idempotent no-op');
+ assert.equal(h.S().bb2.events.length,2);
+ h.ev("state.unit='lb'");
+ h.ctx.__bb2EditLoad=h.ctx.bvomBb2DisplayLoad(65000);
+ assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),true,
+  'resubmitting unchanged rounded pounds cannot create a false load change');
+ assert.equal(h.S().bb2.events.length,2,'unit display round-trip preserves grams and epoch');
+ h.ev("state.unit='kg'");
+ const saved=h.ls.getItem('bvom_data');
+ h.ev('bvomWindowLockOwned=false');h.ctx.__bb2EditLoad='67.5';
+ assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),false,'non-owner edit refused');
+ assert.equal(h.ls.getItem('bvom_data'),saved);
+ h.ev('bvomWindowLockOwned=true');
+ assert.equal(h.ctx.bvomBb2WarmupMark(0,0),true);
+ assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),false,'warm-up tick locks ordinary edit');
+ assert.equal(h.ctx.bvomBb2WarmupMark(0,0),true,'user may untick optional preparation');
+ assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),false,
+  'unticking preparation cannot erase the durable active-workout edit boundary');
+ const savedTouch=JSON.parse(h.ls.getItem('bvom_data'));
+ assert.equal(Object.values(savedTouch.bb2.warmupTouched).filter(Boolean).length,1);
+ assert.equal(h.ctx.bvomBb2WarmupMark(0,0),true);
+ assert.equal(h.ctx.bvomBb2Log(0,0),true);
+ const set=h.S().bb2.events.find(e=>e.type==='SET_RECORDED');
+ assert.equal(set.actualG,65000,'working set inherits edited canonical load');
+ assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),false,'recorded work locks ordinary edit');
+ assert.equal(h.ctx.bvomBb2Discard(),true);
+ assert.ok(h.S().bb2.events.some(e=>e.type==='PRESCRIPTION_EDITED'&&e.loadG===65000),
+  'independent global edit survives discarded session');
+ assert.equal(h.S().history.length,JSON.parse(before).history.length);
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ console.log('PASS: BB2 pre-lock load edit, warm-up refresh, actual inheritance, lock and discard');
+}
+
+console.log('BB2 BVOM integrated setup preview: 10/10 PASS');

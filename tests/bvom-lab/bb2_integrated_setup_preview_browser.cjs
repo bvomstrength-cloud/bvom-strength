@@ -176,13 +176,51 @@ const server=http.createServer((req,res)=>{
   await page.reload();
   await page.waitForSelector('#history [data-bb2-history]',{state:'attached'});
   assert.match(await page.locator('#history').textContent(),/Credit awarded/);
+  assert.match(await page.locator('#history').textContent(),/CURRENT BB2 WORKING PLANS/);
   assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
+  // Exercise the new pre-lock editor against the actual existing Workout and
+  // Warm-up tabs, then ensure its independent event survives Discard.
+  await page.evaluate(()=>showSetup());
+  await page.locator('#setup [data-bb2-preview]').click();
+  await page.waitForSelector('#setup [data-bb2-start]');
+  const editLoads=page.locator('#setup [data-bb2-load]');
+  const editIncrements=page.locator('#setup [data-bb2-inc]');
+  for(let i=0;i<4;i++){
+   await editLoads.nth(i).fill('60');await editIncrements.nth(i).fill('2.5');
+  }
+  await page.locator('#setup [data-bb2-start]').click();
+  await page.waitForSelector('#workout [data-bb2-edit-save="0"]');
+  await page.locator('#workout [data-bb2-edit="0"]').fill('65');
+  await page.locator('#workout [data-bb2-edit-save="0"]').click();
+  assert.equal(await page.evaluate(()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   return b.events.at(-1).type==='PRESCRIPTION_EDITED'&&b.events.at(-1).loadG===65000;
+  }),true,'the shared Workout editor commits a canonical pre-lock edit');
+  await page.evaluate(()=>activateTab('warmup'));
+  assert.match(await page.locator('#warmup').textContent(),/Working: 65 kg/);
+  await page.locator('#warmup [data-bb2-warm-tick="0|0"]').click();
+  await page.locator('#warmup [data-bb2-warm-tick="0|0"]').click();
+  await page.evaluate(()=>activateTab('workout'));
+  assert.equal(await page.locator('#workout [data-bb2-edit-save="0"]').isDisabled(),true,
+   'unticking preparation does not reopen the working-weight editor');
+  await page.locator('#workout [data-bb2-reps="0|0"]').fill('8');
+  await page.locator('#workout [data-bb2-log="0|0"]').click();
+  assert.equal(await page.evaluate(()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   return b.events.at(-1).actualG;
+  }),65000,'working actual inherits the edited canonical load');
+  assert.equal(await page.locator('#workout [data-bb2-edit-save="0"]').isDisabled(),true);
+  await page.locator('#workout [data-bb2-discard]').click();
+  assert.equal(await page.evaluate(()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   return !b.activeSessionId&&b.events.some(e=>e.type==='PRESCRIPTION_EDITED'&&e.loadG===65000);
+  }),true,'discard keeps the independent working-weight edit');
   await page.goto(origin+'/index.html');
   await page.waitForSelector('#app:not(.hidden)');
   await page.evaluate(()=>showSetup());
   assert.equal(await page.locator('#setup [data-bb2-preview]').count(),0,'stored preview does not expose BB2 in normal app');
   assert.deepEqual(errors,[],'no application JavaScript errors');
-  console.log('PASS BB2 integrated setup preview: dev-only chooser, explicit shared save, reload, cloud exclusion, Start/Record/Discard/Finish, History and Warm-up reload');
+  console.log('PASS BB2 integrated setup preview: dev-only chooser, shared save, reload, cloud exclusion, Start/Record/Discard/Finish, History, warm-up and pre-lock weight edit');
   await context.close();
  }finally{
   if(browser)await browser.close();
