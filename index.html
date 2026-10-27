@@ -5084,7 +5084,7 @@ function bvomBb2Workout(){
  const m=bvomBb2PreviewModule;
  if(!m){
   el.innerHTML='<div class="card">Loading BB2 local workout…</div>';
-  import('./bb2/browser-core.mjs').then(x=>{bvomBb2PreviewModule=x;bvomBb2Workout()}).catch(console.error);
+  import('./bb2/browser-core.mjs').then(x=>{bvomBb2PreviewModule=x;bvomBb2Workout();renderWarm();}).catch(console.error);
   return;
  }
  const b=state.bb2,start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
@@ -5210,11 +5210,113 @@ renderHistory=function(...args){
 
 const bvomBb2OldRenderWorkout=renderWorkout;
 renderWorkout=function(...args){return bvomBb2Active()?bvomBb2Workout():bvomBb2OldRenderWorkout(...args)};
+// BB2 preparation uses the existing Warm-up tab and BVOM strength warmups()
+// for recognised barbell lifts. All preparation is separate from the frozen
+// BB2 working-set ledger and cannot change progression or block credits.
+const BVOM_BB2_STRENGTH_WARMUP=Object.freeze({
+ bench_press:'Bench Press',high_bar_squat:'Squat',front_squat:'Squat',
+ barbell_row:'Bench Press',incline_barbell_press:'Bench Press',
+ romanian_deadlift:'Squat',conventional_deadlift:'Deadlift',
+ overhead_press:'Overhead Press'
+});
+function bvomBb2WarmupPlan(slot,role){
+ const kind=role?.warmup||'NONE';
+ if(kind==='NONE')return {kind,sets:[],note:'No dedicated warm-up needed.'};
+ if(kind==='QUALITATIVE'||slot.equipment==='bodyweight'){
+  return {kind:'QUALITATIVE',sets:[],note:'Use an easier variation or additional assistance for a few controlled reps. Preparation does not count as a working set.'};
+ }
+ const grams=slot.plannedG;
+ if(!Number.isSafeInteger(grams)||grams<=0)return {kind,sets:[],note:'No numeric warm-up without a verified positive load.'};
+ const unit=state.unit==='lb'?'lb':'kg',work=unit==='lb'?grams/453.59237:grams/1000;
+ const lift=BVOM_BB2_STRENGTH_WARMUP[slot.exerciseId];
+ const machine=/machine|cable|pulldown|leg_press|hack_squat/.test(slot.exerciseId);
+ const dumbbell=/dumbbell|goblet|bulgarian|lunge/.test(slot.exerciseId);
+ const note=machine?'Machine/cable loads are advisory. Use available settings; no assumed bar or stack weight.':
+  dumbbell?'Dumbbell loads are per hand. Use the nearest safe available weight.':
+  'Preparation loads are advisory. Use practical available equipment and plates.';
+ let sets=[];
+ if(kind==='FULL'&&lift&&!machine&&!dumbbell){
+  // The existing strength engine retains its bar/plate and unit settings.
+  sets=warmups(work,lift).filter(([w,r])=>Number.isFinite(w)&&w>0&&w<work&&
+    Number.isInteger(r)&&r>0).map(([w,r])=>[w,r]);
+ }else{
+  // FEEDERs and machines/dumbbells never receive an invented 20 kg bar floor.
+  const inc=Number.isSafeInteger(slot.incrementG)&&slot.incrementG>0?
+   (unit==='lb'?slot.incrementG/453.59237:slot.incrementG/1000):0;
+  const fractions=kind==='FULL'?[[.5,5],[.7,3],[.85,2]]:[[.65,5],[.8,2]];
+  for(const [ratio,reps] of fractions){
+   const raw=inc?Math.round(work*ratio/inc)*inc:Math.round(work*ratio*10)/10;
+   const w=Math.round(raw*100)/100;
+   if(w>0&&w<work&&!sets.some(([v])=>Math.abs(v-w)<.001))sets.push([w,reps]);
+  }
+ }
+ return {kind,sets,note,work,unit};
+}
+function bvomBb2WarmupKey(sessionId,slot){
+ return 'BB2|'+sessionId+'|'+slot.roleSlotId+'|'+slot.exerciseId;
+}
+function bvomBb2WarmupMark(slotIndex,index){
+ if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed()||
+    !bvomBb2PreviewModule)return false;
+ const b=state.bb2,start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&
+  e.sessionId===b.activeSessionId),slot=start?.slots[slotIndex];
+ if(!slot)return false;
+ const role=bvomBb2PreviewModule.getBB2TemplatePrescription(b.setup,start.templateId)
+  .slots.find(x=>x.roleSlotId===slot.roleSlotId&&x.exerciseId===slot.exerciseId);
+ if(!role)return false;
+ const plan=bvomBb2WarmupPlan(slot,role);
+ if(!Number.isSafeInteger(index)||index<0||index>=plan.sets.length)return false;
+ const key=bvomBb2WarmupKey(start.sessionId,slot),before=state.warmupDone;
+ const marks={...(before?.[key]||{})};
+ if(marks[index])delete marks[index];else marks[index]=true;
+ const next={...(before||{})};
+ if(Object.keys(marks).length)next[key]=marks;else delete next[key];
+ state.warmupDone=next;
+ // Same durable BVOM document, namespaced warmupDone map. No set or credit
+ // events, no BB1 warm-up keys, no timer or workout-activity clock changes.
+ if(!save({durable:true,localOnly:true,passive:true})){
+  if(before===undefined)delete state.warmupDone;else state.warmupDone=before;
+  return false;
+ }
+ bvomBb2WarmupRender();return true;
+}
+function bvomBb2WarmupRender(){
+ const el=document.querySelector('#warmup');if(!el||!bvomBb2Active())return;
+ const b=state.bb2,m=bvomBb2PreviewModule;
+ if(!bvomBb2PreviewEnabled()||!m){
+  el.innerHTML='<div class="card">BB2 local warm-up is unavailable.</div>';return;
+ }
+ try{m.foldBB2Block(b.opening,b.events)}catch(e){
+  el.innerHTML='<div class="card">BB2 warm-up is read-only: invalid training record.</div>';return;
+ }
+ const start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
+ if(!start){el.innerHTML='<div class="card">No active BB2 warm-up.</div>';return}
+ const rx=m.getBB2TemplatePrescription(b.setup,start.templateId);
+ const cards=start.slots.map((slot,i)=>{
+  const role=rx.slots.find(x=>x.roleSlotId===slot.roleSlotId&&x.exerciseId===slot.exerciseId);
+  const plan=bvomBb2WarmupPlan(slot,role);
+  const done=state.warmupDone?.[bvomBb2WarmupKey(start.sessionId,slot)]||{};
+  const rows=plan.sets.map(([weight,reps],j)=>
+   '<div class="warmrow"><button type="button" class="set '+(done[j]?'done':'')+
+   '" data-bb2-warm-tick="'+i+'|'+j+'" onclick="bvomBb2WarmupMark('+i+','+j+')">✓</button>'+
+   '<b>'+bvomEsc(String(weight))+' '+bvomEsc(plan.unit)+' × '+reps+
+   '</b><span class="plates">Preparation only</span></div>').join('');
+  const working=slot.plannedG!==undefined?
+   '<div class="small">Working: '+bvomEsc(slot.plannedOrigin.value)+' '+
+    bvomEsc(slot.plannedOrigin.unit)+'</div>':'';
+  return '<div class="exercise" data-bb2-warm-card="'+i+'"><div class="exhead"><b>'+
+   bvomEsc(bvomBb2PreviewLabel(slot.exerciseId))+
+   '</b><span class="small">'+bvomEsc(plan.kind)+'</span></div>'+working+
+   (rows||'<p class="small">Guidance only</p>')+
+   '<p class="small">'+bvomEsc(plan.note)+'</p></div>';
+ }).join('');
+ el.innerHTML='<div class="toprow"><b>BODYBUILDING 2 · WARM-UP</b></div>'+
+  '<div class="notice">Optional preparation only; ticks never count as working sets, calibration or credits.</div>'+
+  cards;
+}
 const bvomBb2OldRenderWarm=renderWarm;
 renderWarm=function(...args){
- if(bvomBb2Active()){
-  document.querySelector('#warmup').innerHTML='<div class="card">BB2 warm-up integration is not enabled in this development test.</div>';return;
- }
+ if(bvomBb2Active())return bvomBb2WarmupRender();
  return bvomBb2OldRenderWarm(...args);
 };
 const bvomBb2OldFinish=finishWorkout;

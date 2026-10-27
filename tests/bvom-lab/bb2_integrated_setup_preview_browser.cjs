@@ -107,6 +107,19 @@ const server=http.createServer((req,res)=>{
   assert.equal(started.bb2.events[0].type,'WORKOUT_STARTED');
   assert.equal(started.programMode,fixture.programMode);
   assert.equal(await page.evaluate(()=>bvomCloudWorkoutActive()),true);
+  await page.waitForSelector('#warmup [data-bb2-warm-tick="0|0"]');
+  assert.equal(await page.locator('#warmup [data-bb2-warm-card]').count(),5);
+  assert.match(await page.locator('#warmup').textContent(),/Preparation only/);
+  const beforeWarm=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.events.length);
+  await page.locator('#warmup [data-bb2-warm-tick="0|0"]').click();
+  assert.equal(await page.locator('#warmup [data-bb2-warm-tick="0|0"].done').count(),1,
+   'preparation tick is visible and saved');
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.events.length),
+   beforeWarm,'warm-up cannot create BB2 working-set events');
+  await page.reload();
+  await page.waitForSelector('#warmup [data-bb2-warm-tick="0|0"].done',
+   {state:'attached'});
+  assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
   await page.locator('#workout [data-bb2-reps="0|0"]').fill('8');
   await page.locator('#workout [data-bb2-log="0|0"]').click();
   await page.waitForSelector('#workout .warmrow:has-text("8 reps")');
@@ -165,7 +178,7 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>showSetup());
   assert.equal(await page.locator('#setup [data-bb2-preview]').count(),0,'stored preview does not expose BB2 in normal app');
   assert.deepEqual(errors,[],'no application JavaScript errors');
-  console.log('PASS BB2 integrated setup preview: dev-only chooser, explicit shared save, reload, cloud exclusion, Start/Record/Discard/Finish, History reload');
+  console.log('PASS BB2 integrated setup preview: dev-only chooser, explicit shared save, reload, cloud exclusion, Start/Record/Discard/Finish, History and Warm-up reload');
   await context.close();
  }finally{
   if(browser)await browser.close();

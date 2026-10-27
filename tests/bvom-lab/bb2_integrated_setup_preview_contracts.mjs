@@ -253,4 +253,65 @@ function fixture({ls}={}){
  console.log('PASS: rejected Finish and incomplete session preserve legacy data and never award credit');
 }
 
-console.log('BB2 BVOM integrated setup preview: 7/7 PASS');
+
+{
+ const {h,before}=fixture();
+ h.ctx.location.origin='http://localhost:8000';
+ h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const hit=selector.match(/data-bb2-(load|inc|assist)="([^"]+)"/);
+  if(hit)return {value:hit[1]==='load'?'60':hit[1]==='inc'?'2.5':'none'};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ const saved=h.S().bb2,started=saved.events.find(e=>e.type==='WORKOUT_STARTED');
+ const prescription=catalogue.getBB2TemplatePrescription(saved.setup,started.templateId);
+ const roles=started.slots.map(slot=>prescription.slots.find(p=>p.roleSlotId===slot.roleSlotId&&p.exerciseId===slot.exerciseId));
+ const plans=started.slots.map((slot,i)=>h.ctx.bvomBb2WarmupPlan(slot,roles[i]));
+ assert.equal(plans[0].kind,'FULL');
+ assert.ok(plans[0].sets.length>0,'free-bar bench uses established warmup calculations');
+ assert.ok(plans[0].sets.every(([weight,reps])=>weight>0&&weight<60&&reps>0));
+ assert.equal(plans.find(x=>x.kind==='FEEDER').sets.length>0,true,'FEEDER provides lighter prep');
+ assert.equal(plans.find(x=>x.kind==='QUALITATIVE').sets.length,0,'bodyweight advice has no fake weights');
+ assert.equal(plans.find(x=>x.kind==='NONE').sets.length,0,'isolation work has no dedicated prep');
+ const rendered=h.ctx.document.querySelector('#warmup').innerHTML;
+ assert.match(rendered,/BODYBUILDING 2 · WARM-UP/);
+ assert.match(rendered,/data-bb2-warm-tick="0\|0"/);
+ assert.match(rendered,/Preparation only/);
+ const beforeTick=h.ls.getItem('bvom_data');
+ const legacySession=JSON.stringify(h.S().session);
+ assert.equal(h.ctx.bvomBb2WarmupMark(0,999),false,'unprescribed warmup index rejected');
+ assert.equal(h.ls.getItem('bvom_data'),beforeTick);
+ assert.equal(h.ctx.bvomBb2WarmupMark(0,0),true,'warmup tick saved through shared BVOM document');
+ const key='BB2|'+started.sessionId+'|'+started.slots[0].roleSlotId+'|'+started.slots[0].exerciseId;
+ assert.equal(h.S().warmupDone[key][0],true);
+ assert.equal(h.S().bb2.events.length,1,'preparation does not create a working-set event');
+ assert.equal(JSON.stringify(h.S().session),legacySession,'no legacy working-set session changed');
+ assert.equal(h.S().history.length,JSON.parse(before).history.length,'History is unchanged');
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined,'BB2 data still cloud-excluded');
+ assert.match(h.ctx.document.querySelector('#warmup').innerHTML,/data-bb2-warm-tick="0\|0"/);
+ assert.equal(h.ctx.bvomBb2WarmupMark(0,0),true,'warmup tick can be toggled off');
+ assert.equal(h.S().warmupDone[key],undefined);
+ assert.equal(h.ctx.bvomBb2WarmupMark(0,0),true);
+ const written=h.ls.getItem('bvom_data');
+ h.ev('bvomWindowLockOwned=false');
+ assert.equal(h.ctx.bvomBb2WarmupMark(0,0),false,'lost exclusive lock rejects warmup');
+ assert.equal(h.ls.getItem('bvom_data'),written,'rejected tick leaves disk unchanged');
+ h.ev('bvomWindowLockOwned=true');
+ const reloaded=fixture({ls:h.ls});
+ assert.equal(reloaded.h.S().warmupDone[key][0],true,'namespaced tick survives reload');
+ assert.equal(reloaded.h.S().bb2.events.length,1);
+ assert.equal(h.ctx.bvomBb2WarmupMark(4,0),false,'NONE never stores fictitious warmup tick');
+ assert.equal(h.ctx.bvomBb2Discard(),true);
+ assert.equal(h.S().bb2.activeSessionId,null);
+ assert.equal(h.S().history.length,JSON.parse(before).history.length);
+ console.log('PASS: BB2 FULL/FEEDER/QUALITATIVE/NONE, durable ticks, reload, rollback and ledger separation');
+}
+
+console.log('BB2 BVOM integrated setup preview: 8/8 PASS');
