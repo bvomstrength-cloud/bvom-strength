@@ -5128,7 +5128,7 @@ function bvomBb2Log(i,j){
    foldRulesVersion:b.opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:true});
   if(!bvomBb2Commit({...b,events:tx.events}))return false;
   bvomBb2Workout();return true;
- }catch(error){console.error('BB2 set rejected',error);return false}
+ }catch(error){console.error('BB2 set rejected',error);throw error}
 }
 function bvomBb2Discard(){
  if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed()||!bvomBb2PreviewModule)return false;
