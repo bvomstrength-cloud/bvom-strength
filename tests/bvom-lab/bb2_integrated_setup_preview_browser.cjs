@@ -153,12 +153,30 @@ const server=http.createServer((req,res)=>{
    const rows=b.events.filter(e=>e.type==='SET_RECORDED');
    return rows[0].actualG===60000&&rows[1].actualG===67500;
   }),true,'reload and trial change only subsequent actual sets');
+  const bodyweightIndex=await page.evaluate(()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   return b.events.find(e=>e.type==='WORKOUT_STARTED').slots.findIndex(x=>x.equipment==='bodyweight');
+  });
+  assert.ok(bodyweightIndex>=0,'real Upper A has a bodyweight slot');
+  const bwKey=bodyweightIndex+'|0';
+  await page.locator('#workout [data-bb2-bw-variation="'+bwKey+'"]').fill('assisted pullup');
+  await page.locator('#workout [data-bb2-bw-assist="'+bwKey+'"]').fill('light band');
+  await page.locator('#workout [data-bb2-bw-added="'+bwKey+'"]').fill('2.5');
+  await page.locator('#workout [data-bb2-reps="'+bwKey+'"]').fill('8');
+  await page.locator('#workout [data-bb2-log="'+bwKey+'"]').click();
+  assert.equal(await page.evaluate(()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   const e=b.events.at(-1);
+   return e.type==='SET_RECORDED'&&e.variation==='assisted pullup'&&
+    e.assistance==='light band'&&e.actualG===2500&&e.actualOrigin.unit==='kg';
+  }),true,'real BVOM saves explicit bodyweight variation, assistance and added mass');
   await page.locator('#workout [data-bb2-discard]').click();
   const discarded=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
   assert.equal(discarded.bb2.activeSessionId,null);
   assert.equal(discarded.bb2.events[0].type,'TOMBSTONE');
   assert.equal(discarded.bb2.events[1].type,'TOMBSTONE');
   assert.equal(discarded.bb2.events[2].type,'TOMBSTONE','Discard removes session-only calibration trial');
+  assert.equal(discarded.bb2.events[4].type,'TOMBSTONE','Discard removes bodyweight actual while keeping legacy History');
   assert.equal(discarded.history.length,fixture.history.length);
   // The same shared Workout/History surfaces now exercise the true Finish gate.
   await page.evaluate(()=>showSetup());

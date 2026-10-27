@@ -5021,7 +5021,8 @@ function bvomBb2StartForm(){
   (s.equipment==='loaded'
    ? '<label>Starting '+units+'<input type="number" step="any" data-bb2-load="'+i+'"></label>'+
      '<label>Increase '+units+'<input type="number" step="any" data-bb2-inc="'+i+'"></label>'
-   : '<label>Assistance (none if unassisted)<input type="text" data-bb2-assist="'+i+'" value="none"></label>')+
+   : '<label>Assistance (none if unassisted)<input type="text" data-bb2-assist="'+i+'" value="none"></label>'+
+     '<label>Explicit added weight '+units+' (optional)<input type="number" min="0" step="any" data-bb2-bw-load="'+i+'" placeholder="BW only"></label>')+
   '</div>').join('');
  return '<div class="card"><b>BB2 DEVELOPMENT START</b><p class="small">Enter actual starting weights and increases. No BB1 values are inferred. Finish is disabled.</p>'+
   '<div class="choiceRow">'+days+'</div>'+rows+
@@ -5062,6 +5063,11 @@ function bvomBb2Begin(){
     a.variation=p?.variation||s.exerciseId;
     a.assistance=p?.assistance??String(document.querySelector('#setup [data-bb2-assist="'+i+'"]')?.value??'none');
     if(p?.loadG!=null){a.plannedG=p.loadG;a.plannedOrigin=p.loadOrigin}
+    else if(!p){
+     const added=String(document.querySelector('#setup [data-bb2-bw-load="'+i+'"]')?.value??'').trim();
+     if(added){a.plannedG=m.BB2_BROWSER_MODULES.ledger.canonicalGrams(added,unit);
+      a.plannedOrigin={value:added,unit}}
+    }
     if(p?.incrementG!==undefined){a.incrementG=p.incrementG;a.incrementOrigin=p.incrementOrigin}
    }
    return a;
@@ -5247,9 +5253,15 @@ function bvomBb2Workout(){
    b.events.some(e=>e.sessionId===b.activeSessionId&&e.roleSlotId===s.roleSlotId&&e.type==='SET_RECORDED');
   const rows=Array.from({length:s.sets},(_,j)=>{
    const id=i+'|'+j,done=b.events.find(e=>e.type==='SET_RECORDED'&&e.sessionId===b.activeSessionId&&e.roleSlotId===s.roleSlotId&&e.setIndex===j);
-   return done?'<div class="warmrow">Set '+(j+1)+': '+done.reps+' reps ✓</div>':
+   return done?'<div class="warmrow">Set '+(j+1)+': '+done.reps+' reps'+
+    (s.equipment==='bodyweight'?' · '+bvomEsc(done.variation)+' · '+bvomEsc(done.assistance)+
+     (done.actualG!==undefined?' · +'+bvomEsc(bvomBb2DisplayLoad(done.actualG))+' '+unitLabel():''):'')+' ✓</div>':
     '<div class="warmrow"><b>Set '+(j+1)+'</b><input type="number" min="1" step="1" data-bb2-reps="'+id+'" style="width:90px" placeholder="reps">'+
     '<label><input type="checkbox" data-bb2-hard="'+id+'"> Hard</label>'+
+    (s.equipment==='bodyweight'?'<label>Actual variation<input type="text" maxlength="80" data-bb2-bw-variation="'+id+'" value="'+bvomEsc(s.variation)+'"></label>'+
+     '<label>Actual assistance<input type="text" maxlength="80" data-bb2-bw-assist="'+id+'" value="'+bvomEsc(s.assistance)+'"></label>'+
+     '<label>Added '+unitLabel()+' (optional)<input type="number" min="0" step="any" data-bb2-bw-added="'+id+'" value="'+
+      (s.plannedG===undefined?'':bvomEsc(bvomBb2DisplayLoad(s.plannedG)))+'" placeholder="BW only"></label>':'')+
     '<button type="button" class="choice" data-bb2-log="'+id+'" onclick="bvomBb2Log('+i+','+j+')">SAVE SET</button></div>';
   }).join('');
   return '<div class="exercise"><div class="exhead"><b>'+bvomEsc(bvomBb2PreviewLabel(s.exerciseId))+'</b></div>'+
@@ -5295,7 +5307,28 @@ function bvomBb2Log(i,j){
   prescribed:true,harderThanIntended:!!document.querySelector('#workout [data-bb2-hard="'+key+'"]')?.checked};
  if(slot.plannedG!==undefined){const trial=bvomBb2SessionTrial(slot,b.events,b.activeSessionId);
   e.actualG=trial.grams;e.actualOrigin=trial.origin}
- if(slot.equipment==='bodyweight'){e.variation=slot.variation;e.assistance=slot.assistance}
+ if(slot.equipment==='bodyweight'){
+  const variation=String(document.querySelector('#workout [data-bb2-bw-variation="'+key+'"]')?.value??slot.variation).trim();
+  const assistance=String(document.querySelector('#workout [data-bb2-bw-assist="'+key+'"]')?.value??slot.assistance).trim();
+  if(!variation||!assistance||variation.length>80||assistance.length>80)return false;
+  e.variation=variation;e.assistance=assistance;
+  const added=String(document.querySelector('#workout [data-bb2-bw-added="'+key+'"]')?.value??
+   (slot.plannedG===undefined?'':bvomBb2DisplayLoad(slot.plannedG))).trim();
+  if(added){
+   const unit=state.unit==='lb'?'lb':'kg';
+   if(slot.plannedG!==undefined&&added===bvomBb2DisplayLoad(slot.plannedG)){
+    // An unchanged rounded pounds display is not a new physical load.
+    e.actualG=slot.plannedG;e.actualOrigin=slot.plannedOrigin;
+   }else{
+    try{e.actualG=m.BB2_BROWSER_MODULES.ledger.canonicalGrams(added,unit)}catch(error){return false}
+    e.actualOrigin={value:added,unit};
+   }
+  }else if(slot.plannedG!==undefined){
+   // Clearing a planned +weight means explicitly performed bodyweight only:
+   // Stage (i) requires a recorded numeric zero for a numeric BW slot.
+   e.actualG=0;e.actualOrigin={value:'0',unit:state.unit==='lb'?'lb':'kg'};
+  }else{delete e.actualG;delete e.actualOrigin}
+ }
  try{
   const before=m.foldBB2Block(b.opening,b.events);
   const tx=m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(b.opening,b.events,[e],{

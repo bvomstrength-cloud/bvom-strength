@@ -15,7 +15,20 @@ function fixture({ls}={}){
  const document=h.ctx.document,query=document.querySelector;
  const row={children:[],appendChild(el){this.children.push(el);return el},
   querySelector(selector){return this.children.find(el=>selector==='[data-bb2-preview]'&&el.dataset.bb2Preview)||null}};
- document.querySelector=selector=>selector==='#setup [data-bb-program]'?{parentElement:row}:query(selector);
+ document.querySelector=selector=>{
+  if(selector==='#setup [data-bb-program]')return {parentElement:row};
+  // This harness does not parse innerHTML into input nodes. Mirror the
+  // rendered bodyweight default fields; targeted cases override them below.
+  const bw=selector.match(/^#workout \[data-bb2-bw-(variation|assist|added)="(\d+)\|\d+"\]$/);
+  if(bw){
+   const bb=h.S().bb2;
+   const start=bb?.events?.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===bb.activeSessionId);
+   const slot=start?.slots[Number(bw[2])];
+   return {value:bw[1]==='variation'?slot?.variation??'':bw[1]==='assist'?slot?.assistance??'':
+    slot?.plannedG!==undefined?String(slot.plannedG/1000):''};
+  }
+  return query(selector);
+ };
  return {h,before,row};
 }
 
@@ -553,4 +566,130 @@ function fixture({ls}={}){
  console.log('PASS: BB2 calibration trial storage failure leaves document unchanged');
 }
 
-console.log('BB2 BVOM integrated setup preview: 12/12 PASS');
+{
+ const {h,before}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ctx.__bb2Actual={variation:'pullup',assistance:'medium band',added:'5'};
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const bw=selector.match(/data-bb2-bw-(variation|assist|added)="(\d+)\|(\d+)"/);
+  if(bw)return {value:h.ctx.__bb2Actual[bw[1]==='assist'?'assistance':bw[1]]};
+  const field=selector.match(/data-bb2-(bw-load|load|inc|assist|reps|hard)="([^"]+)"/);
+  if(field){
+   if(field[1]==='hard')return {checked:false};
+   return {value:field[1]==='bw-load'?'5':field[1]==='load'?'60':
+    field[1]==='inc'?'2.5':field[1]==='assist'?'medium band':'8'};
+  }
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ const b=h.S().bb2,start=b.events[0],i=start.slots.findIndex(s=>s.equipment==='bodyweight');
+ assert.ok(i>=0,'Upper A includes actual bodyweight vertical pull');
+ const slot=start.slots[i],key='upper_a|'+slot.roleSlotId+'|'+slot.exerciseId;
+ assert.equal(slot.plannedG,5000,'starting numeric BW is only explicitly entered added load');
+ assert.equal(slot.assistance,'medium band');
+ assert.equal(h.ctx.bvomBb2DisplayLoad(5000),'5');
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/Actual variation/);
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/Added kg \(optional\)/);
+ h.ctx.__bb2Actual.variation='';
+ assert.equal(h.ctx.bvomBb2Log(i,0),false,'blank bodyweight variation refused');
+ h.ctx.__bb2Actual.variation='pullup';h.ctx.__bb2Actual.assistance='';
+ assert.equal(h.ctx.bvomBb2Log(i,0),false,'missing explicit assistance refused');
+ h.ctx.__bb2Actual.assistance='medium band';h.ctx.__bb2Actual.added='-3';
+ assert.equal(h.ctx.bvomBb2Log(i,0),false,'negative added load refused');
+ assert.equal(b.events.length,1,'invalid bodyweight entries leave ledger unchanged');
+ h.ev("state.unit='lb'");h.ctx.__bb2Actual.added=h.ctx.bvomBb2DisplayLoad(5000);
+ assert.equal(h.ctx.bvomBb2Log(i,0),true,'record BW after kg-to-lb display conversion');
+ let actual=h.S().bb2.events.at(-1);
+ assert.equal(actual.actualG,5000,'rounded lb display preserves entered 5 kg exactly');
+ assert.equal(actual.actualOrigin.unit,'kg','reversible original load metadata retained');
+ assert.equal(actual.variation,'pullup');assert.equal(actual.assistance,'medium band');
+ h.ev("state.unit='kg'");h.ctx.__bb2Actual.assistance='light band';h.ctx.__bb2Actual.added='7.5';
+ const saved=h.ls.getItem('bvom_data');h.ev('bvomWindowLockOwned=false');
+ assert.equal(h.ctx.bvomBb2Log(i,1),false,'bodyweight actual cannot bypass owner lock');
+ assert.equal(h.ls.getItem('bvom_data'),saved);
+ h.ev('bvomWindowLockOwned=true');
+ assert.equal(h.ctx.bvomBb2Log(i,1),true);
+ actual=h.S().bb2.events.at(-1);
+ assert.equal(actual.actualG,7500);
+ assert.equal(actual.assistance,'light band');
+ assert.equal(start.slots[i].assistance,'medium band','actual variation cannot rewrite immutable prescription');
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/light band/);
+ const reloaded=fixture({ls:h.ls});
+ assert.equal(reloaded.h.S().bb2.events.at(-1).assistance,'light band','bodyweight actual survives reload');
+ const remaining=start.slots.flatMap((s,j)=>j===i?[]:Array.from({length:s.sets},(_,k)=>[j,k])).slice(0,7);
+ assert.equal(remaining.length,7);
+ for(const [j,k] of remaining)assert.equal(h.ctx.bvomBb2Log(j,k),true,`required set ${j}|${k}`);
+ assert.equal(h.ctx.bvomBb2End('FINISH'),true);
+ const projection=catalogue.foldBB2Block(h.S().bb2.opening,h.S().bb2.events);
+ assert.equal(projection.progress[key].calibrated,true);
+ assert.equal(projection.progress[key].bestReps,null,'mixed variation/assistance/added load creates no comparable BW baseline');
+ assert.equal(projection.progress[key].loadG,5000,'mixed actuals do not silently adopt 7.5 kg');
+ assert.equal(projection.progress[key].assistance,'medium band');
+ assert.equal(h.S().history.length,JSON.parse(before).history.length);
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ console.log('PASS: BB2 bodyweight explicit added weight, variation, assistance, units, mixed calibration and owner guard');
+}
+
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const field=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
+  if(field)return {value:field[1]==='load'?'60':field[1]==='inc'?'2.5':
+   field[1]==='assist'?'none':'8',checked:false};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ const i=h.S().bb2.events[0].slots.findIndex(s=>s.equipment==='bodyweight');
+ const old=h.ls.getItem('bvom_data'),prior=h.S().bb2.events.length;
+ const setItem=h.ls.setItem;
+ h.ls.setItem=(key,value)=>{if(key==='bvom_data')throw Error('simulated storage full');return setItem(key,value)};
+ assert.equal(h.ctx.bvomBb2Log(i,0),false,'failed BW actual save cannot commit event');
+ h.ls.setItem=setItem;
+ assert.equal(h.ls.getItem('bvom_data'),old,'failed BW write cannot change disk');
+ assert.equal(h.S().bb2.events.length,prior,'failed BW write rolls back in-memory event');
+ console.log('PASS: BB2 bodyweight storage failure is atomic');
+}
+
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  if(/data-bb2-bw-added=/.test(selector))return {value:''};
+  const field=selector.match(/data-bb2-(bw-load|load|inc|assist|reps|hard)="([^"]+)"/);
+  if(field)return {value:field[1]==='bw-load'?'5':field[1]==='load'?'60':
+   field[1]==='inc'?'2.5':field[1]==='assist'?'none':'8',checked:false};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ const start=h.S().bb2.events[0],i=start.slots.findIndex(s=>s.equipment==='bodyweight');
+ assert.equal(start.slots[i].plannedG,5000);
+ assert.equal(h.ctx.bvomBb2Log(i,0),true,'clearing added weight means a bodyweight-only actual');
+ const row=h.S().bb2.events.at(-1);
+ assert.equal(row.actualG,0,'BW-only actual is explicit zero external kilograms');
+ assert.equal(row.actualOrigin.value,'0');
+ assert.equal(row.variation,start.slots[i].variation);
+ assert.equal(row.assistance,'none');
+ assert.equal(start.slots[i].plannedG,5000,'removing load from one set does not rewrite prescription');
+ console.log('PASS: BB2 bodyweight-only actual after a planned BW+load prescription');
+}
+
+console.log('BB2 BVOM integrated setup preview: 15/15 PASS');
