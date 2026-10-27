@@ -221,9 +221,28 @@ const server=http.createServer((req,res)=>{
   assert.equal(finished.history.length,fixture.history.length,'legacy History unchanged after BB2 Finish');
   assert.equal(await page.evaluate(()=>bvomBb2End('FINISH')),false,'repeat Finish is idempotent');
   assert.match(await page.locator('#history').textContent(),/Credit awarded/);
+  await page.evaluate(()=>activateTab('history'));
+  const correction=page.locator('#history [data-bb2-correct-reps="0|0"]');
+  await correction.fill('7');
+  await page.locator('#history [data-bb2-correct-hard="0|0"]').check();
+  await page.locator('#history [data-bb2-correct-save="0|0"]').click();
+  assert.equal(await page.evaluate(()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   const e=b.events.at(-1);
+   return e.type==='SET_CORRECTED'&&e.reps===7&&e.harderThanIntended&&
+    b.events.filter(x=>x.type==='CREDIT_GRANTED').length===1;
+  }),true,'real History correction is one ledger event and cannot duplicate credit');
+  assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/7 reps/);
+  const correctedRaw=await page.evaluate(()=>localStorage.getItem('bvom_data'));
+  await page.locator('#history [data-bb2-correct-save="0|0"]').click();
+  assert.equal(await page.evaluate(()=>localStorage.getItem('bvom_data')),correctedRaw,
+   'unchanged History correction writes nothing');
+  assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
   await page.reload();
   await page.waitForSelector('#history [data-bb2-history]',{state:'attached'});
   assert.match(await page.locator('#history').textContent(),/Credit awarded/);
+  assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/7 reps/,
+   'completed History corrections survive actual browser reload');
   assert.match(await page.locator('#history').textContent(),/CURRENT BB2 WORKING PLANS/);
   assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
   // Exercise the new pre-lock editor against the actual existing Workout and

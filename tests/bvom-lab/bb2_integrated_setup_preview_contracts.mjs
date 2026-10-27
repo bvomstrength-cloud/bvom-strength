@@ -788,4 +788,66 @@ function fixture({ls}={}){
  console.log('PASS: BB2 atomic two-event bodyweight plan edit rollback');
 }
 
-console.log('BB2 BVOM integrated setup preview: 17/17 PASS');
+{
+ const {h,before}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;h.ctx.__bb2Correction={reps:'7',hard:true};
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  if(selector==='#history [data-bb2-correct-reps="0|0"]')return {value:h.ctx.__bb2Correction.reps};
+  if(selector==='#history [data-bb2-correct-hard="0|0"]')return {checked:h.ctx.__bb2Correction.hard};
+  const field=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
+  if(field)return {value:field[1]==='load'?'60':field[1]==='inc'?'2.5':
+   field[1]==='assist'?'none':'8',checked:false};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ for(const [i,j] of [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[3,0]]){
+  assert.equal(h.ctx.bvomBb2Log(i,j),true);
+ }
+ assert.equal(h.ctx.bvomBb2CorrectSet(0,0),false,'active BB2 workout cannot retrospectively correct');
+ assert.equal(h.ctx.bvomBb2End('FINISH'),true);
+ const original=h.S().bb2.events.find(e=>e.type==='SET_RECORDED');
+ const persisted=h.ls.getItem('bvom_data');
+ assert.match(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-correct-save="0\|0"/);
+ h.ctx.__bb2Correction.reps='0';
+ assert.equal(h.ctx.bvomBb2CorrectSet(0,0),false,'invalid zero-rep edit refused');
+ assert.equal(h.ls.getItem('bvom_data'),persisted,'invalid edit cannot write');
+ h.ctx.__bb2Correction.reps='7';
+ h.ev('bvomWindowLockOwned=false');
+ assert.equal(h.ctx.bvomBb2CorrectSet(0,0),false,'non-owner refused');
+ assert.equal(h.ls.getItem('bvom_data'),persisted);
+ h.ev('bvomWindowLockOwned=true');
+ assert.equal(h.ctx.bvomBb2CorrectSet(0,0),true,'post-Finish correction committed');
+ let bb=h.S().bb2,correct=bb.events.at(-1),projection=catalogue.foldBB2Block(bb.opening,bb.events);
+ assert.equal(correct.type,'SET_CORRECTED');
+ assert.equal(correct.targetEventId,original.eventId,'targets immutable original event ID');
+ assert.equal(correct.reps,7);assert.equal(correct.harderThanIntended,true);
+ assert.equal(projection.history[0].sets[0].reps,7);
+ assert.equal(projection.history[0].sets[0].actualG,original.actualG,'original mass retained');
+ assert.equal(projection.history[0].sets[0].actualOrigin.value,original.actualOrigin.value);
+ assert.equal(projection.quotas.upper_a,1,'credit never silently moved');
+ assert.equal(bb.events.filter(e=>e.type==='CREDIT_GRANTED').length,1);
+ assert.equal(h.ctx.bvomBb2CorrectSet(0,0),true,'unchanged input is idempotent');
+ assert.equal(h.S().bb2.events.length,correct.commitOrdinal);
+ assert.match(h.ctx.document.querySelector('#history').innerHTML,/7 reps/,'History rerenders corrected set');
+ h.ctx.__bb2Correction.reps='6';
+ const success=h.ls.getItem('bvom_data'),setItem=h.ls.setItem;
+ h.ls.setItem=(key,value)=>{if(key==='bvom_data')throw Error('simulated disk full');return setItem(key,value)};
+ assert.equal(h.ctx.bvomBb2CorrectSet(0,0),false,'failed durable History correction refused');
+ h.ls.setItem=setItem;
+ assert.equal(h.ls.getItem('bvom_data'),success,'failed correction leaves disk intact');
+ assert.equal(h.S().bb2.events.at(-1).type,'SET_CORRECTED','failed correction rolls back memory');
+ const reboot=fixture({ls:h.ls});
+ assert.equal(catalogue.foldBB2Block(reboot.h.S().bb2.opening,reboot.h.S().bb2.events)
+  .history[0].sets[0].reps,7,'correction survives reload/replay');
+ assert.equal(h.S().history.length,JSON.parse(before).history.length,'BB1 and legacy History untouched');
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined,'no BB2 correction cloud upload');
+ console.log('PASS: BB2 post-Finish History correction, replay, idempotence, lock and failed-save rollback');
+}
+
+console.log('BB2 BVOM integrated setup preview: 18/18 PASS');
