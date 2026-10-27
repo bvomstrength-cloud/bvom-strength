@@ -107,6 +107,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(started.bb2.events[0].type,'WORKOUT_STARTED');
   assert.equal(started.programMode,fixture.programMode);
   assert.equal(await page.evaluate(()=>bvomCloudWorkoutActive()),true);
+  await page.evaluate(()=>activateTab('warmup'));
   await page.waitForSelector('#warmup [data-bb2-warm-tick="0|0"]');
   assert.equal(await page.locator('#warmup [data-bb2-warm-card]').count(),5);
   assert.match(await page.locator('#warmup').textContent(),/Preparation only/);
@@ -117,9 +118,12 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.events.length),
    beforeWarm,'warm-up cannot create BB2 working-set events');
   await page.reload();
+  await page.waitForSelector('#app:not(.hidden)');
+  await page.evaluate(()=>activateTab('warmup'));
   await page.waitForSelector('#warmup [data-bb2-warm-tick="0|0"].done',
-   {state:'attached'});
+   {state:'visible'});
   assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
+  await page.evaluate(()=>activateTab('workout'));
   await page.locator('#workout [data-bb2-reps="0|0"]').fill('8');
   await page.locator('#workout [data-bb2-log="0|0"]').click();
   await page.waitForSelector('#workout .warmrow:has-text("8 reps")');
