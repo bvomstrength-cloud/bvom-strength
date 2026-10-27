@@ -169,13 +169,15 @@ function fixture({ls}={}){
  restarted.h.ctx.location.search='?bb2Preview=1';
  restarted.h.ctx.__bb2CatalogueForTest=catalogue;
  restarted.h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest');
- assert.equal(restarted.h.ctx.bvomBb2Discard(),true,'Discard makes session tombstones');
- assert.equal(restarted.h.S().bb2.activeSessionId,null);
- assert.equal(restarted.h.S().bb2.events[0].type,'TOMBSTONE');
- assert.equal(restarted.h.S().bb2.events[1].type,'TOMBSTONE');
- assert.equal(restarted.h.S().bb2.events.at(-1).type,'WORKOUT_DISCARDED');
- assert.equal(restarted.h.S().history.length,JSON.parse(before).history.length);
- assert.equal(restarted.h.ctx.bvomCloudPayload().bb2,undefined);
+ assert.equal(restarted.h.ctx.bvomBb2Discard(),false,'a second simulated tab cannot take over original workout ownership');
+ assert.equal(restarted.h.S().bb2.events.length,2,'rejected secondary Discard preserves records');
+ assert.equal(h.ctx.bvomBb2Discard(),true,'original owner can Discard with ledger tombstones');
+ assert.equal(h.S().bb2.activeSessionId,null);
+ assert.equal(h.S().bb2.events[0].type,'TOMBSTONE');
+ assert.equal(h.S().bb2.events[1].type,'TOMBSTONE');
+ assert.equal(h.S().bb2.events.at(-1).type,'WORKOUT_DISCARDED');
+ assert.equal(h.S().history.length,JSON.parse(before).history.length);
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
  console.log('PASS: BB2 Start, set, duplicate fence, reload, cloud guard, lock refusal and Discard');
 }
 
