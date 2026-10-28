@@ -349,6 +349,8 @@ const server=http.createServer((req,res)=>{
     p.quotas.upper_a===0&&b.events.at(-1).type==='WORKOUT_FINISHED';
   }),true,'real recovery Finish is History-only, without quota or new progression');
   await page.reload();
+  await page.waitForSelector('#app:not(.hidden)');
+  await page.evaluate(()=>activateTab('history'));
   await page.waitForSelector('#history [data-bb2-history]');
   assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/LOW_STRESS_RECOVERY/);
   await page.goto(origin+'/index.html');
