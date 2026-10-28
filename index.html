@@ -5456,6 +5456,51 @@ function bvomBb2CorrectSet(historyIndex,setIndex){
   renderHistory();return true;
  }catch(error){console.error('BB2 History correction rejected',error);return false}
 }
+function bvomBb2VoidSet(historyIndex,setIndex){
+ if(!bvomBb2PreviewEnabled()||!bvomBb2PreviewModule||bvomBb2Active()||
+    bvomStateWorkoutActive(state)||!bvomWorkoutActionAllowed()||
+    !Number.isSafeInteger(historyIndex)||historyIndex<0||
+    !Number.isSafeInteger(setIndex)||setIndex<0)return false;
+ const b=state.bb2,m=bvomBb2PreviewModule;
+ if(!b?.opening||!Array.isArray(b.events))return false;
+ try{
+  const before=m.foldBB2Block(b.opening,b.events);
+  if(before.sealed)return false;
+  const h=before.history.filter(x=>!x.hidden&&x.status!=='VOID').reverse()[historyIndex];
+  const set=h?.sets[setIndex];if(!set)return false;
+  const original=b.events.find(e=>['SET_RECORDED','EXTRA_SET_RECORDED'].includes(e.type)&&
+   e.sessionId===h.sessionId&&e.roleSlotId===set.roleSlotId&&e.exerciseId===set.exerciseId&&
+   e.setIndex===set.setIndex);
+  if(!original)return false;
+  const revoke=!!h.creditId&&!!set.prescribed&&
+   h.validCount-1<Math.ceil(.70*h.prescribedCount);
+  if(!confirm(revoke?
+   'Remove this BB2 set? The workout will fall below 70%, so its quota credit will also be revoked. This is an audited correction and cannot be undone here.':
+   'Remove this recorded BB2 set from History? This is an audited correction and cannot be undone here.'))return false;
+  // A native confirmation can yield control. Recheck owner, active state and
+  // exact local document before constructing the final transaction.
+  if(b!==state.bb2||bvomStateWorkoutActive(state)||!bvomWorkoutActionAllowed())return false;
+  const proposed=[{type:'SET_VOIDED',eventId:'void:'+original.eventId+':'+(b.events.length+1),
+   commitOrdinal:b.events.length+1,blockId:b.opening.blockId,sessionId:h.sessionId,
+   targetEventId:original.eventId,roleSlotId:set.roleSlotId,
+   exerciseId:set.exerciseId,setIndex:set.setIndex}];
+  if(revoke)proposed.push({type:'CREDIT_REVOKED',
+   eventId:'revoke:'+h.creditId+':'+(b.events.length+2),
+   commitOrdinal:b.events.length+2,blockId:b.opening.blockId,
+   sessionId:h.sessionId,creditId:h.creditId});
+  const tx=m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(b.opening,b.events,proposed,{
+   ownerId:b.opening.ownerId,blockId:b.opening.blockId,expectedHead:b.events.length,
+   foldRulesVersion:b.opening.foldRulesVersion,sealRevision:before.sealRevision,
+   activeWorkout:false,retrospective:true});
+  const after=tx.projection.history.find(x=>x.sessionId===h.sessionId);
+  if(!after||after.validCount!==h.validCount-(set.prescribed?1:0)||
+     (revoke?after.creditId!==null:after.creditId!==h.creditId)||
+     tx.projection.quotas[h.templateId]!==before.quotas[h.templateId]-(revoke?1:0)||
+     tx.projection.requiredConsent.length)return false;
+  if(!bvomBb2Commit({...b,events:tx.events}))return false;
+  renderHistory();return true;
+ }catch(error){console.error('BB2 History set void rejected',error);return false}
+}
 function bvomBb2RenderHistory(){
  if(!bvomBb2PreviewEnabled()||!state.bb2?.opening||!Array.isArray(state.bb2.events))return;
  const m=bvomBb2PreviewModule;
@@ -5487,7 +5532,9 @@ function bvomBb2RenderHistory(){
     '<label><input type="checkbox" data-bb2-correct-hard="'+historyIndex+'|'+setIndex+'" '+
      (s.harderThanIntended?'checked':'')+'> Hard</label>'+
     '<button type="button" class="choice" data-bb2-correct-save="'+historyIndex+'|'+setIndex+'" '+
-     'onclick="bvomBb2CorrectSet('+historyIndex+','+setIndex+')">CORRECT SET</button></div>':'')+
+     'onclick="bvomBb2CorrectSet('+historyIndex+','+setIndex+')">CORRECT SET</button>'+
+    '<button type="button" class="secondary" data-bb2-void-save="'+historyIndex+'|'+setIndex+'" '+
+     'onclick="bvomBb2VoidSet('+historyIndex+','+setIndex+')">REMOVE SET</button></div>':'')+
    '</div>').join('');
   return '<div class="histCard" data-bb2-history="'+bvomEsc(h.sessionId)+'">'+
    '<div class="histHead"><b>'+bvomEsc(bvomBb2PreviewLabel(h.templateId))+

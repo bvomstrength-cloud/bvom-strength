@@ -850,4 +850,90 @@ function fixture({ls}={}){
  console.log('PASS: BB2 post-Finish History correction, replay, idempotence, lock and failed-save rollback');
 }
 
-console.log('BB2 BVOM integrated setup preview: 18/18 PASS');
+{
+ const {h,before}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const field=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
+  if(field)return {value:field[1]==='load'?'60':field[1]==='inc'?'2.5':
+   field[1]==='assist'?'none':'8',checked:false};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ for(const [i,j] of [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[3,0]])
+  assert.equal(h.ctx.bvomBb2Log(i,j),true);
+ assert.equal(h.ctx.bvomBb2VoidSet(0,8),false,'cannot void an active workout set');
+ assert.equal(h.ctx.bvomBb2End('FINISH'),true);
+ assert.match(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-void-save="0\|8"/);
+ const beforeVoid=h.ls.getItem('bvom_data'),events=h.S().bb2.events;
+ h.ctx.confirm=()=>false;
+ assert.equal(h.ctx.bvomBb2VoidSet(0,8),false,'cancelled destructive action does not write');
+ assert.equal(h.ls.getItem('bvom_data'),beforeVoid);
+ h.ctx.confirm=()=>true;
+ h.ev('bvomWindowLockOwned=false');
+ assert.equal(h.ctx.bvomBb2VoidSet(0,8),false,'non-owner cannot void credit-bearing set');
+ assert.equal(h.ls.getItem('bvom_data'),beforeVoid);
+ h.ev('bvomWindowLockOwned=true');
+ assert.equal(h.ctx.bvomBb2VoidSet(0,8),true,'void and revoke in a single durable transaction');
+ const bb=h.S().bb2,projection=catalogue.foldBB2Block(bb.opening,bb.events);
+ assert.equal(bb.events.length,events.length+2,'void and credit revoke are paired');
+ assert.deepEqual(bb.events.slice(-2).map(e=>e.type),['SET_VOIDED','CREDIT_REVOKED']);
+ assert.equal(bb.events.at(-2).targetEventId,events.filter(e=>e.type==='SET_RECORDED').at(-1).eventId);
+ assert.equal(bb.events.at(-1).creditId,events.find(e=>e.type==='CREDIT_GRANTED').creditId);
+ assert.equal(projection.history[0].status,'INCOMPLETE_CORRECTED');
+ assert.equal(projection.history[0].validCount,8);
+ assert.equal(projection.history[0].creditId,null);
+ assert.equal(projection.quotas.upper_a,0,'quota is revised, never left as unearned credit');
+ assert.equal(h.ctx.bvomBb2VoidSet(0,8),false,'removed set cannot be voided twice');
+ assert.match(h.ctx.document.querySelector('#history').innerHTML,/8\/12 prescribed sets/);
+ assert.doesNotMatch(h.ctx.document.querySelector('#history').innerHTML,/Credit awarded/);
+ const persisted=h.ls.getItem('bvom_data'),setItem=h.ls.setItem;
+ h.ls.setItem=(k,v)=>{if(k==='bvom_data')throw Error('simulated failed History write');return setItem(k,v)};
+ assert.equal(h.ctx.bvomBb2VoidSet(0,7),false,'failed subsequent void leaves the ledger intact');
+ h.ls.setItem=setItem;
+ assert.equal(h.ls.getItem('bvom_data'),persisted);
+ assert.equal(h.S().bb2.events.length,bb.events.length);
+ const reboot=fixture({ls:h.ls});
+ assert.equal(catalogue.foldBB2Block(reboot.h.S().bb2.opening,reboot.h.S().bb2.events).quotas.upper_a,0);
+ assert.equal(h.S().history.length,JSON.parse(before).history.length,'legacy History is untouched');
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined,'BB2 void remains local-only');
+ console.log('PASS: BB2 credit-revoking set void, confirmation, rollback, reload and ownership');
+}
+
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const field=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
+  if(field)return {value:field[1]==='load'?'60':field[1]==='inc'?'2.5':
+   field[1]==='assist'?'none':'8',checked:false};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ for(const [i,j] of [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[3,0],[3,1]])
+  assert.equal(h.ctx.bvomBb2Log(i,j),true);
+ assert.equal(h.ctx.bvomBb2End('FINISH'),true);
+ const initial=h.S().bb2.events.length;
+ assert.equal(h.ctx.bvomBb2VoidSet(0,9),true,'void above 70% is allowed without credit revocation');
+ const b=h.S().bb2,p=catalogue.foldBB2Block(b.opening,b.events);
+ assert.equal(b.events.length,initial+1);
+ assert.equal(b.events.at(-1).type,'SET_VOIDED');
+ assert.equal(p.quotas.upper_a,1);
+ assert.equal(p.history[0].status,'COMPLETED_NORMAL');
+ assert.equal(p.history[0].validCount,9);
+ console.log('PASS: BB2 above-threshold set void retains exactly one earned credit');
+}
+
+console.log('BB2 BVOM integrated setup preview: 20/20 PASS');

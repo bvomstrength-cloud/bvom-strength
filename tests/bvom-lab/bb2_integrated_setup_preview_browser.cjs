@@ -245,6 +245,24 @@ const server=http.createServer((req,res)=>{
    'completed History corrections survive actual browser reload');
   assert.match(await page.locator('#history').textContent(),/CURRENT BB2 WORKING PLANS/);
   assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
+  await page.evaluate(()=>activateTab('history'));
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#history [data-bb2-void-save="0|8"]').click();
+  assert.equal(await page.evaluate(async()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   const tail=b.events.slice(-2);
+   const ledger=await import('./bb2/browser-core.mjs');
+   const projection=ledger.foldBB2Block(b.opening,b.events);
+   return tail[0].type==='SET_VOIDED'&&tail[1].type==='CREDIT_REVOKED'&&
+    projection.quotas.upper_a===0&&projection.history[0].validCount===8&&
+    projection.history[0].status==='INCOMPLETE_CORRECTED';
+  }),true,'real History set removal atomically revokes the now-unearned credit');
+  assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/8\/12 prescribed sets/);
+  assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/No credit/);
+  await page.reload();
+  await page.waitForSelector('#history [data-bb2-history]',{state:'attached'});
+  assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/No credit/,
+   'void and revocation survive full app reload');
   // Exercise the new pre-lock editor against the actual existing Workout and
   // Warm-up tabs, then ensure its independent event survives Discard.
   await page.evaluate(()=>showSetup());
