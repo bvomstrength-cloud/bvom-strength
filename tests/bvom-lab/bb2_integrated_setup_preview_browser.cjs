@@ -291,6 +291,7 @@ const server=http.createServer((req,res)=>{
    await editLoads.nth(i).fill('60');await editIncrements.nth(i).fill('2.5');
   }
   await page.locator('#setup [data-bb2-start]').click();
+  await page.evaluate(()=>activateTab('workout'));
   await page.waitForSelector('#workout [data-bb2-edit-save="0"]');
   await page.locator('#workout [data-bb2-edit="0"]').fill('65');
   await page.locator('#workout [data-bb2-edit-save="0"]').click();
