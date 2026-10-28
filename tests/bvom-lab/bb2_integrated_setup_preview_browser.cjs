@@ -263,6 +263,23 @@ const server=http.createServer((req,res)=>{
   await page.waitForSelector('#history [data-bb2-history]',{state:'attached'});
   assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/No credit/,
    'void and revocation survive full app reload');
+  await page.evaluate(()=>activateTab('history'));
+  page.once('dialog',dialog=>dialog.accept());
+  await page.locator('#history [data-bb2-void-session="0"]').click();
+  assert.equal(await page.evaluate(async()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   const ledger=await import('./bb2/browser-core.mjs');
+   const projection=ledger.foldBB2Block(b.opening,b.events);
+   return b.events.at(-1).type==='SESSION_VOIDED'&&
+    projection.history[0].status==='VOID'&&projection.quotas.upper_a===0;
+  }),true,'real History Remove Workout voids previously credit-revoked session without duplicate credit events');
+  assert.equal(await page.locator('#history [data-bb2-history]').count(),0,
+   'a voided BB2 workout disappears from shared History');
+  await page.reload();
+  await page.waitForSelector('#app:not(.hidden)');
+  await page.evaluate(()=>activateTab('history'));
+  assert.equal(await page.locator('#history [data-bb2-history]').count(),0,
+   'removed workout stays absent from shared History after reload');
   // Exercise the new pre-lock editor against the actual existing Workout and
   // Warm-up tabs, then ensure its independent event survives Discard.
   await page.evaluate(()=>showSetup());

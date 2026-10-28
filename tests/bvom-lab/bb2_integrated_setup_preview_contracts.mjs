@@ -939,4 +939,104 @@ function fixture({ls}={}){
  console.log('PASS: BB2 above-threshold set void retains exactly one earned credit');
 }
 
-console.log('BB2 BVOM integrated setup preview: 20/20 PASS');
+{
+ const {h,before}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const field=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
+  if(field)return {value:field[1]==='load'?'60':field[1]==='inc'?'2.5':
+   field[1]==='assist'?'none':'8',checked:false};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ for(const [i,j] of [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[3,0]])
+  assert.equal(h.ctx.bvomBb2Log(i,j),true);
+ assert.equal(h.ctx.bvomBb2VoidSession(0),false,'cannot retrospectively void while a workout is active');
+ assert.equal(h.ctx.bvomBb2End('FINISH'),true);
+ assert.match(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-void-session="0"/);
+ const original=h.S().bb2,raw=h.ls.getItem('bvom_data');
+ h.ctx.confirm=()=>false;
+ assert.equal(h.ctx.bvomBb2VoidSession(0),false,'cancelled workout removal writes nothing');
+ assert.equal(h.ls.getItem('bvom_data'),raw);
+ h.ctx.confirm=()=>{h.ev('bvomWindowLockOwned=false');return true};
+ assert.equal(h.ctx.bvomBb2VoidSession(0),false,'window-owner change during confirmation aborts removal');
+ h.ev('bvomWindowLockOwned=true');
+ assert.equal(h.ls.getItem('bvom_data'),raw);
+ h.ctx.confirm=()=>true;
+ assert.equal(h.ctx.bvomBb2VoidSession(0),true,'credited workout removal atomically revokes its credit');
+ const bb=h.S().bb2,p=catalogue.foldBB2Block(bb.opening,bb.events);
+ assert.deepEqual(bb.events.slice(-2).map(e=>e.type),['SESSION_VOIDED','CREDIT_REVOKED']);
+ assert.equal(bb.events.at(-1).creditId,original.events.find(e=>e.type==='CREDIT_GRANTED').creditId);
+ assert.equal(p.history[0].status,'VOID');
+ assert.equal(p.history[0].creditId,null);
+ assert.equal(p.quotas.upper_a,0);
+ assert.deepEqual(p.progress,{},'voided only qualifying workout retracts its progression evidence');
+ assert.equal(h.ctx.bvomBb2VoidSession(0),false,'already removed session is not offered twice');
+ assert.doesNotMatch(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-history=/);
+ const reboot=fixture({ls:h.ls}),replay=catalogue.foldBB2Block(reboot.h.S().bb2.opening,reboot.h.S().bb2.events);
+ assert.equal(replay.history[0].status,'VOID');assert.equal(replay.quotas.upper_a,0);
+ assert.equal(h.S().history.length,JSON.parse(before).history.length,'BB1 and ordinary History remain untouched');
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ console.log('PASS: credited BB2 workout removal revokes quota atomically, replays and guards ownership/save');
+}
+
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const field=selector.match(/data-bb2-(load|inc|assist)="([^"]+)"/);
+  if(field)return {value:field[1]==='load'?'60':field[1]==='inc'?'2.5':'none'};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ assert.equal(h.ctx.bvomBb2End('INCOMPLETE'),true);
+ const initial=h.S().bb2.events.length;
+ h.ctx.confirm=()=>true;
+ assert.equal(h.ctx.bvomBb2VoidSession(0),true,'saved incomplete workout can be removed without a credit');
+ assert.equal(h.S().bb2.events.length,initial+1);
+ assert.equal(h.S().bb2.events.at(-1).type,'SESSION_VOIDED');
+ const p=catalogue.foldBB2Block(h.S().bb2.opening,h.S().bb2.events);
+ assert.equal(p.history[0].status,'VOID');assert.equal(p.quotas.upper_a,0);
+ console.log('PASS: incomplete BB2 workout removal has no fabricated quota revocation');
+}
+
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const field=selector.match(/data-bb2-(load|inc|assist)="([^"]+)"/);
+  if(field)return {value:field[1]==='load'?'60':field[1]==='inc'?'2.5':'none'};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ assert.equal(h.ctx.bvomBb2End('INCOMPLETE'),true);
+ const old=h.S().bb2,raw=h.ls.getItem('bvom_data'),setItem=h.ls.setItem;
+ h.ctx.confirm=()=>true;
+ h.ls.setItem=(k,v)=>{if(k==='bvom_data')throw Error('simulated failed workout void');return setItem(k,v)};
+ assert.equal(h.ctx.bvomBb2VoidSession(0),false,'failed local storage blocks historical workout void');
+ h.ls.setItem=setItem;
+ assert.equal(h.ls.getItem('bvom_data'),raw,'persisted incomplete workout is untouched');
+ assert.equal(h.S().bb2,old,'in-memory journal rolls back to the last durable BB2 state');
+ assert.equal(catalogue.foldBB2Block(old.opening,old.events).history[0].status,'INCOMPLETE');
+ console.log('PASS: BB2 workout removal failed-save rollback keeps the complete journal');
+}
+
+console.log('BB2 BVOM integrated setup preview: 23/23 PASS');

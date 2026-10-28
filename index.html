@@ -5501,6 +5501,44 @@ function bvomBb2VoidSet(historyIndex,setIndex){
   renderHistory();return true;
  }catch(error){console.error('BB2 History set void rejected',error);return false}
 }
+// Void a completed BB2 session by its immutable ID. A credited workout must
+// lose its credit in the same durable transaction; no legacy History rows are
+// touched, and the frozen ledger replays all later progression evidence.
+function bvomBb2VoidSession(historyIndex){
+ if(!bvomBb2PreviewEnabled()||!bvomBb2PreviewModule||bvomBb2Active()||
+    bvomStateWorkoutActive(state)||!bvomWorkoutActionAllowed()||
+    !Number.isSafeInteger(historyIndex)||historyIndex<0)return false;
+ const b=state.bb2,m=bvomBb2PreviewModule;
+ if(!b?.opening||!Array.isArray(b.events))return false;
+ try{
+  const before=m.foldBB2Block(b.opening,b.events);
+  if(before.sealed)return false;
+  const h=before.history.filter(x=>!x.hidden&&x.status!=='VOID').reverse()[historyIndex];
+  if(!h)return false;
+  if(!confirm(h.creditId?
+   'Remove this completed BB2 workout? Its quota credit and progression evidence will also be revoked. This cannot be undone here.':
+   'Remove this BB2 workout from History and progression evidence? This cannot be undone here.'))return false;
+  // The native dialog can yield to another tab or owner change.
+  if(b!==state.bb2||bvomBb2Active()||bvomStateWorkoutActive(state)||
+     !bvomWorkoutActionAllowed())return false;
+  const proposed=[{type:'SESSION_VOIDED',eventId:'void-session:'+h.sessionId+':'+(b.events.length+1),
+   commitOrdinal:b.events.length+1,blockId:b.opening.blockId,sessionId:h.sessionId}];
+  if(h.creditId)proposed.push({type:'CREDIT_REVOKED',
+   eventId:'revoke:'+h.creditId+':'+(b.events.length+2),
+   commitOrdinal:b.events.length+2,blockId:b.opening.blockId,
+   sessionId:h.sessionId,creditId:h.creditId});
+  const tx=m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(b.opening,b.events,proposed,{
+   ownerId:b.opening.ownerId,blockId:b.opening.blockId,expectedHead:b.events.length,
+   foldRulesVersion:b.opening.foldRulesVersion,sealRevision:before.sealRevision,
+   activeWorkout:false,retrospective:true});
+  const after=tx.projection.history.find(x=>x.sessionId===h.sessionId);
+  if(after?.status!=='VOID'||after.creditId!==null||
+     tx.projection.quotas[h.templateId]!==before.quotas[h.templateId]-(h.creditId?1:0)||
+     tx.projection.requiredConsent.length)return false;
+  if(!bvomBb2Commit({...b,events:tx.events}))return false;
+  renderHistory();return true;
+ }catch(error){console.error('BB2 History workout void rejected',error);return false}
+}
 function bvomBb2RenderHistory(){
  if(!bvomBb2PreviewEnabled()||!state.bb2?.opening||!Array.isArray(state.bb2.events))return;
  const m=bvomBb2PreviewModule;
@@ -5541,7 +5579,8 @@ function bvomBb2RenderHistory(){
    '</b><span>'+bvomEsc(h.status)+'</span></div>'+
    '<div class="small">'+h.validCount+'/'+h.prescribedCount+' prescribed sets'+
    (h.creditId?' · Credit awarded':' · No credit')+'</div>'+
-   sets+'</div>';
+   sets+(canCorrect?'<button type="button" class="secondary" data-bb2-void-session="'+historyIndex+'" '+
+    'onclick="bvomBb2VoidSession('+historyIndex+')">REMOVE WORKOUT</button>':'')+'</div>';
  }).join('');
  const latest=rows.at(-1);
  const currentPlans=latest.slots.map(slot=>{
