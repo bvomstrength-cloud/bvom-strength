@@ -85,6 +85,7 @@ function fixture({ls}={}){
  const stored=JSON.parse(h.ls.getItem('bvom_data'));
  assert.equal(stored.bb2.setup.selections['upper_a|shoulder_press'],'log_push_press');
  assert.equal(stored.bb2.setup.optionalUpperBCurls,true);
+ assert.equal(!!stored.bb2.selectedProgram,false,'saving setup alone does not switch programs');
  assert.equal(stored.programMode,'lprpt','BB2 setup does not switch the active program');
  assert.match(h.ctx.bvomBb2CloudRestoreMessage(),/WARNING: BB2 is only saved on this device/,
   'developer preview warns before a cloud restore would remove local-only BB2');
@@ -189,6 +190,7 @@ function fixture({ls}={}){
  assert.equal(h.ctx.bvomBb2Log(0,1),false,'no work can save without owning document');
  assert.equal(h.ls.getItem('bvom_data'),written,'lock refusal leaves disk intact');
  h.ev('bvomWindowLockOwned=true');
+ h.ev('delete state.bb2.selectedProgram'); // Older developer sessions predate program selection.
  const restarted=fixture({ls:h.ls});
  assert.equal(restarted.h.S().bb2.activeSessionId,active,'reload retains active BB2 session');
  assert.equal(restarted.h.S().bb2.events.length,2);
@@ -203,6 +205,9 @@ function fixture({ls}={}){
  assert.equal(h.S().bb2.events[0].type,'TOMBSTONE');
  assert.equal(h.S().bb2.events[1].type,'TOMBSTONE');
  assert.equal(h.S().bb2.events.at(-1).type,'WORKOUT_DISCARDED');
+ assert.equal(h.S().bb2.selectedProgram,true,'Discard keeps BB2 as selected program');
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-next-workout/,
+  'after Discard, Workout displays the next BB2 session instead of old LP');
  assert.equal(h.S().history.length,JSON.parse(before).history.length);
  assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
  console.log('PASS: BB2 Start, set, duplicate fence, reload, cloud guard, lock refusal and Discard');
@@ -235,11 +240,17 @@ function fixture({ls}={}){
   assert.equal(h.ctx.bvomBb2Log(slot,set),true,'recorded required set '+slot+'/'+set);
  }
  assert.match(h.ctx.document.querySelector('#workout').innerHTML,/9\/12 prescribed sets recorded/);
+ h.ev('delete state.bb2.selectedProgram'); // Finishing a pre-upgrade BB2 session also selects BB2.
  assert.equal(h.ctx.bvomBb2End('FINISH'),true,'70% Finish succeeds with credit transaction');
  const state=h.S(),bb=state.bb2;
  assert.equal(bb.activeSessionId,null,'active BB2 session closed');
  assert.equal(bb.events.filter(e=>e.type==='WORKOUT_FINISHED').length,1);
  assert.equal(bb.events.filter(e=>e.type==='CREDIT_GRANTED').length,1,'exactly one credit earned');
+ assert.equal(bb.selectedProgram,true,'Finish preserves the BB2 selected program');
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-next-workout/,
+  'after Finish, Workout remains on BB2 next-workout entry');
+ assert.match(h.ctx.document.querySelector('#warmup').innerHTML,/BODYBUILDING 2 · WARM-UP/,
+  'after Finish, Warm-up does not accidentally show previous-program lifts');
  const proj=catalogue.foldBB2Block(bb.opening,bb.events);
  assert.equal(proj.quotas.upper_a,1);
  assert.equal(proj.history[0].status,'COMPLETED_NORMAL');
@@ -1444,4 +1455,59 @@ function fixture({ls}={}){
  console.log('PASS: bodyweight correction consent keeps manual identity or replaces it qualitatively without invented weight');
 }
 
-console.log('BB2 BVOM integrated setup preview: 31/31 PASS');
+{
+ const {h,before}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ const cloudBefore=JSON.stringify(h.ctx.bvomCloudPayload());
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const hit=selector.match(/data-bb2-(load|inc|assist)="([^"]+)"/);
+  if(hit)return {value:hit[1]==='load'?'60':hit[1]==='inc'?'2.5':'none'};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true,'starting BB2 selects it as current local training program');
+ assert.equal(h.ctx.bvomBb2Discard(),true,'Discard leaves the selected program in place');
+ h.ctx.showApp();
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-next-workout/);
+ const firstDisk=h.ls.getItem('bvom_data');
+ assert.equal(JSON.stringify(h.ctx.bvomCloudPayload()),cloudBefore,
+  'BB2 selection is excluded without changing legacy cloud programMode');
+ const restarted=fixture({ls:h.ls});
+ restarted.h.ctx.location.origin='http://localhost:8000';
+ restarted.h.ctx.location.search='?bb2Preview=1';
+ restarted.h.ctx.__bb2CatalogueForTest=catalogue;
+ restarted.h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest');
+ restarted.h.ctx.renderWorkout();restarted.h.ctx.renderWarm();
+ assert.match(restarted.h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-next-workout/,
+  'reloading preserves the BB2 next-workout entry');
+ assert.match(restarted.h.ctx.document.querySelector('#warmup').innerHTML,/BODYBUILDING 2/);
+ restarted.h.ctx.showApp();
+ await restarted.h.ctx.bvomBb2OpenPreview();
+ assert.match(restarted.h.ctx.document.querySelector('#setup').innerHTML,/BODYBUILDING 2 · SETUP PREVIEW/,
+  'BB2 next-workout button opens the existing setup and Start UI');
+ restarted.h.ctx.bvomBb2ClosePreview();
+ assert.equal(restarted.h.ctx.document.querySelector('#app').classList.contains('hidden'),false,
+  'Back from next-workout preparation returns to BVOM Workout');
+ assert.match(restarted.h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-next-workout/);
+ restarted.h.ev('bvomWindowLockOwned=false');
+ assert.equal(restarted.h.ctx.bvomBb2LeaveProgram(),false,'program exit respects window ownership');
+ assert.equal(restarted.h.S().bb2.selectedProgram,true,'failed exit retains BB2 selection');
+ restarted.h.ev('bvomWindowLockOwned=true');
+ assert.equal(restarted.h.ctx.bvomBb2LeaveProgram(),true,'explicit switch leaves BB2 safely');
+ assert.equal(restarted.h.S().bb2.selectedProgram,false);
+ assert.equal(restarted.h.S().programMode,'lprpt','switch does not overwrite legacy program settings');
+ restarted.h.ctx.renderWorkout();
+ assert.doesNotMatch(restarted.h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-next-workout/,
+  'legacy Workout is restored after explicit program switch');
+ assert.equal(restarted.h.S().history.length,JSON.parse(before).history.length);
+ assert.equal(restarted.h.ctx.bvomCloudPayload().bb2,undefined);
+ assert.notEqual(restarted.h.ls.getItem('bvom_data'),firstDisk,'program selection is durably changed');
+ console.log('PASS: BB2 next-workout selection, reload, preparation return, guarded switch and cloud isolation');
+}
+
+console.log('BB2 BVOM integrated setup preview: 32/32 PASS');

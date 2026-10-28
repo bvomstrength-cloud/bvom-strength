@@ -74,6 +74,7 @@ const server=http.createServer((req,res)=>{
   const savedAfter=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
   assert.equal(savedAfter.bb2.setup.optionalUpperBCurls,true,'explicit save persists curls in normal state');
   assert.equal(savedAfter.bb2.setup.selections['upper_a|shoulder_press'],'log_push_press');
+  assert.equal(!!savedAfter.bb2.selectedProgram,false,'setup alone does not switch programs before Start');
   assert.equal(savedAfter.programMode,fixture.programMode,'saving BB2 does not change the active program');
   assert.equal(savedAfter.history.length,fixture.history.length,'saving BB2 does not add a workout');
   assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false,'BB2 setup is absent from cloud payload');
@@ -188,9 +189,19 @@ const server=http.createServer((req,res)=>{
   assert.equal(discarded.bb2.events[5].type,'PRESCRIPTION_EDITED','Discard retains explicit future BW+load');
   assert.equal(discarded.bb2.events[6].type,'TOMBSTONE','Discard removes bodyweight actual while keeping legacy History');
   assert.equal(discarded.history.length,fixture.history.length);
-  // The same shared Workout/History surfaces now exercise the true Finish gate.
-  await page.evaluate(()=>showSetup());
-  await page.locator('#setup [data-bb2-preview]').click();
+  assert.equal(discarded.bb2.selectedProgram,true,'Discard keeps BB2 selected');
+  await page.waitForSelector('#workout [data-bb2-next-workout]');
+  // Continue from the same BVOM Workout tab even after a complete reload.
+  await page.reload();
+  await page.waitForSelector('#app:not(.hidden)');
+  await page.evaluate(()=>activateTab('workout'));
+  await page.locator('#workout [data-bb2-next-workout]').click();
+  await page.waitForSelector('#setup [data-bb2-start]');
+  await page.locator('#setup [data-bb2-back]').click();
+  await page.waitForSelector('#app:not(.hidden)');
+  assert.equal(await page.locator('#workout [data-bb2-next-workout]').count(),1,
+   'Back from preparing the next workout returns to the existing Workout tab');
+  await page.locator('#workout [data-bb2-next-workout]').click();
   await page.waitForSelector('#setup [data-bb2-start]');
   const nextLoads=page.locator('#setup [data-bb2-load]');
   const nextIncrements=page.locator('#setup [data-bb2-inc]');
@@ -218,6 +229,9 @@ const server=http.createServer((req,res)=>{
   assert.equal(finished.bb2.activeSessionId,null);
   assert.equal(finished.bb2.events.filter(e=>e.type==='WORKOUT_FINISHED').length,1);
   assert.equal(finished.bb2.events.filter(e=>e.type==='CREDIT_GRANTED').length,1,'single credit on real Finish');
+  assert.equal(finished.bb2.selectedProgram,true,'Finish keeps BB2 selected');
+  assert.equal(await page.locator('#workout [data-bb2-next-workout]').count(),1,
+   'after Finish, the normal Workout tab offers the next BB2 workout');
   assert.equal(finished.history.length,fixture.history.length,'legacy History unchanged after BB2 Finish');
   assert.equal(await page.evaluate(()=>bvomBb2End('FINISH')),false,'repeat Finish is idempotent');
   assert.match(await page.locator('#history').textContent(),/Credit awarded/);
