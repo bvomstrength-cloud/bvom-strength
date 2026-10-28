@@ -34,6 +34,8 @@ function fixture({ls}={}){
 
 {
  const {h,row}=fixture();
+ assert.doesNotMatch(h.ctx.bvomBb2CloudRestoreMessage(),/WARNING: BB2/,
+  'ordinary cloud-restore warning is unchanged without BB2 local data');
  h.ctx.bvomBb2InjectProgramChoice();
  assert.equal(row.children.length,0,'ordinary BVOM does not expose the dev preview');
  h.ctx.location.origin='https://bvomstrength.com';
@@ -84,6 +86,12 @@ function fixture({ls}={}){
  assert.equal(stored.bb2.setup.selections['upper_a|shoulder_press'],'log_push_press');
  assert.equal(stored.bb2.setup.optionalUpperBCurls,true);
  assert.equal(stored.programMode,'lprpt','BB2 setup does not switch the active program');
+ assert.match(h.ctx.bvomBb2CloudRestoreMessage(),/WARNING: BB2 is only saved on this device/,
+  'developer preview warns before a cloud restore would remove local-only BB2');
+ h.ctx.location.origin='https://app.bvomstrength.com';
+ assert.match(h.ctx.bvomBb2CloudRestoreMessage(),/WARNING: BB2/,
+  'imported local BB2 remains protected by the warning even outside the preview host');
+ h.ctx.location.origin='http://localhost:8000';
  assert.equal(stored.history.length,JSON.parse(before).history.length,'no synthetic workout History');
  assert.match(html(),/SAVED ON THIS DEVICE/);
  assert.equal(h.ctx.bvomBb2SaveSetup(),true,'repeated save is idempotent');
@@ -1125,6 +1133,34 @@ function fixture({ls}={}){
  assert.equal(replay.progress['upper_a|flat_press|bench_press'].loadG,55000);
  assert.equal(h.ctx.bvomBb2ResolveChoice(0,'ACCEPT'),false,'resolved choice cannot be repeated');
  assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ // Correcting the source of a later ACCEPT cannot silently preserve or erase
+ // that choice. The explicit KEEP consent and correction commit in one save.
+ const lookup=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  if(/data-bb2-correct-reps="0\|0"/.test(selector))return {value:'8'};
+  if(/data-bb2-correct-hard="0\|0"/.test(selector))return {checked:true};
+  return lookup(selector);
+ };
+ h.ev('bvomChoiceModal=function(title,body,left,right,onLeft,onRight){'+
+  'globalThis.__bb2CorrectionDialog={title,body,onLeft,onRight};'+
+  'return {querySelector:selector=>({value:selector.includes("consent-mode")?"KEEP_AS_MANUAL":""})}}');
+ const uncorrected=h.ls.getItem('bvom_data');
+ assert.equal(h.ctx.bvomBb2CorrectSet(0,0),true,'correction requiring consent opens decision UI');
+ assert.match(h.ctx.__bb2CorrectionDialog.body,/Keep previous choice as a manual setting/);
+ assert.equal(h.ls.getItem('bvom_data'),uncorrected,'no correction or consent written before explicit confirmation');
+ assert.equal(h.ctx.__bb2CorrectionDialog.onLeft(),true,'cancel has no side effects');
+ assert.equal(h.ls.getItem('bvom_data'),uncorrected);
+ h.ev('bvomWindowLockOwned=false');
+ assert.equal(h.ctx.__bb2CorrectionDialog.onRight(),false,'stale ownership refuses consent');
+ h.ev('bvomWindowLockOwned=true');
+ assert.equal(h.ls.getItem('bvom_data'),uncorrected);
+ assert.equal(h.ctx.__bb2CorrectionDialog.onRight(),true);
+ const corrected=h.S().bb2,afterCorrection=catalogue.foldBB2Block(corrected.opening,corrected.events);
+ assert.deepEqual(corrected.events.slice(-2).map(e=>e.type),['SET_CORRECTED','CHOICE_RECLASSIFIED']);
+ assert.equal(corrected.events.at(-1).targetEventId,committed.events.at(-1).eventId);
+ assert.equal(corrected.events.at(-1).decision,'KEEP_AS_MANUAL');
+ assert.deepEqual(afterCorrection.requiredConsent,[]);
+ assert.equal(afterCorrection.quotas.upper_a,1,'explicit historical consent cannot fabricate quota');
  console.log('PASS: actual-load choice is explicit, one-shot, saved and retains canonical origin');
 }
 
@@ -1177,6 +1213,18 @@ function fixture({ls}={}){
  const persisted=JSON.parse(h.ls.getItem('bvom_data')).bb2;
  assert.equal(persisted.sealedBlocks.length,1);
  assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const field=selector.match(/data-bb2-(load|inc|assist)="([^"]+)"/);
+  if(field)return {value:field[1]==='load'?'60':field[1]==='inc'?'2.5':'none'};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true,'next block may Start using genuine sealed ancestry');
+ const restarted=h.S().bb2;
+ assert.equal(restarted.events[0].type,'WORKOUT_STARTED');
+ assert.equal(restarted.opening.previousBlockId,opening.blockId);
+ assert.equal(restarted.sealedBlocks.length,1,'starting new block never mutates archived records');
+ assert.equal(h.ctx.bvomBb2Discard(),true);
  console.log('PASS: atomic 32-credit seal, next opening, retained read-only History and backup');
 }
 
@@ -1237,4 +1285,163 @@ function fixture({ls}={}){
  console.log('PASS: exercise choice and exact ledger swap commit together, without BB1 or cloud edits');
 }
 
-console.log('BB2 BVOM integrated setup preview: 28/28 PASS');
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const opening=catalogue.createBB2Opening({ownerId:'bb2-test-owner',blockId:'bb2-extra-credit-test'});
+ const events=[];
+ for(let i=0;i<8;i++){
+  const sessionId='upper-a-'+i,add=(type,fields)=>events.push({type,
+   eventId:'extra-seed-'+(events.length+1),commitOrdinal:events.length+1,
+   blockId:opening.blockId,...fields});
+  add('WORKOUT_STARTED',{sessionId,templateId:'upper_a',kind:'NORMAL',
+   slots:[{roleSlotId:'seed_role',exerciseId:'seed_lift',sets:1,floor:6,ceiling:10,
+    equipment:'loaded',plannedG:60000,plannedOrigin:{value:'60',unit:'kg'},
+    incrementG:2500,incrementOrigin:{value:'2.5',unit:'kg'}}]});
+  add('SET_RECORDED',{sessionId,roleSlotId:'seed_role',exerciseId:'seed_lift',
+   setIndex:0,reps:8,prescribed:true,actualG:60000,actualOrigin:{value:'60',unit:'kg'}});
+  add('WORKOUT_FINISHED',{sessionId});add('CREDIT_GRANTED',{sessionId,creditId:'credit-'+sessionId});
+ }
+ h.ctx.__seedOpening=opening;h.ctx.__seedEvents=events;
+ h.ev('state.bb2={...state.bb2,opening:__seedOpening,events:__seedEvents};'+
+  'bvomBb2PreviewSaved=true;bvomBb2RenderPreview()');
+ const form=h.ctx.document.querySelector('#setup').innerHTML;
+ assert.match(form,/data-bb2-kind="EXTRA_NORMAL"/);
+ assert.doesNotMatch(form,/data-bb2-kind="NORMAL"/,'a filled day cannot earn another counted slot');
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const field=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
+  if(field)return {value:field[1]==='load'?'60':field[1]==='inc'?'2.5':
+   field[1]==='assist'?'none':'8',checked:false};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true,'filled template starts extra workout, never a ninth credit');
+ const b=h.S().bb2,start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
+ assert.equal(start.kind,'EXTRA_NORMAL');
+ const positions=start.slots.flatMap((slot,i)=>Array.from({length:slot.sets},(_,j)=>[i,j]));
+ for(const [i,j] of positions.slice(0,9))assert.equal(h.ctx.bvomBb2Log(i,j),true);
+ assert.equal(h.ctx.bvomBb2End('FINISH'),true);
+ const result=catalogue.foldBB2Block(h.S().bb2.opening,h.S().bb2.events);
+ assert.equal(result.quotas.upper_a,8,'extra workout never adds quota credit');
+ assert.equal(result.history.at(-1).status,'COMPLETED_EXTRA_NORMAL');
+ assert.equal(result.history.at(-1).creditId,null);
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ console.log('PASS: quota-full Extra Normal finishes in shared Workout and History without a ninth credit');
+}
+
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ const opening=catalogue.createBB2Opening({ownerId:'bb2-test-owner',blockId:'bb2-replace-choice-test',
+  progress:{'upper_a|flat_press|bench_press':{loadG:60000,loadOrigin:{value:'60',unit:'kg'},
+   incrementG:2500,incrementOrigin:{value:'2.5',unit:'kg'},calibrated:true,bestReps:7}}});
+ const slot={roleSlotId:'flat_press',exerciseId:'bench_press',sets:1,floor:6,ceiling:10,
+  equipment:'loaded',plannedG:60000,plannedOrigin:{value:'60',unit:'kg'},
+  incrementG:2500,incrementOrigin:{value:'2.5',unit:'kg'}};
+ const events=[
+  {type:'WORKOUT_STARTED',eventId:'r-start',commitOrdinal:1,blockId:opening.blockId,
+   sessionId:'r-session',templateId:'upper_a',kind:'NORMAL',slots:[slot]},
+  {type:'SET_RECORDED',eventId:'r-set',commitOrdinal:2,blockId:opening.blockId,
+   sessionId:'r-session',roleSlotId:'flat_press',exerciseId:'bench_press',setIndex:0,
+   reps:8,prescribed:true,actualG:55000,actualOrigin:{value:'55',unit:'kg'}},
+  {type:'WORKOUT_FINISHED',eventId:'r-finish',commitOrdinal:3,blockId:opening.blockId,sessionId:'r-session'},
+  {type:'CREDIT_GRANTED',eventId:'r-credit',commitOrdinal:4,blockId:opening.blockId,
+   sessionId:'r-session',creditId:'r-credit-id'},
+  {type:'CHOICE_RESOLVED',eventId:'r-accept',commitOrdinal:5,blockId:opening.blockId,
+   sourceSessionId:'r-session',sourceBlockId:opening.blockId,
+   roleSlotId:'flat_press',exerciseId:'bench_press',decision:'ACCEPT',
+   loadG:55000,loadOrigin:{value:'55',unit:'kg'}}
+ ];
+ h.ctx.__seedOpening=opening;h.ctx.__seedEvents=events;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'state.bb2={opening:__seedOpening,events:__seedEvents};');
+ const before=catalogue.foldBB2Block(opening,events);
+ const correction={type:'SET_CORRECTED',eventId:'r-correct',commitOrdinal:6,
+  blockId:opening.blockId,sessionId:'r-session',targetEventId:'r-set',
+  roleSlotId:'flat_press',exerciseId:'bench_press',setIndex:0,reps:8,harderThanIntended:true};
+ h.ctx.__replaceLoad='';
+ h.ev('bvomChoiceModal=function(title,body,left,right,onLeft,onRight){'+
+  'globalThis.__bb2ReplacementDialog={body,onLeft,onRight};'+
+  'return {querySelector:selector=>({value:selector.includes("consent-mode")?"REPLACE":'+
+  'selector.includes("consent-load")?globalThis.__replaceLoad:""})}}');
+ const raw=h.ls.getItem('bvom_data');
+ assert.equal(h.ctx.bvomBb2CommitHistoryRevision(h.S().bb2,before,[correction],p=>p.quotas.upper_a===1),true);
+ assert.match(h.ctx.__bb2ReplacementDialog.body,/Replace with a chosen setting/);
+ assert.equal(h.ctx.__bb2ReplacementDialog.onRight(),false,'a loaded replacement requires an explicit weight');
+ assert.equal(h.ls.getItem('bvom_data'),raw);
+ h.ctx.__replaceLoad='50';
+ assert.equal(h.ctx.__bb2ReplacementDialog.onRight(),true);
+ const persisted=h.S().bb2,p=catalogue.foldBB2Block(persisted.opening,persisted.events);
+ assert.deepEqual(persisted.events.slice(-2).map(e=>e.type),['SET_CORRECTED','CHOICE_REPLACED']);
+ assert.equal(persisted.events.at(-1).targetEventId,'r-accept');
+ assert.equal(p.progress['upper_a|flat_press|bench_press'].loadG,50000);
+ assert.deepEqual(p.requiredConsent,[]);
+ assert.equal(p.quotas.upper_a,1);
+ console.log('PASS: retrospective correction can explicitly replace an invalidated load in one durable transaction');
+}
+
+{
+ for(const mode of ['KEEP_AS_MANUAL','REPLACE']){
+  const {h}=fixture();
+  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+  h.ctx.__bb2CatalogueForTest=catalogue;
+  const opening=catalogue.createBB2Opening({ownerId:'bb2-test-owner',blockId:'bb2-bw-consent-'+mode});
+  const events=[],append=(type,fields)=>events.push({type,eventId:'bw-'+mode+'-'+(events.length+1),
+   commitOrdinal:events.length+1,blockId:opening.blockId,...fields});
+  const slot={roleSlotId:'vertical-pull',exerciseId:'chin-up',equipment:'bodyweight',
+   sets:3,floor:6,ceiling:8,variation:'chin-up',assistance:'light-band',
+   plannedG:5000,plannedOrigin:{value:'5',unit:'kg'},
+   incrementG:1000,incrementOrigin:{value:'1',unit:'kg'}};
+  for(const [sessionId,reps] of [['bw-first',[6,7,7]],['bw-earned',[8,8,8]]]){
+   append('WORKOUT_STARTED',{sessionId,templateId:'upper_a',kind:'NORMAL',slots:[slot]});
+   for(let i=0;i<3;i++)append('SET_RECORDED',{sessionId,roleSlotId:'vertical-pull',
+    exerciseId:'chin-up',setIndex:i,reps:reps[i],actualG:5000,
+    actualOrigin:{value:'5',unit:'kg'},variation:'chin-up',assistance:'light-band',prescribed:true});
+   append('WORKOUT_FINISHED',{sessionId});
+   append('CREDIT_GRANTED',{sessionId,creditId:'credit-'+sessionId});
+  }
+  append('CHOICE_RESOLVED',{sourceSessionId:'bw-earned',roleSlotId:'vertical-pull',
+   exerciseId:'chin-up',decision:'DIFFICULTY_ACCEPT',variation:'weighted-chin',
+   assistance:'light-band',addedWeightG:7500,addedWeightOrigin:{value:'7.5',unit:'kg'}});
+  const before=catalogue.foldBB2Block(opening,events);
+  assert.deepEqual(before.requiredConsent,[]);
+  const original=events.find(e=>e.type==='SET_RECORDED'&&e.sessionId==='bw-earned');
+  const correction={type:'SET_CORRECTED',eventId:'bw-correct-'+mode,
+   commitOrdinal:events.length+1,blockId:opening.blockId,
+   sessionId:'bw-earned',targetEventId:original.eventId,roleSlotId:'vertical-pull',
+   exerciseId:'chin-up',setIndex:0,reps:7,
+   actualG:5000,actualOrigin:{value:'5',unit:'kg'}};
+  assert.equal(catalogue.foldBB2Block(opening,[...events,correction]).requiredConsent.length,1);
+  h.ctx.__seedOpening=opening;h.ctx.__seedEvents=events;
+  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+   'state.bb2={opening:__seedOpening,events:__seedEvents};');
+  h.ctx.__bwConsentMode=mode;
+  h.ev('bvomChoiceModal=function(title,body,left,right,onLeft,onRight){'+
+   'globalThis.__bwConsentDialog={body,onRight};return {querySelector:selector=>({value:'+
+   'selector.includes("consent-mode")?globalThis.__bwConsentMode:'+
+   'selector.includes("consent-variation")?"assisted-chin":'+
+   'selector.includes("consent-assist")?"medium-band":""})}}');
+  const raw=h.ls.getItem('bvom_data');
+  assert.equal(h.ctx.bvomBb2CommitHistoryRevision(h.S().bb2,before,[correction],p=>p.quotas.upper_a===2),true);
+  assert.equal(h.ls.getItem('bvom_data'),raw,'bodyweight consent requires user confirmation');
+  assert.equal(h.ctx.__bwConsentDialog.onRight(),true);
+  const result=h.S().bb2,projected=catalogue.foldBB2Block(result.opening,result.events);
+  assert.equal(projected.requiredConsent.length,0);
+  assert.equal(projected.quotas.upper_a,2);
+  assert.deepEqual(result.events.slice(-2).map(e=>e.type),
+   ['SET_CORRECTED',mode==='REPLACE'?'CHOICE_REPLACED':'CHOICE_RECLASSIFIED']);
+  const progress=projected.progress['upper_a|vertical-pull|chin-up'];
+  assert.equal(progress.variation,mode==='REPLACE'?'assisted-chin':'weighted-chin');
+  assert.equal(progress.assistance,mode==='REPLACE'?'medium-band':'light-band');
+  assert.equal(progress.loadG,mode==='REPLACE'?null:7500);
+ }
+ console.log('PASS: bodyweight correction consent keeps manual identity or replaces it qualitatively without invented weight');
+}
+
+console.log('BB2 BVOM integrated setup preview: 31/31 PASS');

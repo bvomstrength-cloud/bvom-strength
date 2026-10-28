@@ -27,6 +27,18 @@ test('checked-in static browser module exactly matches all five input sources', 
   assert.doesNotMatch(text, /new Function\s*\(|\beval\s*\(/);
 });
 
+test('BB2 browser module is in draft Netlify ZIP and offline service-worker cache', () => {
+  const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
+  const zipWorkflow = fs.readFileSync(path.join(root,
+    '.github/workflows/bvom-netlify-test-zip.yml'), 'utf8');
+  assert.ok(sw.includes("'./bb2/browser-core.mjs'"),
+    'offline installation must cache the actual dynamically imported browser module');
+  assert.ok(zipWorkflow.includes('cp bb2/browser-core.mjs .bvom-netlify-test/bb2/'),
+    'the test-site ZIP must contain the generated browser module');
+  assert.ok(zipWorkflow.includes('test -s .bvom-netlify-test/bb2/browser-core.mjs'),
+    'packaging must fail if the dynamic module is missing');
+});
+
 test('whitelist rejects Node imports and computed dependency paths', () => {
   assert.throws(() => inspectImports('evil.cjs', "require('node:fs')"), /unexpected/);
   assert.throws(() => inspectImports('evil.cjs', 'require(path)'), /unexpected/);

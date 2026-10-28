@@ -5,7 +5,8 @@ const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon
   './theme-bee-v23c.svg',
   './theme-cherry-v23f.svg',
   './theme-coastal-v23f.svg',
-  './vendor/supabase-js-2.117.3.js'
+  './vendor/supabase-js-2.117.3.js',
+  './bb2/browser-core.mjs'
 ];
 async function bvomFetchValidatedShell(request='./index.html'){
   const response = await fetch(request,{cache:'reload'});
