@@ -1510,4 +1510,81 @@ function fixture({ls}={}){
  console.log('PASS: BB2 next-workout selection, reload, preparation return, guarded switch and cloud isolation');
 }
 
-console.log('BB2 BVOM integrated setup preview: 32/32 PASS');
+function bb2RecoveryFixture(){
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev("bvomCloud.user={id:'dummy'};window.__bvomAuthUserId='dummy';"+
+  "bvomEntitlement.record={status:'complimentary',user_id:'dummy'}");
+ h.ls.setItem('bvom_data_owner','dummy');h.ctx.showApp();
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const hit=selector.match(/data-bb2-(load|inc|assist|reps)="([^"]+)"/);
+  if(hit)return {value:hit[1]==='load'?'60':hit[1]==='inc'?'2.5':hit[1]==='assist'?'none':'8'};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ assert.equal(h.ev('bvomRecoveryAccount'),'dummy','same account owns recovery');
+ return h;
+}
+
+H.withClock(c=>{
+ const h=bb2RecoveryFixture();
+ assert.equal(h.ctx.bvomBb2Log(0,0),true,'real working set is committed');
+ const saved=JSON.parse(h.ls.getItem('bvom_data'));
+ assert.equal(saved.workoutLastActivityAt,c.now(),'BB2 working set refreshes existing durable inactivity clock');
+ const cloudBefore=JSON.stringify(h.ctx.bvomCloudPayload());
+ c.advance(1000);
+ h.ctx.renderAll();h.ev('save({durable:true,localOnly:true,passive:true})');
+ assert.equal(h.S().workoutLastActivityAt,saved.workoutLastActivityAt,
+  'rendering and passive saves never extend the abandoned-workout clock');
+ c.advance(3598000);
+ const beforeBoundary=h.ls.getItem('bvom_data');
+ assert.equal(h.ctx.bvomRecoveryCheck(),false,'59m59s after work cannot auto-finish');
+ assert.equal(h.ls.getItem('bvom_data'),beforeBoundary,'pre-boundary check does not write');
+ c.advance(1000);
+ assert.equal(h.ctx.bvomRecoveryCheck(),true,'60-minute idle BB2 workout closes atomically as incomplete');
+ const b=h.S().bb2,projection=catalogue.foldBB2Block(b.opening,b.events);
+ assert.equal(b.activeSessionId,null);
+ assert.equal(b.events.filter(e=>e.type==='WORKOUT_INCOMPLETE').length,1);
+ assert.equal(b.events.filter(e=>e.type==='CREDIT_GRANTED').length,0);
+ assert.equal(projection.history[0].status,'INCOMPLETE');
+ assert.equal(projection.quotas.upper_a,0,'abandonment never awards quota');
+ assert.equal(projection.history[0].sets.length,1,'working set is visible in the folded BB2 History');
+ assert.equal(h.S().history.length,0,'legacy History is not populated with a fake LP record');
+ assert.equal(h.S().bb2.selectedProgram,true);
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-next-workout/);
+ assert.equal(JSON.stringify(h.ctx.bvomCloudPayload()),cloudBefore,
+  'BB2 recovery never modifies the cloud-compatible BVOM document');
+ const final=h.ls.getItem('bvom_data');
+ assert.equal(h.ctx.bvomRecoveryCheck(),false,'recovery cannot close the same session twice');
+ assert.equal(h.ls.getItem('bvom_data'),final);
+ console.log('PASS: BB2 meaningful activity, passive saves, 60-minute boundary, local incomplete History and idempotence');
+});
+
+H.withClock(c=>{
+ const h=bb2RecoveryFixture();
+ assert.equal(h.ctx.bvomBb2Log(0,0),true);
+ h.ev('delete state.workoutLastActivityAt;save({durable:true,localOnly:true,recovery:true})');
+ c.advance(3700000);
+ assert.equal(h.ctx.bvomRecoveryCheck(),false,'missing BB2 clock receives fresh grace');
+ assert.equal(h.S().workoutLastActivityAt,c.now());
+ assert.equal(h.S().bb2.activeSessionId!==null,true,'invalid clock never instantly expires training');
+ const raw=h.ls.getItem('bvom_data');
+ const original=h.ls.setItem;
+ h.ls.setItem=(key,value)=>{if(key==='bvom_data')throw Error('simulated storage quota');return original(key,value)};
+ c.advance(3600000);
+ assert.equal(h.ctx.bvomRecoveryCheck(),false,'failed durable recovery leaves session active');
+ h.ls.setItem=original;
+ assert.equal(h.ls.getItem('bvom_data'),raw,'failed recovery did not partially write');
+ assert.equal(h.S().bb2.activeSessionId!==null,true);
+ assert.equal(h.S().bb2.events.filter(e=>e.type==='WORKOUT_INCOMPLETE').length,0);
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ console.log('PASS: BB2 missing-clock grace, recovery write failure rollback and no phantom credit');
+});
+
+console.log('BB2 BVOM integrated setup preview: 34/34 PASS');

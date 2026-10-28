@@ -5041,9 +5041,9 @@ let bvomBb2Day='upper_a';
 let bvomBb2Kind='NORMAL';
 function bvomBb2Active(s=state){return !!s?.bb2?.activeSessionId}
 function bvomBb2Selected(s=state){return !!(s?.bb2?.selectedProgram&&s.bb2.setup)}
-function bvomBb2Commit(next){
+function bvomBb2Commit(next,{activity=false}={}){
  const before=state.bb2;state.bb2=next;
- if(!save({durable:true,localOnly:true})){
+ if(!save({durable:true,localOnly:true,activity})){
   if(before===undefined)delete state.bb2;else state.bb2=before;
   return false;
  }
@@ -5518,7 +5518,11 @@ function bvomBb2Workout(){
  const m=bvomBb2PreviewModule;
  if(!m){
   el.innerHTML='<div class="card">Loading BB2 local workout…</div>';
-  import('./bb2/browser-core.mjs').then(x=>{bvomBb2PreviewModule=x;bvomBb2Workout();renderWarm();}).catch(console.error);
+  import('./bb2/browser-core.mjs').then(x=>{
+   bvomBb2PreviewModule=x;
+   if(bvomBb2Active()){bvomBb2Workout();renderWarm()}
+   bvomRecoveryCheck();
+  }).catch(console.error);
   return;
  }
  const b=state.bb2,start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
@@ -5635,7 +5639,7 @@ function bvomBb2Log(i,j){
   const tx=m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(b.opening,b.events,[e],{
    ownerId:b.opening.ownerId,blockId:b.opening.blockId,expectedHead:b.events.length,
    foldRulesVersion:b.opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:true});
-  if(!bvomBb2Commit({...b,events:tx.events}))return false;
+  if(!bvomBb2Commit({...b,events:tx.events},{activity:true}))return false;
   bvomBb2Workout();return true;
  }catch(error){console.error('BB2 set rejected',error);return false}
 }
@@ -5673,6 +5677,82 @@ function bvomBb2End(outcome='FINISH'){
   renderAll();return true;
  }catch(error){console.error('BB2 Finish rejected',error);return false}
 }
+// BB2 uses BVOM's existing 60-minute inactivity clock and exclusive window
+// ownership. Only committed working sets refresh it; warm-ups, rest timers,
+// prescription edits and ordinary passive saves cannot extend a workout.
+// A qualifying abandonment is closed with the frozen BB2 incomplete planner,
+// in its own local ledger, not as a fabricated legacy History or quota credit.
+function bvomBb2RecoveryCheck(){
+ if(bvomRecoveryBusy||!bvomWindowLockOwned||!bvomRecoveryAccount||
+    bvomPersistenceBlocked()||!bvomBb2Active())return false;
+ const account=bvomRecoveryAccount;
+ let before=null,committed=false;
+ try{
+  if(document.querySelector('#app')?.classList.contains('hidden')||
+     bvomCloud.accountSwitchDeferred||window.__bvomAuthUserId!==account||
+     bvomCloud.user?.id!==account||localStorage.getItem(BVOM_DATA_OWNER_KEY)!==account)return false;
+  const raw=localStorage.getItem(BVOM_DATA_KEY);
+  if(raw!==bvomLastPersistedRaw){bvomLocalWriteConflictNotice();return false}
+  if(localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY)!==bvomTabId())return false;
+  const persisted=raw?JSON.parse(raw):null,b=state.bb2;
+  // A pending in-memory edit must never be auto-finished ahead of its durable save.
+  if(!persisted||JSON.stringify(persisted.bb2)!==JSON.stringify(b)||
+     bvomRecordedActivityChanged(persisted,state)||
+     persisted.workoutOwnershipVersion!==1)return false;
+  const now=Date.now(),last=persisted.workoutLastActivityAt;
+  if(!Number.isFinite(now)||now<=0)return false;
+  if(typeof last!=='number'||!Number.isFinite(last)||last<=0||last>now){
+   before=JSON.parse(JSON.stringify(state));state.workoutLastActivityAt=now;
+   bvomRecoveryBusy=true;
+   if(!save({durable:true,localOnly:true,recovery:true}))state=before;
+   return false;
+  }
+  if(now-last<BVOM_INACTIVITY_MS)return false;
+  const hold=bvomRecoveryHold();
+  if(hold){bvomRecoveryStatus(hlmTxt('BB2 workout kept: resolve the open choice or timer before automatic recovery.',
+    'BB2のワークアウトは保留中です。自動復旧の前に開いている選択やタイマーを完了してください。'));return false}
+  if(!b.events?.some(e=>e.type==='SET_RECORDED'&&e.sessionId===b.activeSessionId)){
+   bvomRecoveryStatus(hlmTxt('BB2 workout kept: there are no recorded working sets to archive.',
+    'BB2のワークアウトは保留中です。履歴に保存するワーキングセットはありません。'));return false;
+  }
+  // On a fresh app reload the existing Workout renderer is already loading
+  // the versioned BB2 module. Recheck after it arrives; do not infer an outcome.
+  const m=bvomBb2PreviewModule;if(!m)return false;
+  const planned=m.planBB2Finish(b.opening,b.events,b.activeSessionId,'INCOMPLETE');
+  if(planned.noOp)return false;
+  const prior=m.foldBB2Block(b.opening,b.events);
+  const tx=m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(b.opening,b.events,
+   planned.events.slice(b.events.length),{
+    ownerId:b.opening.ownerId,blockId:b.opening.blockId,expectedHead:b.events.length,
+    foldRulesVersion:b.opening.foldRulesVersion,sealRevision:prior.sealRevision,activeWorkout:true});
+  // The ledger was planned without awaiting external work. Re-verify the same
+  // owner, tab, account and local document immediately before the one save.
+  if(b!==state.bb2||!bvomWindowLockOwned||localStorage.getItem(BVOM_DATA_KEY)!==raw||
+     localStorage.getItem(BVOM_DATA_OWNER_KEY)!==account||
+     localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY)!==bvomTabId()||
+     window.__bvomAuthUserId!==account||bvomCloud.user?.id!==account)return false;
+  bvomRecoveryBusy=true;
+  if(!bvomBb2Commit({...b,events:tx.events,activeSessionId:null,selectedProgram:true})){
+   bvomRecoveryStatus(hlmTxt('BB2 remains active: the incomplete workout could not be saved.',
+    'BB2のワークアウトは継続中です。未完了として保存できませんでした。'));return false;
+  }
+  committed=true;cancelTimer();bvomStopGppRuntime();
+  bvomRecoveryStatus(hlmTxt('Inactive BB2 workout saved as INCOMPLETE. Logged sets are in History; no progression credit was awarded.',
+   '操作のなかったBB2ワークアウトを未完了として保存しました。記録済みセットは履歴に残り、進行クレジットは付与されません。'));
+  renderAll();return true;
+ }catch(error){
+  if(before&&!committed)state=before;
+  console.error('BB2 incomplete recovery deferred',error);
+  bvomRecoveryStatus(hlmTxt('BB2 workout kept: recovery could not safely complete. Your recorded sets remain on this device.',
+   'BB2のワークアウトは保留中です。安全に復旧できませんでした。記録済みセットは端末に保存されています。'));
+  return false;
+ }finally{bvomRecoveryBusy=false}
+}
+const bvomBb2BaseRecoveryCheck=bvomRecoveryCheck;
+bvomRecoveryCheck=function(...args){
+ if(bvomBb2PreviewEnabled()&&bvomBb2Active())return bvomBb2RecoveryCheck();
+ return bvomBb2BaseRecoveryCheck(...args);
+};
 // Preview a retrospective correction without writing it. If it invalidates
 // earlier explicitly accepted choices, the user must re-authorise each one;
 // the correction, credit revocation and all consents are saved atomically.

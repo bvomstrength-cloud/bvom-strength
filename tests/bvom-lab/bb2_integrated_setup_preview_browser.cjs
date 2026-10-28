@@ -367,6 +367,51 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>activateTab('history'));
   await page.waitForSelector('#history [data-bb2-history]');
   assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/LOW_STRESS_RECOVERY/);
+  // A genuine browser reload must reacquire the existing BVOM document owner
+  // and load the BB2 module before converting a stale session to INCOMPLETE.
+  await page.evaluate(()=>activateTab('workout'));
+  await page.locator('#workout [data-bb2-next-workout]').click();
+  await page.waitForSelector('#setup [data-bb2-start]');
+  for(const input of await page.locator('#setup [data-bb2-load]').all()){
+   if(await input.isEnabled()&&!(await input.inputValue()))await input.fill('60');
+  }
+  for(const input of await page.locator('#setup [data-bb2-inc]').all()){
+   if(await input.isEnabled()&&!(await input.inputValue()))await input.fill('2.5');
+  }
+  await page.locator('#setup [data-bb2-start]').click();
+  await page.waitForSelector('#workout [data-bb2-log="0|0"]');
+  await page.locator('#workout [data-bb2-reps="0|0"]').fill('8');
+  await page.locator('#workout [data-bb2-log="0|0"]').click();
+  const beforeAbandon=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
+  assert.equal(typeof beforeAbandon.workoutLastActivityAt,'number',
+   'the actual BB2 working set records an inactivity timestamp');
+  const cloudBeforeAbandon=await page.evaluate(()=>JSON.stringify(bvomCloudPayload()));
+  await page.reload();
+  await page.waitForSelector('#app:not(.hidden)');
+  await page.evaluate(()=>activateTab('workout'));
+  await page.waitForSelector('#workout [data-bb2-log="0|1"]');
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.activeSessionId!==null),true,
+   'a normal reload recovers the interrupted BB2 working sets');
+  assert.equal(await page.evaluate(()=>{
+   const originalNow=Date.now;Date.now=()=>originalNow()+3600001;
+   return bvomRecoveryCheck();
+  }),true,'60-minute abandoned BB2 session closes through existing recovery');
+  const abandoned=await page.evaluate(async()=>{
+   const d=JSON.parse(localStorage.getItem('bvom_data')),
+    core=await import('./bb2/browser-core.mjs');
+   return {active:d.bb2.activeSessionId,events:d.bb2.events,
+    recent:core.foldBB2Block(d.bb2.opening,d.bb2.events).history.at(-1),
+    quotas:core.foldBB2Block(d.bb2.opening,d.bb2.events).quotas,
+    legacyCount:d.history.length,cloud:JSON.stringify(bvomCloudPayload())};
+  });
+  assert.equal(abandoned.active,null);
+  assert.equal(abandoned.recent.status,'INCOMPLETE');
+  assert.equal(abandoned.recent.sets.length,1,'recorded BB2 work survives automatic incomplete close');
+  assert.equal(abandoned.recent.creditId,null);
+  assert.equal(abandoned.quotas.upper_a,0);
+  assert.equal(abandoned.legacyCount,fixture.history.length,'legacy History is untouched');
+  assert.equal(abandoned.cloud,cloudBeforeAbandon,'automatic recovery stays local-only');
+  await page.waitForSelector('#workout [data-bb2-next-workout]');
   await page.goto(origin+'/index.html');
   await page.waitForSelector('#app:not(.hidden)');
   await page.evaluate(()=>showSetup());
