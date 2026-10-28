@@ -31,12 +31,16 @@ test('BB2 browser module is in draft Netlify ZIP and offline service-worker cach
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
   const zipWorkflow = fs.readFileSync(path.join(root,
     '.github/workflows/bvom-netlify-test-zip.yml'), 'utf8');
+  const labWorkflow = fs.readFileSync(path.join(root,
+    '.github/workflows/bvom-lab.yml'), 'utf8');
   assert.ok(sw.includes("'./bb2/browser-core.mjs'"),
     'offline installation must cache the actual dynamically imported browser module');
   assert.ok(zipWorkflow.includes('cp bb2/browser-core.mjs .bvom-netlify-test/bb2/'),
     'the test-site ZIP must contain the generated browser module');
   assert.ok(zipWorkflow.includes('test -s .bvom-netlify-test/bb2/browser-core.mjs'),
     'packaging must fail if the dynamic module is missing');
+  assert.ok(labWorkflow.includes('cp bb2/browser-core.mjs .bvom-candidate/bb2/'),
+    'the full regression candidate must include every service-worker precache file');
 });
 
 test('whitelist rejects Node imports and computed dependency paths', () => {
