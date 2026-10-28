@@ -62,7 +62,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('#setup [data-bb2-template]').count(),4,'four BB2 training days');
   assert.equal(await page.locator('#setup [data-bb2-role]').count(),20,'optional curl omitted initially');
   assert.equal(await page.locator('#setup button:has-text("START BODYBUILDING 2")').count(),0,'no active Start button');
-  assert.match(await page.locator('#setup').textContent(),/save keeps choices on this device/i);
+  assert.match(await page.locator('#setup').textContent(),/setup and workouts are saved on this device/i);
 
   await page.locator('#setup [data-bb2-role="upper_a|shoulder_press"]').selectOption('log_push_press');
   assert.match(await page.locator('#setup [data-bb2-template="upper_a"]').textContent(),/2 × 4–6 reps/);
