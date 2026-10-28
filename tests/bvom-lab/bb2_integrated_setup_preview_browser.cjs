@@ -295,8 +295,8 @@ const server=http.createServer((req,res)=>{
    return b.events.at(-1).actualG;
   }),65000,'working actual inherits the edited canonical load');
   assert.equal(await page.locator('#workout [data-bb2-edit-save="0"]').isDisabled(),true);
-  assert.equal(await page.locator('#workout [data-bb2-trial-save="0"]').count(),0,
-   'already-calibrated exercise cannot reopen first-exposure trial controls');
+  assert.equal(await page.locator('#workout [data-bb2-trial-save="0"]').count(),1,
+   'revoked qualifying session withdraws calibration evidence, reopening first-exposure trial');
   await page.locator('#workout [data-bb2-discard]').click();
   assert.equal(await page.evaluate(()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;

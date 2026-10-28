@@ -890,6 +890,9 @@ function fixture({ls}={}){
  assert.equal(projection.history[0].validCount,8);
  assert.equal(projection.history[0].creditId,null);
  assert.equal(projection.quotas.upper_a,0,'quota is revised, never left as unearned credit');
+ const first=events.find(e=>e.type==='WORKOUT_STARTED').slots[0];
+ assert.equal(projection.progress['upper_a|'+first.roleSlotId+'|'+first.exerciseId]?.calibrated??false,false,
+  'credit-revoking correction also retracts its progression and calibration evidence');
  assert.equal(h.ctx.bvomBb2VoidSet(0,8),false,'removed set cannot be voided twice');
  assert.match(h.ctx.document.querySelector('#history').innerHTML,/8\/12 prescribed sets/);
  assert.doesNotMatch(h.ctx.document.querySelector('#history').innerHTML,/Credit awarded/);
