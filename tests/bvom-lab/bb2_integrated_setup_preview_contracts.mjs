@@ -1039,4 +1039,202 @@ function fixture({ls}={}){
  console.log('PASS: BB2 workout removal failed-save rollback keeps the complete journal');
 }
 
-console.log('BB2 BVOM integrated setup preview: 23/23 PASS');
+{
+ const {h,before}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ let query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  if(/data-bb2-bw-variation="\d+"/.test(selector))return {value:'pullup'};
+  const field=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
+  if(field)return {value:field[1]==='load'?'60':field[1]==='inc'?'2.5':
+   field[1]==='assist'?'none':'8',checked:false};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ for(const [i,j] of [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[3,0]])
+  assert.equal(h.ctx.bvomBb2Log(i,j),true);
+ assert.equal(h.ctx.bvomBb2End('FINISH'),true);
+ const credited=h.S().bb2,initial=catalogue.foldBB2Block(credited.opening,credited.events);
+ h.ev('bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup(state.bb2.setup);'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewSaved=true;bvomBb2PreviewOriginalMode=state.programMode');
+ h.ctx.bvomBb2ChooseKind('RECOVERY');
+ const startHtml=h.ctx.document.querySelector('#setup').innerHTML;
+ assert.match(startHtml,/data-bb2-kind="RECOVERY"/);
+ assert.match(startHtml,/data-bb2-load="0" value="55"/,'90% load rounds to the established 2.5 kg increment');
+ assert.match(startHtml,/2 × 6–10 reps/,'half working sets preserve exercise rep range');
+ assert.equal(h.ctx.bvomBb2Begin(),true,'recovery can start explicitly');
+ const b=h.S().bb2,start=b.events.find(e=>e.sessionId===b.activeSessionId&&e.type==='WORKOUT_STARTED');
+ assert.equal(start.kind,'RECOVERY');
+ assert.deepEqual(start.slots.map(s=>s.sets),[2,2,1,1,1], '3→2 and 2→1 recovery counts');
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/LOW-STRESS RECOVERY/);
+ assert.doesNotMatch(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-trial-save/,
+  'recovery does not offer first-exposure calibration');
+ assert.equal(h.ctx.bvomBb2Log(0,0),true);
+ assert.equal(h.ctx.bvomBb2End('FINISH'),true);
+ const after=catalogue.foldBB2Block(h.S().bb2.opening,h.S().bb2.events);
+ assert.equal(after.history.at(-1).status,'LOW_STRESS_RECOVERY');
+ assert.equal(after.history.at(-1).creditId,null);
+ assert.deepEqual(after.quotas,initial.quotas,'recovery never earns quota');
+ assert.deepEqual(after.progress,initial.progress,'recovery never changes normal progression');
+ assert.deepEqual(after.pending,initial.pending,'recovery does not consume normal decisions');
+ assert.equal(h.S().history.length,JSON.parse(before).history.length);
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ console.log('PASS: optional half-volume recovery preserves normal prescription, quota and calibration');
+}
+
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const opening=catalogue.createBB2Opening({ownerId:'bb2-test-owner',blockId:'bb2-pending-test',
+  progress:{'upper_a|flat_press|bench_press':{loadG:60000,loadOrigin:{value:'60',unit:'kg'},
+   incrementG:2500,incrementOrigin:{value:'2.5',unit:'kg'},calibrated:true,bestReps:7}}});
+ const slots=[{roleSlotId:'flat_press',exerciseId:'bench_press',sets:1,floor:6,ceiling:10,
+  equipment:'loaded',plannedG:60000,plannedOrigin:{value:'60',unit:'kg'},
+  incrementG:2500,incrementOrigin:{value:'2.5',unit:'kg'}}];
+ const events=[
+  {type:'WORKOUT_STARTED',eventId:'p-start',commitOrdinal:1,blockId:opening.blockId,
+   sessionId:'p-session',templateId:'upper_a',kind:'NORMAL',slots},
+  {type:'SET_RECORDED',eventId:'p-set',commitOrdinal:2,blockId:opening.blockId,
+   sessionId:'p-session',roleSlotId:'flat_press',exerciseId:'bench_press',setIndex:0,
+   reps:8,prescribed:true,actualG:55000,actualOrigin:{value:'55',unit:'kg'}},
+  {type:'WORKOUT_FINISHED',eventId:'p-finish',commitOrdinal:3,blockId:opening.blockId,sessionId:'p-session'},
+  {type:'CREDIT_GRANTED',eventId:'p-credit',commitOrdinal:4,blockId:opening.blockId,sessionId:'p-session',creditId:'p-credit-id'}
+ ];
+ const initial=catalogue.foldBB2Block(opening,events);
+ assert.equal(initial.pending['upper_a|flat_press|bench_press'].kind,'OFF_PLAN');
+ h.ctx.__seedOpening=opening;h.ctx.__seedEvents=events;
+ h.ev('state.bb2={...state.bb2,opening:__seedOpening,events:__seedEvents};'+
+  'bvomBb2PreviewSaved=true;bvomBb2RenderPreview()');
+ assert.match(h.ctx.document.querySelector('#setup').innerHTML,/data-bb2-choice-accept="0"/);
+ assert.equal(h.ctx.bvomBb2ResolveChoice(0,'ACCEPT'),true,'explicit off-plan acceptance uses actual 55 kg origin');
+ const committed=h.S().bb2,replay=catalogue.foldBB2Block(committed.opening,committed.events);
+ assert.equal(committed.events.at(-1).type,'CHOICE_RESOLVED');
+ assert.equal(committed.events.at(-1).loadG,55000);
+ assert.deepEqual(committed.events.at(-1).loadOrigin,{value:'55',unit:'kg'});
+ assert.deepEqual(replay.pending,{});
+ assert.equal(replay.progress['upper_a|flat_press|bench_press'].loadG,55000);
+ assert.equal(h.ctx.bvomBb2ResolveChoice(0,'ACCEPT'),false,'resolved choice cannot be repeated');
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ console.log('PASS: actual-load choice is explicit, one-shot, saved and retains canonical origin');
+}
+
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const owner=h.ls.getItem('bvom_data_owner')||'bb2-test-owner',opening=catalogue.createBB2Opening({
+  ownerId:owner,blockId:'bb2-complete-block'}),events=[];
+ const days=['upper_a','lower_a','upper_b','lower_b'];
+ for(const day of days)for(let i=0;i<8;i++){
+  const sessionId=day+'-'+i;
+  const add=(type,fields)=>events.push({type,eventId:'event-'+(events.length+1),
+   commitOrdinal:events.length+1,blockId:opening.blockId,...fields});
+  const slot={roleSlotId:'synthetic_role',exerciseId:'synthetic_lift',sets:1,floor:6,ceiling:10,
+   equipment:'loaded',plannedG:60000,plannedOrigin:{value:'60',unit:'kg'},
+   incrementG:2500,incrementOrigin:{value:'2.5',unit:'kg'}};
+  add('WORKOUT_STARTED',{sessionId,templateId:day,kind:'NORMAL',slots:[slot]});
+  add('SET_RECORDED',{sessionId,roleSlotId:slot.roleSlotId,exerciseId:slot.exerciseId,
+   setIndex:0,reps:6,prescribed:true,actualG:60000,actualOrigin:{value:'60',unit:'kg'}});
+  add('WORKOUT_FINISHED',{sessionId});add('CREDIT_GRANTED',{sessionId,creditId:'credit-'+sessionId});
+ }
+ const before=catalogue.foldBB2Block(opening,events);
+ assert.deepEqual(Object.values(before.quotas),[8,8,8,8]);
+ h.ctx.__seedOpening=opening;h.ctx.__seedEvents=events;
+ h.ev('state.bb2={...state.bb2,opening:__seedOpening,events:__seedEvents};'+
+  'bvomBb2PreviewSaved=true;bvomBb2RenderPreview()');
+ assert.match(h.ctx.document.querySelector('#setup').innerHTML,/data-bb2-next-block/);
+ const raw=h.ls.getItem('bvom_data');
+ h.ctx.confirm=()=>false;
+ assert.equal(h.ctx.bvomBb2NextBlock(),false,'cancel leaves sealed block unchanged');
+ assert.equal(h.ls.getItem('bvom_data'),raw);
+ h.ctx.confirm=()=>true;
+ assert.equal(h.ctx.bvomBb2NextBlock(),true,'new block begins only after 32 quotas');
+ const b=h.S().bb2,newProjection=catalogue.foldBB2Block(b.opening,b.events);
+ assert.equal(b.sealedBlocks.length,1);
+ assert.equal(catalogue.foldBB2Block(b.sealedBlocks[0].opening,b.sealedBlocks[0].events).sealed,true);
+ assert.deepEqual(Object.values(newProjection.quotas),[0,0,0,0]);
+ assert.equal(b.opening.previousBlockId,opening.blockId);
+ assert.equal(newProjection.history.length,0,'new block starts fresh, without losing archive');
+ h.ctx.renderHistory();
+ assert.match(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-archived="1"/,
+  'sealed workouts remain in the shared History');
+ assert.doesNotMatch(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-correct-save/,
+  'sealed block records are read-only');
+ const persisted=JSON.parse(h.ls.getItem('bvom_data')).bb2;
+ assert.equal(persisted.sealedBlocks.length,1);
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ console.log('PASS: atomic 32-credit seal, next opening, retained read-only History and backup');
+}
+
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const opening=catalogue.createBB2Opening({ownerId:'bb2-test-owner',blockId:'bb2-stall-test',
+  progress:{'upper_a|flat_press|bench_press':{loadG:100000,loadOrigin:{value:'100',unit:'kg'},
+   incrementG:2500,incrementOrigin:{value:'2.5',unit:'kg'},
+   calibrated:true,bestReps:21,stallCount:4,epochId:'stall-epoch'}}});
+ h.ctx.__seedOpening=opening;
+ h.ev('state.bb2={...state.bb2,opening:__seedOpening,events:[]};'+
+  'bvomBb2PreviewSaved=true;bvomBb2RenderPreview()');
+ const signal=catalogue.foldBB2Block(opening,[]).stallSignals['upper_a|flat_press|bench_press'];
+ assert.equal(signal.kind,'OFFER');
+ assert.match(h.ctx.document.querySelector('#setup').innerHTML,/data-bb2-stall-reduce="0"/);
+ assert.equal(h.ctx.bvomBb2ReviewStall(0,'REDUCE'),true,'user explicitly accepts 10% load reduction');
+ const b=h.S().bb2,after=catalogue.foldBB2Block(b.opening,b.events);
+ assert.equal(b.events[0].type,'STALL_REDUCTION_ACCEPTED');
+ assert.equal(b.events[0].loadG,90000);
+ assert.equal(after.progress['upper_a|flat_press|bench_press'].loadG,90000);
+ assert.equal(after.progress['upper_a|flat_press|bench_press'].stallCount,0);
+ assert.deepEqual(after.quotas,{upper_a:0,lower_a:0,upper_b:0,lower_b:0});
+ assert.equal(h.ctx.bvomBb2ReviewStall(0,'REDUCE'),false,'an accepted offer is no longer actionable');
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ console.log('PASS: explicit 10% stall response resets epoch without creating quota');
+}
+
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const opening=catalogue.createBB2Opening({ownerId:'bb2-test-owner',blockId:'bb2-swap-test'});
+ h.ctx.__seedOpening=opening;
+ h.ev('state.bb2={...state.bb2,opening:__seedOpening,events:[]};'+
+  'bvomBb2PreviewSaved=true;bvomBb2RenderPreview()');
+ h.ctx.bvomBb2PreviewChoose('upper_a','shoulder_press','log_push_press');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true,'a changed workout choice has a durable ledger swap');
+ const b=h.S().bb2;
+ assert.equal(b.events.length,1);
+ assert.deepEqual([b.events[0].type,b.events[0].templateId,b.events[0].roleSlotId,b.events[0].exerciseId],
+  ['EXERCISE_SWAPPED','upper_a','shoulder_press','log_push_press']);
+ assert.equal(catalogue.foldBB2Block(b.opening,b.events).selections['upper_a|shoulder_press'],'log_push_press');
+ assert.equal(b.setup.selections['upper_a|shoulder_press'],'log_push_press');
+ const original=h.ls.getItem('bvom_data');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true,'identical saved swap is idempotent');
+ assert.equal(h.ls.getItem('bvom_data'),original);
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ console.log('PASS: exercise choice and exact ledger swap commit together, without BB1 or cloud edits');
+}
+
+console.log('BB2 BVOM integrated setup preview: 28/28 PASS');

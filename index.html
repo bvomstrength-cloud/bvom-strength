@@ -4972,7 +4972,31 @@ function bvomBb2SaveSetup(){
   bvomBb2PreviewSaved=true;bvomBb2RenderPreview();return true;
  }
  const before=state.bb2;
- state.bb2={...(before&&typeof before==='object'&&!Array.isArray(before)?before:{}),setup:snapshot};
+ let nextEvents=before?.events;
+ if(before?.opening&&Array.isArray(before.events)){
+  try{
+   const prior=bvomBb2PreviewModule.foldBB2Block(before.opening,before.events);
+   if(prior.sealed||prior.requiredConsent.length)return false;
+   const changes=Object.entries(snapshot.selections).filter(([key,value])=>
+    value!==before.setup?.selections?.[key]);
+   if(changes.length){
+    const proposed=changes.map(([key,exerciseId],i)=>{
+     const [templateId,roleSlotId]=key.split('|');
+     return {type:'EXERCISE_SWAPPED',eventId:'swap:'+before.opening.blockId+':'+(before.events.length+i+1),
+      commitOrdinal:before.events.length+i+1,blockId:before.opening.blockId,
+      templateId,roleSlotId,exerciseId};
+    });
+    const tx=bvomBb2PreviewModule.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(
+     before.opening,before.events,proposed,{
+      ownerId:before.opening.ownerId,blockId:before.opening.blockId,
+      expectedHead:before.events.length,foldRulesVersion:before.opening.foldRulesVersion,
+      sealRevision:prior.sealRevision,activeWorkout:false});
+    nextEvents=tx.events;
+   }
+  }catch(error){console.error('BB2 exercise swap rejected',error);return false}
+ }
+ state.bb2={...(before&&typeof before==='object'&&!Array.isArray(before)?before:{}),
+  setup:snapshot,...(nextEvents?{events:nextEvents}:{})};
  if(!save({durable:true,localOnly:true})){
   if(before===undefined)delete state.bb2;else state.bb2=before;
   bvomBeeModal(hlmTxt('BB2 SETUP NOT SAVED','BB2設定を保存できません'),
@@ -4996,6 +5020,7 @@ bvomCloudPayload=function(){const d=bvomBb2BaseCloudPayload();delete d.bb2;retur
 // BB2 Stage (ii): local-only Start, prescribed sets, reload and Discard.
 // The existing BVOM data document remains authoritative; no Finish or credits.
 let bvomBb2Day='upper_a';
+let bvomBb2Kind='NORMAL';
 function bvomBb2Active(s=state){return !!s?.bb2?.activeSessionId}
 function bvomBb2Commit(next){
  const before=state.bb2;state.bb2=next;
@@ -5009,23 +5034,168 @@ function bvomBb2ChooseDay(day){
  if(!bvomBb2PreviewOpen||!bvomBb2PreviewModule?.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.includes(day))return;
  bvomBb2Day=day;bvomBb2RenderPreview();
 }
+function bvomBb2ChooseKind(kind){
+ if(!bvomBb2PreviewOpen||!['NORMAL','EXTRA_NORMAL','RECOVERY'].includes(kind))return;
+ bvomBb2Kind=kind;bvomBb2RenderPreview();
+}
+function bvomBb2RecoveryGrams(p){
+ if(!Number.isSafeInteger(p?.loadG)||p.loadG<=0)return null;
+ const inc=Number.isSafeInteger(p.incrementG)&&p.incrementG>0?p.incrementG:1000;
+ return Math.max(inc,Math.round(p.loadG*.90/inc)*inc);
+}
+function bvomBb2PendingChoices(projection){
+ const offers=Object.entries(projection?.pending||{});
+ if(!offers.length)return '';
+ const cards=offers.map(([key,offer],i)=>{
+  const p=projection.progress[key],numeric=offer.kind==='OFF_PLAN';
+  const controls=numeric?
+   '<button class="choice" data-bb2-choice-accept="'+i+'" onclick="bvomBb2ResolveChoice('+i+',\'ACCEPT\')">ACCEPT ACTUAL WEIGHT</button>'+
+   '<button class="secondary" data-bb2-choice-keep="'+i+'" onclick="bvomBb2ResolveChoice('+i+',\'KEEP\')">KEEP PLANNED WEIGHT</button>':
+   '<label>Easier/harder variation<input data-bb2-choice-variation="'+i+'" value="'+bvomEsc(p?.variation||offer.variation||'')+'"></label>'+
+   '<label>Assistance<input data-bb2-choice-assist="'+i+'" value="'+bvomEsc(p?.assistance??offer.assistance??'none')+'"></label>'+
+   '<label>Added '+unitLabel()+' (optional)<input type="number" min="0" step="any" data-bb2-choice-added="'+i+'" value="'+(p?.loadG!=null?bvomEsc(bvomBb2DisplayLoad(p.loadG)):'')+'"></label>'+
+   '<button class="choice" data-bb2-choice-difficulty="'+i+'" onclick="bvomBb2ResolveChoice('+i+',\'DIFFICULTY_ACCEPT\')">ACCEPT NEW DIFFICULTY</button>'+
+   '<button class="secondary" data-bb2-choice-hold="'+i+'" onclick="bvomBb2ResolveChoice('+i+',\'HOLD\')">HOLD CURRENT PLAN</button>';
+  return '<div class="review" data-bb2-pending="'+i+'"><b>'+bvomEsc(bvomBb2PreviewLabel(key))+'</b><p class="small">'+
+   (numeric?'Finished at '+bvomEsc(bvomBb2DisplayLoad(offer.valueG))+' '+unitLabel()+' instead of the saved prescription.':
+    'All prescribed sets reached the top of the range. Choose whether to increase difficulty.')+'</p>'+controls+'</div>';
+ }).join('');
+ return '<div class="card"><b>BB2 DECISIONS TO REVIEW</b><p class="small">Each decision is saved before this exercise can be trained again.</p>'+cards+'</div>';
+}
+function bvomBb2StallActions(projection){
+ const offers=Object.entries(projection?.stallSignals||{}).filter(([,s])=>s.kind==='OFFER'&&!s.dismissed);
+ if(!offers.length)return '';
+ return '<div class="card"><b>OPTIONAL STALL REVIEW</b><p class="small">No change is automatic. You can also swap the exercise above or choose an easy recovery workout.</p>'+
+  offers.map(([key,signal],i)=>{
+   const p=projection.progress[key],reduced=bvomBb2RecoveryGrams(p);
+   return '<div class="review" data-bb2-stall="'+i+'"><b>'+bvomEsc(bvomBb2PreviewLabel(key))+
+    '</b><p class="small">'+signal.stallCount+' comparable sessions without a new best.</p>'+
+    (reduced!==null&&reduced<p.loadG?'<button class="choice" data-bb2-stall-reduce="'+i+'" onclick="bvomBb2ReviewStall('+i+',\'REDUCE\')">REDUCE TO ABOUT '+
+     bvomEsc(bvomBb2DisplayLoad(reduced))+' '+unitLabel()+'</button>':'')+
+    '<button class="secondary" data-bb2-stall-dismiss="'+i+'" onclick="bvomBb2ReviewStall('+i+',\'DISMISS\')">NOT NOW</button></div>';
+  }).join('')+'</div>';
+}
+function bvomBb2ReviewStall(index,decision){
+ if(!bvomBb2PreviewEnabled()||!bvomBb2PreviewOpen||!bvomBb2PreviewModule||
+    bvomBb2Active()||bvomStateWorkoutActive(state)||!bvomWorkoutActionAllowed()||
+    !Number.isSafeInteger(index)||index<0)return false;
+ const b=state.bb2,m=bvomBb2PreviewModule;
+ if(!b?.opening||!Array.isArray(b.events))return false;
+ try{
+  const before=m.foldBB2Block(b.opening,b.events);
+  if(before.sealed||before.requiredConsent.length)return false;
+  const [key,signal]=Object.entries(before.stallSignals).filter(([,s])=>s.kind==='OFFER'&&!s.dismissed)[index]||[];
+  if(!key||!['REDUCE','DISMISS'].includes(decision))return false;
+  const [templateId,roleSlotId,exerciseId]=key.split('|');
+  const base={eventId:'stall:'+b.opening.blockId+':'+(b.events.length+1),
+   commitOrdinal:b.events.length+1,blockId:b.opening.blockId,templateId,roleSlotId,exerciseId};
+  let e;
+  if(decision==='DISMISS')e={...base,type:'STALL_OFFER_DISMISSED',epochId:signal.epochId,
+   stallCount:signal.stallCount};
+  else{
+   const p=before.progress[key],loadG=bvomBb2RecoveryGrams(p);
+   if(loadG===null||loadG>=p.loadG)return false;
+   e={...base,type:'STALL_REDUCTION_ACCEPTED',scope:'GLOBAL',
+    loadG,loadOrigin:{value:String(loadG/1000),unit:'kg'},
+    offerEpochId:signal.epochId,offerStallCount:signal.stallCount};
+  }
+  const tx=m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(b.opening,b.events,[e],{
+   ownerId:b.opening.ownerId,blockId:b.opening.blockId,expectedHead:b.events.length,
+   foldRulesVersion:b.opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:false});
+  if(!bvomBb2Commit({...b,events:tx.events}))return false;
+  bvomBb2RenderPreview();return true;
+ }catch(error){console.error('BB2 stall review rejected',error);return false}
+}
+function bvomBb2ResolveChoice(index,decision){
+ if(!bvomBb2PreviewEnabled()||!bvomBb2PreviewOpen||!bvomBb2PreviewModule||
+    bvomBb2Active()||bvomStateWorkoutActive(state)||!bvomWorkoutActionAllowed()||
+    !Number.isSafeInteger(index)||index<0)return false;
+ const b=state.bb2,m=bvomBb2PreviewModule;
+ if(!b?.opening||!Array.isArray(b.events))return false;
+ try{
+  const before=m.foldBB2Block(b.opening,b.events);
+  if(before.sealed||before.requiredConsent.length)return false;
+  const entry=Object.entries(before.pending)[index];if(!entry)return false;
+  const [key,offer]=entry,[templateId,roleSlotId,exerciseId]=key.split('|');
+  if(!templateId||!roleSlotId||!exerciseId)return false;
+  const e={type:'CHOICE_RESOLVED',eventId:'choice:'+b.opening.blockId+':'+(b.events.length+1),
+   commitOrdinal:b.events.length+1,blockId:b.opening.blockId,
+   sourceSessionId:offer.sessionId,sourceBlockId:offer.sourceBlockId||b.opening.blockId,
+   roleSlotId,exerciseId,decision};
+  if(offer.kind==='OFF_PLAN'){
+   if(!['ACCEPT','KEEP'].includes(decision))return false;
+   if(decision==='ACCEPT'){
+    const source=[...(b.sealedBlocks||[]).flatMap(x=>x.events),...b.events].find(x=>
+     x.type==='SET_RECORDED'&&x.blockId===e.sourceBlockId&&
+     x.sessionId===offer.sessionId&&x.roleSlotId===roleSlotId&&
+     x.exerciseId===exerciseId&&x.actualG===offer.valueG);
+    if(!source?.actualOrigin)return false;
+    e.loadG=offer.valueG;e.loadOrigin=source.actualOrigin;
+   }
+  }else if(offer.kind==='DIFFICULTY'){
+   if(!['HOLD','DIFFICULTY_ACCEPT'].includes(decision))return false;
+   if(decision==='DIFFICULTY_ACCEPT'){
+    e.variation=String(document.querySelector('#setup [data-bb2-choice-variation="'+index+'"]')?.value||'').trim();
+    e.assistance=String(document.querySelector('#setup [data-bb2-choice-assist="'+index+'"]')?.value??'').trim();
+    const added=String(document.querySelector('#setup [data-bb2-choice-added="'+index+'"]')?.value??'').trim();
+    if(!e.variation||!e.assistance||e.variation.length>80||e.assistance.length>80)return false;
+    if(added){
+     const p=before.progress[key];
+     if(p?.loadG!=null&&added===bvomBb2DisplayLoad(p.loadG)){
+      e.addedWeightG=p.loadG;e.addedWeightOrigin=p.loadOrigin;
+     }else{
+      e.addedWeightG=m.BB2_BROWSER_MODULES.ledger.canonicalGrams(added,state.unit==='lb'?'lb':'kg');
+      e.addedWeightOrigin={value:added,unit:state.unit==='lb'?'lb':'kg'};
+     }
+    }
+   }
+  }else return false;
+  const tx=m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(b.opening,b.events,[e],{
+   ownerId:b.opening.ownerId,blockId:b.opening.blockId,expectedHead:b.events.length,
+   foldRulesVersion:b.opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:false});
+  if(!bvomBb2Commit({...b,events:tx.events}))return false;
+  bvomBb2RenderPreview();return true;
+ }catch(error){console.error('BB2 pending decision rejected',error);return false}
+}
 function bvomBb2StartForm(){
  if(!bvomBb2PreviewSaved||!bvomBb2PreviewModule||!state.bb2?.setup)return '';
  const m=bvomBb2PreviewModule,units=state.unit==='lb'?'lb':'kg';
  const p=m.getBB2TemplatePrescription(state.bb2.setup,bvomBb2Day);
+ const b=state.bb2,projection=b.opening?m.foldBB2Block(b.opening,b.events):null;
+ const full=projection&&m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.every(d=>projection.quotas[d]===8);
+ const kinds=full?['RECOVERY']:projection?.quotas[bvomBb2Day]===8?['EXTRA_NORMAL','RECOVERY']:['NORMAL','RECOVERY'];
+ if(!kinds.includes(bvomBb2Kind))bvomBb2Kind=kinds[0];
+ const recovery=bvomBb2Kind==='RECOVERY';
  const days=m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.map(d=>
   '<button type="button" class="choice '+(d===bvomBb2Day?'on':'')+
   '" data-bb2-day="'+d+'" onclick="bvomBb2ChooseDay(\''+d+'\')">'+bvomEsc(bvomBb2PreviewLabel(d))+'</button>').join('');
- const rows=p.slots.map((s,i)=>'<div class="review"><b>'+bvomEsc(bvomBb2PreviewLabel(s.exerciseId))+
-  '</b><div class="small">'+s.sets+' × '+s.floor+'–'+s.ceiling+' reps</div>'+
+ const kindsHtml=kinds.map(k=>'<button type="button" class="choice '+(k===bvomBb2Kind?'on':'')+
+  '" data-bb2-kind="'+k+'" onclick="bvomBb2ChooseKind(\''+k+'\')">'+
+  (k==='RECOVERY'?'OPTIONAL LOW-STRESS':k==='EXTRA_NORMAL'?'EXTRA WORKOUT':'COUNTED WORKOUT')+'</button>').join('');
+ const rows=p.slots.map((s,i)=>{
+  const progress=projection?.progress[bvomBb2Day+'|'+s.roleSlotId+'|'+s.exerciseId];
+  const recommended=recovery?bvomBb2RecoveryGrams(progress):null;
+  return '<div class="review"><b>'+bvomEsc(bvomBb2PreviewLabel(s.exerciseId))+
+  '</b><div class="small">'+(recovery?Math.ceil(s.sets/2):s.sets)+' × '+s.floor+'–'+s.ceiling+' reps'+
+  (recovery?' · easy effort, at least 4 reps in reserve':'')+'</div>'+
   (s.equipment==='loaded'
-   ? '<label>Starting '+units+'<input type="number" step="any" data-bb2-load="'+i+'"></label>'+
-     '<label>Increase '+units+'<input type="number" step="any" data-bb2-inc="'+i+'"></label>'
-   : '<label>Assistance (none if unassisted)<input type="text" data-bb2-assist="'+i+'" value="none"></label>'+
-     '<label>Explicit added weight '+units+' (optional)<input type="number" min="0" step="any" data-bb2-bw-load="'+i+'" placeholder="BW only"></label>')+
-  '</div>').join('');
- return '<div class="card"><b>BB2 DEVELOPMENT START</b><p class="small">Enter actual starting weights and increases. No BB1 values are inferred. Finish is disabled.</p>'+
-  '<div class="choiceRow">'+days+'</div>'+rows+
+   ? '<label>'+(recovery?'Recovery working':'Starting')+' '+units+'<input type="number" step="any" data-bb2-load="'+i+'" '+
+     (recommended!==null?'value="'+bvomEsc(bvomBb2DisplayLoad(recommended))+'"':(progress?'disabled value="'+bvomEsc(bvomBb2DisplayLoad(progress.loadG))+'"':''))+'></label>'+
+     (!progress?'<label>Increase '+units+'<input type="number" step="any" data-bb2-inc="'+i+'"></label>':'')
+   : (recovery?'<label>Easier variation<input type="text" data-bb2-bw-variation="'+i+'" value="'+bvomEsc(progress?.variation||s.exerciseId)+'"></label>':'')+
+     '<label>'+(recovery?'Easier assistance':'Assistance (none if unassisted)')+
+     '<input type="text" data-bb2-assist="'+i+'" value="'+bvomEsc(progress?.assistance??'none')+'"></label>'+
+     '<label>Explicit added weight '+units+' (optional)<input type="number" min="0" step="any" data-bb2-bw-load="'+i+'" placeholder="BW only"'+
+     (!recovery&&progress?.loadG!=null?' value="'+bvomEsc(bvomBb2DisplayLoad(progress.loadG))+'"':'')+'></label>')+
+  '</div>';
+ }).join('');
+ return (projection?'<div class="card"><b>BB2 BLOCK</b><p class="small">'+
+  m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.map(d=>bvomEsc(bvomBb2PreviewLabel(d))+': '+projection.quotas[d]+'/8').join(' · ')+
+  '</p>'+(full?'<button type="button" class="primary wide" data-bb2-next-block onclick="bvomBb2NextBlock()">START NEXT 8-WEEK BLOCK</button>':'')+
+  (projection.multiStallRecovery?'<p class="small">Optional low-stress recovery is available after several stalls.</p>':'')+'</div>':'')+
+  (projection?bvomBb2PendingChoices(projection)+bvomBb2StallActions(projection):'')+
+  '<div class="card"><b>BB2 DEVELOPMENT START</b><p class="small">Enter real starting loads. Low-stress sessions are optional, use about half the sets and do not earn progression or credits.</p>'+
+  '<div class="choiceRow">'+days+'</div><div class="choiceRow">'+kindsHtml+'</div>'+rows+
   '<button type="button" class="primary wide" data-bb2-start onclick="bvomBb2Begin()">START TEST WORKOUT</button></div>';
 }
 function bvomBb2Begin(){
@@ -5039,50 +5209,93 @@ function bvomBb2Begin(){
    ownerId:localStorage.getItem(BVOM_DATA_OWNER_KEY)||'bb2-test-owner',
    blockId:'bb2-preview-'+Date.now()});
   const events=old.events||[],before=m.foldBB2Block(opening,events);
+  if(before.sealed||before.requiredConsent.length)return false;
+  const allFull=m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.every(d=>before.quotas[d]===8);
+  const kind=bvomBb2Kind;
+  if(!['NORMAL','EXTRA_NORMAL','RECOVERY'].includes(kind)||
+     (allFull&&kind!=='RECOVERY')||
+     (kind==='NORMAL'&&before.quotas[bvomBb2Day]>=8)||
+     (kind==='EXTRA_NORMAL'&&before.quotas[bvomBb2Day]<8))return false;
+  const recovery=kind==='RECOVERY';
   const id='bb2-preview-session-'+Date.now()+'-'+events.length;
   const unit=state.unit==='lb'?'lb':'kg';
   const plan=m.getBB2TemplatePrescription(old.setup,bvomBb2Day);
   const slots=plan.slots.map((s,i)=>{
-   const a={roleSlotId:s.roleSlotId,exerciseId:s.exerciseId,sets:s.sets,
+   const a={roleSlotId:s.roleSlotId,exerciseId:s.exerciseId,sets:recovery?Math.ceil(s.sets/2):s.sets,
     floor:s.floor,ceiling:s.ceiling,equipment:s.equipment};
    const p=before.progress[bvomBb2Day+'|'+s.roleSlotId+'|'+s.exerciseId];
    if(s.equipment==='loaded'){
-    if(p){a.plannedG=p.loadG;a.plannedOrigin=p.loadOrigin;
+    if(p&&!recovery){a.plannedG=p.loadG;a.plannedOrigin=p.loadOrigin;
      a.incrementG=p.incrementG;a.incrementOrigin=p.incrementOrigin}
     else{
      const v=String(document.querySelector('#setup [data-bb2-load="'+i+'"]')?.value||'');
-     const n=String(document.querySelector('#setup [data-bb2-inc="'+i+'"]')?.value||'');
-     if(!v||!n)throw Error('Enter weight and increment for '+s.exerciseId);
+     const n=p?null:String(document.querySelector('#setup [data-bb2-inc="'+i+'"]')?.value||'');
+     if(!v||(!p&&!n))throw Error('Enter weight and increment for '+s.exerciseId);
      a.plannedG=m.BB2_BROWSER_MODULES.ledger.canonicalGrams(v,unit);
      a.plannedOrigin={value:v,unit};
-     a.incrementG=m.BB2_BROWSER_MODULES.ledger.canonicalGrams(n,unit);
+     a.incrementG=p?.incrementG??m.BB2_BROWSER_MODULES.ledger.canonicalGrams(n,unit);
      if(a.incrementG<=0)throw Error('Increment must be positive');
-     a.incrementOrigin={value:n,unit};
+     a.incrementOrigin=p?.incrementOrigin??{value:n,unit};
     }
    }else{
-    a.variation=p?.variation||s.exerciseId;
-    a.assistance=p?.assistance??String(document.querySelector('#setup [data-bb2-assist="'+i+'"]')?.value??'none');
-    if(p?.loadG!=null){a.plannedG=p.loadG;a.plannedOrigin=p.loadOrigin}
-    else if(!p){
+    a.variation=recovery?String(document.querySelector('#setup [data-bb2-bw-variation="'+i+'"]')?.value||'').trim():p?.variation||s.exerciseId;
+    a.assistance=recovery?String(document.querySelector('#setup [data-bb2-assist="'+i+'"]')?.value??'').trim():
+     p?.assistance??String(document.querySelector('#setup [data-bb2-assist="'+i+'"]')?.value??'none');
+    if(!a.variation||!a.assistance)throw Error('Enter recovery variation and assistance');
+    if(!recovery&&p?.loadG!=null){a.plannedG=p.loadG;a.plannedOrigin=p.loadOrigin}
+    else if(recovery||!p){
      const added=String(document.querySelector('#setup [data-bb2-bw-load="'+i+'"]')?.value??'').trim();
      if(added){a.plannedG=m.BB2_BROWSER_MODULES.ledger.canonicalGrams(added,unit);
       a.plannedOrigin={value:added,unit}}
     }
+    if(recovery&&p&&a.variation===p.variation&&a.assistance===p.assistance&&
+       (a.plannedG??null)>=(p.loadG??0))throw Error('Select easier bodyweight recovery variation or assistance');
     if(p?.incrementG!==undefined){a.incrementG=p.incrementG;a.incrementOrigin=p.incrementOrigin}
    }
    return a;
   });
   const e={type:'WORKOUT_STARTED',eventId:'start:'+id,commitOrdinal:events.length+1,
-   blockId:opening.blockId,sessionId:id,templateId:bvomBb2Day,kind:'NORMAL',slots};
-  const tx=m.BB2_BROWSER_MODULES.start.commitBB2Start(opening,events,old.setup,e,{
+   blockId:opening.blockId,sessionId:id,templateId:bvomBb2Day,kind,slots};
+  const guard={
    ownerId:opening.ownerId,blockId:opening.blockId,expectedHead:events.length,
-   foldRulesVersion:opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:false});
+   foldRulesVersion:opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:false};
+  const tx=recovery?m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(opening,events,[e],guard):
+   m.BB2_BROWSER_MODULES.start.commitBB2Start(opening,events,old.setup,e,guard,{
+    priorSealedBlock:old.sealedBlocks?.at(-1)});
   if(!bvomBb2Commit({...old,opening,events:tx.events,activeSessionId:id}))return false;
   bvomBb2PreviewOpen=false;bvomBb2PreviewDraft=null;
   document.querySelector('#setup').classList.add('hidden');
   document.querySelector('#app').classList.remove('hidden');
   renderAll();return true;
  }catch(e){console.error('BB2 Start rejected',e);return false}
+}
+// Sealing is deliberately only possible after the exact 8/8/8/8 quota fold.
+// Keep the full sealed audit trail in the existing local BVOM backup while
+// the new block begins from the verified closing snapshot, in one save.
+function bvomBb2NextBlock(){
+ if(!bvomBb2PreviewEnabled()||!bvomBb2PreviewOpen||!bvomBb2PreviewModule||
+    bvomBb2Active()||bvomStateWorkoutActive(state)||!bvomWorkoutActionAllowed())return false;
+ const b=state.bb2,m=bvomBb2PreviewModule;
+ if(!b?.opening||!Array.isArray(b.events))return false;
+ try{
+  const before=m.foldBB2Block(b.opening,b.events);
+  if(before.sealed||before.requiredConsent.length||
+     !m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.every(d=>before.quotas[d]===8))return false;
+  if(!confirm('Start a new BB2 block? The completed 32-credit block will be sealed and retained in your local backup. Corrections to that block will no longer be possible.'))return false;
+  if(b!==state.bb2||bvomBb2Active()||bvomStateWorkoutActive(state)||
+     !bvomWorkoutActionAllowed())return false;
+  const e={type:'BLOCK_SEALED',eventId:'seal:'+b.opening.blockId+':'+(b.events.length+1),
+   commitOrdinal:b.events.length+1,blockId:b.opening.blockId,
+   sealId:'seal:'+b.opening.blockId+':'+(b.events.length+1)};
+  const tx=m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(b.opening,b.events,[e],{
+   ownerId:b.opening.ownerId,blockId:b.opening.blockId,expectedHead:b.events.length,
+   foldRulesVersion:b.opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:false});
+  const next=m.BB2_BROWSER_MODULES.ledger.createNextBB2Opening(b.opening,tx.events,
+   'bb2-preview-block-'+Date.now()+'-'+(b.sealedBlocks?.length||0));
+  if(!bvomBb2Commit({...b,sealedBlocks:[...(b.sealedBlocks||[]),{opening:b.opening,events:tx.events}],
+    opening:next,events:[],activeSessionId:null}))return false;
+  bvomBb2Kind='NORMAL';bvomBb2RenderPreview();return true;
+ }catch(error){console.error('BB2 next-block transition rejected',error);return false}
 }
 function bvomBb2WorkingSlot(startSlot,events,sessionId){
  // Start remains immutable. Independently committed pre-lock edits supply the
@@ -5115,7 +5328,8 @@ function bvomBb2SessionTrial(slot,events,sessionId){
 }
 function bvomBb2CalibrationEligible(slot,events,sessionId,projection,templateId){
  const key=templateId+'|'+slot.roleSlotId+'|'+slot.exerciseId;
- return slot.equipment==='loaded'&&!projection.progress[key]?.calibrated&&
+ const session=events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===sessionId);
+ return session?.kind!=='RECOVERY'&&slot.equipment==='loaded'&&!projection.progress[key]?.calibrated&&
   events.some(e=>e.type==='SET_RECORDED'&&e.sessionId===sessionId&&
     e.roleSlotId===slot.roleSlotId)&&
   events.filter(e=>e.type==='SET_RECORDED'&&e.sessionId===sessionId&&
@@ -5243,6 +5457,7 @@ function bvomBb2AcceptTrial(i){
     !bvomBb2PreviewModule||!Number.isSafeInteger(i))return false;
  const b=state.bb2,m=bvomBb2PreviewModule;
  const start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
+ if(start?.kind==='RECOVERY')return false;
  const slot=start?.slots[i]&&bvomBb2WorkingSlot(start.slots[i],b.events,b.activeSessionId);
  if(!slot||slot.equipment!=='loaded'||!bvomBb2CalibrationSetsComplete(slot,b.events,b.activeSessionId)||
     b.events.some(e=>e.type==='CALIBRATION_ACCEPTED'&&e.sessionId===b.activeSessionId&&
@@ -5280,14 +5495,16 @@ function bvomBb2Workout(){
   const s=bvomBb2WorkingSlot(initial,b.events,b.activeSessionId);
   const key=start.templateId+'|'+s.roleSlotId+'|'+s.exerciseId;
   const p=projection.progress[key],signal=projection.stallSignals[key];
-  const calibration=!p?.calibrated;
+  const recovery=start.kind==='RECOVERY';
+  const calibration=!recovery&&!p?.calibrated;
   const trial=bvomBb2SessionTrial(s,b.events,b.activeSessionId);
   const canRevise=bvomBb2CalibrationEligible(s,b.events,b.activeSessionId,projection,start.templateId);
   const canAccept=calibration&&s.equipment==='loaded'&&
    bvomBb2CalibrationSetsComplete(s,b.events,b.activeSessionId)&&
    !b.events.some(e=>e.type==='CALIBRATION_ACCEPTED'&&e.sessionId===b.activeSessionId&&
     e.roleSlotId===s.roleSlotId);
-  const feedback=calibration?'First eligible exposure calibrates this lift; no automatic increase.':
+  const feedback=recovery?'Low-stress preparation: comfortable reps near the bottom of the range, with at least 4 reps in reserve. No progression.':
+   calibration?'First eligible exposure calibrates this lift; no automatic increase.':
    signal?.kind==='OFFER'?'Stall review available: load reduction, exercise swap or recovery are optional.':
    signal?.kind==='NOTE'?'Three comparable exposures without a new rep best.':
    'Progression is evaluated from completed prescribed sets after Finish.';
@@ -5332,9 +5549,11 @@ function bvomBb2Workout(){
  const count=start.slots.reduce((n,s)=>n+s.sets,0),minimum=Math.ceil(.70*count);
  const done=b.events.filter(e=>e.type==='SET_RECORDED'&&e.sessionId===b.activeSessionId).length;
  el.innerHTML='<div class="toprow"><b>BODYBUILDING 2 · '+bvomEsc(bvomBb2PreviewLabel(start.templateId))+
-  '</b></div><div class="notice">Development-only: '+done+'/'+count+' prescribed sets recorded; '+minimum+
-  ' required for Finish. BB2 is local-only; cloud upload is disabled.</div>'+html+
-  '<button type="button" class="primary wide" data-bb2-finish '+(done<minimum?'disabled':'')+
+  (start.kind==='RECOVERY'?' · LOW-STRESS RECOVERY':start.kind==='EXTRA_NORMAL'?' · EXTRA WORKOUT':'')+
+  '</b></div><div class="notice">Development-only: '+done+'/'+count+' prescribed sets recorded; '+
+  (start.kind==='RECOVERY'?'recovery never earns a credit or progression.':minimum+' required for Finish.')+
+  ' BB2 is local-only; cloud upload is disabled.</div>'+html+
+  '<button type="button" class="primary wide" data-bb2-finish '+(done<(start.kind==='RECOVERY'?1:minimum)?'disabled':'')+
   ' onclick="bvomBb2End(\'FINISH\')">FINISH WORKOUT</button>'+
   '<button type="button" class="secondary wide" data-bb2-incomplete onclick="bvomBb2End(\'INCOMPLETE\')">END AS INCOMPLETE</button>'+
   '<button class="secondary wide" data-bb2-discard onclick="bvomBb2Discard()">DISCARD TEST WORKOUT</button>';
@@ -5404,6 +5623,9 @@ function bvomBb2End(outcome='FINISH'){
     !bvomBb2Active()||!bvomWorkoutActionAllowed()||!bvomBb2PreviewModule)return false;
  const b=state.bb2,m=bvomBb2PreviewModule;
  try{
+  const start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
+  if(start?.kind==='RECOVERY'&&outcome==='FINISH'&&
+     !b.events.some(e=>e.type==='SET_RECORDED'&&e.sessionId===b.activeSessionId))return false;
   const planned=m.planBB2Finish(b.opening,b.events,b.activeSessionId,outcome);
   if(planned.noOp)return false;
   const prior=m.foldBB2Block(b.opening,b.events);
@@ -5554,18 +5776,27 @@ function bvomBb2RenderHistory(){
  try{projection=m.foldBB2Block(state.bb2.opening,state.bb2.events)}
  catch(e){console.error('BB2 History replay rejected',e);return}
  const rows=projection.history.filter(x=>!x.hidden&&x.status!=='VOID');
- if(!rows.length)return;
+ const archived=[];
+ try{
+  for(const block of state.bb2.sealedBlocks||[]){
+   const old=m.foldBB2Block(block.opening,block.events);
+   if(!old.sealed||old.ownerId!==projection.ownerId)return;
+   archived.push(...old.history.filter(x=>!x.hidden&&x.status!=='VOID'));
+  }
+ }catch(e){console.error('BB2 sealed History replay rejected',e);return}
+ if(!rows.length&&!archived.length)return;
  const counts=m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.map(
   day=>bvomEsc(bvomBb2PreviewLabel(day))+': '+projection.quotas[day]+'/8').join(' · ');
  const canCorrect=!projection.sealed&&!bvomBb2Active()&&!bvomStateWorkoutActive(state);
- const cards=rows.slice().reverse().map((h,historyIndex)=>{
+ const cards=[...rows.slice().reverse().map((h,historyIndex)=>({h,historyIndex,archived:false})),
+  ...archived.slice().reverse().map(h=>({h,historyIndex:-1,archived:true}))].map(({h,historyIndex,archived})=>{
   const sets=h.sets.map((s,setIndex)=>'<div class="histLift"><b>'+
    bvomEsc(bvomBb2PreviewLabel(s.exerciseId))+'</b> · '+
    s.reps+' reps'+(s.actualOrigin?' · '+bvomEsc(s.actualOrigin.value)+' '+
     bvomEsc(s.actualOrigin.unit):'')+
    (s.variation?' · '+bvomEsc(s.variation)+' · '+bvomEsc(s.assistance):'')+
    (s.harderThanIntended?' · Hard':'')+
-   (canCorrect?'<div class="warmrow"><label>Correct reps <input type="number" min="1" step="1" '+
+   (canCorrect&&!archived?'<div class="warmrow"><label>Correct reps <input type="number" min="1" step="1" '+
      'data-bb2-correct-reps="'+historyIndex+'|'+setIndex+'" value="'+s.reps+'" style="width:80px"></label>'+
     '<label><input type="checkbox" data-bb2-correct-hard="'+historyIndex+'|'+setIndex+'" '+
      (s.harderThanIntended?'checked':'')+'> Hard</label>'+
@@ -5574,16 +5805,17 @@ function bvomBb2RenderHistory(){
     '<button type="button" class="secondary" data-bb2-void-save="'+historyIndex+'|'+setIndex+'" '+
      'onclick="bvomBb2VoidSet('+historyIndex+','+setIndex+')">REMOVE SET</button></div>':'')+
    '</div>').join('');
-  return '<div class="histCard" data-bb2-history="'+bvomEsc(h.sessionId)+'">'+
+  return '<div class="histCard" data-bb2-history="'+bvomEsc(h.sessionId)+'"'+
+   (archived?' data-bb2-archived="1"':'')+'>'+
    '<div class="histHead"><b>'+bvomEsc(bvomBb2PreviewLabel(h.templateId))+
-   '</b><span>'+bvomEsc(h.status)+'</span></div>'+
+   '</b><span>'+bvomEsc(h.status)+(archived?' · SEALED BLOCK':'')+'</span></div>'+
    '<div class="small">'+h.validCount+'/'+h.prescribedCount+' prescribed sets'+
    (h.creditId?' · Credit awarded':' · No credit')+'</div>'+
-   sets+(canCorrect?'<button type="button" class="secondary" data-bb2-void-session="'+historyIndex+'" '+
+   sets+(canCorrect&&!archived?'<button type="button" class="secondary" data-bb2-void-session="'+historyIndex+'" '+
     'onclick="bvomBb2VoidSession('+historyIndex+')">REMOVE WORKOUT</button>':'')+'</div>';
  }).join('');
  const latest=rows.at(-1);
- const currentPlans=latest.slots.map(slot=>{
+ const currentPlans=(latest?.slots||[]).map(slot=>{
   const key=latest.templateId+'|'+slot.roleSlotId+'|'+slot.exerciseId;
   const p=projection.progress[key];if(!p)return '';
   const load=Number.isSafeInteger(p.loadG)?bvomBb2DisplayLoad(p.loadG)+' '+unitLabel():

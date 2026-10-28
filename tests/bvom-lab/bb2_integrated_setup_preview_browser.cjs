@@ -320,6 +320,37 @@ const server=http.createServer((req,res)=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
    return !b.activeSessionId&&b.events.some(e=>e.type==='PRESCRIPTION_EDITED'&&e.loadG===65000);
   }),true,'discard keeps the independent working-weight edit');
+  // A low-stress workout is a normal BVOM session with reduced sets, not a
+  // progression or quota event. Exercise choices remain in the same chooser.
+  await page.evaluate(()=>showSetup());
+  await page.locator('#setup [data-bb2-preview]').click();
+  await page.waitForSelector('#setup [data-bb2-kind="RECOVERY"]');
+  await page.locator('#setup [data-bb2-kind="RECOVERY"]').click();
+  assert.match(await page.locator('#setup').textContent(),/easy effort, at least 4 reps in reserve/);
+  const recoveryLoads=page.locator('#setup [data-bb2-load]');
+  const recoveryInc=page.locator('#setup [data-bb2-inc]');
+  for(let i=0;i<await recoveryLoads.count();i++){
+   if(!(await recoveryLoads.nth(i).inputValue()))await recoveryLoads.nth(i).fill('60');
+  }
+  for(let i=0;i<await recoveryInc.count();i++)await recoveryInc.nth(i).fill('2.5');
+  await page.locator('#setup [data-bb2-start]').click();
+  await page.evaluate(()=>activateTab('workout'));
+  await page.waitForSelector('#workout [data-bb2-reps="0|0"]');
+  assert.match(await page.locator('#workout').textContent(),/LOW-STRESS RECOVERY/);
+  await page.locator('#workout [data-bb2-reps="0|0"]').fill('7');
+  await page.locator('#workout [data-bb2-log="0|0"]').click();
+  await page.locator('#workout [data-bb2-finish]').click();
+  assert.equal(await page.evaluate(async()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   const ledger=await import('./bb2/browser-core.mjs');
+   const p=ledger.foldBB2Block(b.opening,b.events);
+   const recovery=p.history.at(-1);
+   return recovery.status==='LOW_STRESS_RECOVERY'&&recovery.creditId===null&&
+    p.quotas.upper_a===0&&b.events.at(-1).type==='WORKOUT_FINISHED';
+  }),true,'real recovery Finish is History-only, without quota or new progression');
+  await page.reload();
+  await page.waitForSelector('#history [data-bb2-history]');
+  assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/LOW_STRESS_RECOVERY/);
   await page.goto(origin+'/index.html');
   await page.waitForSelector('#app:not(.hidden)');
   await page.evaluate(()=>showSetup());
