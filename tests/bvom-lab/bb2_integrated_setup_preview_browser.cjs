@@ -412,6 +412,41 @@ const server=http.createServer((req,res)=>{
   assert.equal(abandoned.legacyCount,fixture.history.length,'legacy History is untouched');
   assert.equal(abandoned.cloud,cloudBeforeAbandon,'automatic recovery stays local-only');
   await page.waitForSelector('#workout [data-bb2-next-workout]');
+  // Program selection remains in BVOM's existing Starting Setup, including
+  // HLM confirmation and BB1's otherwise standalone exercise editor.
+  await page.evaluate(()=>showSetup());
+  await page.waitForSelector('#setup [data-bb2-preview].on');
+  assert.equal(await page.locator('#setup button[onclick="completeSetup()"]:has-text("CONTINUE BODYBUILDING 2")').count(),1,
+   'Starting Setup offers a truthful return to selected BB2 instead of silently starting LP');
+  await page.locator('#setup button[onclick="completeSetup()"]:has-text("CONTINUE BODYBUILDING 2")').click();
+  await page.waitForSelector('#app:not(.hidden)');
+  assert.equal(await page.locator('#workout [data-bb2-next-workout]').count(),1);
+  await page.evaluate(()=>showSetup());
+  await page.locator('#setup button[onclick="chooseProgramMode(\'hlm\')"]').click();
+  assert.equal(await page.locator('.bvomModalOverlay [data-r]').count(),1,
+   'existing HLM confirmation is still presented');
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.selectedProgram),true,
+   'opening HLM confirmation does not yet discard BB2 selection');
+  await page.locator('.bvomModalOverlay [data-r]').click();
+  assert.equal(await page.evaluate(()=>{
+   const d=JSON.parse(localStorage.getItem('bvom_data'));
+   return d.programMode==='hlm'&&d.bb2.selectedProgram===false&&!!d.bb2.events.length;
+  }),true,'confirming HLM switches program but retains the full BB2 ledger');
+  assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
+  await page.evaluate(()=>showSetup());
+  await page.locator('#setup [data-bb-program]').click();
+  await page.waitForSelector('#setup [data-bb2-preview]');
+  assert.match(await page.locator('#setup').textContent(),/BODYBUILDING · 24 WORKOUTS/,
+   'BB1 keeps its original setup editor');
+  await page.locator('#setup [data-bb2-preview]').click();
+  await page.waitForSelector('#setup [data-bb2-template]');
+  assert.equal(await page.locator('#setup [data-bb2-template]').count(),4,
+   'BB2 is selectable directly from the BB1 setup editor');
+  await page.locator('#setup [data-bb2-back]').click();
+  await page.waitForSelector('#setup [data-bb2-preview]');
+  await page.evaluate(()=>chooseProgramMode('free'));
+  assert.equal(await page.locator('#setup [data-bb2-preview]').count(),1,
+   'Custom Training chooser also contains BB2');
   await page.goto(origin+'/index.html');
   await page.waitForSelector('#app:not(.hidden)');
   await page.evaluate(()=>showSetup());

@@ -1587,4 +1587,42 @@ H.withClock(c=>{
  console.log('PASS: BB2 missing-clock grace, recovery write failure rollback and no phantom credit');
 });
 
-console.log('BB2 BVOM integrated setup preview: 34/34 PASS');
+{
+ const h=bb2RecoveryFixture();
+ assert.equal(h.ctx.bvomBb2Discard(),true);
+ const oldCloud=JSON.stringify(h.ctx.bvomCloudPayload());
+ const originalEvents=JSON.stringify(h.S().bb2.events);
+ h.ctx.bvomChoiceModal=()=>{}; // User closes the HLM confirmation without choosing.
+ h.ctx.chooseProgramMode('hlm');
+ assert.equal(h.S().bb2.selectedProgram,true,'cancelled HLM choice must not deselect BB2');
+ assert.equal(h.S().programMode,'lprpt');
+ h.ctx.bvomChoiceModal=(title,body,left,right,onLeft,onRight)=>onRight();
+ h.ctx.chooseProgramMode('hlm');
+ assert.equal(h.S().programMode,'hlm','confirmed choice uses existing HLM transition');
+ assert.equal(h.S().bb2.selectedProgram,false,'confirmed HLM choice deselects BB2');
+ assert.equal(JSON.stringify(h.S().bb2.events),originalEvents,'training ledger survives switch');
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ h.ctx.renderWorkout();
+ assert.doesNotMatch(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-next-workout/);
+ const j=bb2RecoveryFixture();
+ assert.equal(j.ctx.bvomBb2Discard(),true);
+ j.ctx.chooseProgramMode('lprpt');
+ assert.equal(j.S().bb2.selectedProgram,false,'reselecting the same underlying legacy LP mode exits BB2');
+ assert.equal(j.S().programMode,'lprpt');
+ assert.equal(JSON.stringify(j.ctx.bvomCloudPayload()),oldCloud,
+  'switching out of BB2 to unchanged LP does not alter the cloud payload');
+ const k=bb2RecoveryFixture();
+ assert.equal(k.ctx.bvomBb2Discard(),true);
+ k.ctx.chooseProgramMode('free');
+ assert.equal(k.S().programMode,'free','Custom Training switch uses the existing chooser');
+ assert.equal(k.S().bb2.selectedProgram,false);
+ const n=bb2RecoveryFixture();
+ assert.equal(n.ctx.bvomBb2Discard(),true);
+ n.ctx.chooseProgramMode('bodybuilding');
+ assert.equal(n.S().programMode,'bodybuilding','BB1 switch uses its original setup');
+ assert.equal(n.S().bb2.selectedProgram,false);
+ assert.equal(n.ctx.bvomCloudPayload().bb2,undefined);
+ console.log('PASS: BB2 chooser cancel, HLM, LP, Custom and BB1 switches preserve history and cloud isolation');
+}
+
+console.log('BB2 BVOM integrated setup preview: 35/35 PASS');

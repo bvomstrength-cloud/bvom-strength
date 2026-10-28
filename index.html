@@ -2124,12 +2124,12 @@ function ensureHLM(){ensurePlateModes();
 ensureHLM();save();
 function liftLabel(n){if(n==='Prone Row')return isHLM()?((typeof bvomGet==='function'&&bvomGet('lifts')?.['Prone Row HLM'])||'Prone Row'):((typeof bvomGet==='function'&&bvomGet('lifts')?.['Prone Row'])||'Row');if(n==='Supine Row')return (typeof bvomGet==='function'&&bvomGet('lifts')?.['Supine Row'])||'Supine Row';return (typeof bvomGet==='function'&&bvomGet('lifts')?.[n])||n}
 function chooseProgramMode(mode){if(!bvomWorkoutActionAllowed())return;
- if(mode==='lprpt'){state.programMode='lprpt';if(!['A','B'].includes(state.day))state.day='A';save();showSetup();return}
+ if(mode==='lprpt'){if(!bvomBb2OnLegacyProgramChoice())return;state.programMode='lprpt';if(!['A','B'].includes(state.day))state.day='A';save();showSetup();return}
  const four=mode==='fourday',title=four?'4-DAY SPLIT — INTERMEDIATE':'HLM RPT — INTERMEDIATE';
  const msg=four?'The 4-Day Split is designed for lifters who have already built a strength base. It uses BVOM’s H/M RPT progression across four shorter upper/lower sessions. LP/RPT is the recommended place to begin if you are new to structured strength training.':'HLM RPT is designed for lifters who have already built a strength base. If you are just starting structured strength training, LP/RPT is the recommended place to begin.';
  bvomChoiceModal(title,msg,'USE LP/RPT',four?'CONTINUE 4-DAY SPLIT':'CONTINUE HLM RPT',
-  ()=>{if(!bvomWorkoutActionAllowed())return;state.programMode='lprpt';state.day='A';save();showSetup()},
-  ()=>{if(!bvomWorkoutActionAllowed())return;const firstIntermediate=!state.hlm?.driverInitialized;state.programMode=four?'fourday':'hlm';state.day=four?'1':'H';ensureHLM();if(firstIntermediate){state.hlm.driver.Squat=Number(state.weights.Squat);state.hlm.driver['Bench Press']=Number(state.weights['Bench Press']);state.hlm.nextHeavy.Squat=null;state.hlm.nextHeavy['Bench Press']=null;state.hlm.driverInitialized=true;}save();showSetup()}
+  ()=>{if(!bvomWorkoutActionAllowed()||!bvomBb2OnLegacyProgramChoice())return;state.programMode='lprpt';state.day='A';save();showSetup()},
+  ()=>{if(!bvomWorkoutActionAllowed()||!bvomBb2OnLegacyProgramChoice())return;const firstIntermediate=!state.hlm?.driverInitialized;state.programMode=four?'fourday':'hlm';state.day=four?'1':'H';ensureHLM();if(firstIntermediate){state.hlm.driver.Squat=Number(state.weights.Squat);state.hlm.driver['Bench Press']=Number(state.weights['Bench Press']);state.hlm.nextHeavy.Squat=null;state.hlm.nextHeavy['Bench Press']=null;state.hlm.driverInitialized=true;}save();showSetup()}
  );
 }
 function showSetup(){
@@ -3396,7 +3396,7 @@ function bvomFtRenderAccessories(){const base=renderAccessories17();return base.
 function bvomFtRenderWarm(){bvomFtEnsure();let h=`<div class="toprow"><div><b>${hlmTxt('Custom Training Warm-up','カスタムトレーニング ウォームアップ')}</b><div class="small">${hlmTxt("Guidance only — generated from each compound's current working/top load.",'目安です。各コンパウンド種目の現在のワーク／トップ重量から作成されます。')}</div></div></div>`;const a=bvomFtCurrentCompounds();if(!a.length)h+=`<div class="card small">${hlmTxt('Add a compound and working weight to see warm-up guidance.','コンパウンド種目とワーク重量を追加すると、ウォームアップの目安が表示されます。')}</div>`;for(const c of a){if(!Number(c.weight)>0)continue;const p=bvomFtPlan(c),top=p.find(x=>x.top),target=Number(top?.load||c.weight),sets=warmups(target,c.lift),wd=(state.warmupDone||{})[state.day+'|'+c.lift]||{};h+=`<div class="exercise"><div class="exhead"><div class="exname">${bvomEsc(liftLabel(c.lift))}</div><div class="weight">${fmt(target)} ${unitLabel()}</div></div>`;if(!sets.length)h+=`<p class="small">${bvomT('warmup.none')}</p>`;sets.forEach(([x,r],i)=>h+=`<div class="warmrow"><button class="set ${wd[i]?'done':''}" onclick="completeWarmup('${c.lift}',${i},${sets.length},this)">✓</button><b>${fmt(x)}×${r}</b><span class="plates">${plateTextFor(c.lift,x)}</span></div>`);h+=`<div class="warmrow"><span></span><b style="color:var(--accent)">${fmt(target)} ${unitLabel()}</b><span class="plates">${hlmTxt('working/first RPT weight','ワーク重量／最初のRPT重量')} · ${plateTextFor(c.lift,target)}</span></div></div>`}document.querySelector('#warmup').innerHTML=h}
 
 const bvomFtBaseChooseProgramMode=chooseProgramMode;
-chooseProgramMode=function(mode){if(!bvomWorkoutActionAllowed())return;if(mode==='free'){state.programMode='free';bvomFtEnsure();state.day=String(state.freeTraining.selectedDay);save();showSetup();return}return bvomFtBaseChooseProgramMode(mode)};
+chooseProgramMode=function(mode){if(!bvomWorkoutActionAllowed())return;if(mode==='free'){if(!bvomBb2OnLegacyProgramChoice())return;state.programMode='free';bvomFtEnsure();state.day=String(state.freeTraining.selectedDay);save();showSetup();return}return bvomFtBaseChooseProgramMode(mode)};
 const bvomFtBaseShowSetup=showSetup;
 showSetup=function(){if(!isFreeTraining()){bvomFtBaseShowSetup();const row=document.querySelector("#setup button[onclick*=\"chooseProgramMode('fourday')\"]")?.parentElement;if(row&&!row.querySelector('[data-ft-program]')){const b=document.createElement('button');b.className='choice';b.dataset.ftProgram='1';b.textContent=hlmTxt('CUSTOM TRAINING','カスタムトレーニング');b.onclick=()=>chooseProgramMode('free');row.appendChild(b);const info=row.parentElement?.querySelector('.small');if(info)info.innerHTML+=hlmTxt('<br><br><b>Custom Training — Build Your Own</b><br>Build your own training days. BVOM records and remembers; you decide what changes next.','<br><br><b>カスタムトレーニング — 自分で組む</b><br>自分のトレーニング日を作成します。BVOMは記録して覚えますが、次の変更はあなたが決めます。')}return}ensureHLM();bvomFtEnsure();document.querySelector('#app').classList.add('hidden');const el=document.querySelector('#setup');el.classList.remove('hidden');el.innerHTML=`<div class="setupBee"><img src="./icon-192.png" alt="Power Bee"><div class="setupBeeTag">BEST VERSION OF MYSELF</div></div><div class="card"><b>${bvomT('language.title')}</b><div class="choiceRow" style="margin-top:10px"><button class="choice ${bvomLocale()==='en'?'on':''}" onclick="changeLanguage('en')">English</button><button class="choice ${bvomLocale()==='ja'?'on':''}" onclick="changeLanguage('ja')">日本語</button></div></div><div class="card"><b>${bvomT('setup.unitsTitle')}</b><div class="choiceRow" style="margin-top:10px"><button class="choice ${!isLb()?'on':''}" onclick="changeUnits('kg',true)">${bvomT('setup.kg')}</button><button class="choice ${isLb()?'on':''}" onclick="changeUnits('lb',true)">${bvomT('setup.lb')}</button></div></div><div class="card"><b>${hlmTxt('Choose your program','プログラムを選択')}</b><div class="choiceRow" style="margin-top:10px"><button class="choice" onclick="chooseProgramMode('lprpt')">LP / RPT</button><button class="choice" onclick="chooseProgramMode('hlm')">HLM RPT</button><button class="choice" onclick="chooseProgramMode('fourday')">4-Day Split</button><button class="choice on" onclick="chooseProgramMode('free')">${hlmTxt('CUSTOM TRAINING','カスタムトレーニング')}</button></div><div class="small" style="margin-top:14px;line-height:1.5"><b>${hlmTxt('Custom Training — Build Your Own','カスタムトレーニング — 自分で組む')}</b><br>${hlmTxt('Build your own training days. Choose your lifts, sets and reps. BVOM records and remembers what you do without automatic progression.','自分のトレーニング日を作成し、種目・セット・回数を選びます。BVOMは自動進行を行わず、実際に行った内容を記録して覚えます。')}</div></div><button class="primary wide" onclick="completeSetup()">${hlmTxt('START CUSTOM TRAINING','カスタムトレーニングを開始')}</button>`};
 const bvomFtBaseCompleteSetup=completeSetup;
@@ -3577,7 +3577,7 @@ function bvomBbRenderFoundationWorkout(){const el=document.querySelector('#worko
 function bvomBbRenderFoundationWarm(){const el=document.querySelector('#warmup');if(el)el.innerHTML=`<div class="card"><b>BODYBUILDING WARM-UP</b><div class="small" style="margin-top:8px">Not enabled in Development Build 1.</div></div>`}
 
 bvomBbEnsure();if(isBodybuilding())state.day=bvomBbDay();
-const bvomBbBaseChooseProgramMode=chooseProgramMode;chooseProgramMode=function(mode){if(!bvomWorkoutActionAllowed())return;if(mode==='bodybuilding'){if(bvomStateWorkoutActive(state)){alert('Finish or clear the active workout before switching programs.');return}state.programMode='bodybuilding';bvomBbEnsure();state.day=bvomBbDay();save();bvomBbPreviewing=false;bvomBbRenderFoundationSetup();return}if(isBodybuilding()&&mode!=='bodybuilding'&&bvomStateWorkoutActive(state)){alert('Finish or clear the active workout before switching programs.');return}return bvomBbBaseChooseProgramMode(mode)};
+const bvomBbBaseChooseProgramMode=chooseProgramMode;chooseProgramMode=function(mode){if(!bvomWorkoutActionAllowed())return;if(mode==='bodybuilding'){if(bvomStateWorkoutActive(state)){alert('Finish or clear the active workout before switching programs.');return}if(!bvomBb2OnLegacyProgramChoice())return;state.programMode='bodybuilding';bvomBbEnsure();state.day=bvomBbDay();save();bvomBbPreviewing=false;bvomBbRenderFoundationSetup();return}if(isBodybuilding()&&mode!=='bodybuilding'&&bvomStateWorkoutActive(state)){alert('Finish or clear the active workout before switching programs.');return}return bvomBbBaseChooseProgramMode(mode)};
 /* ===== BODYBUILDING DEV2: PRESCRIPTION + PROGRESSION ENGINE ===== */
 const BVOM_BB_ENGINE_VERSION=1;
 function bvomBbLoadingMethod(exOrId){const x=typeof exOrId==='string'?BVOM_BB_EXERCISES[exOrId]:exOrId;return x?.loading||null}
@@ -4902,7 +4902,16 @@ function bvomBb2PreviewEnabled(){
 function bvomBb2PreviewLabel(id){return String(id).replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase())}
 function bvomBb2InjectProgramChoice(){
  if(!bvomBb2PreviewEnabled())return;
- const row=document.querySelector('#setup [data-bb-program]')?.parentElement;
+ const setup=document.querySelector('#setup');
+ let row=document.querySelector('#setup [data-bb-program]')?.parentElement||
+  document.querySelector('#setup button[onclick*="chooseProgramMode(\'fourday\')"]')?.parentElement;
+ // BB1's active Setup is an exercise editor without a program-choice row.
+ // Make BB2 reachable there too, while keeping the existing editor unchanged.
+ if(!row&&!setup.querySelector('[data-bb2-preview]')){
+  row=document.createElement('div');row.className='card';
+  row.innerHTML='<b>OTHER TRAINING PROGRAMS</b><p class="small">Bodybuilding 2 is available as a local development preview.</p>';
+  setup.appendChild(row);
+ }
  if(!row)return;
  let button=row.querySelector('[data-bb2-preview]');
  if(!button){
@@ -4912,11 +4921,34 @@ function bvomBb2InjectProgramChoice(){
  }
  if(bvomBb2Selected())row.querySelectorAll?.('.choice').forEach(choice=>choice.classList.remove('on'));
  button.classList.toggle('on',bvomBb2Selected());
+ if(bvomBb2Selected()){
+  const start=setup.querySelector('button[onclick="completeSetup()"]');
+  if(start){start.textContent='CONTINUE BODYBUILDING 2';start.onclick=()=>showApp()}
+ }
 }
 const bvomBb2BaseInjectProgramChoice=bvomBbInjectProgramChoice;
 bvomBbInjectProgramChoice=function(...args){
  const result=bvomBb2BaseInjectProgramChoice(...args);bvomBb2InjectProgramChoice();return result;
 };
+const bvomBb2BaseBb1Setup=bvomBbRenderFoundationSetup;
+bvomBbRenderFoundationSetup=function(...args){
+ const result=bvomBb2BaseBb1Setup(...args);
+ bvomBb2InjectProgramChoice();return result;
+};
+const bvomBb2BaseShowSetup=showSetup;
+showSetup=function(...args){
+ // A selected BB2 overlay must not open the dormant BB1 exercise editor when
+ // the underlying legacy programMode happens to be Bodybuilding.
+ if(bvomBb2PreviewEnabled()&&bvomBb2Selected()&&isBodybuilding()){
+  bvomBbBaseShowSetup();bvomBbInjectProgramChoice();
+ }else bvomBb2BaseShowSetup(...args);
+ bvomBb2InjectProgramChoice();
+};
+function bvomBb2ShowProgramChooser(){
+ if(isBodybuilding()){
+  bvomBbBaseShowSetup();bvomBbInjectProgramChoice();bvomBb2InjectProgramChoice();
+ }else showSetup();
+}
 async function bvomBb2OpenPreview(){
  if(!bvomBb2PreviewEnabled()||bvomBb2PreviewLoading||bvomBb2PreviewOpen||
     !bvomWorkoutActionAllowed()||bvomStateWorkoutActive(state))return;
@@ -5019,7 +5051,7 @@ function bvomBb2ClosePreview(){
  const fromWorkout=bvomBb2PreviewFromWorkout;
  bvomBb2PreviewOpen=false;bvomBb2PreviewDraft=null;bvomBb2PreviewOriginalMode=null;
  bvomBb2PreviewFromWorkout=false;
- if(fromWorkout)showApp();else showSetup();
+ if(fromWorkout)showApp();else bvomBb2ShowProgramChooser();
 }
 // Development-only BB2 setup is part of BVOM's local backup, not the current
 // whole-row cloud payload. Remote unknown BB2 fields remain visible to the
@@ -5041,6 +5073,11 @@ let bvomBb2Day='upper_a';
 let bvomBb2Kind='NORMAL';
 function bvomBb2Active(s=state){return !!s?.bb2?.activeSessionId}
 function bvomBb2Selected(s=state){return !!(s?.bb2?.selectedProgram&&s.bb2.setup)}
+function bvomBb2OnLegacyProgramChoice(){
+ if(!bvomBb2PreviewEnabled()||!bvomBb2Selected())return true;
+ if(!bvomWorkoutActionAllowed()||bvomStateWorkoutActive(state))return false;
+ return bvomBb2Commit({...state.bb2,selectedProgram:false});
+}
 function bvomBb2Commit(next,{activity=false}={}){
  const before=state.bb2;state.bb2=next;
  if(!save({durable:true,localOnly:true,activity})){
@@ -5053,7 +5090,7 @@ function bvomBb2LeaveProgram(){
  if(!bvomBb2PreviewEnabled()||!bvomBb2Selected()||
     !bvomWorkoutActionAllowed()||bvomStateWorkoutActive(state))return false;
  if(!bvomBb2Commit({...state.bb2,selectedProgram:false}))return false;
- showSetup();return true;
+ bvomBb2ShowProgramChooser();return true;
 }
 function bvomBb2IdleWorkout(){
  const el=document.querySelector('#workout');if(!el)return;
