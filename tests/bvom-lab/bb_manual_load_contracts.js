@@ -13,8 +13,8 @@ module.exports=({test,ok,H,build})=>{
   return h;
  };
  const disk=h=>JSON.parse(h.ls.getItem('bvom_data'));
- const open=h=>{
-  if(typeof h.ctx.bvomBbEditWorkingWeight!=='function'||!h.ctx.bvomBbEditWorkingWeight(id))return false;
+ const openFor=(h,exercise=id)=>{
+  if(typeof h.ctx.bvomBbEditWorkingWeight!=='function'||!h.ctx.bvomBbEditWorkingWeight(exercise))return false;
   // The Node DOM stub does not hydrate input.value from assigned innerHTML.
   // Mirror the browser's initial field values for the real modal callbacks.
   const o=h.lastOverlay();
@@ -24,6 +24,7 @@ module.exports=({test,ok,H,build})=>{
   }
   return true;
  };
+ const open=h=>openFor(h,id);
  const saveEdit=(h,weight)=>{
   const o=h.lastOverlay();
   o.querySelector('[data-bb-weight]').value=String(weight);
@@ -150,5 +151,63 @@ module.exports=({test,ok,H,build})=>{
    history.session['BB:'+id][0].load===100&&
    history.bodybuilding.decisions.some(x=>x.id===id&&x.decision.action==='increase'),
    JSON.stringify({nextLoad:p.load,increment:p.increment}));
+ });
+ test('BB62-MONKEY029-TRICEPS-STEP','DEFECT','Monkey: a 1 kg increment from 32.5 kg triceps becomes exactly 33.5 kg after a completed A workout',()=>{
+  const tri='lying_barbell_triceps_extension',h=H.boot(build);H.bbStart(h);
+  const s=h.S();s.bodybuilding.selections.A6=tri;
+  s.bodybuilding.progression[tri]={load:32.5,topLoad:32.5,increment:2.5,
+   calibrated:true,previousSuccessfulLoad:30};h.ev('save()');h.ctx.renderAll();
+  if(!openFor(h,tri))return ok(false,'Cannot open triceps editor');
+  const o=h.lastOverlay();o.querySelector('[data-bb-increment]').value='1';
+  o.querySelector('[data-save]').onclick();
+  H.bbSession(h,(exercise,i)=>exercise===tri?{reps:15}:{});
+  const p=h.S().bodybuilding.progression[tri],hist=h.S().history.at(-1),
+   tricepsSets=hist.session['BB:'+tri];
+  return ok(p.load===33.5&&p.increment===1&&p.previousSuccessfulLoad===32.5&&
+   Object.values(tricepsSets).every(q=>q.load===32.5&&q.reps===15)&&h.S().bodybuilding.completedSessions===1,
+   JSON.stringify({nextLoad:p.load,increment:p.increment,previous:p.previousSuccessfulLoad,
+    sets:tricepsSets}));
+ });
+ test('BB62-MONKEY029-24-WORKOUTS','DEFECT','Monkey: 24 A/B workouts, three mid-block triceps step edits, successes/holds, reloads, all History retained',()=>{
+  const tri='lying_barbell_triceps_extension';let h=H.boot(build);H.bbStart(h);
+  const s=h.S();s.bodybuilding.selections.A6=tri;
+  s.bodybuilding.progression[tri]={load:32.5,topLoad:32.5,increment:2.5,
+   calibrated:true,previousSuccessfulLoad:30};s.weights['Bench Press']=95;
+  h.ev('save()');h.ctx.renderAll();
+  let expected=32.5,step=2.5,exposures=0,edits=0,good=true;
+  const failures=[];
+  for(let workout=0;workout<24;workout++){
+   const a=h.ctx.bvomBbDay()==='A',before=h.S().bodybuilding.progression[tri].load;
+   if(a){
+    if([0,4,8].includes(exposures)){
+     const wanted=exposures===4?2.5:1;
+     if(!openFor(h,tri)){good=false;failures.push('editor unavailable at '+workout);break}
+     const o=h.lastOverlay();o.querySelector('[data-bb-increment]').value=String(wanted);
+     o.querySelector('[data-save]').onclick();step=wanted;edits++;
+     if(h.S().bodybuilding.progression[tri].load!==before){good=false;failures.push('edit changed weight '+workout)}
+    }
+    const earned=exposures%3!==1;
+    H.bbSession(h,(eid)=>eid===tri?{reps:earned?15:13}:{});
+    if(earned)expected=Math.round((expected+step)*100)/100;
+    exposures++;
+   }else H.bbSession(h);
+   const p=h.S().bodybuilding.progression[tri],latest=h.S().history.at(-1),saved=disk(h);
+   if(p.load!==expected||p.increment!==step||(!a&&before!==p.load)){
+    good=false;failures.push('unexpected load/step at '+workout+': '+p.load+'/'+step+'/'+expected)
+   }
+   if(saved.bodybuilding.completedSessions!==workout+1||saved.history.length!==workout+1){
+    good=false;failures.push('counter/history at '+workout)}
+   if(a){const sets=latest.session['BB:'+tri];
+    if(!sets||Object.values(sets).some(x=>x.load!==before)){good=false;failures.push('triceps log at '+workout)}
+   }
+   if(workout%4===3&&workout<23){h=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage});
+    if(h.S().bodybuilding.progression[tri].load!==expected){good=false;failures.push('reload '+workout)}}
+   if(!good)break;
+  }
+  const end=h.S();
+  return ok(good&&exposures===12&&edits===3&&end.bodybuilding.completedSessions===24&&
+   end.history.length===24&&end.weights['Bench Press']===95,
+   JSON.stringify({good,exposures,edits,expected,actual:end.bodybuilding.progression[tri].load,
+    completed:end.bodybuilding.completedSessions,history:end.history.length,failures}));
  });
 };

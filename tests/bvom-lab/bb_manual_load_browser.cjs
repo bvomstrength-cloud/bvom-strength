@@ -79,13 +79,33 @@ const server=http.createServer((req,res)=>{
    await page.reload();await page.waitForSelector('#app:not(.hidden)');
    d=await get();assert.equal(d.bodybuilding.progression.high_bar_squat.load,102.5,'reload retains edit');
    assert.equal(d.bodybuilding.progression.high_bar_squat.increment,1,'reload retains increment');
+   await page.evaluate(()=>{
+    const tri='lying_barbell_triceps_extension';
+    state.bodybuilding.selections.A6=tri;
+    state.bodybuilding.progression[tri]={load:32.5,topLoad:32.5,increment:2.5,
+     calibrated:true,previousSuccessfulLoad:30};
+    save({durable:true});renderWorkout();
+   });
+   const triButton=page.locator('#workout #work-bb-A6 [data-bb-edit-weight]');
+   assert.equal(await triButton.isEnabled(),true,'triceps editor available independently of squat');
+   await triButton.click();
+   assert.equal(await modal.locator('[data-bb-increment]').inputValue(),'2.5');
+   await modal.locator('[data-bb-increment]').fill('1');
+   await modal.locator('[data-save]').click();
+   const tri=await page.evaluate(()=>({
+    p:state.bodybuilding.progression.lying_barbell_triceps_extension,
+    decision:bvomBbDecide('lying_barbell_triceps_extension',[{reps:15},{reps:15}])
+   }));
+   assert.equal(tri.p.load,32.5,'editing step does not move triceps load');
+   assert.equal(tri.p.previousSuccessfulLoad,30,'editing step keeps prior successful load');
+   assert.equal(tri.decision.nextLoad,33.5,'earned 1 kg from 32.5 kg must be 33.5 kg, not 34 kg');
    await page.evaluate(()=>activateTab('warmup'));
    await page.locator('#warmup #warm-bb-A2 button.set').first().click();
    await page.evaluate(()=>activateTab('workout'));
    assert.equal(await page.locator('#workout #work-bb-A2 [data-bb-edit-weight]').isDisabled(),true,'warm-up tick locks same-exercise edit');
    d=await get();assert.equal(d.bodybuilding.progression.high_bar_squat.load,102.5);
    assert.deepEqual(errs,[],'no app JS exceptions');
-   console.log('PASS native Chromium Bodybuilding exercise settings: '+lang+' 375px, increment 2.5→1, weight 100→102.5, backoffs, warmups, reload, LP isolation, tick protection');
+   console.log('PASS native Chromium Bodybuilding exercise settings: '+lang+' 375px, triceps 32.5+1→33.5, increment 2.5→1, weight 100→102.5, warmups, reload, LP isolation, tick protection');
    await context.close();
   }
  }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
