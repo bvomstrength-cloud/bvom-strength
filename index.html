@@ -2926,8 +2926,10 @@ async function bvomCloudRestore(){
   if(!result.data?.length){bvomCloud.busy=false;bvomCloud.message=hlmTxt('No cloud backup exists for this account yet.','このアカウントにはまだクラウドバックアップがありません。');bvomCloud.error=false;renderSettings();return}
   const d=result.data[0].data;
   if(!bvomCloudValidData(d))throw new Error(hlmTxt('The cloud copy does not look like valid BVOM data. Nothing was restored.','クラウドのデータは有効なBVOMデータではないようです。復元は行われませんでした。'));
+  const restored=await bvomBb2PrepareCloudRestore(d,u.id);
+  if(!bvomRestoreCommitAllowed(token,true)){bvomCloud.busy=false;renderSettings();return}
   bvomCloud.busy=false;bvomCloud.message='';bvomCloud.error=false;renderSettings();
-  bvomChoiceModal(hlmTxt('RESTORE FROM BVOM CLOUD?','BVOM CLOUDから復元しますか？'),bvomBb2CloudRestoreMessage(),hlmTxt('CANCEL','キャンセル'),hlmTxt('RESTORE','復元'),()=>{},()=>{if(!bvomRestoreCommitAllowed(token,true))return false;try{localStorage.setItem('bvom_pre_cloud_restore',JSON.stringify(state));localStorage.setItem('bvom_cloud_restore_baseline',bvomCloudComparableFingerprint(d));if(!bvomRestoreCommitAllowed(token,true)){localStorage.removeItem('bvom_cloud_restore_baseline');return false}localStorage.setItem(BVOM_DATA_KEY,JSON.stringify(d));location.reload()}catch(e){localStorage.removeItem('bvom_cloud_restore_baseline');bvomBeeModal(hlmTxt('RESTORE FAILED','復元できませんでした'),hlmTxt('BVOM could not replace the data on this device. Your current local data has not been changed.','この端末のデータを置き換えられませんでした。現在の端末データは変更されていません。'))}});
+  bvomChoiceModal(hlmTxt('RESTORE FROM BVOM CLOUD?','BVOM CLOUDから復元しますか？'),bvomBb2CloudRestoreMessage(),hlmTxt('CANCEL','キャンセル'),hlmTxt('RESTORE','復元'),()=>{},()=>{if(!bvomRestoreCommitAllowed(token,true))return false;try{localStorage.setItem('bvom_pre_cloud_restore',JSON.stringify(state));localStorage.setItem('bvom_cloud_restore_baseline',bvomCloudComparableFingerprint(d));if(!bvomRestoreCommitAllowed(token,true)){localStorage.removeItem('bvom_cloud_restore_baseline');return false}localStorage.setItem(BVOM_DATA_KEY,JSON.stringify(restored));location.reload()}catch(e){localStorage.removeItem('bvom_cloud_restore_baseline');bvomBeeModal(hlmTxt('RESTORE FAILED','復元できませんでした'),hlmTxt('BVOM could not replace the data on this device. Your current local data has not been changed.','この端末のデータを置き換えられませんでした。現在の端末データは変更されていません。'))}});
  }catch(e){bvomCloud.busy=false;bvomCloud.message=e?.message||hlmTxt('Cloud backup could not be loaded.','クラウドバックアップを読み込めませんでした。');bvomCloud.error=true;renderSettings()}
 }
 async function bvomCloudSignOut(){const signedOutUser=bvomCloud.user?.id||bvomLocalOwnerId();bvomEntitlementCacheClear(signedOutUser);const c=bvomCloudClient();let error=null;if(c){bvomCloud.busy=true;renderSettings();try{const result=await c.auth.signOut({scope:'local'});error=result?.error||null}catch(e){error=e}}bvomCloud.busy=false;bvomCloud.user=null;bvomCloud.offlineLocalAccess=false;window.__bvomAuthUserId=null;bvomCloud.codeSent=false;bvomCloud.syncReady=false;bvomCloud.conflict=false;bvomCloud.remoteFingerprint=null;bvomCloud.message=error?(error.message||hlmTxt('Signed out on this device. Cloud sign-out could not be confirmed.','この端末ではサインアウトしましたが、クラウド側のサインアウトを確認できませんでした。')):hlmTxt('Signed out on this device.','この端末でサインアウトしました。');bvomCloud.error=!!error;bvomShowAuthGate()}
@@ -5114,13 +5116,61 @@ function bvomBb2ClosePreview(){
 // existing conflict fingerprint; do not normalise them away.
 const bvomBb2BaseCloudPayload=bvomCloudPayload;
 bvomCloudPayload=function(){const d=bvomBb2BaseCloudPayload();delete d.bb2;return d};
+// Before cloud-sidecar activation, legacy cloud restores may replace legacy
+// training fields, but must retain the *verified same-device* BB2 ledger.
+// An unknown remote BB2 subtree never gets silently imported or merged.
+async function bvomBb2PrepareCloudRestore(remote,ownerId){
+ if(Object.prototype.hasOwnProperty.call(remote,'bb2'))throw new Error(hlmTxt(
+  'Cloud restore stopped: this cloud copy contains incompatible BB2 data. Your device has not been changed.',
+  'クラウド復元を停止しました。クラウドのBB2データに互換性がありません。端末のデータは変更されていません。'));
+ const local=state.bb2;
+ if(local===undefined)return remote;
+ if(!local||typeof local!=='object'||Array.isArray(local)||local.activeSessionId||
+    !ownerId||ownerId!==window.__bvomAuthUserId||ownerId!==bvomLocalOwnerId())
+  throw new Error('BB2 cloud restore refused: unsafe local owner or active workout');
+ const m=bvomBb2PreviewModule||await import('./bb2/browser-core.mjs');
+ m.validateBB2Setup(local.setup);
+ const archives=local.sealedBlocks===undefined?[]:local.sealedBlocks;
+ const events=local.events===undefined?[]:local.events;
+ if(!Array.isArray(archives)||!Array.isArray(events)||
+    (!local.opening&&(events.length||archives.length)))
+  throw new Error('BB2 cloud restore refused: invalid local journal');
+ const seen=new Set(),blocks=[...archives,...(local.opening?[{opening:local.opening,events}]:[])];
+ const stable=x=>Array.isArray(x)?'['+x.map(stable).join(',')+']':
+  x&&typeof x==='object'?'{'+Object.keys(x).sort().map(k=>JSON.stringify(k)+':'+stable(x[k])).join(',')+'}':JSON.stringify(x);
+ for(const [i,block] of blocks.entries()){
+  if(!block?.opening||block.opening.ownerId!==ownerId||
+     !Array.isArray(block.events)||seen.has(block.opening.blockId))
+   throw new Error('BB2 cloud restore refused: invalid local block owner or identity');
+  seen.add(block.opening.blockId);
+  const projection=m.validateBB2RestoredBlock(block.opening,block.events);
+  if(i<archives.length&&projection.sealed!==true)
+   throw new Error('BB2 cloud restore refused: unsealed archive');
+  const open=new Set();
+  for(const event of block.events){
+   if(event.type==='WORKOUT_STARTED')open.add(event.sessionId);
+   if(['WORKOUT_FINISHED','WORKOUT_INCOMPLETE','WORKOUT_DISCARDED'].includes(event.type))
+    open.delete(event.sessionId);
+  }
+  if(open.size)throw new Error('BB2 cloud restore refused: unfinished local workout');
+  if(i===0&&block.opening.previousSealId)
+   throw new Error('BB2 cloud restore refused: missing predecessor');
+  if(i>0){
+   const prior=blocks[i-1],expected=m.BB2_BROWSER_MODULES.ledger.createNextBB2Opening(
+    prior.opening,prior.events,block.opening.blockId);
+   if(stable(expected)!==stable(block.opening))
+    throw new Error('BB2 cloud restore refused: invalid block ancestry');
+  }
+ }
+ return {...remote,bb2:JSON.parse(JSON.stringify(local))};
+}
 function bvomBb2CloudRestoreMessage(){
  const ordinary=hlmTxt('This will replace BVOM data on this device with your saved cloud copy. A one-step pre-cloud copy will be kept on this device.',
   'この端末のBVOMデータを保存済みのクラウドデータで置き換えます。復元前のデータは、この端末に1段階の復元用コピーとして保存されます。');
  const b=state.bb2;
  if(!b||!(b.setup||b.opening||b.events?.length||b.sealedBlocks?.length))return ordinary;
- return hlmTxt('WARNING: BB2 is only saved on this device and in exported BVOM backups. Cloud restore will remove its local setup and workout history. Export a BVOM backup before continuing. ',
-  '注意：BB2はこの端末と書き出したBVOMバックアップにのみ保存されています。クラウド復元すると、この端末のBB2設定とトレーニング履歴は消えます。続行する前にBVOMバックアップを書き出してください。 ')+ordinary;
+ return hlmTxt('Your local BB2 setup and workout history will be kept unchanged. BB2 is not yet backed up to BVOM Cloud; export a current BVOM backup for another device. ',
+  '端末のBB2設定とトレーニング履歴は変更せず保持されます。BB2はまだBVOMクラウドに保存されません。別の端末に備えてBVOMバックアップを書き出してください。 ')+ordinary;
 }
 
 // BB2 Stage (ii): local-only Start, prescribed sets, recovery, Finish, quota,

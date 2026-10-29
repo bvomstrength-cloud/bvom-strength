@@ -87,11 +87,11 @@ function fixture({ls}={}){
  assert.equal(stored.bb2.setup.optionalUpperBCurls,true);
  assert.equal(!!stored.bb2.selectedProgram,false,'saving setup alone does not switch programs');
  assert.equal(stored.programMode,'lprpt','BB2 setup does not switch the active program');
- assert.match(h.ctx.bvomBb2CloudRestoreMessage(),/WARNING: BB2 is only saved on this device/,
-  'developer preview warns before a cloud restore would remove local-only BB2');
+ assert.match(h.ctx.bvomBb2CloudRestoreMessage(),/BB2 setup and workout history will be kept unchanged/,
+  'cloud restore explains that validated local-only BB2 history is preserved');
  h.ctx.location.origin='https://app.bvomstrength.com';
- assert.match(h.ctx.bvomBb2CloudRestoreMessage(),/WARNING: BB2/,
-  'imported local BB2 remains protected by the warning even outside the preview host');
+ assert.match(h.ctx.bvomBb2CloudRestoreMessage(),/BB2 setup and workout history will be kept unchanged/,
+  'the BB2 preservation message is shown even outside the preview host');
  h.ctx.location.origin='http://localhost:8000';
  assert.equal(stored.history.length,JSON.parse(before).history.length,'no synthetic workout History');
  assert.match(html(),/SAVED ON THIS DEVICE/);
@@ -160,6 +160,64 @@ function fixture({ls}={}){
  assert.equal(JSON.parse(h.ls.getItem('bvom_pre_restore')).bb2.opening.blockId,
   'bb2-backup-guard','the existing pre-restore recovery snapshot contains old BB2 data');
  console.log('PASS: BB2 local-only backup restore warning, cancellation and pre-restore recovery');
+}
+
+{
+ // A legacy cloud restore may replace normal training fields, but never drop
+ // the verified BB2 block that is saved on this device. No real cloud access.
+ const {h}=fixture();
+ const owner='11111111-1111-4111-8111-111111111111';
+ const bb2={setup:catalogue.createBB2Setup(),
+  opening:catalogue.createBB2Opening({ownerId:owner,blockId:'cloud-preserve'}),
+  events:[],sealedBlocks:[],selectedProgram:true,warmupTouched:{local:true}};
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ctx.__bvomBb2LocalForTest=bb2;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'state.bb2=__bvomBb2LocalForTest;window.__bvomAuthUserId="'+owner+'";'+
+  'bvomSetLocalOwnerId("'+owner+'");save({durable:true,localOnly:true})');
+ const remote=JSON.parse(h.ls.getItem('bvom_data'));delete remote.bb2;
+ remote.weights.Squat=77;
+ const prepared=await h.ctx.bvomBb2PrepareCloudRestore(remote,owner);
+ assert.equal(prepared.weights.Squat,77,'normal BVOM cloud fields are still restored');
+ assert.deepEqual(JSON.parse(JSON.stringify(prepared.bb2)),bb2,
+  'every local BB2 field survives unchanged, including local warm-up state');
+ assert.equal(remote.bb2,undefined,'the remote cloud object is not mutated');
+ await assert.rejects(h.ctx.bvomBb2PrepareCloudRestore({...remote,bb2:{}},owner),
+  /incompatible BB2/,'an unknown cloud BB2 subtree is never silently merged');
+ await assert.rejects(h.ctx.bvomBb2PrepareCloudRestore(remote,
+  '22222222-2222-4222-8222-222222222222'),/unsafe local owner/);
+ h.ev('state.bb2={...state.bb2,events:[{type:"FORGED"}]}');
+ await assert.rejects(h.ctx.bvomBb2PrepareCloudRestore(remote,owner),/BB2/,
+  'corrupted local training events cannot be silently carried forward');
+ const unclosed={type:'WORKOUT_STARTED',eventId:'cloud-unclosed',commitOrdinal:1,
+  blockId:'cloud-preserve',sessionId:'unfinished',templateId:'upper_a',kind:'NORMAL',
+  slots:[{roleSlotId:'flat_press',exerciseId:'bench_press',sets:1,floor:6,ceiling:10,
+   equipment:'loaded',plannedG:60000,plannedOrigin:{value:'60',unit:'kg'},
+   incrementG:2500,incrementOrigin:{value:'2.5',unit:'kg'}}]};
+ h.ctx.__bb2UnclosedForTest=[unclosed];
+ h.ev('state.bb2={...state.bb2,events:__bb2UnclosedForTest}');
+ await assert.rejects(h.ctx.bvomBb2PrepareCloudRestore(remote,owner),/unfinished local workout/,
+  'an unclosed journal is refused even when activeSessionId was lost');
+ h.ev('state.bb2=__bvomBb2LocalForTest');
+ // Exercise the actual Settings > Restore from Cloud confirmation callback.
+ let restore;
+ h.ctx.bvomCloudClient=()=>({from:()=>({select(){return this},eq(){return this},
+  order(){return this},async limit(){return {data:[{id:'cloud-row',data:remote}],error:null}}})});
+ h.ev('bvomCloud.user={id:"'+owner+'"};bvomCloud.offlineLocalAccess=false');
+ h.ctx.bvomChoiceModal=(_title,_body,_cancel,_confirm,_left,right)=>{restore=right};
+ h.ev('bvomRestoreCommitAllowed=function(){return true}');
+ await h.ctx.bvomCloudRestore();
+ assert.equal(typeof restore,'function','valid cloud restore reaches user confirmation');
+ restore();
+ const persisted=JSON.parse(h.ls.getItem('bvom_data'));
+ assert.equal(persisted.weights.Squat,77);
+ assert.deepEqual(persisted.bb2,bb2,'real restore persists the original BB2 journal');
+ assert.equal(h.ls.getItem('bvom_cloud_restore_baseline'),
+  h.ctx.bvomCloudComparableFingerprint(remote),
+  'the legacy cloud baseline excludes the locally preserved BB2 ledger');
+ assert.deepEqual(JSON.parse(h.ls.getItem('bvom_pre_cloud_restore')).bb2,bb2,
+  'the one-step recovery backup still contains BB2');
+ console.log('PASS: verified local BB2 survives cloud restore; unknown remote, owner and invalid journals refuse');
 }
 
 {
@@ -1851,4 +1909,4 @@ H.withClock(c=>{
  console.log('PASS: BB2 chooser cancel, HLM, LP, Custom and BB1 switches preserve history and cloud isolation');
 }
 
-console.log('BB2 BVOM integrated setup preview: 38/38 PASS');
+console.log('BB2 BVOM integrated setup preview: 39/39 PASS');

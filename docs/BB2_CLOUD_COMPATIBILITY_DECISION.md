@@ -128,6 +128,20 @@ cold audit returned **GO for draft publication, HOLD for live activation**.
 This remains a candidate transport, not an approved cloud integration or real
 concurrency/RLS proof; isolated real-database tests are still required.
 
+### Local-only cloud restore preservation (draft integration)
+
+The existing BVOM **Restore from Cloud** action now builds a candidate from the
+legacy cloud document plus the same device's independently replay-validated BB2
+subtree. It checks the authenticated/local owner, each archived/current block,
+sealed ancestry and unfinished sessions before offering confirmation; the
+locally saved BB2 data remains unchanged in the restored document and its
+pre-cloud recovery backup. A remote `bb2` field, mismatched owner, invalid
+journal or failed module validation stops the restore without changing the
+local copy. The ordinary legacy cloud fingerprint remains based on the cloud
+document without BB2. The existing one-step restore and document-lock checks
+still apply. The BVOM integrated contract exercises the real restore callback
+with an in-memory cloud response. No BB2 upload or live cloud sync is enabled.
+
 Run `node tests/bvom-lab/bb2_cloud_sidecar_contracts.cjs` to exercise both
 actual legacy BVOM cloud writers against separate fake tables, two first
 writers, stale competing revisions, a lost-reply retry, owner checks and
