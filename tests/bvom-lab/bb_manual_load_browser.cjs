@@ -9,6 +9,7 @@ function fixture(lang){
  const h=H.boot(build);H.bbStart(h);
  const s=h.S(),b=s.bodybuilding;b.selections.A2='high_bar_squat';
  b.progression.high_bar_squat={load:100,topLoad:100,increment:2.5,calibrated:true,previousSuccessfulLoad:97.5};
+ b.performanceRefs.high_bar_squat={'high_bar_squat|100':{load:100,reps:10,updatedAt:'2026-01-01'}};
  s.weights.Squat=145;s.language=lang;s.accessoryList=[];s.gppList=[];
  h.ev('save()');return JSON.parse(JSON.stringify(s));
 }
@@ -50,6 +51,11 @@ const server=http.createServer((req,res)=>{
    assert.match(await modal.textContent(),lang==='en'?/next working weight/i:/次回のワーキング重量/);
    assert.match(await modal.textContent(),lang==='en'?/progression increment/i:/進行時の増量幅/);
    assert.equal(await modal.locator('[data-bb-increment]').inputValue(),'2.5','existing step appears in Edit Weight');
+   assert.match(await modal.textContent(),lang==='en'?/back-off sets/i:/バックオフセット/);
+   await modal.locator('[data-bb-increment]').fill('25');
+   await modal.locator('[data-save]').click();
+   assert.equal(await modal.count(),1,'out-of-range increment remains in modal');
+   assert.match(await modal.locator('[data-bb-validation]').textContent(),lang==='en'?/0.01 to 10/i:/0.01～10/);
    await modal.locator('[data-bb-increment]').fill('1');
    await modal.locator('[data-save]').click();
    assert.equal(await modal.count(),0,'increment-only change closes the existing modal');
@@ -57,6 +63,10 @@ const server=http.createServer((req,res)=>{
    assert.equal(d.bodybuilding.progression.high_bar_squat.load,100,'increment-only retains load');
    assert.equal(d.bodybuilding.progression.high_bar_squat.previousSuccessfulLoad,97.5,'increment-only retains progression evidence');
    assert.equal(d.bodybuilding.progression.high_bar_squat.increment,1,'increment-only persists');
+   const stepOnly=await page.evaluate(()=>({rx:bvomBbPrescription('high_bar_squat'),warm:bvomBbWarmStageBPlan('A2','high_bar_squat'),drop:bvomBbPerformanceDrop('high_bar_squat',100,6)}));
+   assert.deepEqual(stepOnly.rx.sets.slice(1),before.rx.sets.slice(1),'increment-only must preserve back-off prescriptions');
+   assert.deepEqual(stepOnly.warm.sets,before.warm.sets,'increment-only must preserve warm-up suggestions');
+   assert.equal(stepOnly.drop.triggered,true,'reference remains reachable after increment edit');
    await btn.click();
    assert.equal(await modal.locator('[data-bb-increment]').inputValue(),'1','reopened Edit Weight shows new increment');
    await modal.locator('[data-bb-weight]').fill('102.5');

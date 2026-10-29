@@ -119,7 +119,7 @@ module.exports=({test,ok,H,build})=>{
  test('BB62-INCREMENT-VALIDATION','DEFECT','Invalid, empty and zero increments cannot change persisted weight or progression',()=>{
   const h=fixture();if(!open(h))return ok(false,'No editor');
   const dlg=h.lastOverlay(),entry=dlg.querySelector('[data-bb-increment]'),before=h.ls.getItem('bvom_data');
-  const trials=['','0','-1','banana'];let all=true;
+  const trials=['','0','-1','banana','0.001','0.123','25','1000000'];let all=true;
   for(const raw of trials){entry.value=raw;dlg.querySelector('[data-save]').onclick();
    all=all&&h.ls.getItem('bvom_data')===before&&h.S().bodybuilding.progression[id].increment===2.5}
   return ok(all,JSON.stringify({trials,increment:h.S().bodybuilding.progression[id].increment}));
@@ -140,6 +140,72 @@ module.exports=({test,ok,H,build})=>{
   try{dlg.querySelector('[data-save]').onclick()}finally{h.ls.setItem=write}
   return ok(h.ls.getItem('bvom_data')===raw&&JSON.stringify(h.S())===mem,
    'Rejected increment save rolls back');
+ });
+ test('BB62-AUDIT-PERFORMANCE-REF-REACHABLE','DEFECT','Increment-only change retains warnings from old step-keyed performance references after reload',()=>{
+  const h=fixture(),s=h.S(),p=s.bodybuilding.progression[id];p.load=32.5;p.topLoad=32.5;
+  s.bodybuilding.performanceRefs[id]={'high_bar_squat|32.5':{load:32.5,reps:10,updatedAt:'2026-01-01'}};
+  h.ev('save()');const old=h.ctx.bvomBbPerformanceDrop(id,32.5,6);
+  if(!open(h))return ok(false,'No editor');
+  const o=h.lastOverlay();o.querySelector('[data-bb-increment]').value='1';o.querySelector('[data-save]').onclick();
+  const warning=h.ctx.bvomBbPerformanceDrop(id,32.5,6),reload=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage}),again=reload.ctx.bvomBbPerformanceDrop(id,32.5,6);
+  reload.ctx.bvomBbRecordPerformanceRef(id,32.5,9);
+  const refs=reload.S().bodybuilding.performanceRefs[id];
+  return ok(old?.triggered===true&&warning?.triggered===true&&again?.triggered===true&&
+   refs['high_bar_squat|32.5']?.reps===10&&Object.keys(refs).length===1&&
+   reload.S().bodybuilding.progression[id].load===32.5&&
+   JSON.stringify(reload.S().history)===JSON.stringify(s.history),JSON.stringify({old,warning,again,refs}));
+ });
+ test('BB62-AUDIT-PERFORMANCE-REF-DISTINCT','DEFECT','Distinct 33.5 and 34 kg loads never share references, including legacy rounded keys',()=>{
+  const h=fixture(),s=h.S(),refs=s.bodybuilding.performanceRefs[id]={
+   'high_bar_squat|34':{load:33.5,reps:12,updatedAt:'2026-01-01'}};
+  const at335=h.ctx.bvomBbPerformanceDrop(id,33.5,7),at34=h.ctx.bvomBbPerformanceDrop(id,34,7);
+  h.ctx.bvomBbRecordPerformanceRef(id,34,8);
+  const withBoth=Object.values(refs).some(x=>x.load===33.5&&x.reps===12)&&
+   Object.values(refs).some(x=>x.load===34&&x.reps===8);
+  h.ctx.bvomBbRecordPerformanceRef(id,33.5,9);
+  return ok(at335?.triggered===true&&at34===null&&withBoth&&
+   refs['high_bar_squat|33.5']?.reps===12&&refs['high_bar_squat|34']?.reps===8,
+   JSON.stringify({at335,at34,refs}));
+ });
+ test('BB62-AUDIT-PREPARATION-NEUTRAL','DEFECT','Increment-only edit preserves existing back-offs and machine warm-ups; weight edit recalculates them',()=>{
+  const h=fixture(),s=h.S(),p=s.bodybuilding.progression[id];p.load=32.5;p.topLoad=32.5;
+  s.bodybuilding.selections.A1='machine_chest_press';
+  s.bodybuilding.progression.machine_chest_press={load:32.5,topLoad:32.5,increment:2.5,calibrated:true};
+  h.ev('save()');h.ctx.renderAll();
+  const backBefore=h.ctx.bvomBbPrescription(id).sets.slice(1).map(x=>x.load),
+   warmBefore=h.ctx.bvomBbWarmStageBPlan('A1','machine_chest_press').sets;
+  const editStep=(exercise)=>{if(!openFor(h,exercise))return false;const o=h.lastOverlay();o.querySelector('[data-bb-increment]').value='1';o.querySelector('[data-save]').onclick();return true};
+  if(!editStep(id)||!editStep('machine_chest_press'))return ok(false,'Cannot edit steps');
+  const afterBack=h.ctx.bvomBbPrescription(id).sets.slice(1).map(x=>x.load),
+   afterWarm=h.ctx.bvomBbWarmStageBPlan('A1','machine_chest_press').sets;
+  const reloaded=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage});
+  const persistedBack=reloaded.ctx.bvomBbPrescription(id).sets.slice(1).map(x=>x.load),
+   persistedWarm=reloaded.ctx.bvomBbWarmStageBPlan('A1','machine_chest_press').sets;
+  if(!open(h))return ok(false,'Cannot reopen');
+  saveEdit(h,35);const changed=h.ctx.bvomBbPrescription(id).sets.slice(1).map(x=>x.load);
+  return ok(backBefore[0]===30&&JSON.stringify(backBefore)===JSON.stringify(afterBack)&&
+   JSON.stringify(afterBack)===JSON.stringify(persistedBack)&&
+   JSON.stringify(warmBefore)===JSON.stringify(afterWarm)&&
+   JSON.stringify(afterWarm)===JSON.stringify(persistedWarm)&&
+   JSON.stringify(changed)!==JSON.stringify(afterBack),
+   JSON.stringify({backBefore,afterBack,warmBefore,afterWarm,changed}));
+ });
+ test('BB62-AUDIT-EXACT-REDUCTIONS','DEFECT','Non-grid reductions subtract exactly one increment, or use previous successful load where present',()=>{
+  const h=fixture(),p=h.S().bodybuilding.progression[id],cases=[];
+  for(const load of [32.5,33.5]){p.load=load;p.topLoad=load;p.increment=1;delete p.previousSuccessfulLoad;
+   cases.push({load,reduced:h.ctx.bvomBbReductionLoad(id),cal:h.ctx.bvomBbCalibrationDecision(id,'too_hard',{load,reps:5}).nextLoad});
+   p.previousSuccessfulLoad=load-1.5;cases.push({load,previous:h.ctx.bvomBbReductionLoad(id)})}
+  const clean=cases.every(x=>'reduced' in x?x.reduced===x.load-1&&x.cal===x.load-1:x.previous===x.load-1.5);
+  return ok(clean,JSON.stringify(cases));
+ });
+ test('BB62-AUDIT-INCREMENT-ROUNDTRIP','DEFECT','A custom 1.25 increment and preparation step survive an unchanged kg/lb/kg cycle',()=>{
+  const h=fixture();if(!open(h))return ok(false,'No editor');const o=h.lastOverlay();o.querySelector('[data-bb-increment]').value='1.25';o.querySelector('[data-save]').onclick();
+  const before=h.S().bodybuilding.progression[id],initial={load:before.load,increment:before.increment,preparationStep:before.preparationStep};
+  h.ctx.changeUnits('lb',true);h.ctx.changeUnits('kg',true);
+  const p=h.S().bodybuilding.progression[id];
+  return ok(p.load===initial.load&&p.increment===initial.increment&&p.preparationStep===initial.preparationStep&&
+   h.ctx.bvomBbNextIncrementLoad(19.8,.1)===19.9,
+   JSON.stringify({initial,after:{load:p.load,increment:p.increment,preparationStep:p.preparationStep}}));
  });
  test('BB62-INCREMENT-EARNED','DEFECT','The next earned Bodybuilding increase uses the new 1 kg step, not the old 2.5 kg step',()=>{
   const h=fixture();if(!open(h))return ok(false,'No editor');
