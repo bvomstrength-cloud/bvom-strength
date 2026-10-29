@@ -89,6 +89,45 @@ reconciled using the durable request ID and canonical snapshot comparison.
 An active workout, foreign-owner snapshot, other protocol or unavailable
 table fails closed. Local-first saving continues unchanged.
 
+### Independent cold audit and local hardening (29 October 2026)
+
+The independent cold audit returned **HOLD for live cloud activation**:
+initial transport tests proved table isolation but did not yet validate
+ledger semantics or stale-device ancestry. The dormant transport was hardened
+without changing Stage (i), BVOM's legacy sync, or any Supabase data:
+
+- Both outbound and inbound snapshots now validate the exact catalogue setup,
+  replay their current and archived blocks through the frozen Stage (i) restore
+  validator, verify every sealed-block successor opening through the frozen
+  next-block constructor, reject duplicate block identities, and refuse
+  unfinished sessions and extra cloud-only snapshot fields. A genuinely saved
+  `WORKOUT_INCOMPLETE` is closed history, not an active workout.
+- Every write requires the exact previously verified remote envelope and
+  an allowed append-only ledger ancestry (including legal discard tombstones).
+  Tombstone replacement is limited to the exact Stage (i) discardable event
+  classes; changing unrelated historical events is never accepted.
+  A new remote read must match that saved baseline; the server's revision CAS
+  then closes the final read/write race. Stale/replaced journals fail closed.
+  Verified ancestry also supports multiple completed blocks accumulated while
+  a device was offline; an upload cannot omit the saved predecessor.
+- Before and after awaits, writes must pass BVOM's existing
+  `bb2AppWriteStatus` account/entitlement/lock/storage/conflict checks **and**
+  an injected check against the exact durable pending-upload intent. These
+  real BVOM callbacks and their persistent intent storage are **not yet wired**.
+- Write receipts now confirm the complete canonical snapshot, not just the
+  revision/request ID. Lost-first-insert replies can be reconciled by a stable
+  request ID. Revision updates also refresh `updated_at`. Unexpected network
+  promise rejections are reported as unavailable/uncertain, not as success.
+
+The in-memory suite now includes valid Stage (i) fixtures, stale history,
+valid event append, a closed incomplete workout, changed lock during a
+network await, forged events, altered receipts, first-insert race and lost-reply
+cases, plus two complete 32-credit block seals, offline reconnection and
+rejected network promises. **16/16 PASS** locally. An independent second-round
+cold audit returned **GO for draft publication, HOLD for live activation**.
+This remains a candidate transport, not an approved cloud integration or real
+concurrency/RLS proof; isolated real-database tests are still required.
+
 Run `node tests/bvom-lab/bb2_cloud_sidecar_contracts.cjs` to exercise both
 actual legacy BVOM cloud writers against separate fake tables, two first
 writers, stale competing revisions, a lost-reply retry, owner checks and
