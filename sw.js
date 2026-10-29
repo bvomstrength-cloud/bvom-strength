@@ -1,6 +1,6 @@
-// v2.9.18 BB1 exercise swap progression retention; versioned shell cache.
-const CACHE = 'bvom-2.9.18';
-const BUILD = '2.9.18';
+// v2.9.20 BB1 per-exercise progression increment editor; versioned shell cache.
+const CACHE = 'bvom-2.9.20';
+const BUILD = '2.9.20';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './og-image.png', './i18n/en.js?v=6090d2f48f09', './i18n/ja.js?v=326ff8e97bb8',
   './theme-bee-v23c.svg',
   './theme-cherry-v23f.svg',

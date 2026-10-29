@@ -148,6 +148,13 @@ jobs:
         run: node tests/bvom-lab/bb2_app_session_browser.cjs
       - name: Check developer-only BB2 setup preview in the real BVOM program chooser
         run: node tests/bvom-lab/bb2_integrated_setup_preview_browser.cjs
+      - name: Preserve mobile BB1/BB2 Edit Weight comparison screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bb1-bb2-edit-weight-mobile-parity
+          path: ${{ runner.temp }}/bb2-ui-parity/*.png
+          if-no-files-found: ignore
       - name: Run isolated deferred Starting Setup interactions
         run: node tests/bvom-lab/starting_setup_browser.cjs
 

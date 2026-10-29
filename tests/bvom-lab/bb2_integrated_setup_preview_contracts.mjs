@@ -606,31 +606,38 @@ function fixture({ls}={}){
 {
  const {h,before}=fixture();
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
- h.ctx.__bb2CatalogueForTest=catalogue;h.ctx.__bb2EditLoad='65';
+ h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
   'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
- const editField={get value(){return h.ctx.__bb2EditLoad},disabled:false};
  const editSaveButton={disabled:false};
  h.ctx.document.querySelector=selector=>{
-  if(selector==='#workout [data-bb2-edit="0"]')return editField;
   if(selector==='#workout [data-bb2-edit-save="0"]')return editSaveButton;
-  const hit=selector.match(/data-bb2-(load|inc|assist|edit|reps|hard)="([^"]+)"/);
+  const hit=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
   if(hit){
    if(hit[1]==='hard')return {checked:false};
-   return {value:hit[1]==='edit'?h.ctx.__bb2EditLoad:
-    hit[1]==='load'?'60':hit[1]==='inc'?'2.5':hit[1]==='reps'?'8':'none'};
+   return {value:hit[1]==='load'?'60':hit[1]==='inc'?'2.5':hit[1]==='reps'?'8':'none'};
   }
   return query(selector);
+ };
+ const edit=(weight,increment)=>{
+  if(!h.ctx.bvomBb2EditWorkingLoad(0))return false;
+  const dlg=h.lastOverlay();
+  for(const [field,value] of [['weight',weight],['increment',increment]]){
+   const input=dlg.querySelector('[data-bb-'+field+']');
+   if(value!==undefined)input.value=String(value);
+   else input.value=dlg.innerHTML.match(new RegExp('data-bb-'+field+'[^>]*value="([^"]*)"'))?.[1]??'';
+  }
+  dlg.querySelector('[data-save]').onclick();return true;
  };
  assert.equal(h.ctx.bvomBb2Begin(),true);
  const id=h.S().bb2.activeSessionId;
  const first=h.S().bb2.events[0].slots[0];
  assert.equal(first.plannedG,60000);
  assert.match(h.ctx.document.querySelector('#workout').innerHTML,/First eligible exposure calibrates/);
- assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),true,'untouched working weight can be edited');
+ assert.equal(edit('65'),true,'untouched working weight can be edited');
  let events=h.S().bb2.events;
  assert.equal(events.length,2);
  assert.equal(events[1].type,'PRESCRIPTION_EDITED');
@@ -639,21 +646,51 @@ function fixture({ls}={}){
  assert.equal(events[0].slots[0].plannedG,60000,'immutable Start plan survives edit');
  assert.match(h.ctx.document.querySelector('#workout').innerHTML,/65 kg/);
  assert.match(h.ctx.document.querySelector('#warmup').innerHTML,/Working: 65 kg/);
- assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),true,'unchanged edit is an idempotent no-op');
- assert.equal(h.S().bb2.events.length,2);
+ const started=h.S().bb2.events[0],role=catalogue.getBB2TemplatePrescription(h.S().bb2.setup,started.templateId).slots[0];
+ const current=h.ctx.bvomBb2WorkingSlot(started.slots[0],h.S().bb2.events,id);
+ const prep=h.ctx.bvomBb2WarmupPlan(current,role),warmKey=h.ctx.bvomBb2WarmupKey(id,current,prep);
+ const historyBefore=JSON.stringify(h.S().history),cloudBefore=JSON.stringify(h.ctx.bvomCloudPayload());
+ assert.equal(edit(undefined,'1'),true,'same Edit Weight dialog can change only the increment');
+ events=h.S().bb2.events;
+ assert.equal(events.length,3);
+ assert.equal(events[2].type,'INCREMENT_EDITED');
+ assert.equal(events[2].incrementG,1000);
+ assert.equal(events[2].scope,'GLOBAL');
+ assert.equal(h.ctx.bvomBb2WorkingSlot(started.slots[0],events,id).plannedG,65000);
+ assert.equal(JSON.stringify(h.S().history),historyBefore,'increment edit retains History');
+ assert.equal(JSON.stringify(h.ctx.bvomCloudPayload()),cloudBefore,'BB2 edits do not reach cloud');
+ const currentAfter=h.ctx.bvomBb2WorkingSlot(started.slots[0],events,id);
+ assert.deepEqual(h.ctx.bvomBb2WarmupPlan(currentAfter,role),prep);
+ assert.equal(h.ctx.bvomBb2WarmupKey(id,currentAfter,prep),warmKey,
+  'increment-only change preserves the warm-up plan and tick identity');
+ const feederStart=started.slots[1],feederRole=catalogue.getBB2TemplatePrescription(h.S().bb2.setup,started.templateId).slots[1];
+ const feederBefore=h.ctx.bvomBb2WarmupPlan(feederStart,feederRole);
+ assert.deepEqual(h.ctx.bvomBb2WarmupPlan({...feederStart,incrementG:1000},feederRole),feederBefore,
+  'BB2 FEEDER preparation also retains its original in-block rounding grid');
+ assert.equal(h.ctx.bvomBb2DisplayLoad(33500),'33.5','canonical 32.5 + 1 displays exactly 33.5 kg');
+ const rawBeforeValidation=h.ls.getItem('bvom_data');
+ assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),true);
+ const invalidDialog=h.lastOverlay(),weightInput=invalidDialog.querySelector('[data-bb-weight]'),
+  incInput=invalidDialog.querySelector('[data-bb-increment]');
+ weightInput.value='65';
+ for(const invalid of ['', '0', '0.001', '10.001', '11']){
+  incInput.value=invalid;invalidDialog.querySelector('[data-save]').onclick();
+  assert.equal(h.ls.getItem('bvom_data'),rawBeforeValidation,'invalid increment must not save: '+invalid);
+ }
+ invalidDialog.querySelector('[data-cancel]').onclick();
+ assert.equal(edit(),true,'unchanged edit is an idempotent no-op');
+ assert.equal(h.S().bb2.events.length,3);
  h.ev("state.unit='lb'");
- h.ctx.__bb2EditLoad=h.ctx.bvomBb2DisplayLoad(65000);
- assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),true,
+ assert.equal(edit(),true,
   'resubmitting unchanged rounded pounds cannot create a false load change');
- assert.equal(h.S().bb2.events.length,2,'unit display round-trip preserves grams and epoch');
+ assert.equal(h.S().bb2.events.length,3,'unit display round-trip preserves grams and epoch');
  h.ev("state.unit='kg'");
  const saved=h.ls.getItem('bvom_data');
- h.ev('bvomWindowLockOwned=false');h.ctx.__bb2EditLoad='67.5';
+ h.ev('bvomWindowLockOwned=false');
  assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),false,'non-owner edit refused');
  assert.equal(h.ls.getItem('bvom_data'),saved);
  h.ev('bvomWindowLockOwned=true');
  assert.equal(h.ctx.bvomBb2WarmupMark(0,0),true);
- assert.equal(editField.disabled,true,'warm-up immediately disables stale Workout weight input');
  assert.equal(editSaveButton.disabled,true,'warm-up immediately disables stale save control');
  assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),false,'warm-up tick locks ordinary edit');
  assert.equal(h.ctx.bvomBb2WarmupMark(0,0),true,'user may untick optional preparation');
@@ -669,9 +706,63 @@ function fixture({ls}={}){
  assert.equal(h.ctx.bvomBb2Discard(),true);
  assert.ok(h.S().bb2.events.some(e=>e.type==='PRESCRIPTION_EDITED'&&e.loadG===65000),
   'independent global edit survives discarded session');
+ assert.ok(h.S().bb2.events.some(e=>e.type==='INCREMENT_EDITED'&&e.incrementG===1000),
+  'independent increment edit also survives discarded session');
  assert.equal(h.S().history.length,JSON.parse(before).history.length);
  assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
  console.log('PASS: BB2 pre-lock load edit, warm-up refresh, actual inheritance, lock and discard');
+}
+
+{
+ const {h,before}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const hit=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
+  if(hit)return hit[1]==='hard'?{checked:false}:
+   {value:hit[1]==='load'?'60':hit[1]==='inc'?'2.5':hit[1]==='assist'?'none':'8'};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ const dialog=(i,weight,increment)=>{
+  assert.equal(h.ctx.bvomBb2EditWorkingLoad(i),true);
+  const o=h.lastOverlay();
+  o.querySelector('[data-bb-weight]').value=weight;
+  o.querySelector('[data-bb-increment]').value=increment;
+  return o;
+ };
+ const combined=dialog(0,'62.5','1');combined.querySelector('[data-save]').onclick();
+ const b=h.S().bb2,sid=b.activeSessionId,events=b.events;
+ assert.equal(events.at(-2).type,'PRESCRIPTION_EDITED');
+ assert.equal(events.at(-2).loadG,62500);
+ assert.equal(events.at(-1).type,'INCREMENT_EDITED');
+ assert.equal(events.at(-1).incrementG,1000);
+ assert.equal(events.at(-1).commitOrdinal,events.at(-2).commitOrdinal+1);
+ const reload=fixture({ls:h.ls});
+ const start=events[0],savedSlot=h.ctx.bvomBb2WorkingSlot(start.slots[0],events,sid);
+ assert.equal(savedSlot.plannedG,62500);
+ assert.equal(savedSlot.incrementG,1000);
+ assert.equal(reload.h.S().bb2.events.at(-1).incrementG,1000,'combined edit survives reload');
+ const stale=dialog(1,'65','1');
+ assert.equal(h.ctx.bvomBb2Log(1,0),true,'another working-set action advances the journal');
+ const saved=h.ls.getItem('bvom_data');
+ stale.querySelector('[data-save]').onclick();
+ assert.equal(h.ls.getItem('bvom_data'),saved,'stale modal cannot overwrite newer sets');
+ stale.querySelector('[data-cancel]').onclick();
+ const refused=dialog(2,'65','1'),raw=h.ls.getItem('bvom_data'),memory=JSON.stringify(h.S());
+ const write=h.ls.setItem;
+ h.ls.setItem=(key,value)=>{if(key==='bvom_data')throw Error('simulated full local storage');return write(key,value)};
+ try{refused.querySelector('[data-save]').onclick()}finally{h.ls.setItem=write}
+ assert.equal(h.ls.getItem('bvom_data'),raw,'failed two-field save is not partially persisted');
+ assert.equal(JSON.stringify(h.S()),memory,'failed save rolls back the in-memory document');
+ assert.equal(h.S().history.length,JSON.parse(before).history.length,'legacy History unchanged');
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined,'no draft data reaches normal cloud payload');
+ console.log('PASS: BB2 combined Edit Weight save, stale dialog and quota-failure rollback');
 }
 
 {

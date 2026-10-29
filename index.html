@@ -8,7 +8,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="BVOM">
 <meta name="twitter:description" content="Best Version Of Myself — strength training and progression.">
-<title>BVOM Strength v2.9.18</title><link rel="manifest" href="manifest.json">
+<title>BVOM Strength v2.9.20</title><link rel="manifest" href="manifest.json">
 <style>
 :root{--bg:#f4f4f4;--card:#fff;--ink:#111;--muted:#737373;--accent:#d91e18;--line:#ddd}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
@@ -242,7 +242,7 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
 <div id="authgate" class="setup hidden"></div>
 <div id="setup" class="setup hidden"></div>
 <div id="app" class="hidden">
-<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v2.9.18</div></header>
+<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v2.9.20</div></header>
 <div class="tabs"><div class="tab on" data-tab="workout">WORKOUT</div><div class="tab" data-tab="warmup">WARM-UP</div><div class="tab" data-tab="history">HISTORY</div><div class="tab" data-tab="info">INFO</div><div class="tab" data-tab="settings">SETTINGS</div></div>
 <main><section id="workout"></section><section id="warmup" class="hidden"></section><section id="history" class="hidden"></section><section id="info" class="hidden"></section><section id="settings" class="hidden"></section></main>
 <div class="timer idle" id="timerbar"><div class="timerin"><div><div class="clock" id="clock">0:00</div><div class="marks">DINGS 3 · 5 · 10</div></div><button class="cancel" onclick="if(bvomWorkoutActionAllowed())cancelTimer()">CANCEL</button><button class="finish" onclick="finishWorkout()">FINISH</button></div></div>
@@ -251,7 +251,7 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
 <script src="./i18n/ja.js?v=326ff8e97bb8"></script>
 <script src="./vendor/supabase-js-2.117.3.js"></script>
 <script>
-const BVOM_BUILD='2.9.18';
+const BVOM_BUILD='2.9.20';
 const programs={A:[["Squat",3,5],["Bench Press",3,5],["Prone Row",3,5]],B:[["Squat",3,5],["Overhead Press",5,5],["Deadlift",1,5]]};
 function liftLabel(n){return n==='Prone Row'?(isHLM()?'Prone Row':'Row'):n==='Overhead Press'?'Press':n;}
 const inc={Squat:2.5,"Bench Press":2.5,"Prone Row":2.5,"Overhead Press":2.5,Deadlift:5};
@@ -3597,21 +3597,30 @@ const BVOM_BB_ENGINE_VERSION=1;
 function bvomBbLoadingMethod(exOrId){const x=typeof exOrId==='string'?BVOM_BB_EXERCISES[exOrId]:exOrId;return x?.loading||null}
 function bvomBbProgress(id,target=state){bvomBbEnsure(target);const b=target.bodybuilding,p=b.progression[id]&&typeof b.progression[id]==='object'?b.progression[id]:{};b.progression[id]=p;return p}
 function bvomBbLoadStep(id,target=state){const x=BVOM_BB_EXERCISES[id],p=bvomBbProgress(id,target),n=Number(p.increment);if(Number.isFinite(n)&&n>0)return n;if(x?.equipment==='barbell'){const map={barbell_bench_press:'Bench Press',high_bar_squat:'Squat',heel_elevated_barbell_squat:'Squat',barbell_row:'Prone Row',lying_barbell_triceps_extension:'Bench Press',romanian_deadlift:'Deadlift',good_morning:'Squat',incline_barbell_press:'Bench Press',barbell_curl:'Bench Press'};const lift=map[id];if(lift&&target===state)return loadIncrementFor(lift)}return null}
-function bvomBbRoundToStep(v,step){v=Number(v);step=Number(step);if(!Number.isFinite(v))return null;if(!(step>0))return Math.round(v*100)/100;return Math.max(step,Math.round(v/step)*step)}
+function bvomBbRoundToStep(v,step){v=Number(v);step=Number(step);if(!Number.isFinite(v))return null;if(!(step>0))return Math.round(v*100)/100;return Math.round(Math.max(step,Math.round(v/step)*step)*100)/100}
+// An increment edit changes future earned jumps, not the rounding of the
+// current exercise's back-off sets and warm-ups. Older records need no migration.
+function bvomBbPreparationStep(id,target=state){const p=target?.bodybuilding?.progression?.[id];if(p&&Object.prototype.hasOwnProperty.call(p,'preparationStep')){if(p.preparationStep===null)return null;const locked=Number(p.preparationStep);if(Number.isFinite(locked)&&locked>0)return locked}const current=Number(p?.increment);return Number.isFinite(current)&&current>0?current:null}
+// The old strength fallback applies only where no preparation method was locked.
+// A null lock means the previous calculation deliberately had no step grid.
+function bvomBbPreparationRoundingStep(id,target=state){const p=target?.bodybuilding?.progression?.[id];return p&&Object.prototype.hasOwnProperty.call(p,'preparationStep')?bvomBbPreparationStep(id,target):bvomBbPreparationStep(id,target)||bvomBbLoadStep(id,target)}
+// An earned increase adds the chosen increment to the *current* load. Rounding
+// onto a new step grid would turn 32.5 + 1 into 34, an unintended 1.5 kg jump.
+function bvomBbNextIncrementLoad(load,step){const a=Number(load),b=Number(step);return Number.isFinite(a)&&Number.isFinite(b)&&b>0?Math.round((a+b)*100)/100:null}
 function bvomBbPrescription(id,target=state){const x=BVOM_BB_EXERCISES[id];if(!x)return null;const p=bvomBbProgress(id,target),method=bvomBbLoadingMethod(x),load=Number(p.load??p.topLoad),step=bvomBbLoadStep(id,target),numericResistance=!['bodyweight','band'].includes(x.equipment),hasLoad=Number.isFinite(load)&&load>0;
- if(method==='stable_primary'||method==='demanding_primary'){const drop=method==='stable_primary'?0.08:0.05,back=hasLoad?bvomBbRoundToStep(load*(1-drop),step):null,max2=method==='stable_primary'?10:8;return {method,calibrated:hasLoad,needsIncrement:hasLoad&&!step,sets:[{type:'top',load:hasLoad?load:null,minReps:6,maxReps:8},{type:'backoff',load:back,minReps:null,maxReps:max2},{type:'backoff',load:back,minReps:null,maxReps:max2}]}}
+ if(method==='stable_primary'||method==='demanding_primary'){const drop=method==='stable_primary'?0.08:0.05,back=hasLoad?bvomBbRoundToStep(load*(1-drop),bvomBbPreparationRoundingStep(id,target)):null,max2=method==='stable_primary'?10:8;return {method,calibrated:hasLoad,needsIncrement:hasLoad&&!step,sets:[{type:'top',load:hasLoad?load:null,minReps:6,maxReps:8},{type:'backoff',load:back,minReps:null,maxReps:max2},{type:'backoff',load:back,minReps:null,maxReps:max2}]}}
  if(method==='double_progression'||method==='double_progression_3set'){const r=x.repRange||[10,15],sets=method==='double_progression_3set'?3:2;return {method,calibrated:numericResistance?hasLoad:!!p.calibrated,needsIncrement:numericResistance&&hasLoad&&!step,progressionGateSets:Number(x.progressionGateSets)||sets,sets:Array.from({length:sets},(_,i)=>({type:'work',load:hasLoad?load:null,resistance:!numericResistance?(p.resistance??null):null,minReps:r[0],maxReps:r[1],gatesProgression:i<(Number(x.progressionGateSets)||sets)}))}}
  if(method==='bodyweight_assistance'){const r=x.repRange;return {method,calibrated:!!p.calibrated,needsIncrement:false,sets:Array.from({length:Number(x.sets)||2},()=>({type:'bodyweight',load:p.addedLoad??null,assistance:p.assistance??null,rom:p.rom??'full',minReps:r?.[0]??null,maxReps:r?.[1]??null}))}}
  return null}
 function bvomBbSetResult(raw){const reps=Math.max(0,Math.floor(Number(raw?.reps)||0));return {reps,harderThanIntended:!!raw?.harderThanIntended}}
 function bvomBbGatingSets(rx,sets){return sets.slice(0,Math.max(1,Number(rx?.progressionGateSets)||sets.length))}
 function bvomBbDecide(id,rawSets,target=state){const x=BVOM_BB_EXERCISES[id],rx=bvomBbPrescription(id,target);if(!x||!rx)return {action:'none',reason:'unknown_exercise'};const sets=(rawSets||[]).map(bvomBbSetResult),p=bvomBbProgress(id,target),method=rx.method,step=bvomBbLoadStep(id,target);
- if(method==='stable_primary'||method==='demanding_primary'){const top=sets[0];if(!top)return {action:'hold',reason:'no_top_set'};if(top.reps<6)return {action:'reduce',reason:'below_working_range'};if(top.harderThanIntended)return {action:'hold',reason:'harder_than_intended'};if(top.reps>=8){if(!(step>0))return {action:'needs_increment',reason:'earned_progression'};return {action:'increase',nextLoad:bvomBbRoundToStep(Number(p.load??p.topLoad)+step,step),reason:'top_set_earned'};}return {action:'hold',reason:'earn_8'};}
- if(method==='double_progression'||method==='double_progression_3set'){const gate=bvomBbGatingSets(rx,sets),lo=x.repRange[0],hi=x.repRange[1];if(!gate.length)return {action:'hold',reason:'no_sets'};if(gate[0].reps<lo)return ['bodyweight','band'].includes(x.equipment)?{action:'easier_resistance',reason:'below_working_range'}:{action:'reduce',reason:'below_working_range'};if(gate.some(s=>s.harderThanIntended))return {action:'hold',reason:'harder_than_intended'};const earned=gate[0].reps>=hi&&gate.slice(1).every(s=>s.reps>=lo);if(earned){if(['bodyweight','band'].includes(x.equipment))return {action:'harder_resistance',reason:'double_progression_earned'};if(!(step>0))return {action:'needs_increment',reason:'earned_progression'};return {action:'increase',nextLoad:bvomBbRoundToStep(Number(p.load??p.topLoad)+step,step),reason:'double_progression_earned'}}return {action:'hold',reason:'build_reps'};}
+ if(method==='stable_primary'||method==='demanding_primary'){const top=sets[0];if(!top)return {action:'hold',reason:'no_top_set'};if(top.reps<6)return {action:'reduce',reason:'below_working_range'};if(top.harderThanIntended)return {action:'hold',reason:'harder_than_intended'};if(top.reps>=8){if(!(step>0))return {action:'needs_increment',reason:'earned_progression'};return {action:'increase',nextLoad:bvomBbNextIncrementLoad(p.load??p.topLoad,step),reason:'top_set_earned'};}return {action:'hold',reason:'earn_8'};}
+ if(method==='double_progression'||method==='double_progression_3set'){const gate=bvomBbGatingSets(rx,sets),lo=x.repRange[0],hi=x.repRange[1];if(!gate.length)return {action:'hold',reason:'no_sets'};if(gate[0].reps<lo)return ['bodyweight','band'].includes(x.equipment)?{action:'easier_resistance',reason:'below_working_range'}:{action:'reduce',reason:'below_working_range'};if(gate.some(s=>s.harderThanIntended))return {action:'hold',reason:'harder_than_intended'};const earned=gate[0].reps>=hi&&gate.slice(1).every(s=>s.reps>=lo);if(earned){if(['bodyweight','band'].includes(x.equipment))return {action:'harder_resistance',reason:'double_progression_earned'};if(!(step>0))return {action:'needs_increment',reason:'earned_progression'};return {action:'increase',nextLoad:bvomBbNextIncrementLoad(p.load??p.topLoad,step),reason:'double_progression_earned'}}return {action:'hold',reason:'build_reps'};}
  if(method==='bodyweight_assistance'){const lo=x.repRange[0],hi=x.repRange[1],gate=bvomBbGatingSets(rx,sets);if(!gate.length)return {action:'hold',reason:'no_sets'};if(gate[0].reps<lo)return {action:'easier',reason:'below_working_range'};if(gate.some(s=>s.harderThanIntended))return {action:'hold',reason:'harder_than_intended'};if(gate[0].reps>=hi&&gate.slice(1).every(s=>s.reps>=lo))return {action:'harder',reason:'bodyweight_range_earned'};return {action:'hold',reason:'build_reps'};}
  return {action:'hold',reason:'unsupported'}
 }
-function bvomBbReductionLoad(id,target=state){const p=bvomBbProgress(id,target),current=Number(p.load??p.topLoad),previous=Number(p.previousSuccessfulLoad),step=bvomBbLoadStep(id,target);if(Number.isFinite(previous)&&previous>0&&(!Number.isFinite(current)||previous<current))return previous;if(Number.isFinite(current)&&current>0&&step>0)return bvomBbRoundToStep(Math.max(step,current-step),step);return null}
+function bvomBbReductionLoad(id,target=state){const p=bvomBbProgress(id,target),current=Number(p.load??p.topLoad),previous=Number(p.previousSuccessfulLoad),step=bvomBbLoadStep(id,target);if(Number.isFinite(previous)&&previous>0&&(!Number.isFinite(current)||previous<current))return previous;if(Number.isFinite(current)&&current>0&&step>0){const reduced=Math.round((current-step)*100)/100;return reduced>0?reduced:null}return null}
 function bvomBbApplyDecision(id,decision,target=state){const p=bvomBbProgress(id,target),current=Number(p.load??p.topLoad);p.lastDecision=decision?.action||'hold';p.lastDecisionReason=decision?.reason||null;
  if(decision?.action==='increase'&&Number.isFinite(decision.nextLoad)){if(Number.isFinite(current)&&current>0)p.previousSuccessfulLoad=current;p.load=decision.nextLoad;p.topLoad=decision.nextLoad;p.pendingDifficulty=null}
  else if(decision?.action==='reduce'){const next=Number.isFinite(decision.nextLoad)?decision.nextLoad:bvomBbReductionLoad(id,target);if(Number.isFinite(next)&&next>0){p.load=next;p.topLoad=next;p.performanceRefResetLoad=next;p.pendingDifficulty=null}else p.pendingDifficulty='easier'}
@@ -3621,12 +3630,21 @@ function bvomBbApplyDecision(id,decision,target=state){const p=bvomBbProgress(id
 function bvomBbCalibrationFloor(id){const x=BVOM_BB_EXERCISES[id],method=bvomBbLoadingMethod(x);if(method==='stable_primary'||method==='demanding_primary')return 6;return Array.isArray(x?.repRange)?Number(x.repRange[0]):null}
 function bvomBbCalibrationDecision(id,feedback,observed={},target=state){const x=BVOM_BB_EXERCISES[id];if(!x)return {action:'none'};const method=bvomBbLoadingMethod(x),p=bvomBbProgress(id,target),f=String(feedback||'').toLowerCase(),reps=Number(observed.reps),floor=bvomBbCalibrationFloor(id);if(observed.increment!=null&&Number(observed.increment)>0)p.increment=Number(observed.increment);p.calibrated=true;
  if(method==='bodyweight_assistance'){if(Number.isFinite(reps)&&Number.isFinite(floor)&&reps<floor)return {action:'easier',reason:'calibration_below_range'};if(f==='too hard'||f==='too_hard')return {action:'easier',reason:'calibration_too_hard'};if(f==='too easy'||f==='too_easy')return {action:'harder',reason:'calibration_too_easy'};return {action:'hold',reason:'calibration_about_right'}}
- const load=Number(observed.load);if(Number.isFinite(load)&&load>0){p.load=load;p.topLoad=load}if(Number.isFinite(reps)&&Number.isFinite(floor)&&reps<floor)return {action:'reduce',nextLoad:bvomBbReductionLoad(id,target),reason:'calibration_below_range'};if(f==='too hard'||f==='too_hard')return {action:'reduce',nextLoad:bvomBbReductionLoad(id,target),reason:'calibration_too_hard'};if(f==='too easy'||f==='too_easy'){const step=bvomBbLoadStep(id,target);return step>0?{action:'increase',nextLoad:bvomBbRoundToStep(load+step,step),reason:'calibration_too_easy'}:{action:'needs_increment',reason:'calibration_too_easy'}}return {action:'hold',reason:'calibration_about_right'} }
-function bvomBbComparableKey(id,load,target=state){const step=bvomBbLoadStep(id,target);return `${id}|${bvomBbRoundToStep(load,step)}`}
+ const load=Number(observed.load);if(Number.isFinite(load)&&load>0){p.load=load;p.topLoad=load}if(Number.isFinite(reps)&&Number.isFinite(floor)&&reps<floor)return {action:'reduce',nextLoad:bvomBbReductionLoad(id,target),reason:'calibration_below_range'};if(f==='too hard'||f==='too_hard')return {action:'reduce',nextLoad:bvomBbReductionLoad(id,target),reason:'calibration_too_hard'};if(f==='too easy'||f==='too_easy'){const step=bvomBbLoadStep(id,target);return step>0?{action:'increase',nextLoad:bvomBbNextIncrementLoad(load,step),reason:'calibration_too_easy'}:{action:'needs_increment',reason:'calibration_too_easy'}}return {action:'hold',reason:'calibration_about_right'} }
+function bvomBbComparableKey(id,load,target=state){const n=Number(load);return `${id}|${Number.isFinite(n)?Math.round(n*10000)/10000:'invalid'}`}
+function bvomBbFindPerformanceRef(id,load,target=state){const refs=target?.bodybuilding?.performanceRefs?.[id],key=bvomBbComparableKey(id,load,target);let best=null;if(!refs||typeof refs!=='object')return null;for(const [storedKey,ref] of Object.entries(refs)){if(!ref||bvomBbComparableKey(id,ref.load,target)!==key)continue;if(!best||Number(ref.reps)>Number(best.ref.reps))best={key:storedKey,ref}}if(best)return best;
+ // A practical unit conversion can snap the working prescription (32.5 kg ->
+ // 70 lb) while retaining the exact physical historical reference (71.6502 lb).
+ // Match their shared *original* load only while the prescription is unchanged.
+ // Never snap historical references together or infer equivalence from proximity.
+ const p=target?.bodybuilding?.progression?.[id],origin=p?._unitLoadOrigins?.load;
+ if(!origin||Math.abs(Number(origin.converted)-Number(load))>1e-9)return null;
+ for(const [storedKey,ref] of Object.entries(refs)){const m=ref?._unitLoadOrigins?.load;if(!m||m.unit!==origin.unit||m.convertedUnit!==origin.convertedUnit||bvomBbComparableKey(id,m.value,target)!==bvomBbComparableKey(id,origin.value,target))continue;if(!best||Number(ref.reps)>Number(best.ref.reps))best={key:storedKey,ref,convertedEquivalent:true}}
+ return best}
 function bvomBbPerformanceRefResetPending(id,load,target=state){const p=bvomBbProgress(id,target),reset=Number(p.performanceRefResetLoad);return Number.isFinite(reset)&&reset>0&&bvomBbComparableKey(id,reset,target)===bvomBbComparableKey(id,load,target)}
-function bvomBbRecordPerformanceRef(id,load,reps,target=state){bvomBbEnsure(target);const b=target.bodybuilding,key=bvomBbComparableKey(id,load,target),p=bvomBbProgress(id,target),r=Math.max(0,Math.floor(Number(reps)||0)),reset=bvomBbPerformanceRefResetPending(id,load,target);if(!b.performanceRefs[id]||typeof b.performanceRefs[id]!=='object')b.performanceRefs[id]={};const old=b.performanceRefs[id][key];if(reset||!old||r>Number(old.reps||0))b.performanceRefs[id][key]={load:Number(load),reps:r,updatedAt:new Date().toISOString()};if(reset)delete p.performanceRefResetLoad;return b.performanceRefs[id][key]}
-function bvomBbPerformanceDrop(id,load,reps,target=state){if(bvomBbPerformanceRefResetPending(id,load,target))return null;const key=bvomBbComparableKey(id,load,target),ref=target?.bodybuilding?.performanceRefs?.[id]?.[key];if(!ref||!(Number(ref.reps)>0))return null;const drop=(Number(ref.reps)-Number(reps))/Number(ref.reps);return drop>=0.30?{triggered:true,drop,referenceReps:Number(ref.reps),currentReps:Number(reps)}:{triggered:false,drop}}
-function bvomBbPerformanceDropNotice(decisions){const hits=(decisions||[]).filter(x=>x?.drop?.triggered);if(!hits.length)return'';const rows=hits.map(x=>{const name=BVOM_BB_EXERCISES[x.id]?.name||String(x.id||'Exercise'),pct=Math.max(30,Math.round((Number(x.drop.drop)||0)*100));return `<div style="margin-top:6px"><strong>${name}</strong>: ${pct}% ${hlmTxt('below your previous performance at the same load.','同じ重量での以前のパフォーマンスを下回りました。')}</div>`}).join('');return `<div style="margin-top:14px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;text-align:left"><div style="font-weight:900">${hlmTxt('PERFORMANCE DROP','パフォーマンス低下')}</div>${rows}<div class="small" style="margin-top:8px">${hlmTxt('BVOM has flagged this for your attention. Your normal progression decision has not been changed by the warning.','BVOMが注意喚起として表示しています。この警告によって通常の進行判定は変更されていません。')}</div></div>`}
+function bvomBbRecordPerformanceRef(id,load,reps,target=state){bvomBbEnsure(target);const b=target.bodybuilding,key=bvomBbComparableKey(id,load,target),p=bvomBbProgress(id,target),r=Math.max(0,Math.floor(Number(reps)||0)),reset=bvomBbPerformanceRefResetPending(id,load,target);if(!b.performanceRefs[id]||typeof b.performanceRefs[id]!=='object')b.performanceRefs[id]={};const refs=b.performanceRefs[id],canonical={};for(const ref of Object.values(refs)){if(!ref||!Number.isFinite(Number(ref.load)))continue;const k=bvomBbComparableKey(id,ref.load,target);if(!canonical[k]||Number(ref.reps)>Number(canonical[k].reps))canonical[k]=ref}for(const k of Object.keys(refs))delete refs[k];Object.assign(refs,canonical);const old=refs[key],next=reset||!old||r>Number(old.reps||0)?{load:Number(load),reps:r,updatedAt:new Date().toISOString()}:{...old,load:Number(load)};refs[key]=next;if(reset)delete p.performanceRefResetLoad;return next}
+function bvomBbPerformanceDrop(id,load,reps,target=state){if(bvomBbPerformanceRefResetPending(id,load,target))return null;const found=bvomBbFindPerformanceRef(id,load,target),ref=found?.ref;if(!ref||!(Number(ref.reps)>0))return null;const drop=(Number(ref.reps)-Number(reps))/Number(ref.reps);return drop>=0.30?{triggered:true,drop,referenceReps:Number(ref.reps),currentReps:Number(reps),convertedEquivalent:!!found.convertedEquivalent}:{triggered:false,drop}}
+function bvomBbPerformanceDropNotice(decisions){const hits=(decisions||[]).filter(x=>x?.drop?.triggered);if(!hits.length)return'';const rows=hits.map(x=>{const name=BVOM_BB_EXERCISES[x.id]?.name||String(x.id||'Exercise'),pct=Math.max(30,Math.round((Number(x.drop.drop)||0)*100));return `<div style="margin-top:6px"><strong>${name}</strong>: ${pct}% ${x.drop.convertedEquivalent?hlmTxt('below your previous performance at the equivalent load before changing units.','単位変更前の対応する重量での以前のパフォーマンスを下回りました。'):hlmTxt('below your previous performance at the same load.','同じ重量での以前のパフォーマンスを下回りました。')}</div>`}).join('');return `<div style="margin-top:14px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;text-align:left"><div style="font-weight:900">${hlmTxt('PERFORMANCE DROP','パフォーマンス低下')}</div>${rows}<div class="small" style="margin-top:8px">${hlmTxt('BVOM has flagged this for your attention. Your normal progression decision has not been changed by the warning.','BVOMが注意喚起として表示しています。この警告によって通常の進行判定は変更されていません。')}</div></div>`}
 /* ===== END BODYBUILDING DEV2 ENGINE ===== */
 
 const bvomBbBaseShowSetup=showSetup;showSetup=function(){if(isBodybuilding())return bvomBbRenderFoundationSetup();bvomBbBaseShowSetup();bvomBbInjectProgramChoice()};
@@ -3650,7 +3668,7 @@ const bvomBbBaseCloudNormalize=bvomCloudNormalizeForCompare;bvomCloudNormalizeFo
 function bvomBbConvertPracticalIncrement(x,to){return convertIncrement(Number(x||0),to)}
 function bvomBbConvertLoadToStep(x,to,step){return bvomBbRoundToStep(convertLoad(Number(x||0),to),step)}
 function bvomBbConvertLoadRoundTrip(owner,x,from,to,step){const v=Number(x||0),m=owner?._unitLoadOrigin;if(m&&m.unit===to&&m.convertedUnit===from&&Math.abs(Number(m.converted)-v)<1e-9){delete owner._unitLoadOrigin;return Number(m.value)}const y=bvomBbConvertLoadToStep(v,to,step);if(owner&&Number.isFinite(v)&&v>0)owner._unitLoadOrigin={unit:from,value:v,convertedUnit:to,converted:y};else if(owner)delete owner._unitLoadOrigin;return y}
-const bvomBbBaseChangeUnits=changeUnits;changeUnits=function(to,quiet=false){if(!bvomWorkoutActionAllowed())return;const before=state.unit||'kg';bvomBbBaseChangeUnits(to,quiet);if((state.unit||'kg')===before||before===to||!state.bodybuilding)return;const steps={};for(const [id,p] of Object.entries(state.bodybuilding.progression||{})){if(!p)continue;const step=bvomConvertIncrementRoundTrip(p,p.increment??2.5,before,to);steps[id]=step;for(const k of ['topLoad','load','backoffLoad','previousSuccessfulLoad','performanceRefResetLoad'])if(p[k]!=null)p[k]=bvomConvertLoadRoundTripField(p,k,p[k],before,to,v=>bvomBbConvertLoadToStep(v,to,step));p.increment=step}for(const [id,refs] of Object.entries(state.bodybuilding.performanceRefs||{})){if(!refs||typeof refs!=='object')continue;const step=steps[id]||bvomBbConvertPracticalIncrement(state.bodybuilding.progression?.[id]?.increment??2.5,to),rebuilt={};for(const r of Object.values(refs)){if(!r||r.load==null)continue;r.load=bvomConvertLoadRoundTripField(r,'load',r.load,before,to,v=>bvomBbConvertLoadToStep(v,to,step));const key=bvomBbComparableKey(id,r.load,state),prior=rebuilt[key];if(!prior||Number(r.reps)>Number(prior.reps))rebuilt[key]=r}state.bodybuilding.performanceRefs[id]=rebuilt}save()};
+const bvomBbBaseChangeUnits=changeUnits;changeUnits=function(to,quiet=false){if(!bvomWorkoutActionAllowed())return;const before=state.unit||'kg';bvomBbBaseChangeUnits(to,quiet);if((state.unit||'kg')===before||before===to||!state.bodybuilding)return;for(const [id,p] of Object.entries(state.bodybuilding.progression||{})){if(!p)continue;const step=bvomConvertIncrementRoundTrip(p,p.increment??2.5,before,to);for(const k of ['topLoad','load','backoffLoad','previousSuccessfulLoad','performanceRefResetLoad'])if(p[k]!=null)p[k]=bvomConvertLoadRoundTripField(p,k,p[k],before,to,v=>bvomBbConvertLoadToStep(v,to,step));if(p.preparationStep!=null)p.preparationStep=bvomConvertLoadRoundTripField(p,'preparationStep',p.preparationStep,before,to,v=>bvomBbConvertPracticalIncrement(v,to));p.increment=step}for(const [id,refs] of Object.entries(state.bodybuilding.performanceRefs||{})){if(!refs||typeof refs!=='object')continue;const rebuilt={};for(const r of Object.values(refs)){if(!r||r.load==null)continue;/* Actual historical references need finer reversible precision than user-facing prescriptions. */r.load=bvomConvertLoadRoundTripField(r,'load',r.load,before,to,v=>Math.round(convertLoad(v,to)*10000)/10000);const key=bvomBbComparableKey(id,r.load,state),prior=rebuilt[key];if(!prior||Number(r.reps)>Number(prior.reps))rebuilt[key]=r}state.bodybuilding.performanceRefs[id]=rebuilt}save()};
 
 bvomGppEnsure();bvomStartGppTicker();
 
@@ -3690,7 +3708,7 @@ document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{document.querySelect
 const BVOM_BB_SLOT_LABELS={A1:'Chest press',A2:'Quad compound',A3:'Horizontal pull',A4:'Hamstring curl',A5:'Lateral delt',A6:'Triceps',B1:'Vertical pull',B2:'Posterior chain',B3:'Incline / secondary chest',B4:'Secondary quad',B5:'Rear delt / upper back',B6:'Biceps'};
 function bvomBbSlotsForDay(day=bvomBbDay()){return day?Object.keys(BVOM_BB_SLOT_DEFAULTS).filter(s=>s[0]===day):[]}
 function bvomBbNumericExercise(id){const x=BVOM_BB_EXERCISES[id];return !!x&&!['bodyweight','band'].includes(x.equipment)}
-function bvomBbSetupDraft(){if(!window.__bvomBbSetupDraft){const base=bvomBbEnsure(),prog={};for(const [id,p] of Object.entries(base.progression||{}))prog[id]={...p};window.__bvomBbSetupDraft={selections:{...base.selections},progression:prog}}return window.__bvomBbSetupDraft}
+function bvomBbSetupDraft(){if(!window.__bvomBbSetupDraft){const base=bvomBbEnsure(),prog={};for(const [id,p] of Object.entries(base.progression||{})){prog[id]={...p};if(base.status==='completed')delete prog[id].preparationStep}window.__bvomBbSetupDraft={selections:{...base.selections},progression:prog}}return window.__bvomBbSetupDraft}
 function bvomBbSetupSelect(slot,id){const d=bvomBbSetupDraft();d.selections[slot]=id;bvomBbRenderFoundationSetup()}
 function bvomBbSetupValue(id,key,val){const d=bvomBbSetupDraft(),p=d.progression[id]||(d.progression[id]={}),n=Number(val);if(Number.isFinite(n)&&n>0)p[key]=n;else delete p[key]}
 function bvomBbSetupPrescriptionText(id){const x=BVOM_BB_EXERCISES[id],method=bvomBbLoadingMethod(x);if(method==='stable_primary')return '3 sets · Top set 6–8 reps · 2 back-off sets up to 10';if(method==='demanding_primary')return '3 sets · Top set 6–8 reps · 2 back-off sets up to 8';if(method==='double_progression'||method==='double_progression_3set'){const r=x.repRange||[10,15],sets=method==='double_progression_3set'?3:(Number(x.sets)||2);return `${sets} × ${r[0]}–${r[1]} reps`;}if(method==='bodyweight_assistance'){const r=x.repRange||[],sets=Number(x.sets)||2;return `${sets} × ${r[0]}–${r[1]} reps · progress reps / difficulty`;}return ''}
@@ -3837,37 +3855,55 @@ function bvomBbWeightEditAllowed(id){
 function bvomBbEditWorkingWeight(id){
  if(!bvomWorkoutActionAllowed()||document.querySelector('.bvomModalOverlay')||!bvomBbWeightEditAllowed(id))return false;
  const p=state.bodybuilding?.progression?.[id],old=Number(p?.load??p?.topLoad),
+  storedIncrement=p?.increment,stepNow=Number(bvomBbLoadStep(id)),
+  oldIncrement=Number.isFinite(stepNow)&&stepNow>0?stepNow:null,
   number=state.bodybuilding.completedSessions,started=state.bodybuilding.startedAt,
   slot=bvomBbSlotsForDay(bvomBbDay()).find(x=>state.bodybuilding.selections[x]===id);
  if(!(Number.isFinite(old)&&old>0))return false;
  const name=BVOM_BB_EXERCISES[id].name,unit=unitLabel(),o=document.createElement('div');o.className='bvomModalOverlay';
- o.innerHTML='<div class="bvomModal" role="dialog" aria-modal="true"><h3>'+hlmTxt('EDIT BODYBUILDING WEIGHT','ボディビルディングの重量を変更')+'</h3><div class="sub">'+bvomEsc(name)+' · '+hlmTxt('Upcoming prescribed top set, not a recorded set or LP weight.','次回のトップセットの指定重量です。記録済みのセットやLP重量は変更しません。')+'</div><label>'+hlmTxt('Next working weight','次回のワーキング重量')+' ('+unit+')<input data-bb-weight type="number" inputmode="decimal" min=".25" step=".25" value="'+old+'"></label><div class="small">'+hlmTxt('Back-off sets and warm-ups update immediately. Already recorded sets and warm-ups are protected.','バックオフセットとウォームアップはすぐに更新されます。記録済みのセットやウォームアップは保護されます。')+'</div><div class="bvomBbValidationNotice" data-bb-validation role="alert" aria-live="polite" hidden></div><div class="modalActions"><button type="button" data-cancel>'+hlmTxt('CANCEL','キャンセル')+'</button><button type="button" class="primary" data-save>'+hlmTxt('SAVE WEIGHT','重量を保存')+'</button></div></div>';
+ o.innerHTML='<div class="bvomModal" role="dialog" aria-modal="true"><h3>'+hlmTxt('EDIT BODYBUILDING WEIGHT','ボディビルディングの重量を変更')+'</h3><div class="sub">'+bvomEsc(name)+' · '+hlmTxt('Upcoming prescribed top set, not a recorded set or LP weight.','次回のトップセットの指定重量です。記録済みのセットやLP重量は変更しません。')+'</div><label>'+hlmTxt('Next working weight','次回のワーキング重量')+' ('+unit+')<input data-bb-weight type="number" inputmode="decimal" min=".25" step=".25" value="'+old+'"></label><label>'+hlmTxt('Progression increment','進行時の増量幅')+' ('+unit+')<input data-bb-increment type="number" inputmode="decimal" min=".01" max="10" step=".01" value="'+(oldIncrement??'')+'" placeholder="e.g. 1"></label><div class="small">'+hlmTxt('Changing only the increment preserves your current weight, back-off sets, warm-ups and past performance. Editing the weight recalculates preparation loads.','増量幅だけを変更しても、現在の重量、バックオフセット、ウォームアップ、過去の記録は変わりません。重量を変更すると準備セットの重量が再計算されます。')+'</div><div class="bvomBbValidationNotice" data-bb-validation role="alert" aria-live="polite" hidden></div><div class="modalActions"><button type="button" data-cancel>'+hlmTxt('CANCEL','キャンセル')+'</button><button type="button" class="primary" data-save>'+hlmTxt('SAVE EXERCISE SETTINGS','種目の設定を保存')+'</button></div></div>';
  document.body.appendChild(o);
- const entry=o.querySelector('[data-bb-weight]');entry.focus();entry.select();
+ const entry=o.querySelector('[data-bb-weight]'),incrementEntry=o.querySelector('[data-bb-increment]');entry.focus();entry.select();
  o.querySelector('[data-cancel]').onclick=()=>o.remove();
  o.querySelector('[data-save]').onclick=()=>{
   if(!bvomWorkoutActionAllowed())return false;
   const current=Number(state.bodybuilding?.progression?.[id]?.load??state.bodybuilding?.progression?.[id]?.topLoad);
+  const currentIncrement=state.bodybuilding?.progression?.[id]?.increment,
+   effectiveIncrement=Number(bvomBbLoadStep(id));
   if(!bvomBbWeightEditAllowed(id)||state.bodybuilding?.completedSessions!==number||
    state.bodybuilding?.startedAt!==started||state.bodybuilding?.selections?.[slot]!==id||
-   unitLabel()!==unit||!Number.isFinite(current)||Math.abs(current-old)>1e-9){
+   unitLabel()!==unit||!Number.isFinite(current)||Math.abs(current-old)>1e-9||
+   currentIncrement!==storedIncrement||
+   (oldIncrement===null?Number.isFinite(effectiveIncrement)&&effectiveIncrement>0:
+    !Number.isFinite(effectiveIncrement)||Math.abs(effectiveIncrement-oldIncrement)>1e-9)){
    bvomBbInputNotice(o,hlmTxt('Workout changed. Close and reopen this editor.','ワークアウトが変更されました。閉じて再度開いてください。'),'[data-bb-weight]');return false;
   }
   const raw=String(entry.value??''),value=Number(raw);
   if(!raw.trim()||!Number.isFinite(value)||value<=0){
    bvomBbInputNotice(o,hlmTxt('Enter a valid positive working weight.','有効な正の重量を入力してください。'),'[data-bb-weight]');return false;
   }
-  if(Math.abs(value-old)<1e-9){o.remove();return true}
+  const incRaw=String(incrementEntry.value??'').trim(),increment=incRaw===''&&oldIncrement===null?null:Number(incRaw);
+  if((incRaw===''&&oldIncrement!==null)||
+    (increment!==null&&(!Number.isFinite(increment)||increment<=0))){
+   bvomBbInputNotice(o,hlmTxt('Enter a valid positive progression increment.','有効な正の増量幅を入力してください。'),'[data-bb-increment]');return false;
+  }
+  const weightChanged=Math.abs(value-old)>=1e-9,
+   incrementChanged=increment!==null&&(oldIncrement===null||Math.abs(increment-oldIncrement)>=1e-9);
+  if(incrementChanged&&(increment<.01||increment>10||Math.abs(increment*100-Math.round(increment*100))>1e-7)){
+   bvomBbInputNotice(o,hlmTxt('Use an increment from 0.01 to 10, with up to two decimal places.','増量幅は0.01～10の範囲で、小数点以下2桁まで入力してください。'),'[data-bb-increment]');return false;
+  }
+  if(!weightChanged&&!incrementChanged){o.remove();return true}
   const before=JSON.parse(JSON.stringify(state)),next=bvomBbProgress(id);
-  next.load=value;next.topLoad=value;
-  delete next.previousSuccessfulLoad;delete next.performanceRefResetLoad;
+  if(weightChanged){next.load=value;next.topLoad=value;
+   delete next.previousSuccessfulLoad;delete next.performanceRefResetLoad}
+  if(incrementChanged){if(!Object.prototype.hasOwnProperty.call(next,'preparationStep'))next.preparationStep=oldIncrement;next.increment=increment;delete next._unitIncrementOrigin}
   if(!save({durable:true})){state=before;return false}
   if(bvomPersistenceBlocked())return true;
   o.remove();renderWorkout();renderWarm();bvomSyncWorkoutControls();return true;
  };
  return true;
 }
-function bvomBbRenderFoundationWorkout(){bvomBbEnsure();const day=bvomBbDay();const el=document.querySelector('#workout');if(!day){el.innerHTML=`<div class="card"><b>BODYBUILDING COMPLETE</b><div class="small" style="margin-top:8px">24 of 24 workouts completed. Nice work. Your next step is a return-to-strength re-entry rather than an immediate max test.</div></div>`;return}const n=state.bodybuilding.completedSessions+1;let h=`<div class="toprow"><div><b>BODYBUILDING · WORKOUT ${n} OF 24 — ${day}</b><div class="small">${day==='A'?'Push + quad emphasis':'Pull + posterior emphasis'} · stop with about two good reps left</div></div></div>`;for(const slot of bvomBbSlotsForDay(day)){const id=state.bodybuilding.selections[slot],x=BVOM_BB_EXERCISES[id],rx=bvomBbPrescription(id),ss=state.session[bvomBbSessionKey(id)]||{},editUi=bvomBbNumericExercise(id)? '<div class="small" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:6px 0 12px"><span>'+hlmTxt('Next working weight','次回のワーキング重量')+': <b>'+fmt(rx?.sets?.[0]?.load)+' '+unitLabel()+'</b></span><button type="button" class="secondary" data-bb-edit-weight="'+id+'" onclick="bvomBbEditWorkingWeight(this.dataset.bbEditWeight)" '+(bvomBbWeightEditAllowed(id)?'':'disabled')+'>'+hlmTxt('EDIT WEIGHT','重量を変更')+'</button></div>':'';h+=`<div class="exercise" id="work-bb-${slot}"><div class="exhead"><div><div class="exname">${bvomEsc(x.name)}</div><div class="small">${BVOM_BB_SLOT_LABELS[slot]} · ${rx?.method?.replaceAll('_',' ')||''}</div></div></div>${editUi}<div class="sets">`;for(let i=0;i<bvomBbSetCount(rx);i++){const q=rx.sets[i],log=ss[i],cl=log?'done':'';h+=`<div class="setwrap"><button class="set ${cl}" onclick="bvomBbSetModal('${id}',${i})">${log?log.reps:'✓'}</button><div class="setload">${log?.bodyweight===true?bvomEsc(bvomBwSetText(log)):bvomBbLoadText(q,id)+' × '+bvomBbSetTarget(rx,i)}</div>${log?.harderThanIntended?'<div class="extraLabel">HARD</div>':''}</div>`}for(const ix of bvomBbExtraIndices(id,rx,ss)){ const log=ss[ix],detail=log.bodyweight===true?bvomBwSetText(log):bvomBbNumericExercise(id)?fmt(log.load)+' '+unitLabel()+' × '+log.reps:String(log.resistance||'Bodyweight')+' × '+log.reps; h+=`<div class="setwrap" data-bb-extra="${ix}"><button class="set done" onclick="bvomBbSetModal('${id}',${ix})">${log.reps}</button><div class="setload">${bvomEsc(detail)}<div class="extraLabel">${hlmTxt('EXTRA','追加')}</div></div></div>`;}h+=`</div><button type="button" class="secondary" style="margin-top:8px" onclick="bvomBbAddExtraSet('${id}')">+ ${hlmTxt('ADD EXTRA SET','追加セットを記録')}</button>${bvomBbDifficultyCallout(id)}</div>`}h+=renderAccessories17();h+=renderGpp17();el.innerHTML=h}
+function bvomBbRenderFoundationWorkout(){bvomBbEnsure();const day=bvomBbDay();const el=document.querySelector('#workout');if(!day){el.innerHTML=`<div class="card"><b>BODYBUILDING COMPLETE</b><div class="small" style="margin-top:8px">24 of 24 workouts completed. Nice work. Your next step is a return-to-strength re-entry rather than an immediate max test.</div></div>`;return}const n=state.bodybuilding.completedSessions+1;let h=`<div class="toprow"><div><b>BODYBUILDING · WORKOUT ${n} OF 24 — ${day}</b><div class="small">${day==='A'?'Push + quad emphasis':'Pull + posterior emphasis'} · stop with about two good reps left</div></div></div>`;for(const slot of bvomBbSlotsForDay(day)){const id=state.bodybuilding.selections[slot],x=BVOM_BB_EXERCISES[id],rx=bvomBbPrescription(id),ss=state.session[bvomBbSessionKey(id)]||{},editUi=bvomBbNumericExercise(id)? '<div class="small" style="display:flex;align-items:center;justify-content:flex-end;margin:6px 0 12px"><button type="button" class="secondary" data-bb-edit-weight="'+id+'" onclick="bvomBbEditWorkingWeight(this.dataset.bbEditWeight)" '+(bvomBbWeightEditAllowed(id)?'':'disabled')+'>'+hlmTxt('EDIT WEIGHT','重量を変更')+'</button></div>':'';h+=`<div class="exercise" id="work-bb-${slot}"><div class="exhead"><div><div class="exname">${bvomEsc(x.name)}</div><div class="small">${BVOM_BB_SLOT_LABELS[slot]} · ${rx?.method?.replaceAll('_',' ')||''}</div></div></div>${editUi}<div class="sets">`;for(let i=0;i<bvomBbSetCount(rx);i++){const q=rx.sets[i],log=ss[i],cl=log?'done':'';h+=`<div class="setwrap"><button class="set ${cl}" onclick="bvomBbSetModal('${id}',${i})">${log?log.reps:'✓'}</button><div class="setload">${log?.bodyweight===true?bvomEsc(bvomBwSetText(log)):bvomBbLoadText(q,id)+' × '+bvomBbSetTarget(rx,i)}</div>${log?.harderThanIntended?'<div class="extraLabel">HARD</div>':''}</div>`}for(const ix of bvomBbExtraIndices(id,rx,ss)){ const log=ss[ix],detail=log.bodyweight===true?bvomBwSetText(log):bvomBbNumericExercise(id)?fmt(log.load)+' '+unitLabel()+' × '+log.reps:String(log.resistance||'Bodyweight')+' × '+log.reps; h+=`<div class="setwrap" data-bb-extra="${ix}"><button class="set done" onclick="bvomBbSetModal('${id}',${ix})">${log.reps}</button><div class="setload">${bvomEsc(detail)}<div class="extraLabel">${hlmTxt('EXTRA','追加')}</div></div></div>`;}h+=`</div><button type="button" class="secondary" style="margin-top:8px" onclick="bvomBbAddExtraSet('${id}')">+ ${hlmTxt('ADD EXTRA SET','追加セットを記録')}</button>${bvomBbDifficultyCallout(id)}</div>`}h+=renderAccessories17();h+=renderGpp17();el.innerHTML=h}
 function bvomBbSetModal(id,i){if(!bvomWorkoutActionAllowed())return;
  if(bvomBbDifficultyPending(id)){
   bvomBeeModal(hlmTxt('CHOOSE ACCEPT OR HOLD FIRST','先に承認または維持を選んでください。'),
@@ -4093,7 +4129,7 @@ function bvomBbStageAWarmupPlan(id,workingLoad,onramp=false){
  const work=Number(workingLoad);
  if(!(Number.isFinite(work)&&work>0))return {kind:'guidance',sets:[],finding:true};
  // No on-ramp state, bodyweight estimate or future progression is inferred.
- const step=Number(state.bodybuilding?.progression?.[id]?.increment);
+ const step=Number(bvomBbPreparationStep(id));
  const actualStep=Number.isFinite(step)&&step>0?step:null;
  if(profile.equipment==='dumbbell'){
   // Weights are PER HAND. The barbell's fixed absolute-weight milestones
@@ -4268,7 +4304,7 @@ function bvomBbWarmStageBRender(){
 /* ===== END ISSUE #55 STAGE B ===== */
 
 function bvomBbWarmClass(slot){if(['A1','A2','A3','B1','B2','B3'].includes(slot))return 'full';if(['A4','B4'].includes(slot))return 'feeder';return 'none'}
-function bvomBbWarmRound(id,v){const step=bvomBbOnRampActive()?bvomBbOnRampLoadStep(id):bvomBbLoadStep(id),x=BVOM_BB_EXERCISES[id];if(x?.equipment==='dumbbell'||x?.equipment==='machine')return bvomBbRoundToStep(v,step);return bvomBbRoundToStep(v,step)}
+function bvomBbWarmRound(id,v){const step=bvomBbOnRampActive()?bvomBbOnRampLoadStep(id):bvomBbPreparationRoundingStep(id),x=BVOM_BB_EXERCISES[id];if(x?.equipment==='dumbbell'||x?.equipment==='machine')return bvomBbRoundToStep(v,step);return bvomBbRoundToStep(v,step)}
 function bvomBbWarmPlan(slot,id){const x=BVOM_BB_EXERCISES[id],cl=bvomBbWarmClass(slot),load=bvomBbOnRampActive()?bvomBbOnRampNumericValue(id):Number(bvomBbProgress(id).load??bvomBbProgress(id).topLoad);if(cl==='none')return {kind:'none',sets:[]};if(!bvomBbNumericExercise(id)){if(x?.equipment==='band')return {kind:cl,sets:[['Lighter band',5]]};if(id==='back_extension_45')return {kind:cl,sets:[['Bodyweight',5]]};return {kind:cl,sets:[['Easier variation / more assistance',3]]}}if(!(load>0))return {kind:cl,sets:[],finding:true};const ps=cl==='feeder'?[[.65,5]]:(['machine','dumbbell'].includes(x.equipment)?[[.60,5],[.80,2]]:[[.50,5],[.70,3],[.85,2]]),standardBar=['barbell_bench_press','high_bar_squat','heel_elevated_barbell_squat','barbell_row','romanian_deadlift','good_morning','incline_barbell_press'].includes(id),barFloor=standardBar?(isLb()?45:20):0,seen=new Set(),sets=[];for(const [pct,reps] of ps){let w=bvomBbWarmRound(id,load*pct);if(barFloor>0)w=Math.max(w,barFloor);if(!(w>0)||w>=load)continue;const k=String(w);if(seen.has(k))continue;seen.add(k);sets.push([w,reps])}return {kind:cl,sets,load}}
 function bvomBbRenderFoundationWarm(){return bvomBbWarmStageBRender()}
 const bvomBbDev36WorkoutBase=bvomBbRenderFoundationWorkout;bvomBbRenderFoundationWorkout=function(){if(bvomBbOnRampActive())return bvomBbOnRampRenderWorkout();return bvomBbDev36WorkoutBase()}
@@ -5600,8 +5636,9 @@ function bvomBb2CalibrationSetsComplete(slot,events,sessionId){
 }
 function bvomBb2DisplayLoad(grams){
  if(!Number.isSafeInteger(grams))return '';
- return state.unit==='lb'?String(Math.round(grams/453.59237)):
-  fmt(Math.round(grams/100)/10);
+ // BB2's canonical ledger stores grams. Display hundredths without rounding a
+ // legitimate 1 kg or 0.01 kg increment onto a different visible load.
+ return String(Number((state.unit==='lb'?grams/453.59237:grams/1000).toFixed(2)));
 }
 function bvomBb2WarmupTouched(sessionId,slot){
  const touchKey=JSON.stringify([sessionId,slot.roleSlotId,slot.exerciseId]);
@@ -5612,34 +5649,74 @@ function bvomBb2WarmupTouched(sessionId,slot){
 }
 function bvomBb2EditWorkingLoad(i){
  if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed()||
-    !bvomBb2PreviewModule||!Number.isSafeInteger(i))return false;
+    !bvomBb2PreviewModule||!Number.isSafeInteger(i)||document.querySelector('.bvomModalOverlay'))return false;
  const b=state.bb2,m=bvomBb2PreviewModule;
  const start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
  const original=start?.slots[i];if(!original||original.equipment!=='loaded')return false;
- const raw=String(document.querySelector('#workout [data-bb2-edit="'+i+'"]')?.value??'').trim();
- if(!raw)return false;
  const slot=bvomBb2WorkingSlot(original,b.events,b.activeSessionId);
  if(b.events.some(e=>e.sessionId===b.activeSessionId&&e.roleSlotId===slot.roleSlotId&&
      ['SET_RECORDED','EXTRA_SET_RECORDED','EXERCISE_LOCKED'].includes(e.type))||
     bvomBb2WarmupTouched(b.activeSessionId,slot))return false;
- // The unchanged displayed value inherits exact canonical grams, even when
- // a practical kg/lb display conversion was rounded.
- if(raw===bvomBb2DisplayLoad(slot.plannedG))return true;
- try{
-  const unit=state.unit==='lb'?'lb':'kg',grams=m.BB2_BROWSER_MODULES.ledger.canonicalGrams(raw,unit);
-  if(!Number.isSafeInteger(grams)||grams<=0)return false;
-  if(grams===slot.plannedG)return true;
-  const before=m.foldBB2Block(b.opening,b.events);
-  const e={type:'PRESCRIPTION_EDITED',eventId:'prelock:'+b.activeSessionId+':'+b.events.length,
-   commitOrdinal:b.events.length+1,blockId:b.opening.blockId,
-   sessionId:b.activeSessionId,templateId:start.templateId,roleSlotId:slot.roleSlotId,
-   exerciseId:slot.exerciseId,scope:'GLOBAL',loadG:grams,loadOrigin:{value:raw,unit}};
-  const tx=m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(b.opening,b.events,[e],{
-   ownerId:b.opening.ownerId,blockId:b.opening.blockId,expectedHead:b.events.length,
-   foldRulesVersion:b.opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:true});
-  if(!bvomBb2Commit({...b,events:tx.events}))return false;
-  bvomBb2Workout();renderWarm();return true;
- }catch(error){console.error('BB2 working-weight edit rejected',error);return false}
+ const sessionId=b.activeSessionId,head=b.events.length,unit=unitLabel();
+ const oldLoad=slot.plannedG,oldIncrement=slot.incrementG;
+ const o=document.createElement('div');o.className='bvomModalOverlay';
+ o.innerHTML='<div class="bvomModal" role="dialog" aria-modal="true"><h3>'+hlmTxt('EDIT BODYBUILDING WEIGHT','ボディビルディングの重量を変更')+'</h3><div class="sub">'+
+  bvomEsc(bvomBb2PreviewLabel(slot.exerciseId))+' · '+hlmTxt('Changes apply to the future working plan, not sets already recorded.','変更は今後のワーキング重量に適用され、記録済みのセットには影響しません。')+'</div>'+
+  '<label>'+hlmTxt('Next working weight','次回のワーキング重量')+' ('+unit+')<input data-bb-weight type="number" inputmode="decimal" min=".01" step=".01" value="'+bvomEsc(bvomBb2DisplayLoad(oldLoad))+'"></label>'+
+  '<label>'+hlmTxt('Progression increment','進行時の増量幅')+' ('+unit+')<input data-bb-increment type="number" inputmode="decimal" min=".01" max="10" step=".01" value="'+bvomEsc(bvomBb2DisplayLoad(oldIncrement))+'"></label>'+
+  '<div class="small">'+hlmTxt('Changing only the increment preserves the current weight, warm-ups and History. An earned increase adds the exact increment.','増量幅だけの変更では、現在の重量、ウォームアップ、履歴は変わりません。増量時には指定した増量幅を正確に加えます。')+'</div>'+
+  '<div class="bvomBbValidationNotice" data-bb-validation role="alert" aria-live="polite" hidden></div><div class="modalActions"><button type="button" data-cancel>'+hlmTxt('CANCEL','キャンセル')+'</button><button type="button" class="primary" data-save>'+hlmTxt('SAVE EXERCISE SETTINGS','種目の設定を保存')+'</button></div></div>';
+ document.body.appendChild(o);
+ const weightField=o.querySelector('[data-bb-weight]'),incField=o.querySelector('[data-bb-increment]');
+ weightField.focus();weightField.select();
+ o.querySelector('[data-cancel]').onclick=()=>o.remove();
+ o.querySelector('[data-save]').onclick=()=>{
+  if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed())return false;
+  const live=state.bb2,liveStart=live.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===sessionId);
+  const liveOriginal=liveStart?.slots[i],current=liveOriginal&&bvomBb2WorkingSlot(liveOriginal,live.events,sessionId);
+  if(live.activeSessionId!==sessionId||live.events.length!==head||
+     live.opening.blockId!==b.opening.blockId||unitLabel()!==unit||
+     !current||current.roleSlotId!==slot.roleSlotId||current.exerciseId!==slot.exerciseId||
+     current.plannedG!==oldLoad||current.incrementG!==oldIncrement||
+     bvomBb2WarmupTouched(sessionId,current)){
+   bvomBbInputNotice(o,hlmTxt('Workout changed. Close and reopen this editor.','ワークアウトが変更されました。閉じて再度開いてください。'),'[data-bb-weight]');return false;
+  }
+  const raw=String(weightField.value??'').trim(),incRaw=String(incField.value??'').trim();
+  const requestedIncrement=Number(incRaw);
+  if(!raw||!Number.isFinite(Number(raw))||Number(raw)<=0){
+   bvomBbInputNotice(o,hlmTxt('Enter a valid positive working weight.','有効な正の重量を入力してください。'),'[data-bb-weight]');return false;
+  }
+  if(!incRaw||!Number.isFinite(requestedIncrement)||requestedIncrement<.01||
+     requestedIncrement>10||Math.abs(requestedIncrement*100-Math.round(requestedIncrement*100))>1e-7){
+   bvomBbInputNotice(o,hlmTxt('Use an increment from 0.01 to 10, with up to two decimal places.','増量幅は0.01～10の範囲で、小数点以下2桁まで入力してください。'),'[data-bb-increment]');return false;
+  }
+  try{
+   const ledger=m.BB2_BROWSER_MODULES.ledger;
+   // A displayed, unchanged value retains the exact prior grams across unit
+   // conversions. Only values the user changes are freshly canonicalised.
+   const grams=raw===bvomBb2DisplayLoad(oldLoad)?oldLoad:ledger.canonicalGrams(raw,unit);
+   const increment=incRaw===bvomBb2DisplayLoad(oldIncrement)?oldIncrement:
+    ledger.canonicalGrams(incRaw,unit);
+   if(!Number.isSafeInteger(grams)||grams<=0||!Number.isSafeInteger(increment)||increment<=0)return false;
+   const common={blockId:live.opening.blockId,sessionId,templateId:liveStart.templateId,
+    roleSlotId:current.roleSlotId,exerciseId:current.exerciseId,scope:'GLOBAL'};
+   const changes=[];
+   if(grams!==oldLoad)changes.push({...common,type:'PRESCRIPTION_EDITED',loadG:grams,loadOrigin:{value:raw,unit}});
+   if(increment!==oldIncrement)changes.push({...common,type:'INCREMENT_EDITED',incrementG:increment,incrementOrigin:{value:incRaw,unit}});
+   if(!changes.length){o.remove();return true}
+   const before=m.foldBB2Block(live.opening,live.events);
+   const edits=changes.map((e,k)=>({...e,eventId:'prelock:'+sessionId+':'+(head+k),commitOrdinal:head+k+1}));
+   const tx=ledger.commitBB2Transaction(live.opening,live.events,edits,{
+    ownerId:live.opening.ownerId,blockId:live.opening.blockId,expectedHead:head,
+    foldRulesVersion:live.opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:true});
+   if(!bvomBb2Commit({...live,events:tx.events}))return false;
+   o.remove();bvomBb2Workout();renderWarm();return true;
+  }catch(error){
+   console.error('BB2 working-weight/increment edit rejected',error);
+   bvomBbInputNotice(o,hlmTxt('Exercise settings could not be saved. Check the entries and try again.','種目の設定を保存できませんでした。入力内容を確認して再度お試しください。'),'[data-bb-weight]');return false;
+  }
+ };
+ return true;
 }
 function bvomBb2EditBodyweightPlan(i){
  if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed()||
@@ -5822,12 +5899,12 @@ function bvomBb2Workout(){
    (open?bvomBb2SetEntryMarkup(i,nextExtra,s,true):
     '<button type="button" class="secondary" data-bb2-extra-add="'+i+'" onclick="bvomBb2OpenExtra('+i+')">+ '+
     hlmTxt('ADD EXTRA SET','追加セットを記録')+'</button>'):'';
-  return '<div class="exercise"><div class="exhead"><b>'+bvomEsc(bvomBb2PreviewLabel(s.exerciseId))+'</b></div>'+
+  return '<div class="exercise"><div class="exhead"><div class="exname">'+bvomEsc(bvomBb2PreviewLabel(s.exerciseId))+'</div></div>'+
    '<div class="small">'+s.sets+' × '+s.floor+'–'+s.ceiling+' reps · '+
    (s.plannedG===undefined?bvomEsc(s.assistance):bvomEsc(bvomBb2DisplayLoad(s.plannedG))+' '+unitLabel())+'</div>'+
-   (s.equipment==='loaded'?'<div class="warmrow"><label>Working '+unitLabel()+
-   ' <input type="number" min="0" step="any" data-bb2-edit="'+i+'" value="'+bvomEsc(bvomBb2DisplayLoad(s.plannedG))+'" '+(touched?'disabled':'')+'></label>'+
-   '<button type="button" class="choice" data-bb2-edit-save="'+i+'" onclick="bvomBb2EditWorkingLoad('+i+')" '+(touched?'disabled':'')+'>SAVE WEIGHT</button></div>':'')+
+   (s.equipment==='loaded'?'<div class="small" style="display:flex;align-items:center;justify-content:flex-end;margin:6px 0 12px">'+
+   '<button type="button" class="secondary" data-bb2-edit-save="'+i+'" onclick="bvomBb2EditWorkingLoad('+i+')" '+
+   (touched?'disabled':'')+'>'+hlmTxt('EDIT WEIGHT','重量を変更')+'</button></div>':'')+
    (s.equipment==='bodyweight'?'<div class="warmrow"><label>Future variation<input type="text" maxlength="80" data-bb2-plan-variation="'+i+'" value="'+bvomEsc(s.variation)+'" '+(touched?'disabled':'')+'></label>'+
     '<label>Future assistance<input type="text" maxlength="80" data-bb2-plan-assist="'+i+'" value="'+bvomEsc(s.assistance)+'" '+(touched?'disabled':'')+'></label>'+
     '<label>Future added '+unitLabel()+' (optional)<input type="number" min="0" step="any" data-bb2-plan-added="'+i+'" value="'+
@@ -6336,8 +6413,12 @@ function bvomBb2WarmupPlan(slot,role){
     Number.isInteger(r)&&r>0).map(([w,r])=>[w,r]);
  }else{
   // FEEDERs and machines/dumbbells never receive an invented 20 kg bar floor.
-  const inc=Number.isSafeInteger(slot.incrementG)&&slot.incrementG>0?
-   (unit==='lb'?slot.incrementG/453.59237:slot.incrementG/1000):0;
+  // Freeze the preparation grid at this exercise's first Start in the current
+  // BB2 block. An INCREMENT_EDITED event changes future earned progression,
+  // but must not quietly alter warm-ups or their durable tick identities.
+  const prepIncrement=bvomBb2PreparationIncrement(slot);
+  const inc=Number.isSafeInteger(prepIncrement)&&prepIncrement>0?
+   (unit==='lb'?prepIncrement/453.59237:prepIncrement/1000):0;
   const fractions=kind==='FULL'?[[.5,5],[.7,3],[.85,2]]:[[.65,5],[.8,2]];
   for(const [ratio,reps] of fractions){
    const raw=inc?Math.round(work*ratio/inc)*inc:Math.round(work*ratio*10)/10;
@@ -6347,10 +6428,16 @@ function bvomBb2WarmupPlan(slot,role){
  }
  return {kind,sets,note,work,unit};
 }
+function bvomBb2PreparationIncrement(slot){
+ const b=state.bb2,start=b?.events?.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
+ const first=b?.events?.find(e=>e.type==='WORKOUT_STARTED'&&e.templateId===start?.templateId&&
+  e.slots?.some(s=>s.roleSlotId===slot.roleSlotId&&s.exerciseId===slot.exerciseId));
+ return first?.slots?.find(s=>s.roleSlotId===slot.roleSlotId&&s.exerciseId===slot.exerciseId)?.incrementG??slot.incrementG;
+}
 function bvomBb2WarmupKey(sessionId,slot,plan){
  // A future weight or equipment edit must not inherit ticks from a different
  // prescription. The plan itself is the key material; no ledger event is made.
- const planScope=JSON.stringify([slot.plannedG??null,slot.incrementG??null,
+ const planScope=JSON.stringify([slot.plannedG??null,bvomBb2PreparationIncrement(slot)??null,
   plan.kind,plan.unit||state.unit,plan.sets]);
  return 'BB2|'+sessionId+'|'+slot.roleSlotId+'|'+slot.exerciseId+'|'+planScope;
 }
@@ -6384,7 +6471,7 @@ function bvomBb2WarmupMark(slotIndex,index){
  }
  // The inactive Workout tab keeps its existing inputs. Lock only this slot's
  // future-prescription editor immediately after the durable preparation tick.
- for(const field of ['edit','edit-save','plan-variation','plan-assist','plan-added','plan-save']){
+ for(const field of ['edit-save','plan-variation','plan-assist','plan-added','plan-save']){
   const control=document.querySelector('#workout [data-bb2-'+field+'="'+slotIndex+'"]');
   if(control)control.disabled=true;
  }
@@ -6448,7 +6535,7 @@ bvomHideMainSurfaces();if("serviceWorker" in navigator){
        // Re-registering with a new ?v= every release installs a second worker.
        // Only first-time installations register a new versioned URL.
        const reg = await navigator.serviceWorker.getRegistration("./") ||
-         await navigator.serviceWorker.register("./sw.js?v=2.9.18",{updateViaCache:"none"});
+         await navigator.serviceWorker.register("./sw.js?v=2.9.20",{updateViaCache:"none"});
       bvomWatchServiceWorkerUpdate(reg);
       navigator.serviceWorker.addEventListener("controllerchange", ()=>{
         bvomSwFinishRequestedReload();

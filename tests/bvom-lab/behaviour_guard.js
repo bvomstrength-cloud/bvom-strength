@@ -414,15 +414,19 @@ const onGrid=(x,step)=>step>0&&Math.abs(x/step-Math.round(x/step))<1e-9;
 const contractLoad=(x,from,to,step)=>Math.max(step,Math.round(convRaw(x,from,to)/step)*step);
 function f5Block(h){bbStart(h,{incs:{cable_lateral_raise:1.25,incline_dumbbell_press:1,cable_curl:1.25}});
   for(let k=0;k<6;k++)bbSession(h,(id,i,q)=>({reps:q.type==='top'?8:q.maxReps}));}
-test('F5-LB-PRACTICAL','DEFECT','kg→lb mid-block uses BVOM practical increment policy; loads/refs/prescriptions stay on that grid, including On-Ramp',()=>{
-  const h=H.boot(build);f5Block(h);const before={};for(const id of Object.values(h.S().bodybuilding.selections)){if(!h.ctx.bvomBbNumericExercise(id))continue;const p=h.S().bodybuilding.progression[id];before[id]={load:p.load,inc:p.increment}}
+test('F5-LB-PRACTICAL','DEFECT','kg→lb keeps prescribed working loads on the practical grid while preserving exact historical reference loads, including On-Ramp',()=>{
+  const h=H.boot(build);f5Block(h);const before={};for(const id of Object.values(h.S().bodybuilding.selections)){if(!h.ctx.bvomBbNumericExercise(id))continue;const p=h.S().bodybuilding.progression[id];before[id]={load:p.load,inc:p.increment,refs:Object.values(h.S().bodybuilding.performanceRefs[id]||{}).map(r=>({load:r.load,reps:r.reps}))}}
   h.ctx.changeUnits('lb',true);const b=h.S().bodybuilding,bad=[];
   for(const id of Object.values(b.selections)){const p=b.progression[id];if(!h.ctx.bvomBbNumericExercise(id))continue;
     const expInc=contractInc(before[id].inc,'kg','lb'),expLoad=contractLoad(before[id].load,'kg','lb',expInc);
     if(Math.abs(p.increment-expInc)>1e-9)bad.push(`${id}.inc=${p.increment} expected ${expInc}`);
     if(Math.abs(p.load-expLoad)>1e-9)bad.push(`${id}.load=${p.load} expected ${expLoad}`);
     if(!onGrid(p.load,p.increment))bad.push(`${id}.load off grid ${p.load}/${p.increment}`);
-    for(const [k,r] of Object.entries(b.performanceRefs[id]||{}))if(k!==h.ctx.bvomBbComparableKey(id,r.load)||!onGrid(r.load,p.increment))bad.push(`ref ${k} load ${r.load} off ${p.increment} grid`)}
+    const convertedRefs=Object.entries(b.performanceRefs[id]||{}),originalRefs=before[id].refs;
+    if(convertedRefs.length!==originalRefs.length)bad.push(`ref ${id}: lost historical reference`);
+    for(const [k,r] of convertedRefs)if(k!==h.ctx.bvomBbComparableKey(id,r.load))bad.push(`ref ${k} noncanonical`);
+    for(const r of originalRefs){const physical=Math.round(convRaw(r.load,'kg','lb')*10000)/10000;
+     if(!convertedRefs.some(([,v])=>v.load===physical&&v.reps===r.reps))bad.push(`ref ${id}: ${r.load} kg historical load not preserved`)} }
   bbSession(h,(id,i,q)=>({reps:q.type==='top'?8:q.maxReps}));bbSession(h,(id,i,q)=>({reps:q.type==='top'?8:q.maxReps}));
   for(const id of Object.values(b.selections)){const p=b.progression[id];if(!h.ctx.bvomBbNumericExercise(id))continue;for(const s of h.ctx.bvomBbPrescription(id).sets)if(s.load!=null&&!onGrid(s.load,p.increment))bad.push(`rx ${id}=${s.load} off ${p.increment} grid`)}
   const o=H.boot(build);bbStart(o,{onramp:true});const e=o.ctx.bvomBbOnRampEx('cable_lateral_raise');e.load=10;e.increment=2.5;o.ctx.changeUnits('lb',true);const expOi=contractInc(2.5,'kg','lb'),expOl=contractLoad(10,'kg','lb',expOi);if(e.increment!==expOi||e.load!==expOl)bad.push(`onramp lateral=${e.load}/+${e.increment} expected ${expOl}/+${expOi}`);

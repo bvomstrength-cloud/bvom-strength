@@ -13,6 +13,10 @@ const root=path.resolve(__dirname,'../..');
 const h=H.boot(H.loadBuild(root));
 H.configureLP(h);
 const fixture=JSON.parse(h.ls.getItem('bvom_data'));
+const bb1=H.boot(H.loadBuild(root));H.bbStart(bb1);
+const bb1Fixture=JSON.parse(bb1.ls.getItem('bvom_data'));
+const mobile={viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,serviceWorkers:'block'};
+const screenshots=path.resolve(process.env.RUNNER_TEMP||'/tmp','bb2-ui-parity');
 const server=http.createServer((req,res)=>{
  const pathname=new URL(req.url,'http://localhost').pathname;
  if(pathname==='/seed'){res.writeHead(200,{'Content-Type':'text/html'});res.end('<!doctype html><title>Test setup</title>');return}
@@ -30,7 +34,7 @@ const server=http.createServer((req,res)=>{
  let browser;
  try{
   browser=await chromium.launch({headless:true,args:['--no-sandbox']});
-  const context=await browser.newContext({serviceWorkers:'block'});
+  const context=await browser.newContext(mobile);
   context.setDefaultTimeout(8000);
   await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
   await context.addInitScript(()=>Object.defineProperty(navigator,'onLine',{get:()=>false}));
@@ -307,12 +311,58 @@ const server=http.createServer((req,res)=>{
   await page.locator('#setup [data-bb2-start]').click();
   await page.evaluate(()=>activateTab('workout'));
   await page.waitForSelector('#workout [data-bb2-edit-save="0"]');
-  await page.locator('#workout [data-bb2-edit="0"]').fill('65');
   await page.locator('#workout [data-bb2-edit-save="0"]').click();
+  await page.waitForSelector('.bvomModalOverlay [data-bb-increment]');
+  assert.equal(await page.locator('.bvomModalOverlay input').count(),2,
+   'BB2 uses the same two-field Edit Weight popup as BB1');
+  await page.locator('.bvomModalOverlay [data-bb-weight]').fill('65');
+  await page.locator('.bvomModalOverlay [data-bb-increment]').fill('1');
+  fs.mkdirSync(screenshots,{recursive:true});
+  await page.screenshot({path:path.join(screenshots,'bb2-edit-en-mobile.png')});
+  await page.locator('.bvomModalOverlay [data-save]').click();
   assert.equal(await page.evaluate(()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
-   return b.events.at(-1).type==='PRESCRIPTION_EDITED'&&b.events.at(-1).loadG===65000;
-  }),true,'the shared Workout editor commits a canonical pre-lock edit');
+   return b.events.at(-2).type==='PRESCRIPTION_EDITED'&&b.events.at(-2).loadG===65000&&
+    b.events.at(-1).type==='INCREMENT_EDITED'&&b.events.at(-1).incrementG===1000;
+  }),true,'one popup atomically commits both canonical weight and increment');
+  await page.evaluate(()=>changeLanguage('ja'));
+  await page.locator('#workout [data-bb2-edit-save="0"]').click();
+  assert.match(await page.locator('.bvomModalOverlay').textContent(),/進行時の増量幅/,
+   'BB2 Edit Weight fields follow the BVOM Japanese language setting');
+  await page.screenshot({path:path.join(screenshots,'bb2-edit-ja-mobile.png')});
+  await page.locator('.bvomModalOverlay [data-cancel]').click();
+  await page.evaluate(()=>changeLanguage('en'));
+  const bb1Context=await browser.newContext(mobile);
+  await bb1Context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
+  await bb1Context.addInitScript(()=>Object.defineProperty(navigator,'onLine',{get:()=>false}));
+  const bb1Page=await bb1Context.newPage();
+  await bb1Page.goto(origin+'/seed');
+  await bb1Page.evaluate(data=>{
+   localStorage.setItem('bvom_data',JSON.stringify(data));
+   localStorage.setItem('bvom_data_owner','bb2-preview-owner');
+   localStorage.setItem('bvom_entitlement_cache_bb2-preview-owner',JSON.stringify({
+    userId:'bb2-preview-owner',verifiedAt:new Date().toISOString(),
+    record:{user_id:'bb2-preview-owner',status:'complimentary'}
+   }));
+  },bb1Fixture);
+  await bb1Page.goto(origin+'/index.html');
+  await bb1Page.waitForSelector('#workout [data-bb-edit-weight]');
+  await bb1Page.locator('#workout [data-bb-edit-weight]').first().click();
+  assert.equal(await bb1Page.locator('.bvomModalOverlay input').count(),2);
+  await bb1Page.screenshot({path:path.join(screenshots,'bb1-edit-en-mobile.png')});
+  for(const p of [page,bb1Page]){
+   if(p===page)await p.locator('#workout [data-bb2-edit-save="0"]').click();
+   const bounds=await p.locator('.bvomModal').boundingBox();
+   assert.ok(bounds&&bounds.x>=0&&bounds.x+bounds.width<=391,
+    'the shared editor fits a 390px mobile Chromium viewport');
+  }
+  await page.locator('.bvomModalOverlay [data-cancel]').click();
+  await bb1Page.locator('.bvomModalOverlay [data-cancel]').click();
+  await bb1Page.evaluate(()=>changeLanguage('ja'));
+  await bb1Page.locator('#workout [data-bb-edit-weight]').first().click();
+  assert.match(await bb1Page.locator('.bvomModalOverlay').textContent(),/進行時の増量幅/);
+  await bb1Page.screenshot({path:path.join(screenshots,'bb1-edit-ja-mobile.png')});
+  await bb1Context.close();
   await page.evaluate(()=>activateTab('warmup'));
   assert.match(await page.locator('#warmup').textContent(),/Working: 65 kg/);
   await page.locator('#warmup [data-bb2-warm-tick="0|0"]').click();
