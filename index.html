@@ -3823,30 +3823,45 @@ function bvomBbWeightEditAllowed(id){
 function bvomBbEditWorkingWeight(id){
  if(!bvomWorkoutActionAllowed()||document.querySelector('.bvomModalOverlay')||!bvomBbWeightEditAllowed(id))return false;
  const p=state.bodybuilding?.progression?.[id],old=Number(p?.load??p?.topLoad),
+  storedIncrement=p?.increment,stepNow=Number(bvomBbLoadStep(id)),
+  oldIncrement=Number.isFinite(stepNow)&&stepNow>0?stepNow:null,
   number=state.bodybuilding.completedSessions,started=state.bodybuilding.startedAt,
   slot=bvomBbSlotsForDay(bvomBbDay()).find(x=>state.bodybuilding.selections[x]===id);
  if(!(Number.isFinite(old)&&old>0))return false;
  const name=BVOM_BB_EXERCISES[id].name,unit=unitLabel(),o=document.createElement('div');o.className='bvomModalOverlay';
- o.innerHTML='<div class="bvomModal" role="dialog" aria-modal="true"><h3>'+hlmTxt('EDIT BODYBUILDING WEIGHT','ボディビルディングの重量を変更')+'</h3><div class="sub">'+bvomEsc(name)+' · '+hlmTxt('Upcoming prescribed top set, not a recorded set or LP weight.','次回のトップセットの指定重量です。記録済みのセットやLP重量は変更しません。')+'</div><label>'+hlmTxt('Next working weight','次回のワーキング重量')+' ('+unit+')<input data-bb-weight type="number" inputmode="decimal" min=".25" step=".25" value="'+old+'"></label><div class="small">'+hlmTxt('Back-off sets and warm-ups update immediately. Already recorded sets and warm-ups are protected.','バックオフセットとウォームアップはすぐに更新されます。記録済みのセットやウォームアップは保護されます。')+'</div><div class="bvomBbValidationNotice" data-bb-validation role="alert" aria-live="polite" hidden></div><div class="modalActions"><button type="button" data-cancel>'+hlmTxt('CANCEL','キャンセル')+'</button><button type="button" class="primary" data-save>'+hlmTxt('SAVE WEIGHT','重量を保存')+'</button></div></div>';
+ o.innerHTML='<div class="bvomModal" role="dialog" aria-modal="true"><h3>'+hlmTxt('EDIT BODYBUILDING WEIGHT','ボディビルディングの重量を変更')+'</h3><div class="sub">'+bvomEsc(name)+' · '+hlmTxt('Upcoming prescribed top set, not a recorded set or LP weight.','次回のトップセットの指定重量です。記録済みのセットやLP重量は変更しません。')+'</div><label>'+hlmTxt('Next working weight','次回のワーキング重量')+' ('+unit+')<input data-bb-weight type="number" inputmode="decimal" min=".25" step=".25" value="'+old+'"></label><label>'+hlmTxt('Progression increment','進行時の増量幅')+' ('+unit+')<input data-bb-increment type="number" inputmode="decimal" min=".01" step=".01" value="'+(oldIncrement??'')+'" placeholder="e.g. 1"></label><div class="small">'+hlmTxt('Changes to the increment affect future earned increases only. Back-off sets and warm-ups update with weight changes; recorded sets and History stay intact.','増量幅の変更は今後の進行にのみ適用されます。重量を変更するとバックオフセットとウォームアップが更新されます。記録済みセットと履歴は保持されます。')+'</div><div class="bvomBbValidationNotice" data-bb-validation role="alert" aria-live="polite" hidden></div><div class="modalActions"><button type="button" data-cancel>'+hlmTxt('CANCEL','キャンセル')+'</button><button type="button" class="primary" data-save>'+hlmTxt('SAVE EXERCISE SETTINGS','種目の設定を保存')+'</button></div></div>';
  document.body.appendChild(o);
- const entry=o.querySelector('[data-bb-weight]');entry.focus();entry.select();
+ const entry=o.querySelector('[data-bb-weight]'),incrementEntry=o.querySelector('[data-bb-increment]');entry.focus();entry.select();
  o.querySelector('[data-cancel]').onclick=()=>o.remove();
  o.querySelector('[data-save]').onclick=()=>{
   if(!bvomWorkoutActionAllowed())return false;
   const current=Number(state.bodybuilding?.progression?.[id]?.load??state.bodybuilding?.progression?.[id]?.topLoad);
+  const currentIncrement=state.bodybuilding?.progression?.[id]?.increment,
+   effectiveIncrement=Number(bvomBbLoadStep(id));
   if(!bvomBbWeightEditAllowed(id)||state.bodybuilding?.completedSessions!==number||
    state.bodybuilding?.startedAt!==started||state.bodybuilding?.selections?.[slot]!==id||
-   unitLabel()!==unit||!Number.isFinite(current)||Math.abs(current-old)>1e-9){
+   unitLabel()!==unit||!Number.isFinite(current)||Math.abs(current-old)>1e-9||
+   currentIncrement!==storedIncrement||
+   (oldIncrement===null?Number.isFinite(effectiveIncrement)&&effectiveIncrement>0:
+    !Number.isFinite(effectiveIncrement)||Math.abs(effectiveIncrement-oldIncrement)>1e-9)){
    bvomBbInputNotice(o,hlmTxt('Workout changed. Close and reopen this editor.','ワークアウトが変更されました。閉じて再度開いてください。'),'[data-bb-weight]');return false;
   }
   const raw=String(entry.value??''),value=Number(raw);
   if(!raw.trim()||!Number.isFinite(value)||value<=0){
    bvomBbInputNotice(o,hlmTxt('Enter a valid positive working weight.','有効な正の重量を入力してください。'),'[data-bb-weight]');return false;
   }
-  if(Math.abs(value-old)<1e-9){o.remove();return true}
+  const incRaw=String(incrementEntry.value??'').trim(),increment=incRaw===''&&oldIncrement===null?null:Number(incRaw);
+  if((incRaw===''&&oldIncrement!==null)||
+    (increment!==null&&(!Number.isFinite(increment)||increment<=0))){
+   bvomBbInputNotice(o,hlmTxt('Enter a valid positive progression increment.','有効な正の増量幅を入力してください。'),'[data-bb-increment]');return false;
+  }
+  const weightChanged=Math.abs(value-old)>=1e-9,
+   incrementChanged=increment!==null&&(oldIncrement===null||Math.abs(increment-oldIncrement)>=1e-9);
+  if(!weightChanged&&!incrementChanged){o.remove();return true}
   const before=JSON.parse(JSON.stringify(state)),next=bvomBbProgress(id);
-  next.load=value;next.topLoad=value;
-  delete next.previousSuccessfulLoad;delete next.performanceRefResetLoad;
+  if(weightChanged){next.load=value;next.topLoad=value;
+   delete next.previousSuccessfulLoad;delete next.performanceRefResetLoad}
+  if(incrementChanged)next.increment=increment;
   if(!save({durable:true})){state=before;return false}
   if(bvomPersistenceBlocked())return true;
   o.remove();renderWorkout();renderWarm();bvomSyncWorkoutControls();return true;

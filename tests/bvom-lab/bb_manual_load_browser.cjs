@@ -8,7 +8,7 @@ const root=path.resolve(__dirname,'../..'),build=H.loadBuild(root);
 function fixture(lang){
  const h=H.boot(build);H.bbStart(h);
  const s=h.S(),b=s.bodybuilding;b.selections.A2='high_bar_squat';
- b.progression.high_bar_squat={load:100,topLoad:100,increment:2.5,calibrated:true};
+ b.progression.high_bar_squat={load:100,topLoad:100,increment:2.5,calibrated:true,previousSuccessfulLoad:97.5};
  s.weights.Squat=145;s.language=lang;s.accessoryList=[];s.gppList=[];
  h.ev('save()');return JSON.parse(JSON.stringify(s));
 }
@@ -48,6 +48,17 @@ const server=http.createServer((req,res)=>{
    await btn.click();
    const modal=page.locator('.bvomModalOverlay');
    assert.match(await modal.textContent(),lang==='en'?/next working weight/i:/次回のワーキング重量/);
+   assert.match(await modal.textContent(),lang==='en'?/progression increment/i:/進行時の増量幅/);
+   assert.equal(await modal.locator('[data-bb-increment]').inputValue(),'2.5','existing step appears in Edit Weight');
+   await modal.locator('[data-bb-increment]').fill('1');
+   await modal.locator('[data-save]').click();
+   assert.equal(await modal.count(),0,'increment-only change closes the existing modal');
+   let d=await get();
+   assert.equal(d.bodybuilding.progression.high_bar_squat.load,100,'increment-only retains load');
+   assert.equal(d.bodybuilding.progression.high_bar_squat.previousSuccessfulLoad,97.5,'increment-only retains progression evidence');
+   assert.equal(d.bodybuilding.progression.high_bar_squat.increment,1,'increment-only persists');
+   await btn.click();
+   assert.equal(await modal.locator('[data-bb-increment]').inputValue(),'1','reopened Edit Weight shows new increment');
    await modal.locator('[data-bb-weight]').fill('102.5');
    await modal.locator('[data-save]').click();
    assert.equal(await modal.count(),0,'successful edit closes the modal');
@@ -55,8 +66,10 @@ const server=http.createServer((req,res)=>{
    assert.equal(after.rx.sets[0].load,102.5);
    assert.notEqual(after.rx.sets[1].load,before.rx.sets[1].load,'back-offs recalculated');
    assert.notDeepEqual(after.warm.sets,before.warm.sets,'warm-up recalculated');
-   let d=await get();
+   d=await get();
    assert.equal(d.bodybuilding.progression.high_bar_squat.load,102.5);
+   assert.equal(d.bodybuilding.progression.high_bar_squat.increment,1,'weight edit preserves increment');
+   assert.equal(d.bodybuilding.progression.high_bar_squat.previousSuccessfulLoad,undefined,'weight edit resets old performance reference');
    assert.equal(d.weights.Squat,145,'LP load untouched');
    assert.equal(d.bodybuilding.completedSessions,0);
    assert.equal(d.history.length,0);
@@ -65,13 +78,14 @@ const server=http.createServer((req,res)=>{
    assert.match(await page.locator('#warmup #warm-bb-A2').textContent(),/102.5 kg/);
    await page.reload();await page.waitForSelector('#app:not(.hidden)');
    d=await get();assert.equal(d.bodybuilding.progression.high_bar_squat.load,102.5,'reload retains edit');
+   assert.equal(d.bodybuilding.progression.high_bar_squat.increment,1,'reload retains increment');
    await page.evaluate(()=>activateTab('warmup'));
    await page.locator('#warmup #warm-bb-A2 button.set').first().click();
    await page.evaluate(()=>activateTab('workout'));
    assert.equal(await page.locator('#workout #work-bb-A2 [data-bb-edit-weight]').isDisabled(),true,'warm-up tick locks same-exercise edit');
    d=await get();assert.equal(d.bodybuilding.progression.high_bar_squat.load,102.5);
    assert.deepEqual(errs,[],'no app JS exceptions');
-   console.log('PASS native Chromium Bodybuilding manual load: '+lang+' 375px, 100→102.5, backoffs, warmups, reload, LP isolation, tick protection');
+   console.log('PASS native Chromium Bodybuilding exercise settings: '+lang+' 375px, increment 2.5→1, weight 100→102.5, backoffs, warmups, reload, LP isolation, tick protection');
    await context.close();
   }
  }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}

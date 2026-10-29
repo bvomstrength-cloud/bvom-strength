@@ -13,7 +13,17 @@ module.exports=({test,ok,H,build})=>{
   return h;
  };
  const disk=h=>JSON.parse(h.ls.getItem('bvom_data'));
- const open=h=>typeof h.ctx.bvomBbEditWorkingWeight==='function'&&h.ctx.bvomBbEditWorkingWeight(id);
+ const open=h=>{
+  if(typeof h.ctx.bvomBbEditWorkingWeight!=='function'||!h.ctx.bvomBbEditWorkingWeight(id))return false;
+  // The Node DOM stub does not hydrate input.value from assigned innerHTML.
+  // Mirror the browser's initial field values for the real modal callbacks.
+  const o=h.lastOverlay();
+  for(const field of ['weight','increment']){
+   const match=o.innerHTML.match(new RegExp('data-bb-'+field+'[^>]*value="([^"]*)"'));
+   if(match)o.querySelector('[data-bb-'+field+']').value=match[1];
+  }
+  return true;
+ };
  const saveEdit=(h,weight)=>{
   const o=h.lastOverlay();
   o.querySelector('[data-bb-weight]').value=String(weight);
@@ -82,5 +92,63 @@ module.exports=({test,ok,H,build})=>{
    history.session['BB:'+id][0].load===102.5&&
    history.bodybuilding.decisions.some(x=>x.id===id&&x.decision.action==='increase'),
    JSON.stringify({current:p.load,old:p.previousSuccessfulLoad}));
+ });
+ test('BB62-INCREMENT-ONLY','DEFECT','Edit Weight modal changes only the exercise increment; weight, successful-load evidence and History stay intact',()=>{
+  const h=fixture();if(!open(h))return ok(false,'No editor');
+  const dlg=h.lastOverlay(),inc=dlg.querySelector('[data-bb-increment]');
+  if(!inc)return ok(false,'Missing progression increment field');
+  const displayed=Number(inc.value),before=JSON.stringify(h.S().history);
+  inc.value='1';dlg.querySelector('[data-save]').onclick();
+  const p=h.S().bodybuilding.progression[id],saved=disk(h),reloaded=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage});
+  return ok(displayed===2.5&&p.increment===1&&p.load===100&&p.topLoad===100&&
+   p.previousSuccessfulLoad===97.5&&saved.bodybuilding.completedSessions===0&&
+   JSON.stringify(h.S().history)===before&&h.S().weights.Squat===145&&
+   reloaded.S().bodybuilding.progression[id].increment===1,
+   JSON.stringify({displayed,progress:p}));
+ });
+ test('BB62-INCREMENT-COMBINED','DEFECT','One save updates weight and increment together, resets only weight-specific evidence',()=>{
+  const h=fixture();if(!open(h))return ok(false,'No editor');
+  const dlg=h.lastOverlay();dlg.querySelector('[data-bb-weight]').value='102.5';
+  dlg.querySelector('[data-bb-increment]').value='1';dlg.querySelector('[data-save]').onclick();
+  const p=disk(h).bodybuilding.progression[id];
+  return ok(p.load===102.5&&p.topLoad===102.5&&p.increment===1&&
+   !('previousSuccessfulLoad' in p)&&h.S().weights.Squat===145,
+   JSON.stringify(p));
+ });
+ test('BB62-INCREMENT-VALIDATION','DEFECT','Invalid, empty and zero increments cannot change persisted weight or progression',()=>{
+  const h=fixture();if(!open(h))return ok(false,'No editor');
+  const dlg=h.lastOverlay(),entry=dlg.querySelector('[data-bb-increment]'),before=h.ls.getItem('bvom_data');
+  const trials=['','0','-1','banana'];let all=true;
+  for(const raw of trials){entry.value=raw;dlg.querySelector('[data-save]').onclick();
+   all=all&&h.ls.getItem('bvom_data')===before&&h.S().bodybuilding.progression[id].increment===2.5}
+  return ok(all,JSON.stringify({trials,increment:h.S().bodybuilding.progression[id].increment}));
+ });
+ test('BB62-INCREMENT-STALE','DEFECT','An open Edit Weight dialog cannot overwrite a newer increment change',()=>{
+  const h=fixture();if(!open(h))return ok(false,'No editor');
+  const dlg=h.lastOverlay();dlg.querySelector('[data-bb-increment]').value='1';
+  h.S().bodybuilding.progression[id].increment=1.5;h.ev('save()');
+  const before=h.ls.getItem('bvom_data');dlg.querySelector('[data-save]').onclick();
+  return ok(h.ls.getItem('bvom_data')===before&&
+   h.S().bodybuilding.progression[id].increment===1.5,'Stale dialog cannot overwrite newer step');
+ });
+ test('BB62-INCREMENT-SAVE-ROLLBACK','DEFECT','A failed increment-only durable save preserves local weight, increment and history',()=>{
+  const h=fixture();if(!open(h))return ok(false,'No editor');
+  const dlg=h.lastOverlay(),raw=h.ls.getItem('bvom_data'),mem=JSON.stringify(h.S()),write=h.ls.setItem;
+  dlg.querySelector('[data-bb-increment]').value='1';
+  h.ls.setItem=(key,value)=>{if(key==='bvom_data')throw Error('synthetic storage quota');return write(key,value)};
+  try{dlg.querySelector('[data-save]').onclick()}finally{h.ls.setItem=write}
+  return ok(h.ls.getItem('bvom_data')===raw&&JSON.stringify(h.S())===mem,
+   'Rejected increment save rolls back');
+ });
+ test('BB62-INCREMENT-EARNED','DEFECT','The next earned Bodybuilding increase uses the new 1 kg step, not the old 2.5 kg step',()=>{
+  const h=fixture();if(!open(h))return ok(false,'No editor');
+  const dlg=h.lastOverlay();dlg.querySelector('[data-bb-increment]').value='1';
+  dlg.querySelector('[data-save]').onclick();
+  H.bbSession(h,(eid,i,q)=>eid===id&&i===0?{reps:8,load:100}:{});
+  const p=h.S().bodybuilding.progression[id],history=h.S().history.at(-1);
+  return ok(h.S().bodybuilding.completedSessions===1&&p.load===101&&p.increment===1&&
+   history.session['BB:'+id][0].load===100&&
+   history.bodybuilding.decisions.some(x=>x.id===id&&x.decision.action==='increase'),
+   JSON.stringify({nextLoad:p.load,increment:p.increment}));
  });
 };
