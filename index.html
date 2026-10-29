@@ -3184,6 +3184,14 @@ function bvomRestoreCommitAllowed(token,cloud=false){
  }
  return true;
 }
+function bvomBb2BackupRestoreWarning(current,incoming){
+ const local=current?.bb2;
+ if(!local||typeof local!=='object'||
+   !(local.setup||local.opening||local.events?.length||local.sealedBlocks?.length)||
+   JSON.stringify(local)===JSON.stringify(incoming?.bb2))return '';
+ return hlmTxt('WARNING: This device contains Bodybuilding 2 setup or workouts that will be REPLACED or REMOVED by this restore. BB2 is not yet saved in BVOM Cloud. Export a current BVOM backup before continuing.',
+  '警告：この端末のボディビルディング2の設定やトレーニング記録は、この復元によって上書きまたは削除されます。BB2はまだBVOMクラウドに保存されません。続行する前に現在のBVOMバックアップを書き出してください。');
+}
 function importBackupFile(input){if(!bvomWorkoutActionAllowed())return;
  if(bvomCloudWorkoutActive()||bvomStoredWorkoutActive()){
   input.value='';
@@ -3192,7 +3200,11 @@ function importBackupFile(input){if(!bvomWorkoutActionAllowed())return;
  }
  const f=input.files?.[0];if(!f)return;const token=bvomRestoreToken(),r=new FileReader();
  r.onload=()=>{if(!bvomRestoreCommitAllowed(token)){input.value='';return}let d;try{const obj=JSON.parse(r.result),candidate=obj.data||obj;if(!candidate||typeof candidate!=='object'||!candidate.weights||!Array.isArray(candidate.history))throw Error();d=candidate}catch(e){input.value='';bvomBeeModal(hlmTxt('BACKUP NOT RESTORED','バックアップを復元できませんでした'),hlmTxt('That does not look like a valid BVOM backup.','有効なBVOMバックアップではないようです。'));return}
-  bvomChoiceModal(hlmTxt('RESTORE BACKUP?','バックアップを復元しますか？'),hlmTxt('This will replace BVOM data currently on this device. A one-step pre-restore copy will be kept on this device.','この端末の現在のBVOMデータを置き換えます。復元前のデータは、この端末に1段階の復元用コピーとして保存されます。'),hlmTxt('CANCEL','キャンセル'),hlmTxt('RESTORE','復元'),()=>{input.value=''},()=>{if(!bvomRestoreCommitAllowed(token)){input.value='';return false}try{localStorage.setItem('bvom_pre_restore',JSON.stringify(state));if(!bvomRestoreCommitAllowed(token))return false;localStorage.setItem(BVOM_DATA_KEY,JSON.stringify(d));if(window.__bvomAuthUserId)bvomSetLocalOwnerId(window.__bvomAuthUserId);location.reload()}catch(e){input.value='';bvomBeeModal(hlmTxt('RESTORE FAILED','復元できませんでした'),hlmTxt('BVOM could not save the restored data on this device. Your current session has not been replaced.','復元したデータをこの端末に保存できませんでした。現在のセッションは置き換えられていません。'))}});
+  const bb2Warning=bvomBb2BackupRestoreWarning(state,d);
+  const body=(bb2Warning?'<p style="font-weight:700">'+bb2Warning+'</p>':'')+
+   hlmTxt('This will replace BVOM data currently on this device. A one-step pre-restore copy will be kept on this device.',
+    'この端末の現在のBVOMデータを置き換えます。復元前のデータは、この端末に1段階の復元用コピーとして保存されます。');
+  bvomChoiceModal(hlmTxt('RESTORE BACKUP?','バックアップを復元しますか？'),body,hlmTxt('CANCEL','キャンセル'),hlmTxt('RESTORE','復元'),()=>{input.value=''},()=>{if(!bvomRestoreCommitAllowed(token)){input.value='';return false}try{localStorage.setItem('bvom_pre_restore',JSON.stringify(state));if(!bvomRestoreCommitAllowed(token))return false;localStorage.setItem(BVOM_DATA_KEY,JSON.stringify(d));if(window.__bvomAuthUserId)bvomSetLocalOwnerId(window.__bvomAuthUserId);location.reload()}catch(e){input.value='';bvomBeeModal(hlmTxt('RESTORE FAILED','復元できませんでした'),hlmTxt('BVOM could not save the restored data on this device. Your current session has not been replaced.','復元したデータをこの端末に保存できませんでした。現在のセッションは置き換えられていません。'))}});
  };
  r.onerror=()=>{input.value='';bvomBeeModal(hlmTxt('BACKUP NOT RESTORED','バックアップを復元できませんでした'),hlmTxt('BVOM could not read that backup file.','そのバックアップファイルを読み込めませんでした。'))};r.readAsText(f);
 }

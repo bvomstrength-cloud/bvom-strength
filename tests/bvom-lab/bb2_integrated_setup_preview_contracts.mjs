@@ -117,6 +117,52 @@ function fixture({ls}={}){
 }
 
 {
+ const {h}=fixture();
+ const oldBackup=JSON.parse(h.ls.getItem('bvom_data'));
+ assert.equal(h.ctx.bvomBb2BackupRestoreWarning(h.S(),oldBackup),'',
+  'ordinary BVOM backups have no new warning when BB2 is absent');
+ const bb2={setup:catalogue.createBB2Setup(),opening:catalogue.createBB2Opening({
+  ownerId:'bb2-test-owner',blockId:'bb2-backup-guard'}),events:[]};
+ h.ctx.__bb2BackupFixture=bb2;
+ h.ev('state.bb2=__bb2BackupFixture');
+ const untouched=JSON.stringify(h.S()),raw=h.ls.getItem('bvom_data');
+ assert.equal(h.ctx.bvomBb2BackupRestoreWarning(h.S(),{bb2}),'' ,
+  'restoring identical BB2 data does not warn of a replacement');
+ assert.match(h.ctx.bvomBb2BackupRestoreWarning(h.S(),oldBackup),/REPLACED or REMOVED/);
+ assert.match(h.ctx.bvomBb2BackupRestoreWarning(h.S(),{bb2:{...bb2,events:[{type:'test'}]}}),
+  /not yet saved in BVOM Cloud/,'different BB2 archive also warns');
+ h.ev("state.language='ja'");
+ assert.match(h.ctx.bvomBb2BackupRestoreWarning(h.S(),oldBackup),/ボディビルディング2/,
+  'the same warning is available in Japanese');
+ h.ev('delete state.language');
+ let reader,prompt='',restore;
+ h.ctx.FileReader=function(){reader=this;this.readAsText=()=>{}};
+ h.ctx.bvomChoiceModal=(title,body,left,right,onLeft,onRight)=>{
+  prompt=body;restore={onLeft,onRight};return restore};
+ h.ctx.importBackupFile({files:[{name:'old-bvom.json'}]});
+ reader.result=JSON.stringify({app:'BVOM',data:oldBackup});reader.onload();
+ assert.match(prompt,/Bodybuilding 2 setup or workouts/,
+  'existing Restore Backup UI names the local-only BB2 records at risk');
+ assert.match(prompt,/Export a current BVOM backup/);
+ restore.onLeft();
+ assert.equal(h.ls.getItem('bvom_data'),raw,'cancelled BB2-risk restore performs no overwrite');
+ assert.equal(JSON.stringify(h.S()),untouched,'cancelled restore preserves in-memory BB2 data');
+ assert.equal(h.ls.getItem('bvom_pre_restore'),null,'cancel creates no recovery backup');
+ h.ctx.importBackupFile({files:[{name:'same-bvom.json'}]});
+ reader.result=JSON.stringify({app:'BVOM',data:{...oldBackup,bb2}});reader.onload();
+ assert.doesNotMatch(prompt,/Bodybuilding 2 setup or workouts/,
+  'the same BB2 data does not create unnecessary warning prompts');
+ h.ctx.importBackupFile({files:[{name:'old-bvom.json'}]});
+ reader.result=JSON.stringify({app:'BVOM',data:oldBackup});reader.onload();
+ restore.onRight();
+ assert.equal(JSON.parse(h.ls.getItem('bvom_data')).bb2,undefined,
+  'a deliberately confirmed legacy restore retains existing replacement semantics');
+ assert.equal(JSON.parse(h.ls.getItem('bvom_pre_restore')).bb2.opening.blockId,
+  'bb2-backup-guard','the existing pre-restore recovery snapshot contains old BB2 data');
+ console.log('PASS: BB2 local-only backup restore warning, cancellation and pre-restore recovery');
+}
+
+{
  const {h,before}=fixture();
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
@@ -1805,4 +1851,4 @@ H.withClock(c=>{
  console.log('PASS: BB2 chooser cancel, HLM, LP, Custom and BB1 switches preserve history and cloud isolation');
 }
 
-console.log('BB2 BVOM integrated setup preview: 37/37 PASS');
+console.log('BB2 BVOM integrated setup preview: 38/38 PASS');
