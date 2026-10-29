@@ -213,6 +213,97 @@ function fixture({ls}={}){
  console.log('PASS: BB2 Start, set, duplicate fence, reload, cloud guard, lock refusal and Discard');
 }
 
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const field=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
+  if(field)return field[1]==='hard'?{checked:false}:{value:field[1]==='load'?'60':
+   field[1]==='inc'?'2.5':field[1]==='assist'?'none':'8'};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ const sessionId=h.S().bb2.activeSessionId;
+ assert.equal(h.ctx.bvomBb2OpenExtra(0),false,'no extra-set entry before any prescribed work');
+ assert.equal(h.ctx.bvomBb2Log(0,0),true);
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-extra-add="0"/);
+ assert.equal(h.ctx.bvomBb2Log(0,3,true),false,'extra cannot bypass the Add button');
+ assert.equal(h.ctx.bvomBb2OpenExtra(0),true);
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-extra-entry="0"/);
+ assert.equal(h.ctx.bvomBb2Log(0,3,true),true,'first extra recorded in the frozen ledger');
+ const extra=h.S().bb2.events.find(e=>e.type==='EXTRA_SET_RECORDED');
+ assert.equal(extra.setIndex,3);assert.equal(extra.prescribed,false);
+ assert.equal(extra.sessionId,sessionId);
+ assert.equal(h.ctx.bvomBb2Log(0,3,true),false,'duplicate extra ordinal refused');
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-extra-done="0\|3"/);
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/1\/12 prescribed sets recorded/,
+  'an extra set cannot satisfy the 70% gate');
+ const bwSlot=h.S().bb2.events.find(e=>e.type==='WORKOUT_STARTED').slots.findIndex(
+  s=>s.equipment==='bodyweight');
+ assert.ok(bwSlot>=0,'default BB2 upper template has a qualitative bodyweight option');
+ assert.equal(h.ctx.bvomBb2Log(bwSlot,0),true);
+ assert.equal(h.ctx.bvomBb2OpenExtra(bwSlot),true);
+ const bwStart=h.S().bb2.events.find(e=>e.type==='WORKOUT_STARTED').slots[bwSlot];
+ assert.equal(h.ctx.bvomBb2Log(bwSlot,bwStart.sets,true),true);
+ const bwExtra=h.S().bb2.events.filter(e=>e.type==='EXTRA_SET_RECORDED').at(-1);
+ assert.equal(bwExtra.prescribed,false);assert.equal(bwExtra.variation,bwStart.variation);
+ assert.equal(bwExtra.assistance,bwStart.assistance);
+ for(let n=1;n<30;n++){
+  assert.equal(h.ctx.bvomBb2OpenExtra(0),true);
+  assert.equal(h.ctx.bvomBb2Log(0,3+n,true),true,'extra set '+(n+1)+' of 30');
+ }
+ assert.equal(h.ctx.bvomBb2OpenExtra(0),false,'BB1-style 30-extra-set limit');
+ assert.doesNotMatch(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-extra-add="0"/);
+ const reloaded=fixture({ls:h.ls});
+ assert.equal(reloaded.h.S().bb2.events.filter(e=>e.type==='EXTRA_SET_RECORDED').length,31,
+  'extra numeric and bodyweight sets survive a BVOM document reload');
+ assert.equal(h.ctx.bvomBb2End('FINISH'),false,'extras cannot make a below-gate Finish eligible');
+ assert.equal(h.ctx.bvomBb2End('INCOMPLETE'),true);
+ const p=catalogue.foldBB2Block(h.S().bb2.opening,h.S().bb2.events);
+ assert.equal(p.quotas.upper_a,0);
+ assert.equal(p.history[0].validCount,2,'only prescribed sets count');
+ assert.equal(p.history[0].sets.filter(s=>!s.prescribed).length,31,
+  'all permitted extra sets remain in History');
+ assert.match(h.ctx.document.querySelector('#history').innerHTML,/EXTRA SET/,
+  'the shared History labels logged extra work');
+ assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
+ console.log('PASS: BB2 numeric/BW extras, 70% isolation, reload and History');
+}
+
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const field=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
+  if(field)return field[1]==='hard'?{checked:false}:{value:field[1]==='load'?'60':
+   field[1]==='inc'?'2.5':field[1]==='assist'?'none':'8'};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ assert.equal(h.ctx.bvomBb2Log(0,0),true);
+ assert.equal(h.ctx.bvomBb2OpenExtra(0),true);
+ const before=h.S().bb2,raw=h.ls.getItem('bvom_data'),setItem=h.ls.setItem;
+ h.ls.setItem=(k,v)=>{if(k==='bvom_data')throw Error('simulated full local storage');return setItem(k,v)};
+ assert.equal(h.ctx.bvomBb2Log(0,3,true),false,'failed extra-set persistence rolls back');
+ h.ls.setItem=setItem;
+ assert.equal(h.S().bb2,before);
+ assert.equal(h.ls.getItem('bvom_data'),raw);
+ assert.equal(h.S().bb2.events.some(e=>e.type==='EXTRA_SET_RECORDED'),false);
+ console.log('PASS: failed BB2 extra-set save never creates a phantom set or credit');
+}
+
 
 {
  const {h,before}=fixture();
@@ -1625,4 +1716,4 @@ H.withClock(c=>{
  console.log('PASS: BB2 chooser cancel, HLM, LP, Custom and BB1 switches preserve history and cloud isolation');
 }
 
-console.log('BB2 BVOM integrated setup preview: 35/35 PASS');
+console.log('BB2 BVOM integrated setup preview: 37/37 PASS');

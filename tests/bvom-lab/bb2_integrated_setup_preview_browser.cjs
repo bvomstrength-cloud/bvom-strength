@@ -382,6 +382,13 @@ const server=http.createServer((req,res)=>{
   await page.waitForSelector('#workout [data-bb2-log="0|0"]');
   await page.locator('#workout [data-bb2-reps="0|0"]').fill('8');
   await page.locator('#workout [data-bb2-log="0|0"]').click();
+  await page.locator('#workout [data-bb2-extra-add="0"]').click();
+  await page.locator('#workout [data-bb2-reps="0|3"]').fill('11');
+  await page.locator('#workout [data-bb2-extra-log="0|3"]').click();
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.events
+   .filter(e=>e.type==='EXTRA_SET_RECORDED'&&!e.prescribed).length),1,
+   'actual extra-set button logs non-gating work in the shared BVOM document');
+  assert.equal(await page.locator('#workout [data-bb2-extra-done="0|3"]').count(),1);
   const beforeAbandon=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
   assert.equal(typeof beforeAbandon.workoutLastActivityAt,'number',
    'the actual BB2 working set records an inactivity timestamp');
@@ -390,6 +397,8 @@ const server=http.createServer((req,res)=>{
   await page.waitForSelector('#app:not(.hidden)');
   await page.evaluate(()=>activateTab('workout'));
   await page.waitForSelector('#workout [data-bb2-log="0|1"]');
+  assert.equal(await page.locator('#workout [data-bb2-extra-done="0|3"]').count(),1,
+   'the additional recorded set survives a real PWA tab reload');
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.activeSessionId!==null),true,
    'a normal reload recovers the interrupted BB2 working sets');
   assert.equal(await page.evaluate(()=>{
@@ -406,7 +415,8 @@ const server=http.createServer((req,res)=>{
   });
   assert.equal(abandoned.active,null);
   assert.equal(abandoned.recent.status,'INCOMPLETE');
-  assert.equal(abandoned.recent.sets.length,1,'recorded BB2 work survives automatic incomplete close');
+  assert.equal(abandoned.recent.sets.length,2,'prescribed and extra sets survive automatic incomplete close');
+  assert.equal(abandoned.recent.validCount,1,'extra sets do not count toward Finish eligibility');
   assert.equal(abandoned.recent.creditId,null);
   assert.equal(abandoned.quotas.upper_a,0);
   assert.equal(abandoned.legacyCount,fixture.history.length,'legacy History is untouched');
