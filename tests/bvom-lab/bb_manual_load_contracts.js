@@ -180,10 +180,28 @@ module.exports=({test,ok,H,build})=>{
    first=h.ctx.bvomBbPerformanceDrop(id,33.5,7),second=h.ctx.bvomBbPerformanceDrop(id,34,5),
    reload=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage});
   const persisted=Object.values(reload.S().bodybuilding.performanceRefs[id]).map(x=>({load:x.load,reps:x.reps})).sort((a,b)=>a.load-b.load);
-  return ok(lb.length===2&&lb[0].load===73.85&&lb[0].reps===12&&lb[1].load===74.96&&lb[1].reps===8&&
+  return ok(lb.length===2&&lb[0].load===73.8549&&lb[0].reps===12&&lb[1].load===74.9572&&lb[1].reps===8&&
    JSON.stringify(kg)===JSON.stringify([{load:33.5,reps:12},{load:34,reps:8}])&&
    JSON.stringify(persisted)===JSON.stringify(kg)&&first?.triggered===true&&second?.triggered===true,
    JSON.stringify({lb,kg,persisted,first,second}));
+ });
+ test('BB62-AUDIT-HUNDREDTH-LB-ROUNDTRIP','DEFECT','Historical loads only 0.01 lb apart remain distinct after lb/kg/lb conversion and reload',()=>{
+  const h=fixture();h.ctx.changeUnits('lb',true);
+  const s=h.S(),p=s.bodybuilding.progression[id];p.increment=.01;p.load=75;p.topLoad=75;
+  s.bodybuilding.performanceRefs[id]={
+   older:{load:75,reps:12,updatedAt:'2026-01-01'},
+   newer:{load:75.01,reps:8,updatedAt:'2026-01-02'}
+  };h.ev('save()');h.ctx.changeUnits('kg',true);
+  const kg=Object.values(h.S().bodybuilding.performanceRefs[id]).map(x=>({load:x.load,reps:x.reps})).sort((a,b)=>a.load-b.load);
+  h.ctx.changeUnits('lb',true);
+  const lb=Object.values(h.S().bodybuilding.performanceRefs[id]).map(x=>({load:x.load,reps:x.reps})).sort((a,b)=>a.load-b.load),
+   first=h.ctx.bvomBbPerformanceDrop(id,75,7),second=h.ctx.bvomBbPerformanceDrop(id,75.01,5),
+   reload=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage});
+  const persisted=Object.values(reload.S().bodybuilding.performanceRefs[id]).map(x=>({load:x.load,reps:x.reps})).sort((a,b)=>a.load-b.load);
+  return ok(JSON.stringify(kg)===JSON.stringify([{load:34.0194,reps:12},{load:34.024,reps:8}])&&
+   JSON.stringify(lb)===JSON.stringify([{load:75,reps:12},{load:75.01,reps:8}])&&
+   JSON.stringify(persisted)===JSON.stringify(lb)&&first?.triggered===true&&second?.triggered===true,
+   JSON.stringify({kg,lb,persisted,first,second}));
  });
  test('BB62-AUDIT-PREPARATION-NEUTRAL','DEFECT','Increment-only edit preserves existing back-offs and machine warm-ups; weight edit recalculates them',()=>{
   const h=fixture(),s=h.S(),p=s.bodybuilding.progression[id];p.load=32.5;p.topLoad=32.5;

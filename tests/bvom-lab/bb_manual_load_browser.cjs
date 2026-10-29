@@ -140,13 +140,28 @@ const server=http.createServer((req,res)=>{
    });
    const refsLb=await page.evaluate(()=>Object.values(state.bodybuilding.performanceRefs.high_bar_squat)
     .map(x=>({load:x.load,reps:x.reps})).sort((a,b)=>a.load-b.load));
-   assert.deepEqual(refsLb,[{load:73.85,reps:12},{load:74.96,reps:8}],
+   assert.deepEqual(refsLb,[{load:73.8549,reps:12},{load:74.9572,reps:8}],
     'unit conversion preserves distinct historical loads');
    await page.evaluate(()=>changeUnits('kg',true));
    const refsKg=await page.evaluate(()=>Object.values(state.bodybuilding.performanceRefs.high_bar_squat)
     .map(x=>({load:x.load,reps:x.reps})).sort((a,b)=>a.load-b.load));
    assert.deepEqual(refsKg,[{load:33.5,reps:12},{load:34,reps:8}],
     'return to kg recovers both exact performance references');
+   await page.evaluate(()=>{
+    changeUnits('lb',true);
+    state.bodybuilding.performanceRefs.high_bar_squat={a:{load:75,reps:12},b:{load:75.01,reps:8}};
+    save({durable:true});changeUnits('kg',true);
+   });
+   const fineKg=await page.evaluate(()=>Object.values(state.bodybuilding.performanceRefs.high_bar_squat)
+    .map(x=>({load:x.load,reps:x.reps})).sort((a,b)=>a.load-b.load));
+   assert.deepEqual(fineKg,[{load:34.0194,reps:12},{load:34.024,reps:8}],
+    '0.01 lb separated evidence stays distinct in kilograms');
+   await page.evaluate(()=>changeUnits('lb',true));
+   const fineLb=await page.evaluate(()=>Object.values(state.bodybuilding.performanceRefs.high_bar_squat)
+    .map(x=>({load:x.load,reps:x.reps})).sort((a,b)=>a.load-b.load));
+   assert.deepEqual(fineLb,[{load:75,reps:12},{load:75.01,reps:8}],
+    '0.01 lb separated evidence restores exactly');
+   await page.evaluate(()=>changeUnits('kg',true));
    await page.reload();await page.waitForSelector('#app:not(.hidden)');
    assert.equal((await get()).bodybuilding.progression.machine_chest_press.preparationStep,null,
     'no-step preparation lock survives full reload');
@@ -156,7 +171,7 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.locator('#workout #work-bb-A2 [data-bb-edit-weight]').isDisabled(),true,'warm-up tick locks same-exercise edit');
    d=await get();assert.equal(d.bodybuilding.progression.high_bar_squat.load,102.5);
    assert.deepEqual(errs,[],'no app JS exceptions');
-   console.log('PASS native Chromium Bodybuilding exercise settings: '+lang+' 375px, triceps 32.5+1→33.5, first machine increment neutral, distinct kg/lb refs, weight 100→102.5, warmups, reload, LP isolation, tick protection');
+   console.log('PASS native Chromium Bodybuilding exercise settings: '+lang+' 375px, triceps 32.5+1→33.5, first machine increment neutral, distinct kg/lb refs including .01 lb, weight 100→102.5, warmups, reload, LP isolation, tick protection');
    await context.close();
   }
  }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}

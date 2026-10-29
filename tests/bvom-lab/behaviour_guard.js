@@ -425,7 +425,7 @@ test('F5-LB-PRACTICAL','DEFECT','kg→lb keeps prescribed working loads on the p
     const convertedRefs=Object.entries(b.performanceRefs[id]||{}),originalRefs=before[id].refs;
     if(convertedRefs.length!==originalRefs.length)bad.push(`ref ${id}: lost historical reference`);
     for(const [k,r] of convertedRefs)if(k!==h.ctx.bvomBbComparableKey(id,r.load))bad.push(`ref ${k} noncanonical`);
-    for(const r of originalRefs){const physical=Math.round(convRaw(r.load,'kg','lb')*100)/100;
+    for(const r of originalRefs){const physical=Math.round(convRaw(r.load,'kg','lb')*10000)/10000;
      if(!convertedRefs.some(([,v])=>v.load===physical&&v.reps===r.reps))bad.push(`ref ${id}: ${r.load} kg historical load not preserved`)} }
   bbSession(h,(id,i,q)=>({reps:q.type==='top'?8:q.maxReps}));bbSession(h,(id,i,q)=>({reps:q.type==='top'?8:q.maxReps}));
   for(const id of Object.values(b.selections)){const p=b.progression[id];if(!h.ctx.bvomBbNumericExercise(id))continue;for(const s of h.ctx.bvomBbPrescription(id).sets)if(s.load!=null&&!onGrid(s.load,p.increment))bad.push(`rx ${id}=${s.load} off ${p.increment} grid`)}
