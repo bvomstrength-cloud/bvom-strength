@@ -109,13 +109,54 @@ const server=http.createServer((req,res)=>{
    assert.equal(tri.p.load,32.5,'editing step does not move triceps load');
    assert.equal(tri.p.previousSuccessfulLoad,30,'editing step keeps prior successful load');
    assert.equal(tri.decision.nextLoad,33.5,'earned 1 kg from 32.5 kg must be 33.5 kg, not 34 kg');
+   await page.evaluate(()=>{
+    const id='machine_chest_press';state.bodybuilding.selections.A1=id;
+    state.bodybuilding.progression[id]={load:32.5,topLoad:32.5,calibrated:true};
+    save({durable:true});renderAll();
+   });
+   const machineBefore=await page.evaluate(()=>({
+    back:bvomBbPrescription('machine_chest_press').sets.slice(1).map(x=>x.load),
+    warm:bvomBbWarmStageBPlan('A1','machine_chest_press').sets
+   }));
+   await page.locator('#workout #work-bb-A1 [data-bb-edit-weight]').click();
+   assert.equal(await modal.locator('[data-bb-increment]').inputValue(),'','unset increment displayed empty');
+   await modal.locator('[data-bb-increment]').fill('1');
+   await modal.locator('[data-save]').click();
+   const machineAfter=await page.evaluate(()=>({
+    back:bvomBbPrescription('machine_chest_press').sets.slice(1).map(x=>x.load),
+    warm:bvomBbWarmStageBPlan('A1','machine_chest_press').sets,
+    prep:state.bodybuilding.progression.machine_chest_press.preparationStep,
+    step:state.bodybuilding.progression.machine_chest_press.increment
+   }));
+   assert.deepEqual(machineAfter.back,machineBefore.back,'first increment leaves machine back-offs intact');
+   assert.deepEqual(machineAfter.warm,machineBefore.warm,'first increment leaves machine warm-ups intact');
+   assert.equal(machineAfter.prep,null,'no prior rounding step is preserved');
+   assert.equal(machineAfter.step,1);
+   await page.evaluate(()=>{
+    state.bodybuilding.performanceRefs.high_bar_squat={
+     old:{load:33.5,reps:12},other:{load:34,reps:8}
+    };
+    save({durable:true});changeUnits('lb',true);
+   });
+   const refsLb=await page.evaluate(()=>Object.values(state.bodybuilding.performanceRefs.high_bar_squat)
+    .map(x=>({load:x.load,reps:x.reps})).sort((a,b)=>a.load-b.load));
+   assert.deepEqual(refsLb,[{load:73.85,reps:12},{load:74.96,reps:8}],
+    'unit conversion preserves distinct historical loads');
+   await page.evaluate(()=>changeUnits('kg',true));
+   const refsKg=await page.evaluate(()=>Object.values(state.bodybuilding.performanceRefs.high_bar_squat)
+    .map(x=>({load:x.load,reps:x.reps})).sort((a,b)=>a.load-b.load));
+   assert.deepEqual(refsKg,[{load:33.5,reps:12},{load:34,reps:8}],
+    'return to kg recovers both exact performance references');
+   await page.reload();await page.waitForSelector('#app:not(.hidden)');
+   assert.equal((await get()).bodybuilding.progression.machine_chest_press.preparationStep,null,
+    'no-step preparation lock survives full reload');
    await page.evaluate(()=>activateTab('warmup'));
    await page.locator('#warmup #warm-bb-A2 button.set').first().click();
    await page.evaluate(()=>activateTab('workout'));
    assert.equal(await page.locator('#workout #work-bb-A2 [data-bb-edit-weight]').isDisabled(),true,'warm-up tick locks same-exercise edit');
    d=await get();assert.equal(d.bodybuilding.progression.high_bar_squat.load,102.5);
    assert.deepEqual(errs,[],'no app JS exceptions');
-   console.log('PASS native Chromium Bodybuilding exercise settings: '+lang+' 375px, triceps 32.5+1→33.5, increment 2.5→1, weight 100→102.5, warmups, reload, LP isolation, tick protection');
+   console.log('PASS native Chromium Bodybuilding exercise settings: '+lang+' 375px, triceps 32.5+1→33.5, first machine increment neutral, distinct kg/lb refs, weight 100→102.5, warmups, reload, LP isolation, tick protection');
    await context.close();
   }
  }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}

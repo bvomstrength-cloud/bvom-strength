@@ -167,6 +167,24 @@ module.exports=({test,ok,H,build})=>{
    refs['high_bar_squat|33.5']?.reps===12&&refs['high_bar_squat|34']?.reps===8,
    JSON.stringify({at335,at34,refs}));
  });
+ test('BB62-AUDIT-PERFORMANCE-REF-UNIT-COLLISION','DEFECT','Fine-step kg/lb/kg conversion preserves two distinct historical performance references',()=>{
+  const h=fixture(),s=h.S(),p=s.bodybuilding.progression[id];p.increment=1;
+  s.bodybuilding.performanceRefs[id]={
+   'high_bar_squat|34':{load:33.5,reps:12,updatedAt:'2026-01-01'},
+   'high_bar_squat|34-old':{load:34,reps:8,updatedAt:'2026-01-02'}
+  };
+  h.ev('save()');h.ctx.changeUnits('lb',true);
+  const lb=Object.values(h.S().bodybuilding.performanceRefs[id]).map(x=>({load:x.load,reps:x.reps})).sort((a,b)=>a.load-b.load);
+  h.ctx.changeUnits('kg',true);
+  const kg=Object.values(h.S().bodybuilding.performanceRefs[id]).map(x=>({load:x.load,reps:x.reps})).sort((a,b)=>a.load-b.load),
+   first=h.ctx.bvomBbPerformanceDrop(id,33.5,7),second=h.ctx.bvomBbPerformanceDrop(id,34,5),
+   reload=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage});
+  const persisted=Object.values(reload.S().bodybuilding.performanceRefs[id]).map(x=>({load:x.load,reps:x.reps})).sort((a,b)=>a.load-b.load);
+  return ok(lb.length===2&&lb[0].load===73.85&&lb[0].reps===12&&lb[1].load===74.96&&lb[1].reps===8&&
+   JSON.stringify(kg)===JSON.stringify([{load:33.5,reps:12},{load:34,reps:8}])&&
+   JSON.stringify(persisted)===JSON.stringify(kg)&&first?.triggered===true&&second?.triggered===true,
+   JSON.stringify({lb,kg,persisted,first,second}));
+ });
  test('BB62-AUDIT-PREPARATION-NEUTRAL','DEFECT','Increment-only edit preserves existing back-offs and machine warm-ups; weight edit recalculates them',()=>{
   const h=fixture(),s=h.S(),p=s.bodybuilding.progression[id];p.load=32.5;p.topLoad=32.5;
   s.bodybuilding.selections.A1='machine_chest_press';
@@ -189,6 +207,27 @@ module.exports=({test,ok,H,build})=>{
    JSON.stringify(afterWarm)===JSON.stringify(persistedWarm)&&
    JSON.stringify(changed)!==JSON.stringify(afterBack),
    JSON.stringify({backBefore,afterBack,warmBefore,afterWarm,changed}));
+ });
+ test('BB62-AUDIT-FIRST-INCREMENT-PREPARATION','DEFECT','Entering the first increment with no previous rounding step preserves machine back-offs and warm-ups through reload',()=>{
+  const machine='machine_chest_press',h=fixture(),s=h.S();s.bodybuilding.selections.A1=machine;
+  s.bodybuilding.progression[machine]={load:32.5,topLoad:32.5,calibrated:true};
+  h.ev('save()');h.ctx.renderAll();
+  const rxBefore=h.ctx.bvomBbPrescription(machine).sets.slice(1).map(x=>x.load),
+   warmBefore=h.ctx.bvomBbStageAWarmupPlan(machine,32.5).sets,
+   stageBBefore=h.ctx.bvomBbWarmStageBPlan('A1',machine).sets;
+  if(!openFor(h,machine))return ok(false,'Cannot open first-increment editor');
+  const dlg=h.lastOverlay();dlg.querySelector('[data-bb-increment]').value='1';dlg.querySelector('[data-save]').onclick();
+  const rxAfter=h.ctx.bvomBbPrescription(machine).sets.slice(1).map(x=>x.load),
+   warmAfter=h.ctx.bvomBbStageAWarmupPlan(machine,32.5).sets,
+   stageBAfter=h.ctx.bvomBbWarmStageBPlan('A1',machine).sets,
+   reload=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage}),p=reload.S().bodybuilding.progression[machine];
+  return ok(rxBefore[0]===29.9&&p.increment===1&&p.preparationStep===null&&p.load===32.5&&
+   JSON.stringify(rxBefore)===JSON.stringify(rxAfter)&&
+   JSON.stringify(warmBefore)===JSON.stringify(warmAfter)&&
+   JSON.stringify(stageBBefore)===JSON.stringify(stageBAfter)&&
+   JSON.stringify(rxAfter)===JSON.stringify(reload.ctx.bvomBbPrescription(machine).sets.slice(1).map(x=>x.load))&&
+   JSON.stringify(warmAfter)===JSON.stringify(reload.ctx.bvomBbStageAWarmupPlan(machine,32.5).sets),
+   JSON.stringify({rxBefore,rxAfter,warmBefore,warmAfter,stageBBefore,stageBAfter,p}));
  });
  test('BB62-AUDIT-EXACT-REDUCTIONS','DEFECT','Non-grid reductions subtract exactly one increment, or use previous successful load where present',()=>{
   const h=fixture(),p=h.S().bodybuilding.progression[id],cases=[];
