@@ -203,6 +203,67 @@ module.exports=({test,ok,H,build})=>{
    JSON.stringify(persisted)===JSON.stringify(lb)&&first?.triggered===true&&second?.triggered===true,
    JSON.stringify({kg,lb,persisted,first,second}));
  });
+ test('BB62-AUDIT-SNAPPED-UNIT-REF-LOOKUP','DEFECT','A practical converted working load still finds its exact pre-conversion performance origin, without merging other references',()=>{
+  const h=fixture(),s=h.S(),p=s.bodybuilding.progression[id];p.load=33.5;p.topLoad=33.5;
+  s.bodybuilding.performanceRefs[id]={
+   old:{load:33.5,reps:12,updatedAt:'2026-01-01'},
+   nearby:{load:34,reps:8,updatedAt:'2026-01-02'}
+  };h.ev('save()');h.ctx.changeUnits('lb',true);
+  const working=h.S().bodybuilding.progression[id].load,
+   refs=Object.values(h.S().bodybuilding.performanceRefs[id]),
+   warning=h.ctx.bvomBbPerformanceDrop(id,working,7),
+   notice=h.ctx.bvomBbPerformanceDropNotice([{id,drop:warning}]),
+   reload=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage}),
+   afterReload=reload.ctx.bvomBbPerformanceDrop(id,working,7);
+  reload.ctx.bvomBbRecordPerformanceRef(id,working,10);
+  const exact=reload.ctx.bvomBbPerformanceDrop(id,working,7),
+   preserved=Object.values(reload.S().bodybuilding.performanceRefs[id]);
+  reload.ctx.changeUnits('kg',true);
+  const restored=Object.values(reload.S().bodybuilding.performanceRefs[id]);
+  return ok(working===75&&refs.length===2&&refs[0].load===73.8549&&refs[1].load===74.9572&&
+   warning?.triggered===true&&warning?.referenceReps===12&&warning?.convertedEquivalent===true&&
+   notice.includes('equivalent load before changing units')&&afterReload?.triggered===true&&
+   exact?.referenceReps===10&&exact?.convertedEquivalent===false&&preserved.length===3&&
+   restored.some(r=>r.load===33.5&&r.reps===12)&&restored.some(r=>r.load===34&&r.reps===8),
+   JSON.stringify({working,refs,warning,afterReload,exact,preserved,restored}));
+ });
+ test('BB62-AUDIT-SETUP-LOCK-LIFECYCLE','DEFECT','Mid-block setup preserves preparations while a completed block starts fresh with the newly chosen grid',()=>{
+  const h=fixture(),machine='machine_chest_press',p=h.S().bodybuilding.progression[machine];
+  p.load=100;p.topLoad=100;p.increment=2.5;h.ev('save()');h.ctx.renderAll();
+  if(!openFor(h,machine))return ok(false,'No weight editor');
+  const o=h.lastOverlay();o.querySelector('[data-bb-increment]').value='5';o.querySelector('[data-save]').onclick();
+  const locked=h.ctx.bvomBbPrescription(machine).sets[1].load;
+  h.ctx.bvomBbSetupDraft();h.ctx.bvomBbCommitSetup();
+  const active=h.S().bodybuilding.progression[machine],midBlock=h.ctx.bvomBbPrescription(machine).sets[1].load;
+  h.S().bodybuilding.status='completed';h.S().bodybuilding.completedSessions=24;
+  h.ctx.__bvomBbSetupDraft=null;
+  const draft=h.ctx.bvomBbSetupDraft(),fresh=!Object.prototype.hasOwnProperty.call(draft.progression[machine],'preparationStep'),
+   unchanged=h.S().bodybuilding.progression[machine].preparationStep===2.5;
+  h.ctx.bvomBbCommitSetup();
+  const newBlock=h.S().bodybuilding.progression[machine],newBack=h.ctx.bvomBbPrescription(machine).sets[1].load;
+  return ok(locked===92.5&&midBlock===92.5&&active.preparationStep===2.5&&
+   fresh&&unchanged&&newBlock.preparationStep===undefined&&newBack===90&&
+   h.S().bodybuilding.status==='active'&&h.S().bodybuilding.completedSessions===0,
+   JSON.stringify({locked,midBlock,fresh,unchanged,newBack,status:h.S().bodybuilding.status,count:h.S().bodybuilding.completedSessions}));
+ });
+ test('BB62-AUDIT-MID-WORKOUT-UNIT-LOCK','DEFECT','An active recorded BB1 set retains its exact load across unit round-trip while unrecorded preparations retain their locked grid',()=>{
+  const h=fixture(),machine='machine_chest_press',p=h.S().bodybuilding.progression[machine];
+  p.load=100;p.topLoad=100;p.increment=2.5;h.ev('save()');h.ctx.renderAll();
+  if(!openFor(h,machine))return ok(false,'No weight editor');
+  const dlg=h.lastOverlay();dlg.querySelector('[data-bb-increment]').value='5';dlg.querySelector('[data-save]').onclick();
+  H.bbSet(h,machine,0,{reps:7,load:100});
+  const before=h.ctx.bvomBbPrescription(machine).sets[1].load;
+  h.ctx.changeUnits('lb',true);
+  const during={recorded:h.S().session['BB:'+machine]?.[0]?.load,backoff:h.ctx.bvomBbPrescription(machine).sets[1].load};
+  h.ctx.changeUnits('kg',true);
+  const after=h.ctx.bvomBbPrescription(machine).sets[1].load,
+   recorded=h.S().session['BB:'+machine]?.[0]?.load,
+   reload=H.boot(build,{ls:h.ls,ss:h.ctx.sessionStorage});
+  return ok(before===92.5&&Number.isFinite(during.recorded)&&Number.isFinite(during.backoff)&&
+   recorded===100&&after===92.5&&reload.S().session['BB:'+machine]?.[0]?.load===100&&
+   reload.S().bodybuilding.progression[machine].preparationStep===2.5,
+   JSON.stringify({before,during,after,recorded}));
+ });
  test('BB62-AUDIT-PREPARATION-NEUTRAL','DEFECT','Increment-only edit preserves existing back-offs and machine warm-ups; weight edit recalculates them',()=>{
   const h=fixture(),s=h.S(),p=s.bodybuilding.progression[id];p.load=32.5;p.topLoad=32.5;
   s.bodybuilding.selections.A1='machine_chest_press';
