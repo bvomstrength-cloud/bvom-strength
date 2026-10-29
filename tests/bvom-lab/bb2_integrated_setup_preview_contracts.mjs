@@ -1274,8 +1274,13 @@ function fixture({ls}={}){
   'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
- const owner=h.ls.getItem('bvom_data_owner')||'bb2-test-owner',opening=catalogue.createBB2Opening({
-  ownerId:owner,blockId:'bb2-complete-block'}),events=[];
+ const owner=h.ls.getItem('bvom_data_owner')||'bb2-test-owner',opening={
+  ...catalogue.createBB2Opening({ownerId:owner,blockId:'bb2-complete-block',
+   progress:{'upper_a|flat_press|bench_press':{
+    loadG:100000,loadOrigin:{value:'100',unit:'kg'},incrementG:2500,
+    incrementOrigin:{value:'2.5',unit:'kg'},calibrated:true,bestReps:8,
+    stallCount:0,epochId:'carry-forward'}}}),
+  selections:{...h.S().bb2.setup.selections}},events=[];
  const days=['upper_a','lower_a','upper_b','lower_b'];
  for(const day of days)for(let i=0;i<8;i++){
   const sessionId=day+'-'+i;
@@ -1296,17 +1301,65 @@ function fixture({ls}={}){
   'bvomBb2PreviewSaved=true;bvomBb2RenderPreview()');
  assert.match(h.ctx.document.querySelector('#setup').innerHTML,/data-bb2-next-block/);
  const raw=h.ls.getItem('bvom_data');
- h.ctx.confirm=()=>false;
- assert.equal(h.ctx.bvomBb2NextBlock(),false,'cancel leaves sealed block unchanged');
+ const oldChoice=h.S().bb2.setup.selections['upper_a|shoulder_press'];
+ h.ctx.bvomBb2PreviewChoose('upper_a','shoulder_press','log_push_press');
+ assert.equal(h.S().bb2.setup.selections['upper_a|shoulder_press'],oldChoice,
+  'full block chooser cannot silently rewrite the completed setup');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true,'unchanged completed setup is an idempotent no-op');
+ assert.equal(h.ls.getItem('bvom_data'),raw,'ordinary Save cannot rewrite the finished block');
+ assert.equal(h.ctx.bvomBb2NextBlock(),true,'full quota opens next-block review, not a seal');
+ const reviewMarkup=h.ctx.document.querySelector('#setup').innerHTML;
+ assert.match(reviewMarkup,/data-bb2-next-commit/);
+ assert.match(reviewMarkup,/data-bb2-next-load="upper_a\|flat_press\|bench_press" value="100"/,
+  'completed block working load is prefilled in the existing setup screen');
+ assert.match(reviewMarkup,/data-bb2-next-increment="upper_a\|flat_press\|bench_press" value="2.5"/,
+  'completed block increment is prefilled without rounding');
+ assert.equal(h.S().bb2.sealedBlocks?.length||0,0,'review cannot seal or replace the old block');
+ assert.equal(h.ls.getItem('bvom_data'),raw,'review has no persistence side effects');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),false,'old-block Save is disabled during next review');
+ assert.equal(h.ctx.bvomBb2CancelNextBlock(),true,'cancel returns to completed block');
+ assert.equal(h.S().bb2.sealedBlocks?.length||0,0);
  assert.equal(h.ls.getItem('bvom_data'),raw);
+ assert.equal(h.ctx.bvomBb2NextBlock(),true);
+ h.ctx.bvomBb2PreviewChoose('upper_a','shoulder_press','log_push_press');
+ const nextSetup=catalogue.BB2_BROWSER_MODULES.catalogue.chooseBB2Exercise(h.S().bb2.setup,
+  'upper_a','shoulder_press','log_push_press');
+ for(const day of days)for(const slot of catalogue.getBB2TemplatePrescription(nextSetup,day).slots){
+  if(slot.equipment!=='loaded')continue;
+  const identity=day+'|'+slot.roleSlotId+'|'+slot.exerciseId;
+  assert.equal(h.ctx.bvomBb2NextBlockChange(identity,'load',
+   identity==='upper_a|flat_press|bench_press'?'65':'60'),true);
+  assert.equal(h.ctx.bvomBb2NextBlockChange(identity,'increment',
+   identity==='upper_a|flat_press|bench_press'?'5':'2.5'),true);
+ }
+ h.ctx.confirm=()=>false;
+ assert.equal(h.ctx.bvomBb2CommitNextBlock(),false,'cancel confirmation retains old evidence');
+ assert.equal(h.ls.getItem('bvom_data'),raw);
+ assert.equal(h.S().bb2.sealedBlocks?.length||0,0);
  h.ctx.confirm=()=>true;
- assert.equal(h.ctx.bvomBb2NextBlock(),true,'new block begins only after 32 quotas');
+ assert.equal(h.ctx.bvomBb2NextBlockChange('upper_a|flat_press|bench_press','load',''),true);
+ assert.equal(h.ctx.bvomBb2CommitNextBlock(),false,'required next load cannot be omitted');
+ assert.equal(h.ls.getItem('bvom_data'),raw);
+ h.ctx.bvomBb2NextBlockChange('upper_a|flat_press|bench_press','load','65');
+ const beforeCommit=JSON.parse(JSON.stringify(h.S().bb2));
+ assert.equal(h.ctx.bvomBb2CommitNextBlock(),true,'one confirmed save seals and begins next block');
  const b=h.S().bb2,newProjection=catalogue.foldBB2Block(b.opening,b.events);
  assert.equal(b.sealedBlocks.length,1);
  assert.equal(catalogue.foldBB2Block(b.sealedBlocks[0].opening,b.sealedBlocks[0].events).sealed,true);
  assert.deepEqual(Object.values(newProjection.quotas),[0,0,0,0]);
  assert.equal(b.opening.previousBlockId,opening.blockId);
  assert.equal(newProjection.history.length,0,'new block starts fresh, without losing archive');
+ assert.equal(b.setup.selections['upper_a|shoulder_press'],'log_push_press');
+ assert.equal(newProjection.selections['upper_a|shoulder_press'],'log_push_press',
+  'next-block exercise choice is a new-block event, not a prior-block revision');
+ assert.equal(newProjection.progress['upper_a|flat_press|bench_press'].loadG,65000);
+ assert.equal(newProjection.progress['upper_a|flat_press|bench_press'].incrementG,5000);
+ assert.equal(catalogue.foldBB2Block(b.sealedBlocks[0].opening,b.sealedBlocks[0].events)
+  .progress['upper_a|flat_press|bench_press'].loadG,100000,
+  'editing next-block working weights never changes sealed prior progression');
+ assert.equal(catalogue.foldBB2Block(b.sealedBlocks[0].opening,b.sealedBlocks[0].events)
+  .selections['upper_a|shoulder_press'],'overhead_press',
+  'sealed previous choices stay intact');
  h.ctx.renderHistory();
  assert.match(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-archived="1"/,
   'sealed workouts remain in the shared History');
@@ -1323,10 +1376,46 @@ function fixture({ls}={}){
  };
  assert.equal(h.ctx.bvomBb2Begin(),true,'next block may Start using genuine sealed ancestry');
  const restarted=h.S().bb2;
- assert.equal(restarted.events[0].type,'WORKOUT_STARTED');
+ assert.ok(restarted.events.some(e=>e.type==='WORKOUT_STARTED'));
  assert.equal(restarted.opening.previousBlockId,opening.blockId);
  assert.equal(restarted.sealedBlocks.length,1,'starting new block never mutates archived records');
  assert.equal(h.ctx.bvomBb2Discard(),true);
+ const afterReload=fixture({ls:h.ls}).h.S().bb2;
+ assert.equal(afterReload.sealedBlocks.length,1,'archived block survives app reload');
+ assert.equal(afterReload.opening.previousBlockId,opening.blockId);
+ assert.equal(afterReload.setup.selections['upper_a|shoulder_press'],'log_push_press');
+ const failed=fixture().h;
+ failed.ctx.location.origin='http://localhost:8000';failed.ctx.location.search='?bb2Preview=1';
+ failed.ctx.__bb2CatalogueForTest=catalogue;failed.ctx.__oldCompleteBlock=beforeCommit;
+ failed.ev('state.bb2=__oldCompleteBlock;bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup(state.bb2.setup);'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewSaved=true;'+
+  'bvomBb2PreviewOriginalMode=state.programMode;bvomBb2RenderPreview()');
+ assert.equal(failed.ctx.bvomBb2NextBlock(),true);
+ const failedPlan=catalogue.getBB2TemplatePrescription(beforeCommit.setup,'upper_a');
+ const failIdentity=failedPlan.slots.find(s=>s.equipment==='loaded');
+ assert.equal(failed.ctx.bvomBb2NextBlockChange('upper_a|'+failIdentity.roleSlotId+'|'+failIdentity.exerciseId,
+  'load','67.5'),true);
+ // The inherited slot needs no new values; all other previously uncalibrated
+ // slots still require explicit starting loads before the atomic save.
+ for(const day of days)for(const slot of catalogue.getBB2TemplatePrescription(beforeCommit.setup,day).slots){
+  if(slot.equipment!=='loaded')continue;
+  const id=day+'|'+slot.roleSlotId+'|'+slot.exerciseId;
+  if(id==='upper_a|'+failIdentity.roleSlotId+'|'+failIdentity.exerciseId)continue;
+  failed.ctx.bvomBb2NextBlockChange(id,'load','60');
+  failed.ctx.bvomBb2NextBlockChange(id,'increment','2.5');
+ }
+ failed.ctx.confirm=()=>true;
+ const failedRaw=failed.ls.getItem('bvom_data'),write=failed.ls.setItem.bind(failed.ls);
+ failed.ev('bvomWindowLockOwned=false');
+ assert.equal(failed.ctx.bvomBb2CommitNextBlock(),false,'stale workout window cannot seal the block');
+ assert.equal(failed.ls.getItem('bvom_data'),failedRaw);
+ failed.ev('bvomWindowLockOwned=true');
+ failed.ls.setItem=(key,value)=>{if(key==='bvom_data')throw Error('simulated next-block save failure');return write(key,value)};
+ assert.equal(failed.ctx.bvomBb2CommitNextBlock(),false,'failed next-block save cannot seal prior evidence');
+ assert.equal(failed.ls.getItem('bvom_data'),failedRaw);
+ assert.equal(failed.S().bb2.sealedBlocks?.length||0,0);
+ assert.equal(failed.S().bb2.opening.blockId,opening.blockId);
  console.log('PASS: atomic 32-credit seal, next opening, retained read-only History and backup');
 }
 

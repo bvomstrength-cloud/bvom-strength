@@ -4896,11 +4896,40 @@ renderWarm=function(...args){const out=bvomOrderBaseWarm(...args);bvomOrderApply
 let bvomBb2PreviewModule=null,bvomBb2PreviewDraft=null,bvomBb2PreviewOpen=false,bvomBb2PreviewLoading=false;
 let bvomBb2PreviewOriginalMode=null,bvomBb2PreviewSaved=false,bvomBb2PreviewFromWorkout=false;
 let bvomBb2ExtraEntry=null;
+let bvomBb2NextBlockReview=false,bvomBb2NextBlockBase=null,bvomBb2NextBlockInputs={};
 function bvomBb2PreviewEnabled(){
  const host=String(location.origin||'').replace(/^https?:\/\//,'').split(':')[0];
  return (host==='localhost'||host==='127.0.0.1')&&/(?:^|[?&])bb2Preview=1(?:&|$)/.test(String(location.search||''));
 }
 function bvomBb2PreviewLabel(id){return String(id).replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase())}
+function bvomBb2NextBlockFieldMarkup(templateId,slot,projection){
+ const identity=templateId+'|'+slot.roleSlotId+'|'+slot.exerciseId;
+ const p=projection?.progress[identity];
+ const values=bvomBb2NextBlockInputs[identity]||(
+  bvomBb2NextBlockInputs[identity]={
+   load:p?.loadG!=null?bvomBb2DisplayLoad(p.loadG):'',
+   increment:p?.incrementG!=null?bvomBb2DisplayLoad(p.incrementG):'',
+   variation:p?.variation||slot.exerciseId,assistance:p?.assistance??'none'
+  });
+ const input=(field,label,required=false)=>'<label class="small">'+label+
+  '<input type="'+(['load','increment'].includes(field)?'number':'text')+'" '+
+  (['load','increment'].includes(field)?'min="0" step="any" ':'maxlength="80" ')+
+  (required?'required ':'')+'data-bb2-next-'+field+'="'+bvomEsc(identity)+'" value="'+
+  bvomEsc(values[field])+'" oninput="bvomBb2NextBlockChange(\''+identity+'\',\''+
+  field+'\',this.value)"></label>';
+ return '<div data-bb2-next-plan="'+bvomEsc(identity)+'" class="warmrow">'+
+  (slot.equipment==='loaded'?input('load',hlmTxt('Working weight','使用重量')+' '+unitLabel(),true)+
+   input('increment',hlmTxt('Increase','増量幅')+' '+unitLabel(),true):
+   input('variation',hlmTxt('Variation','種目のバリエーション'),true)+
+   input('assistance',hlmTxt('Assistance (none if unassisted)','補助（補助なしの場合はnone）'),true)+
+   input('load',hlmTxt('Added weight (optional)','追加重量（任意）')+' '+unitLabel()))+
+  '</div>';
+}
+function bvomBb2NextBlockChange(identity,field,value){
+ if(!bvomBb2NextBlockReview||!bvomBb2NextBlockInputs[identity]||
+   !['load','increment','variation','assistance'].includes(field))return false;
+ bvomBb2NextBlockInputs[identity][field]=String(value);return true;
+}
 function bvomBb2InjectProgramChoice(){
  if(!bvomBb2PreviewEnabled())return;
  const setup=document.querySelector('#setup');
@@ -4964,6 +4993,7 @@ async function bvomBb2OpenPreview(){
   const stored=state.bb2?.setup;
   if(stored)module.validateBB2Setup(stored);
   bvomBb2PreviewDraft=stored?module.createBB2Setup(stored):module.createBB2Setup();
+  bvomBb2NextBlockReview=false;bvomBb2NextBlockBase=null;bvomBb2NextBlockInputs={};
   bvomBb2PreviewOriginalMode=state.programMode;bvomBb2PreviewSaved=!!stored;
   bvomBb2PreviewFromWorkout=fromWorkout;
   bvomBb2PreviewOpen=true;bvomBb2RenderPreview();
@@ -4976,6 +5006,9 @@ async function bvomBb2OpenPreview(){
 function bvomBb2RenderPreview(){
  if(!bvomBb2PreviewOpen||!bvomBb2PreviewModule||!bvomBb2PreviewDraft)return;
  const m=bvomBb2PreviewModule,setup=bvomBb2PreviewDraft;
+ const projection=state.bb2?.opening?m.foldBB2Block(state.bb2.opening,state.bb2.events):null;
+ const blockComplete=!!projection&&m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.every(d=>projection.quotas[d]===8);
+ const selectionsLocked=blockComplete&&!bvomBb2NextBlockReview;
  const headings={upper_a:'UPPER A',lower_a:'LOWER A',upper_b:'UPPER B',lower_b:'LOWER B'};
  const templates=m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.map(templateId=>{
   const prescribed=m.getBB2TemplatePrescription(setup,templateId);
@@ -4984,26 +5017,34 @@ function bvomBb2RenderPreview(){
     const key=templateId+'|'+role.roleSlotId,selected=setup.selections[key];
     const slot=prescribed.slots.find(s=>s.roleSlotId===role.roleSlotId);
     const options=role.options.map(o=>`<option value="${bvomEsc(o.id)}" ${o.id===selected?'selected':''}>${bvomEsc(bvomBb2PreviewLabel(o.id))}</option>`).join('');
-    return `<label style="display:block;margin:10px 0"><b>${bvomEsc(bvomBb2PreviewLabel(role.roleSlotId))}</b><select data-bb2-role="${bvomEsc(key)}" onchange="bvomBb2PreviewChoose('${templateId}','${role.roleSlotId}',this.value)" style="width:100%;margin-top:6px">${options}</select><span class="small">${slot.sets} × ${slot.floor}–${slot.ceiling} ${hlmTxt('reps','回')} · ${slot.warmup}</span></label>`;
+    return `<label style="display:block;margin:10px 0"><b>${bvomEsc(bvomBb2PreviewLabel(role.roleSlotId))}</b><select data-bb2-role="${bvomEsc(key)}" onchange="bvomBb2PreviewChoose('${templateId}','${role.roleSlotId}',this.value)" style="width:100%;margin-top:6px" ${selectionsLocked?'disabled':''}>${options}</select><span class="small">${slot.sets} × ${slot.floor}–${slot.ceiling} ${hlmTxt('reps','回')} · ${slot.warmup}</span>${bvomBb2NextBlockReview?bvomBb2NextBlockFieldMarkup(templateId,slot,projection):''}</label>`;
    }).join('');
   return `<div class="card" data-bb2-template="${templateId}"><b>${headings[templateId]}</b><div class="small">${prescribed.prescribedCount} ${hlmTxt('working sets','ワーキングセット')} · ${hlmTxt('minimum to finish','完了に必要な最低セット数')} ${prescribed.minimumToFinish}</div>${rows}</div>`;
  }).join('');
  const el=document.querySelector('#setup');document.querySelector('#app').classList.add('hidden');el.classList.remove('hidden');
- el.innerHTML=`<div class="setupBee"><img src="./icon-192.png" alt="Power Bee"><div class="setupBeeTag">BEST VERSION OF MYSELF</div></div><div class="card"><b>${hlmTxt('BODYBUILDING 2 · SETUP PREVIEW','ボディビルディング2 · 設定プレビュー')}</b><p class="small">${hlmTxt('Development preview: BB2 setup and workouts are saved on this device and in exported BVOM backups. BB2 training is not sent to BVOM Cloud yet.','開発中のプレビューです。BB2の設定とトレーニング記録はこの端末とBVOMバックアップに保存されます。BVOMクラウドにはまだ送信されません。')}</p><label class="toggle"><input type="checkbox" data-bb2-curls ${setup.optionalUpperBCurls?'checked':''} onchange="bvomBb2PreviewCurls(this.checked)"><span>${hlmTxt('Include optional Upper B curls','Upper Bのカール種目を追加')}</span></label></div>${templates}<button type="button" class="primary wide" data-bb2-save onclick="bvomBb2SaveSetup()">${bvomBb2PreviewSaved?hlmTxt('SAVED ON THIS DEVICE','この端末に保存済み'):hlmTxt('SAVE BB2 SETUP','BB2設定を保存')}</button>${bvomBb2StartForm()}<button type="button" class="secondary wide" data-bb2-back onclick="bvomBb2ClosePreview()">${hlmTxt('BACK TO PROGRAMS','プログラム選択に戻る')}</button>`;
+ el.innerHTML=`<div class="setupBee"><img src="./icon-192.png" alt="Power Bee"><div class="setupBeeTag">BEST VERSION OF MYSELF</div></div><div class="card"><b>${bvomBb2NextBlockReview?hlmTxt('BODYBUILDING 2 · NEXT BLOCK SETUP','ボディビルディング2 · 次のブロック設定'):hlmTxt('BODYBUILDING 2 · SETUP PREVIEW','ボディビルディング2 · 設定プレビュー')}</b><p class="small">${bvomBb2NextBlockReview?hlmTxt('Review your carried exercise choices, working weights and increments. Nothing changes until you confirm Start Next Block.','引き継ぐ種目・重量・増量幅を確認してください。「次のブロックを開始」を確定するまで変更されません。'):hlmTxt('Development preview: BB2 setup and workouts are saved on this device and in exported BVOM backups. BB2 training is not sent to BVOM Cloud yet.','開発中のプレビューです。BB2の設定とトレーニング記録はこの端末とBVOMバックアップに保存されます。BVOMクラウドにはまだ送信されません。')}</p><label class="toggle"><input type="checkbox" data-bb2-curls ${setup.optionalUpperBCurls?'checked':''} ${selectionsLocked?'disabled':''} onchange="bvomBb2PreviewCurls(this.checked)"><span>${hlmTxt('Include optional Upper B curls','Upper Bのカール種目を追加')}</span></label></div>${templates}${bvomBb2NextBlockReview?'<button type="button" class="primary wide" data-bb2-next-commit onclick="bvomBb2CommitNextBlock()">'+hlmTxt('START NEXT BLOCK · SEAL PREVIOUS','次のブロックを開始 · 前のブロックを確定')+'</button><button type="button" class="secondary wide" data-bb2-next-cancel onclick="bvomBb2CancelNextBlock()">'+hlmTxt('CANCEL NEXT-BLOCK REVIEW','次のブロックの確認をキャンセル')+'</button>':blockComplete?'<p class="small">'+hlmTxt('All 32 credits earned. Use Review Next Block Setup below to change choices without altering completed training.','32回分のクレジットを獲得しました。完了した記録を変更せず、次のブロック設定を確認できます。')+'</p>':'<button type="button" class="primary wide" data-bb2-save onclick="bvomBb2SaveSetup()">'+(bvomBb2PreviewSaved?hlmTxt('SAVED ON THIS DEVICE','この端末に保存済み'):hlmTxt('SAVE BB2 SETUP','BB2設定を保存'))+'</button>'}${bvomBb2NextBlockReview?'':bvomBb2StartForm()}<button type="button" class="secondary wide" data-bb2-back onclick="bvomBb2ClosePreview()">${hlmTxt('BACK TO PROGRAMS','プログラム選択に戻る')}</button>`;
 }
 function bvomBb2PreviewChoose(templateId,roleSlotId,exerciseId){
  if(!bvomBb2PreviewOpen||!bvomBb2PreviewModule||!bvomBb2PreviewDraft)return;
+ if(!bvomBb2NextBlockReview&&state.bb2?.opening){
+  const p=bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events);
+  if(bvomBb2PreviewModule.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.every(d=>p.quotas[d]===8))return;
+ }
  try{bvomBb2PreviewDraft=bvomBb2PreviewModule.BB2_BROWSER_MODULES.catalogue.chooseBB2Exercise(
   bvomBb2PreviewDraft,templateId,roleSlotId,exerciseId);bvomBb2PreviewSaved=false;bvomBb2RenderPreview()}
  catch(e){console.error('BB2 preview choice rejected',e)}
 }
 function bvomBb2PreviewCurls(enabled){
  if(!bvomBb2PreviewOpen||!bvomBb2PreviewModule||!bvomBb2PreviewDraft)return;
+ if(!bvomBb2NextBlockReview&&state.bb2?.opening){
+  const p=bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events);
+  if(bvomBb2PreviewModule.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.every(d=>p.quotas[d]===8))return;
+ }
  bvomBb2PreviewDraft=bvomBb2PreviewModule.setBB2OptionalCurls(bvomBb2PreviewDraft,enabled);
  bvomBb2PreviewSaved=false;bvomBb2RenderPreview();
 }
 function bvomBb2SaveSetup(){
- if(!bvomBb2PreviewEnabled()||!bvomBb2PreviewOpen||!bvomBb2PreviewModule||
+ if(bvomBb2NextBlockReview||!bvomBb2PreviewEnabled()||!bvomBb2PreviewOpen||!bvomBb2PreviewModule||
     !bvomBb2PreviewDraft||state.programMode!==bvomBb2PreviewOriginalMode||
     !bvomWorkoutActionAllowed()||bvomStateWorkoutActive(state))return false;
  bvomBb2PreviewModule.validateBB2Setup(bvomBb2PreviewDraft);
@@ -5016,7 +5057,8 @@ function bvomBb2SaveSetup(){
  if(before?.opening&&Array.isArray(before.events)){
   try{
    const prior=bvomBb2PreviewModule.foldBB2Block(before.opening,before.events);
-   if(prior.sealed||prior.requiredConsent.length)return false;
+   if(prior.sealed||prior.requiredConsent.length||
+      bvomBb2PreviewModule.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.every(d=>prior.quotas[d]===8))return false;
    const changes=Object.entries(snapshot.selections).filter(([key,value])=>
     value!==before.setup?.selections?.[key]);
    if(changes.length){
@@ -5051,6 +5093,7 @@ function bvomBb2ClosePreview(){
  if(!bvomBb2PreviewOpen)return;
  const fromWorkout=bvomBb2PreviewFromWorkout;
  bvomBb2PreviewOpen=false;bvomBb2PreviewDraft=null;bvomBb2PreviewOriginalMode=null;
+ bvomBb2NextBlockReview=false;bvomBb2NextBlockBase=null;bvomBb2NextBlockInputs={};
  bvomBb2PreviewFromWorkout=false;
  if(fromWorkout)showApp();else bvomBb2ShowProgramChooser();
 }
@@ -5264,7 +5307,7 @@ function bvomBb2StartForm(){
  }).join('');
  return (projection?'<div class="card"><b>BB2 BLOCK</b><p class="small">'+
   m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.map(d=>bvomEsc(bvomBb2PreviewLabel(d))+': '+projection.quotas[d]+'/8').join(' · ')+
-  '</p>'+(full?'<button type="button" class="primary wide" data-bb2-next-block onclick="bvomBb2NextBlock()">START NEXT 8-WEEK BLOCK</button>':'')+
+  '</p>'+(full?'<button type="button" class="primary wide" data-bb2-next-block onclick="bvomBb2NextBlock()">'+hlmTxt('REVIEW NEXT BLOCK SETUP','次のブロック設定を確認')+'</button>':'')+
   (projection.multiStallRecovery?'<p class="small">Optional low-stress recovery is available after several stalls.</p>':'')+'</div>':'')+
   (projection?bvomBb2PendingChoices(projection)+bvomBb2StallActions(projection):'')+
   '<div class="card"><b>BB2 DEVELOPMENT START</b><p class="small">Enter real starting loads. Low-stress sessions are optional, use about half the sets and do not earn progression or credits.</p>'+
@@ -5272,7 +5315,7 @@ function bvomBb2StartForm(){
   '<button type="button" class="primary wide" data-bb2-start onclick="bvomBb2Begin()">START TEST WORKOUT</button></div>';
 }
 function bvomBb2Begin(){
- if(!bvomBb2PreviewEnabled()||!bvomBb2PreviewOpen||!bvomBb2PreviewSaved||
+ if(bvomBb2NextBlockReview||!bvomBb2PreviewEnabled()||!bvomBb2PreviewOpen||!bvomBb2PreviewSaved||
     !bvomBb2PreviewModule||!bvomWorkoutActionAllowed()||bvomStateWorkoutActive(state)||
     state.programMode!==bvomBb2PreviewOriginalMode)return false;
  const m=bvomBb2PreviewModule,old=state.bb2;
@@ -5342,21 +5385,42 @@ function bvomBb2Begin(){
   renderAll();return true;
  }catch(e){console.error('BB2 Start rejected',e);return false}
 }
-// Sealing is deliberately only possible after the exact 8/8/8/8 quota fold.
-// Keep the full sealed audit trail in the existing local BVOM backup while
-// the new block begins from the verified closing snapshot, in one save.
+// Review is UI-only: neither the completed block nor its setup can change
+// before an explicit confirmed Start Next Block transaction.
 function bvomBb2NextBlock(){
  if(!bvomBb2PreviewEnabled()||!bvomBb2PreviewOpen||!bvomBb2PreviewModule||
-    bvomBb2Active()||bvomStateWorkoutActive(state)||!bvomWorkoutActionAllowed())return false;
+    bvomBb2NextBlockReview||bvomBb2Active()||bvomStateWorkoutActive(state)||
+    !bvomWorkoutActionAllowed())return false;
  const b=state.bb2,m=bvomBb2PreviewModule;
  if(!b?.opening||!Array.isArray(b.events))return false;
  try{
   const before=m.foldBB2Block(b.opening,b.events);
   if(before.sealed||before.requiredConsent.length||
      !m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.every(d=>before.quotas[d]===8))return false;
-  if(!confirm('Start a new BB2 block? The completed 32-credit block will be sealed and retained in your local backup. Corrections to that block will no longer be possible.'))return false;
-  if(b!==state.bb2||bvomBb2Active()||bvomStateWorkoutActive(state)||
-     !bvomWorkoutActionAllowed())return false;
+  bvomBb2NextBlockReview=true;bvomBb2NextBlockBase=b;bvomBb2NextBlockInputs={};
+  bvomBb2PreviewDraft=m.createBB2Setup(b.setup);bvomBb2RenderPreview();return true;
+ }catch(error){console.error('BB2 next-block review rejected',error);return false}
+}
+function bvomBb2CancelNextBlock(){
+ if(!bvomBb2NextBlockReview||!bvomBb2PreviewModule)return false;
+ bvomBb2NextBlockReview=false;bvomBb2NextBlockBase=null;bvomBb2NextBlockInputs={};
+ bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup(state.bb2.setup);
+ bvomBb2PreviewSaved=true;bvomBb2RenderPreview();return true;
+}
+// The old 8/8/8/8 block is sealed and the new opening, choices and explicit
+// next-block prescriptions are saved atomically in BVOM's existing document.
+function bvomBb2CommitNextBlock(){
+ if(!bvomBb2PreviewEnabled()||!bvomBb2PreviewOpen||!bvomBb2NextBlockReview||
+    !bvomBb2PreviewModule||!bvomWorkoutActionAllowed()||bvomStateWorkoutActive(state)||
+    state.programMode!==bvomBb2PreviewOriginalMode)return false;
+ const b=state.bb2,m=bvomBb2PreviewModule;
+ if(!b?.opening||b!==bvomBb2NextBlockBase||bvomBb2Active()||
+    !Array.isArray(b.events)||!bvomBb2PreviewDraft)return false;
+ try{
+  const before=m.foldBB2Block(b.opening,b.events);
+  if(before.sealed||before.requiredConsent.length||
+    !m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.every(d=>before.quotas[d]===8))return false;
+  const draft=m.createBB2Setup(bvomBb2PreviewDraft),unit=state.unit==='lb'?'lb':'kg';
   const e={type:'BLOCK_SEALED',eventId:'seal:'+b.opening.blockId+':'+(b.events.length+1),
    commitOrdinal:b.events.length+1,blockId:b.opening.blockId,
    sealId:'seal:'+b.opening.blockId+':'+(b.events.length+1)};
@@ -5365,8 +5429,66 @@ function bvomBb2NextBlock(){
    foldRulesVersion:b.opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:false});
   const next=m.BB2_BROWSER_MODULES.ledger.createNextBB2Opening(b.opening,tx.events,
    'bb2-preview-block-'+Date.now()+'-'+(b.sealedBlocks?.length||0));
-  if(!bvomBb2Commit({...b,sealedBlocks:[...(b.sealedBlocks||[]),{opening:b.opening,events:tx.events}],
-    opening:next,events:[],activeSessionId:null}))return false;
+  const inherited=m.foldBB2Block(next,[]),edits=[];
+  const add=(type,fields)=>edits.push({type,eventId:'next:'+next.blockId+':'+(edits.length+1),
+   commitOrdinal:edits.length+1,blockId:next.blockId,...fields});
+  for(const [key,exerciseId] of Object.entries(draft.selections)){
+   if(inherited.selections[key]!==exerciseId){
+    const [templateId,roleSlotId]=key.split('|');
+    add('EXERCISE_SWAPPED',{templateId,roleSlotId,exerciseId});
+   }
+  }
+  for(const templateId of m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER){
+   for(const slot of m.getBB2TemplatePrescription(draft,templateId).slots){
+    const identity=templateId+'|'+slot.roleSlotId+'|'+slot.exerciseId;
+    const values=bvomBb2NextBlockInputs[identity];
+    if(!values)throw Error('Review every next-block exercise before Start');
+    const p=inherited.progress[identity],base={templateId,roleSlotId:slot.roleSlotId,
+     exerciseId:slot.exerciseId,scope:'GLOBAL'};
+    const numeric=(raw,old,optional=false)=>{
+     const value=String(raw??'').trim();
+     if(!value){if(optional)return old==null?null:0;throw Error('Enter working weight and increment');}
+     if(old!==undefined&&value===bvomBb2DisplayLoad(old))return old;
+     return m.BB2_BROWSER_MODULES.ledger.canonicalGrams(value,unit);
+    };
+    const actual=numeric(values.load,p?.loadG,slot.equipment==='bodyweight');
+    if(slot.equipment==='loaded'&&actual<=0)throw Error('Enter a positive working weight');
+    if(actual!==null&&actual!==p?.loadG){
+     const value=String(values.load).trim()||'0';
+     add('PRESCRIPTION_EDITED',{...base,loadG:actual,loadOrigin:{value,unit}});
+    }
+    if(slot.equipment==='loaded'){
+     const increment=numeric(values.increment,p?.incrementG);
+     if(increment<=0)throw Error('Enter a positive increment');
+     if(increment!==(p?.incrementG??2500)){
+      add('INCREMENT_EDITED',{...base,incrementG:increment,
+       incrementOrigin:{value:String(values.increment).trim(),unit}});
+     }
+    }else{
+     const variation=String(values.variation??'').trim(),assistance=String(values.assistance??'').trim();
+     if(!variation||!assistance||variation.length>80||assistance.length>80)
+      throw Error('Enter variation and assistance for bodyweight movements');
+     if(p?.variation!==variation||p?.assistance!==assistance)
+      add('VARIATION_EDITED',{...base,variation,assistance});
+    }
+   }
+  }
+  const newEvents=edits.length?m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(
+   next,[],edits,{ownerId:next.ownerId,blockId:next.blockId,expectedHead:0,
+    foldRulesVersion:next.foldRulesVersion,sealRevision:inherited.sealRevision,
+    activeWorkout:false}).events:[];
+  const updated=m.foldBB2Block(next,newEvents);
+  if(Object.entries(draft.selections).some(([key,value])=>updated.selections[key]!==value))
+   throw Error('Next-block catalogue and ledger selection mismatch');
+  if(!confirm(hlmTxt('Starting the next block locks corrections to the previous block’s recorded working sets. History and weights carry forward. Continue?',
+    '次のブロックを開始すると、前のブロックのセット記録を修正できなくなります。履歴と重量は引き継がれます。続けますか？')))return false;
+  if(b!==state.bb2||!bvomBb2NextBlockReview||b!==bvomBb2NextBlockBase||
+     bvomBb2Active()||bvomStateWorkoutActive(state)||!bvomWorkoutActionAllowed())return false;
+  if(!bvomBb2Commit({...b,setup:draft,
+    sealedBlocks:[...(b.sealedBlocks||[]),{opening:b.opening,events:tx.events}],
+    opening:next,events:newEvents,activeSessionId:null}))return false;
+  bvomBb2NextBlockReview=false;bvomBb2NextBlockBase=null;bvomBb2NextBlockInputs={};
+  bvomBb2PreviewDraft=m.createBB2Setup(draft);bvomBb2PreviewSaved=true;
   bvomBb2Kind='NORMAL';bvomBb2RenderPreview();return true;
  }catch(error){console.error('BB2 next-block transition rejected',error);return false}
 }
