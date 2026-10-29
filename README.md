@@ -2,7 +2,18 @@
 
 Production source repository for BVOM Strength.
 
-## Current approved release — v2.9.19
+## Current approved release — v2.9.20
+
+- **GitHub application baseline:** merged `main` application commit `bbfe880719838b183386db0f54395963d8f9b81a` (29 October 2026). A later documentation-only commit may advance `main` without changing deployable application files.
+- **App version:** `v2.9.20` in the title/header and `BVOM_BUILD`; service worker `BUILD = '2.9.20'` with production cache `bvom-2.9.20`.
+- **Owner deployment confirmation:** On 29 October 2026, Richard confirmed deploying the production ZIP to Netlify. Independently fetched live `https://app.bvomstrength.com/` and `/index.html` both matched Git blob `21c2f34f8ba0b2d96cdc68408eee6ba2ae89a239`; live `/sw.js` matched Git blob `7d6963d78b1ebfac7e7ff2399890eab1efca1354`. This verifies the public static release, not signed-in data, cloud sync or an installed Android PWA after updating.
+- **Production ZIP:** `BVOM-v2.9.20-PRODUCTION.zip`, 13 deployable files (1,618,994 bytes); SHA-256 `32d7214ad21ac00cdd04ac534df56b35b5a7da06801b8d223f1cced7e7390f75`. Archive integrity passed; all 13 file bytes were compared to the exact merged release-source tree, with the `index.html` and `sw.js` Git blob identities also checked inside the ZIP. Previous release ZIPs are retained for rollback.
+- **Change:** BB1's existing Edit Weight dialog now contains both Next working weight and Progression increment. Increment-only edits preserve current prescriptions, warm-ups, historical performance references and completed workout progress; earned 32.5 kg + 1 kg progresses to 33.5 kg. Distinct historical loads survive unit conversions; new blocks reset old preparation-rounding locks. No separate increment button. Other training programs and BB2 were not altered.
+- **Release trail:** [PR #75](https://github.com/bvomstrength-cloud/bvom-strength/pull/75) (independently audited BB1 editor, merged as `d046069`) and [PR #76](https://github.com/bvomstrength-cloud/bvom-strength/pull/76) (v2.9.20 build/cache markers, merged as `bbfe880`).
+- **Verification:** PR #75 Lab #599 and Browser Runner #355 PASS; PR #76 Lab #601, Browser Runner #356 and test packaging #347 PASS. Final source gate passed 30 static checks, 296 behavioural checks, 14 sequence checks, all mutations killed; English/Japanese mobile Chromium tests passed. Independent cold audit found no remaining P1/P2 blocker.
+- **Safety:** GitHub merges do not automatically deploy Netlify. Do not remove previous verified ZIPs, stored workout data or update/ownership protections during cleanup.
+
+## Previous approved release — v2.9.19 (superseded 29 October 2026)
 
 - **GitHub application baseline:** merged `main` application commit `71a0c0acdcfc9cb6593cb61875f0cda41388e5e4` (23 October 2026). Later documentation-only commits may advance `main` without changing these application files.
 - **App version:** `v2.9.19` in the title/header and `BVOM_BUILD`; service worker `BUILD = '2.9.19'` with production cache `bvom-2.9.19`.
