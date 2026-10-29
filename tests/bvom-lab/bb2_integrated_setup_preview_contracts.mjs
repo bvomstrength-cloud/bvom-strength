@@ -766,6 +766,34 @@ function fixture({ls}={}){
 }
 
 {
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const hit=selector.match(/data-bb2-(load|inc|assist)="([^"]+)"/);
+  if(hit)return {value:hit[1]==='load'?'60':hit[1]==='inc'?'12.5':'none'};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true,'older BB2 setup can use an increment above 10');
+ assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),true);
+ const dlg=h.lastOverlay();
+ dlg.querySelector('[data-bb-weight]').value='65';
+ dlg.querySelector('[data-bb-increment]').value='12.50';
+ dlg.querySelector('[data-save]').onclick();
+ const b=h.S().bb2,start=b.events[0],slot=h.ctx.bvomBb2WorkingSlot(start.slots[0],b.events,b.activeSessionId);
+ assert.equal(slot.plannedG,65000,'weight-only editing still works with an unchanged inherited increment');
+ assert.equal(slot.incrementG,12500,'unchanged increment retains canonical grams');
+ assert.equal(b.events.length,2,'weight edit does not emit a phantom increment event');
+ assert.equal(b.events[1].type,'PRESCRIPTION_EDITED');
+ console.log('PASS: BB2 weight-only edit preserves inherited increments outside the new edit range');
+}
+
+{
  const {h,before}=fixture();
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;h.ctx.__bb2TrialLoad='65';
@@ -2000,4 +2028,4 @@ H.withClock(c=>{
  console.log('PASS: BB2 chooser cancel, HLM, LP, Custom and BB1 switches preserve history and cloud isolation');
 }
 
-console.log('BB2 BVOM integrated setup preview: 39/39 PASS');
+console.log('BB2 BVOM integrated setup preview: 41/41 PASS');
