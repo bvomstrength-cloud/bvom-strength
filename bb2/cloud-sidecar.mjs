@@ -1,12 +1,14 @@
 /* Candidate BB2 cloud transport, NOT registered in BVOM's application.
- * Requires a separately approved, nullable JSONB `bb2_data` column on the
- * existing bvom_data row. Importing this module performs no I/O.
+ * Uses BVOM's existing, currently unused bvom_cloud_state table (one row
+ * per authenticated owner, explicit revision and data_version columns).
+ * No database schema change is needed. Importing performs no I/O.
  *
- * An old BVOM client updates only `data`, so it cannot remove `bb2_data`.
- * New BB2 writers update only `bb2_data`, with a database-evaluated revision
- * condition. A client-side read/compare/write sequence is NOT a substitute.
+ * Old BVOM clients update bvom_data, which cannot touch this table.
+ * BB2 writers update one revisioned row with a database-evaluated revision
+ * condition. First inserts rely on the existing unique user_id primary key.
  */
 
+const VERSION = 'bvom-bb2-sidecar-v1';
 const copy = value => JSON.parse(JSON.stringify(value));
 const validOwner = value => typeof value === 'string' && value.length > 0;
 const validRevision = value => Number.isSafeInteger(value) && value >= 1;
@@ -41,62 +43,74 @@ export function createBB2CloudSidecar({ ownerId, bb2, previousRevision, requestI
   // The ledger and catalogue setup are the only exported BB2 fields.
   const snapshot = copy({ setup: bb2.setup, opening: bb2.opening || null,
     events: bb2.events || [], sealedBlocks: bb2.sealedBlocks || [] });
-  return Object.freeze({ protocol: 'bvom-bb2-sidecar-v1', ownerId,
+  return Object.freeze({ protocol: VERSION, ownerId,
     revision: previousRevision === null ? 1 : previousRevision + 1,
     requestId, snapshot });
 }
 
 export function validateBB2CloudSidecar(envelope, expectedOwnerId) {
   if (!validOwner(expectedOwnerId) || !envelope ||
-      envelope.protocol !== 'bvom-bb2-sidecar-v1' ||
+      envelope.protocol !== VERSION ||
       envelope.ownerId !== expectedOwnerId || !validRevision(envelope.revision) ||
       !validOwner(envelope.requestId)) throw new Error('Incompatible BB2 cloud record');
   checkLedgerOwnership(expectedOwnerId, envelope.snapshot);
   return copy(envelope);
 }
 
-function queryForOwner(client, rowId, ownerId) {
-  if (!client || !validOwner(rowId) || !validOwner(ownerId))
-    throw new Error('Invalid BB2 cloud row ownership');
-  return client.from('bvom_data');
+function queryForOwner(client, ownerId) {
+  if (!client || !validOwner(ownerId)) throw new Error('Invalid BB2 cloud owner');
+  return client.from('bvom_cloud_state');
 }
 
-export async function readBB2CloudSidecar({ client, rowId, ownerId }) {
-  const result = await queryForOwner(client, rowId, ownerId)
-    .select('id,bb2_data').eq('id', rowId).eq('user_id', ownerId).maybeSingle();
-  if (result.error || !result.data) return { status: 'unavailable', error: result.error || null };
-  if (result.data.bb2_data == null) return { status: 'empty' };
+export async function readBB2CloudSidecar({ client, ownerId }) {
+  const result = await queryForOwner(client, ownerId)
+    .select('user_id,revision,data_version,state').eq('user_id', ownerId).maybeSingle();
+  if (result.error) return { status: 'unavailable', error: result.error };
+  if (!result.data) return { status: 'empty' };
   try {
-    return { status: 'ready', envelope: validateBB2CloudSidecar(result.data.bb2_data, ownerId) };
+    if (result.data.data_version !== VERSION) throw new Error('Cloud row belongs to another protocol');
+    const envelope = validateBB2CloudSidecar(result.data.state, ownerId);
+    if (result.data.revision !== envelope.revision || result.data.user_id !== ownerId)
+      throw new Error('Cloud row revision/ownership mismatch');
+    return { status: 'ready', envelope };
   } catch (error) { return { status: 'incompatible', error }; }
 }
 
-export async function writeBB2CloudSidecar({ client, rowId, ownerId, envelope,
+export async function writeBB2CloudSidecar({ client, ownerId, envelope,
   previousRevision }) {
   const safe = validateBB2CloudSidecar(envelope, ownerId);
   if (!(previousRevision === null || validRevision(previousRevision)) ||
       safe.revision !== (previousRevision === null ? 1 : previousRevision + 1))
     throw new Error('Invalid BB2 cloud revision transition');
-  let query = queryForOwner(client, rowId, ownerId)
-    .update({ bb2_data: safe }).eq('id', rowId).eq('user_id', ownerId);
-  query = previousRevision === null
-    ? query.is('bb2_data', null)
-    : query.eq('bb2_data->>revision', String(previousRevision));
-  // Return the actual matched row: zero rows is a conflict, not success.
-  const result = await query.select('id,bb2_data').maybeSingle();
+  let query;
+  if (previousRevision === null) {
+    // A concurrent first writer receives unique_violation instead of silently
+    // overwriting the row. Never use upsert for the first BB2 cloud commit.
+    query = queryForOwner(client, ownerId).insert({ user_id: ownerId,
+      revision: safe.revision, data_version: VERSION, state: safe });
+  } else {
+    query = queryForOwner(client, ownerId)
+      .update({ revision: safe.revision, state: safe })
+      .eq('user_id', ownerId).eq('data_version', VERSION)
+      .eq('revision', previousRevision);
+  }
+  const result = await query.select('user_id,revision,data_version,state').maybeSingle();
+  if (result.error?.code === '23505') return { status: 'conflict' };
   if (result.error) return { status: 'uncertain', error: result.error };
   if (!result.data) return { status: 'conflict' };
   try {
-    const committed = validateBB2CloudSidecar(result.data.bb2_data, ownerId);
-    if (committed.revision !== safe.revision || committed.requestId !== safe.requestId)
+    const committed = validateBB2CloudSidecar(result.data.state, ownerId);
+    if (result.data.revision !== safe.revision ||
+        result.data.data_version !== VERSION || result.data.user_id !== ownerId ||
+        committed.revision !== safe.revision || committed.requestId !== safe.requestId)
       return { status: 'uncertain', error: new Error('Unexpected cloud write receipt') };
     return { status: 'committed', envelope: committed };
   } catch (error) { return { status: 'uncertain', error }; }
 }
 
-export async function reconcileBB2CloudSidecar({ client, rowId, ownerId, envelope }) {
+export async function reconcileBB2CloudSidecar({ client, ownerId, envelope }) {
   const expected = validateBB2CloudSidecar(envelope, ownerId);
-  const observed = await readBB2CloudSidecar({ client, rowId, ownerId });
+  const observed = await readBB2CloudSidecar({ client, ownerId });
   if (observed.status !== 'ready') return observed;
   if (observed.envelope.revision === expected.revision &&
       observed.envelope.requestId === expected.requestId &&

@@ -1,6 +1,6 @@
 # BB2 cloud compatibility — decision required before live writer enablement
 
-Status: **PROPOSED / NOT APPROVED / NO DATABASE CHANGE** (28 October 2026)
+Status: **PROPOSED / NOT APPROVED / NO DATABASE CHANGE** (29 October 2026)
 
 Scope: Stage (ii), after the isolated ledger and guarded local browser bridge.
 This document does not change Stage (i), existing BVOM cloud sync, BB1, or the
@@ -41,6 +41,31 @@ These are compatibility and concurrency **counterexamples**, not evidence
 that any real BB2 records have been lost. BB2 records are not yet stored in
 the production cloud document. The tests do not contact Supabase.
 
+## Read-only observations of the existing BVOM Supabase schema (29 October)
+
+The connected **bvom cloud** production project's schema was inspected by
+metadata and aggregate-only SELECT queries. No user records were fetched and
+no rows, policies, columns or database functions were modified.
+
+- `public.bvom_data` has a primary key on `id`, **not** on `user_id`.
+  It currently contains 24 rows belonging to 21 distinct owners, confirming
+  that multiple rows per owner exist. The candidate D approach below is not
+  a reliable canonical BB2 store without extra row-resolution logic.
+- The project already contains `public.bvom_cloud_state`, with **zero rows**.
+  Its `user_id` is a unique primary key linked to `auth.users` (delete cascade).
+  It has a positive `revision` bigint, a `data_version` text discriminator,
+  a `state` JSONB document and an `updated_at` timestamp.
+- That existing table has owner-only `SELECT`, `INSERT` and `UPDATE` RLS
+  policies that compare `auth.uid()` to `user_id`. The authenticated role has
+  the corresponding table grants. There is no BB2-specific RPC in `public`.
+- `bvom_cloud_state` is not referenced by the current app source. Its name is
+  generic, and its intended future use is not confirmed. A BB2 protocol must
+  refuse to overwrite any row bearing an unknown `data_version`.
+
+This establishes a **promising existing storage boundary**, not authority to
+use production storage. Read-only metadata inspection cannot prove a real
+conditional write, auth-isolated owner access, concurrent commit or retry.
+
 ## Architectural choices
 
 | Choice | Older BVOM clients | BB2 across devices | Consequence |
@@ -48,42 +73,41 @@ the production cloud document. The tests do not contact Supabase.
 | **A. Separate BB2 cloud storage** | Their whole-row writes cannot touch BB2 rows | Yes, after a guarded sync implementation | New owner-scoped, versioned table/API and independent backup/restore logic are required |
 | **B. Embed BB2 in `bvom_data`** | Can silently erase fields unless *the server* rejects unsupported writers | Possible only after coordinated server-side writer fencing | Materially changes the existing sync path and may lock older BVOM installations out of ordinary training uploads |
 | **C. BB2 stays local-only** | Cannot overwrite isolated local BB2 data via `bvom_data` | No | Must be clearly presented as device-specific, with manual backup/export; not equivalent to BVOM's existing optional cross-device backup |
-| **D. Add a protected `bb2_data` column to existing `bvom_data`** (minimal candidate) | Existing `.update({data})` writes leave the distinct column unchanged | Yes, if row identity, atomic revision and ownership are verified | One additive nullable JSONB column, no new table, plus a separately versioned BB2 cloud path |
+| **D. Add a protected `bb2_data` column to existing `bvom_data`** (superseded candidate) | Existing `.update({data})` writes leave the distinct column unchanged | Possible, but current duplicated user rows need resolution | One additive JSONB column and more complex canonical-row handling |
+| **E. Reuse existing revisioned `bvom_cloud_state`** (preferred candidate) | Old clients write only `bvom_data`; they never touch this table | Yes, after real cross-device proof | **No new table or column**; one row per owner with an existing revision and protocol field; requires safe coordination of that table's future purpose |
 
-### Minimal candidate D — proof in a fake database only
+### Candidate E — proof in a fake database only
 
 `bb2/cloud-sidecar.mjs` is an **import-inert, unregistered candidate transport**.
-It reads and writes only a proposed nullable `bvom_data.bb2_data` JSONB column;
-it never changes the legacy `data` column or the existing cloud fingerprint.
-The client supplies an owner ID, fixed existing row ID, durable request ID,
-expected remote revision and a validated local BB2 snapshot. A single
-conditional update matches both owner and row ID and *the previous revision*
-(or a NULL sidecar for the first write). No matched row means conflict, not
-success; a lost reply is reconciled by request ID and the actual saved snapshot.
-An active workout, foreign-owner snapshot, unknown protocol or missing column
-fails closed. Local-first saving continues unchanged.
+It reads and writes only the **existing** `bvom_cloud_state` table and never
+changes `bvom_data`, its `data` document or its fingerprint. A first upload
+uses a normal INSERT, not upsert, so the unique owner key rejects two
+simultaneous first writers. Subsequent updates match the authenticated owner,
+the explicit BB2 `data_version` and the *previous revision* in one database
+statement. No matched row means conflict, not success; a lost reply is
+reconciled using the durable request ID and canonical snapshot comparison.
+An active workout, foreign-owner snapshot, other protocol or unavailable
+table fails closed. Local-first saving continues unchanged.
 
 Run `node tests/bvom-lab/bb2_cloud_sidecar_contracts.cjs` to exercise both
-actual legacy BVOM cloud writers against the fake sidecar row, stale competing
-BB2 revisions, lost-reply retry, owner checks and malformed records. This
-**does not** prove the column exists, RLS, row uniqueness, PostgREST's real
-conditional update behaviour, or integration into BVOM's Settings/restore UI.
-The real backend must be tested in a nonproduction project first.
+actual legacy BVOM cloud writers against separate fake tables, two first
+writers, stale competing revisions, a lost-reply retry, owner checks and
+protocol mismatch. This **does not** prove PostgREST's real conditional
+update behaviour, cross-account RLS or integration into BVOM Settings/restore.
+The real write path must be tested in a nonproduction database first.
 
-Before choosing D, inspect the existing `bvom_data` schema **read-only**:
-whether a user has one canonical row, whether older versions can insert a
-second row, and what RLS and update grants already enforce. An older client
-can create an extra row if uniqueness is absent; a new client must not silently
-pick a newer row with NULL `bb2_data` while ignoring a protected older row.
-The schema would need an additive migration and real-project approval. No
-schema modification or BB2 upload is authorized here.
+The existing `bvom_cloud_state` table may have been reserved for a future
+whole-BVOM sync migration; its purpose must be confirmed before approving E.
+Do not put a BB2 snapshot into a pre-existing row with a different
+`data_version`, and do not use that table for other purposes without a migration
+strategy. No Supabase write, schema change or BB2 upload is authorized here.
 
-### Required contract for A or D after owner approval
+### Required contract for A or E after owner approval
 
 - Keep the current `bvom_data.data` payload untouched. Do not append BB2
   fields to its legacy whole-row JSON or cloud-comparison fingerprint.
 - Store BB2 separately from the old clients' replaceable JSON field, whether
-  as A's separate owner-scoped record set or D's distinct column, with
+  as A's new owner-scoped record set or E's existing revisioned table, with
   explicit protocol and immutable Stage (i) opening/events semantics.
 - Every cloud write requires authenticated owner verification **and a
   server-enforced expected revision**. The comparison and update must be
@@ -131,7 +155,7 @@ schema modification or BB2 upload is authorized here.
 ## Gate
 
 **No Supabase migration, RPC, live client registration, or BB2 cloud upload
-is authorized by this document.** The owner must select A, B, C or D before
+is authorized by this document.** The owner must select A, B, C, D or E before
 cloud integration proceeds. Meanwhile, isolated on-device workout planning,
 UI and offline ledger tests can continue behind closed rollout flags.
 
