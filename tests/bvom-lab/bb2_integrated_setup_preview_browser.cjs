@@ -118,6 +118,20 @@ const server=http.createServer((req,res)=>{
   assert.equal(started.bb2.events[0].type,'WORKOUT_STARTED');
   assert.equal(started.programMode,fixture.programMode);
   assert.equal(await page.evaluate(()=>bvomCloudWorkoutActive()),true);
+  await page.evaluate(()=>changeLanguage('ja'));
+  await page.waitForSelector('#workout [data-bb2-finish]');
+  assert.match(await page.locator('#workout').textContent(),/予定セットを記録済み/,
+   'BB2 Workout guidance follows Japanese locale on a real mobile viewport');
+  assert.match(await page.locator('#workout [data-bb2-finish]').textContent(),/ワークアウトを終了/);
+  assert.match(await page.locator('#workout [data-bb2-plan-save]').first().textContent(),/自重種目の設定を保存/);
+  await page.evaluate(()=>activateTab('warmup'));
+  assert.match(await page.locator('#warmup').textContent(),/ウォームアップのみ/,
+   'BB2 Warm-up instructions and preparation labels are Japanese');
+  assert.match(await page.locator('#warmup').textContent(),/使用重量/);
+  await page.evaluate(()=>changeLanguage('en'));
+  await page.evaluate(()=>activateTab('workout'));
+  assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.events),
+   started.bb2.events,'language changes cannot rewrite the workout ledger');
   const beforeOrderCloud=await page.evaluate(()=>JSON.stringify(bvomCloudPayload()));
   const originalOrder=await page.locator('#workout > .exercise .exname').allTextContents();
   assert.equal(originalOrder.length,5,'five real Upper A workout cards are available for ordering');
@@ -267,6 +281,19 @@ const server=http.createServer((req,res)=>{
   assert.equal(finished.history.length,fixture.history.length,'legacy History unchanged after BB2 Finish');
   assert.equal(await page.evaluate(()=>bvomBb2End('FINISH')),false,'repeat Finish is idempotent');
   assert.match(await page.locator('#history').textContent(),/Credit awarded/);
+  await page.evaluate(()=>activateTab('history'));
+  await page.evaluate(()=>changeLanguage('ja'));
+  await page.waitForSelector('#history [data-bb2-history]');
+  const jaHistory=await page.locator('#history [data-bb2-history]').first().textContent();
+  assert.match(jaHistory,/クレジット獲得/,'BB2 History credit and status show Japanese labels');
+  assert.match(jaHistory,/セットを修正/,'BB2 History correction controls localise');
+  assert.match(jaHistory,/ワークアウトを削除/,'BB2 History removal controls localise');
+  assert.match(await page.locator('#history').textContent(),/BB2の現在の使用重量と設定/);
+  const japaneseHistoryWidth=await page.locator('#history [data-bb2-history]').first().boundingBox();
+  assert.ok(japaneseHistoryWidth&&japaneseHistoryWidth.x>=0&&
+   japaneseHistoryWidth.x+japaneseHistoryWidth.width<=391,
+   'Japanese BB2 History fits the existing 390px mobile viewport');
+  await page.evaluate(()=>changeLanguage('en'));
   await page.evaluate(()=>activateTab('history'));
   const correction=page.locator('#history [data-bb2-correct-reps="0|0"]');
   await correction.fill('7');
