@@ -214,6 +214,10 @@ const server=http.createServer((req,res)=>{
    const rows=b.events.filter(e=>e.type==='SET_RECORDED');
    return rows[0].actualG===60000&&rows[1].actualG===67500;
   }),true,'reload and trial change only subsequent actual sets');
+  await page.locator('#workout [data-bb2-extra-add="0"]').click();
+  assert.equal(await page.locator('.bvomModalOverlay [data-bb2-actual="0|3"]').inputValue(),'67.5',
+   'BB2 extra set preloads the previous actual, matching BB1 instead of reverting to 60 kg');
+  await page.locator('.bvomModalOverlay [data-cancel]').click();
   const bodyweightIndex=await page.evaluate(()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
    return b.events.find(e=>e.type==='WORKOUT_STARTED').slots.findIndex(x=>x.equipment==='bodyweight');
@@ -242,6 +246,7 @@ const server=http.createServer((req,res)=>{
   await page.locator('#workout [data-bb2-discard]').click();
   const discarded=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
   assert.equal(discarded.bb2.activeSessionId,null);
+  assert.equal(discarded.timerStart,null,'Discard atomically stops the working-set rest timer');
   assert.equal(discarded.bb2.events[0].type,'TOMBSTONE');
   assert.equal(discarded.bb2.events[1].type,'TOMBSTONE');
   assert.equal(discarded.bb2.events[2].type,'TOMBSTONE','Discard removes session-only calibration trial');
@@ -291,6 +296,7 @@ const server=http.createServer((req,res)=>{
   await page.waitForSelector('#history [data-bb2-history]',{state:'attached'});
   const finished=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
   assert.equal(finished.bb2.activeSessionId,null);
+  assert.equal(finished.timerStart,null,'Finish atomically stops the running rest clock');
   assert.equal(finished.bb2.events.filter(e=>e.type==='WORKOUT_FINISHED').length,1);
   assert.equal(finished.bb2.events.filter(e=>e.type==='CREDIT_GRANTED').length,1,'single credit on real Finish');
   assert.equal(finished.bb2.selectedProgram,true,'Finish keeps BB2 selected');

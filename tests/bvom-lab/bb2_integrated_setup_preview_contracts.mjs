@@ -41,7 +41,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   const bb=h.S().bb2,sessionId=bb.activeSessionId;
   const start=bb.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===sessionId);
   const slot=h.ctx.bvomBb2WorkingSlot(start.slots[i],bb.events,sessionId);
-  const trial=h.ctx.bvomBb2SessionTrial(slot,bb.events,sessionId);
+  const trial=h.ctx.bvomBb2SetActualDefault(slot,bb.events,sessionId,extra);
   o.querySelector('[data-bb2-actual="'+key+'"]').value=actual??h.ctx.bvomBb2DisplayLoad(trial.grams);
  }
  if(o.innerHTML.includes('data-bb2-bw-variation')){
@@ -362,6 +362,10 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(restarted.h.S().bb2.events.length,2,'rejected secondary Discard preserves records');
  assert.equal(h.ctx.bvomBb2Discard(),true,'original owner can Discard with ledger tombstones');
  assert.equal(h.S().bb2.activeSessionId,null);
+ assert.equal(h.S().timerStart,null,'Discard stops the rest timer in the same transaction');
+ assert.equal(JSON.parse(h.ls.getItem('bvom_data')).timerStart,null,
+  'discarded session cannot leave a persisted running timer');
+ assert.equal(h.ctx.document.querySelector('#timerbar').classList.contains('idle'),true);
  assert.equal(h.S().bb2.events[0].type,'TOMBSTONE');
  assert.equal(h.S().bb2.events[1].type,'TOMBSTONE');
  assert.equal(h.S().bb2.events.at(-1).type,'WORKOUT_DISCARDED');
@@ -513,6 +517,8 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(bwExtra.assistance,bwStart.assistance);
  for(let n=1;n<30;n++){
   assert.equal(h.ctx.bvomBb2OpenExtra(0),true);
+  if(n===1)assert.match(h.lastOverlay().innerHTML,/data-bb2-actual="0\|4" value="56"/,
+   'next extra defaults to the previous actual load rather than the 60 kg plan');
   recordBB2Dialog(h,0,3+n,{extra:true});
  }
  assert.equal(h.ctx.bvomBb2OpenExtra(0),false,'BB1-style 30-extra-set limit');
@@ -522,6 +528,8 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   'extra numeric and bodyweight sets survive a BVOM document reload');
  assert.equal(h.ctx.bvomBb2End('FINISH'),false,'extras cannot make a below-gate Finish eligible');
  assert.equal(h.ctx.bvomBb2End('INCOMPLETE'),true);
+ assert.equal(h.S().timerStart,null,'incomplete Finish clears the rest timer');
+ assert.equal(JSON.parse(h.ls.getItem('bvom_data')).timerStart,null);
  const p=catalogue.foldBB2Block(h.S().bb2.opening,h.S().bb2.events);
  assert.equal(p.quotas.upper_a,0);
  assert.equal(p.history[0].validCount,2,'only prescribed sets count');
@@ -582,7 +590,9 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ctx.bvomBb2Begin(),true);
  const id=h.S().bb2.activeSessionId;
  assert.equal(h.ctx.bvomBb2Log(0,0),true);
+ const timerBeforeRejectedFinish=h.S().timerStart;
  assert.equal(h.ctx.bvomBb2End('FINISH'),false,'below-70%-threshold Finish is refused');
+ assert.equal(h.S().timerStart,timerBeforeRejectedFinish,'rejected Finish cannot cancel rest time');
  assert.equal(h.S().bb2.activeSessionId,id,'failed Finish keeps original active session');
  assert.equal(h.S().bb2.events.length,2,'failed Finish cannot append credit or outcome');
  // Nine distinct prescribed working sets meet the 70% threshold for Upper A (9/12).
@@ -594,6 +604,10 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ctx.bvomBb2End('FINISH'),true,'70% Finish succeeds with credit transaction');
  const state=h.S(),bb=state.bb2;
  assert.equal(bb.activeSessionId,null,'active BB2 session closed');
+ assert.equal(state.timerStart,null,'successful 70% Finish stops rest clock atomically');
+ assert.equal(JSON.parse(h.ls.getItem('bvom_data')).timerStart,null,
+  'credited workout and timer clear share one durable local save');
+ assert.equal(h.ctx.document.querySelector('#timerbar').classList.contains('idle'),true);
  assert.equal(bb.events.filter(e=>e.type==='WORKOUT_FINISHED').length,1);
  assert.equal(bb.events.filter(e=>e.type==='CREDIT_GRANTED').length,1,'exactly one credit earned');
  assert.equal(bb.selectedProgram,true,'Finish preserves the BB2 selected program');
@@ -2111,6 +2125,9 @@ H.withClock(c=>{
  assert.equal(h.ctx.bvomRecoveryCheck(),true,'60-minute idle BB2 workout closes atomically as incomplete');
  const b=h.S().bb2,projection=catalogue.foldBB2Block(b.opening,b.events);
  assert.equal(b.activeSessionId,null);
+ assert.equal(h.S().timerStart,null,'automatic recovery clears rest clock with incomplete archive');
+ assert.equal(JSON.parse(h.ls.getItem('bvom_data')).timerStart,null,
+  'recovered session persists a stopped timer in its one durable commit');
  assert.equal(b.events.filter(e=>e.type==='WORKOUT_INCOMPLETE').length,1);
  assert.equal(b.events.filter(e=>e.type==='CREDIT_GRANTED').length,0);
  assert.equal(projection.history[0].status,'INCOMPLETE');
@@ -2144,6 +2161,7 @@ H.withClock(c=>{
  assert.equal(h.ls.getItem('bvom_data'),raw,'failed recovery did not partially write');
  assert.equal(h.S().bb2.activeSessionId!==null,true);
  assert.equal(h.S().bb2.events.filter(e=>e.type==='WORKOUT_INCOMPLETE').length,0);
+ assert.ok(h.S().timerStart>0,'rejected recovery keeps original active rest timer');
  assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
  console.log('PASS: BB2 missing-clock grace, recovery write failure rollback and no phantom credit');
 });

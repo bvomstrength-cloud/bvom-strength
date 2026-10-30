@@ -5843,6 +5843,20 @@ function bvomBb2NextExtraIndex(events,sessionId,slot){
  if(used.length>=30)return null;
  return used.reduce((next,e)=>Math.max(next,e.setIndex+1),slot.sets);
 }
+function bvomBb2SetActualDefault(slot,events,sessionId,extra){
+ const trial=bvomBb2SessionTrial(slot,events,sessionId);
+ if(!extra||slot.equipment!=='loaded')return trial;
+ // Match BB1: a new extra set suggests the previous recorded actual weight.
+ // Retain its exact canonical origin when pounds are only displayed rounded.
+ for(let k=events.length-1;k>=0;k--){
+  const e=events[k];
+  if(['SET_RECORDED','EXTRA_SET_RECORDED'].includes(e.type)&&
+     e.sessionId===sessionId&&e.roleSlotId===slot.roleSlotId&&
+     e.exerciseId===slot.exerciseId&&Number.isSafeInteger(e.actualG)&&e.actualOrigin)
+   return {grams:e.actualG,origin:e.actualOrigin};
+ }
+ return trial;
+}
 // Match BB1's round set buttons and recording dialog. The immutable BB2 ledger
 // still owns all validation, calibration and correction behaviour.
 function bvomBb2SetModal(i,j,extra=false){
@@ -5872,7 +5886,8 @@ function bvomBb2SetModal(i,j,extra=false){
     'このセットは記録済みです。修正はワークアウト終了後の履歴から行えます。')+
    '</p><div class="modalActions"><button type="button" data-cancel>'+hlmTxt('CLOSE','閉じる')+'</button></div></div>';
  }else{
-  const trial=bvomBb2SessionTrial(s,b.events,sessionId);
+  const trial=bvomBb2SessionTrial(s,b.events,sessionId),actualDefault=
+   bvomBb2SetActualDefault(s,b.events,sessionId,extra);
   o.innerHTML='<div class="bvomModal" role="dialog" aria-modal="true"><h3>'+title+'</h3><div class="sub">'+
    hlmTxt('Target','目標')+': '+s.floor+'–'+s.ceiling+' '+hlmTxt('reps','回')+
    (s.equipment==='loaded'&&Number.isSafeInteger(trial.grams)?' · '+
@@ -5886,7 +5901,7 @@ function bvomBb2SetModal(i,j,extra=false){
     (s.plannedG===undefined?'':bvomEsc(bvomBb2DisplayLoad(s.plannedG)))+'"></label>':
     '<label>'+hlmTxt('Actual load','実際の使用重量')+' ('+unit+')'+
     '<input type="number" min="0.01" step="any" inputmode="decimal" data-bb2-actual="'+id+'" value="'+
-    bvomEsc(bvomBb2DisplayLoad(trial.grams))+'"></label>')+
+    bvomEsc(bvomBb2DisplayLoad(actualDefault.grams))+'"></label>')+
    '<label>'+hlmTxt('Reps','回数')+'<input type="number" min="1" step="1" inputmode="numeric" data-bb2-reps="'+id+'" value="'+s.ceiling+'"></label>'+
    '<label style="display:flex;gap:10px;align-items:center;margin-top:12px">'+
    '<input type="checkbox" data-bb2-hard="'+id+'"> '+
@@ -6058,7 +6073,7 @@ function bvomBb2Log(i,j,extra=false,entryRoot=null){
   roleSlotId:slot.roleSlotId,exerciseId:slot.exerciseId,setIndex:j,reps:Number(raw),
   prescribed:!extra,harderThanIntended:!!field('hard')?.checked};
  if(slot.equipment==='loaded'){
-  const trial=bvomBb2SessionTrial(slot,b.events,b.activeSessionId);
+  const trial=bvomBb2SetActualDefault(slot,b.events,b.activeSessionId,extra);
   const actualField=entryRoot?field('actual'):null,entered=actualField?.value===undefined?
    bvomBb2DisplayLoad(trial.grams):String(actualField.value??'').trim();
   if(!entered||!Number.isFinite(Number(entered))||Number(entered)<=0)return false;
@@ -6114,13 +6129,25 @@ function bvomBb2Log(i,j,extra=false,entryRoot=null){
   bvomBb2Workout();return true;
  }catch(error){console.error('BB2 set rejected',error);return false}
 }
+function bvomBb2StopCommittedRestClock(){
+ // Finish/Discard already committed timerStart:null in the BB2 transaction.
+ // Only update the shared timer UI; cancelTimer() would cause a second save.
+ clearInterval(timerInt);timerInt=null;dinged={};
+ const clock=document.querySelector('#clock');if(clock)clock.textContent='0:00';
+ const bar=document.querySelector('#timerbar');if(bar)bar.classList.add('idle');
+}
 function bvomBb2Discard(){
  if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed()||!bvomBb2PreviewModule)return false;
  const b=state.bb2,m=bvomBb2PreviewModule;
  try{
   const events=m.BB2_BROWSER_MODULES.ledger.discardBB2Session(b.events,b.activeSessionId);
   m.foldBB2Block(b.opening,events);
-  if(!bvomBb2Commit({...b,events,activeSessionId:null,selectedProgram:true}))return false;
+  const priorTimer=state.timerStart;state.timerStart=null;
+  if(!bvomBb2Commit({...b,events,activeSessionId:null,selectedProgram:true})){
+   state.timerStart=priorTimer;return false;
+  }
+  if(bvomPersistenceBlocked())return true;
+  bvomBb2StopCommittedRestClock();
   renderAll();return true;
  }catch(error){console.error('BB2 discard rejected',error);return false}
 }
@@ -6144,7 +6171,12 @@ function bvomBb2End(outcome='FINISH'){
    ownerId:b.opening.ownerId,blockId:b.opening.blockId,
    expectedHead:b.events.length,foldRulesVersion:b.opening.foldRulesVersion,
    sealRevision:prior.sealRevision,activeWorkout:true});
-  if(!bvomBb2Commit({...b,events:tx.events,activeSessionId:null,selectedProgram:true}))return false;
+  const priorTimer=state.timerStart;state.timerStart=null;
+  if(!bvomBb2Commit({...b,events:tx.events,activeSessionId:null,selectedProgram:true})){
+   state.timerStart=priorTimer;return false;
+  }
+  if(bvomPersistenceBlocked())return true;
+  bvomBb2StopCommittedRestClock();
   renderAll();return true;
  }catch(error){console.error('BB2 Finish rejected',error);return false}
 }
@@ -6203,11 +6235,15 @@ function bvomBb2RecoveryCheck(){
      localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY)!==bvomTabId()||
      window.__bvomAuthUserId!==account||bvomCloud.user?.id!==account)return false;
   bvomRecoveryBusy=true;
+  const priorTimer=state.timerStart;state.timerStart=null;
   if(!bvomBb2Commit({...b,events:tx.events,activeSessionId:null,selectedProgram:true})){
+   state.timerStart=priorTimer;
    bvomRecoveryStatus(hlmTxt('BB2 remains active: the incomplete workout could not be saved.',
     'BB2のワークアウトは継続中です。未完了として保存できませんでした。'));return false;
   }
-  committed=true;cancelTimer();bvomStopGppRuntime();
+  committed=true;
+  if(bvomPersistenceBlocked())return true;
+  bvomBb2StopCommittedRestClock();bvomStopGppRuntime();
   bvomRecoveryStatus(hlmTxt('Inactive BB2 workout saved as INCOMPLETE. Logged sets are in History; no progression credit was awarded.',
    '操作のなかったBB2ワークアウトを未完了として保存しました。記録済みセットは履歴に残り、進行クレジットは付与されません。'));
   renderAll();return true;
