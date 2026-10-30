@@ -53,24 +53,10 @@ async function open() {
     window.bb2StaticCoreHash = BB2_BROWSER_SOURCE_SHA256;
     window.bb2StaticOptionalCurls = setBB2OptionalCurls;
     window.bb2StaticSetup = createBB2Setup;
+    // ONLY this offline test substitutes both rollout gates. The real app's
+    // read-only snapshot always returns false for both and cannot enable sync.
     window.bb2AppRead = () => ({
-      authUserId: window.__bvomAuthUserId,
-      cloudUserId: bvomCloud.user?.id || null,
-      localOwnerId: bvomLocalOwnerId(),
-      appVisible: !document.querySelector('#app')?.classList.contains('hidden'),
-      entitlementAllowed: bvomEntitlementAccessDecision(
-        bvomEntitlement.record, bvomCloud.user?.id, true).allowed,
-      documentLockOwned: bvomWindowLockOwned,
-      documentLockState: bvomWindowLockState,
-      legacyRecoveryBlocked: bvomRecoveryLegacyBlocked,
-      tabOwnerCompatible: !bvomSecondaryTabWriteBlocked(),
-      accountSwitchDeferred: bvomCloud.accountSwitchDeferred,
-      recoveryBusy: bvomRecoveryBusy,
-      localPersistenceHealthy: !bvomLocalPersistenceFailureActive &&
-        !bvomLocalWriteConflictActive,
-      localBlobUnchanged: localStorage.getItem(BVOM_DATA_KEY) === bvomLastPersistedRaw,
-      legacyWorkoutActive: bvomAnyWorkoutActive(),
-      cloudConflict: bvomCloud.conflict,
+      ...bvomBb2DormantAccountSnapshot(),
       bb2WriterEnabled: window.bb2TestEnable === true,
       multiDeviceFenceVerified: window.bb2TestDeviceFence === true
     });
@@ -86,6 +72,30 @@ const attempt = p => p.evaluate(async () => {
     await window.bb2RealLocalStore.initialize('browser-block-1');
     return true;
   } catch (error) { return error.message; }
+});
+
+test('real BVOM source mapping is read-only, accounts and document ownership are live', async () => {
+  const p = await open();
+  try {
+    assert.deepEqual(await p.evaluate(() => {
+      window.bb2TestEnable = true;
+      window.bb2TestDeviceFence = true;
+      const s = bvomBb2DormantAccountSnapshot();
+      return [Object.isFrozen(s), s.bb2WriterEnabled, s.multiDeviceFenceVerified,
+        s.authUserId === bvomCloud.user?.id,
+        s.localOwnerId === bvomLocalOwnerId(), s.documentLockOwned,
+        s.documentLockState, s.localBlobUnchanged, s.entitlementAllowed];
+    }), [true, false, false, true, true, true, 'owned', true, true]);
+    assert.equal(await p.evaluate(() => {
+      bvomCloud.user = { id: 'different-owner' };
+      return bvomBb2DormantAccountSnapshot().cloudUserId;
+    }), 'different-owner');
+    assert.equal(await p.evaluate(() => {
+      bvomCloud.user = { id: 'dummy-owner' };
+      localStorage.setItem(BVOM_DATA_KEY, '{}');
+      return bvomBb2DormantAccountSnapshot().localBlobUnchanged;
+    }), false);
+  } finally { await p.close(); }
 });
 
 test('real app boots with both BB2 rollout gates shut; no local/cloud mutation', async () => {

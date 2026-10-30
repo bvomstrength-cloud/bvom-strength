@@ -5236,6 +5236,36 @@ function bvomBb2CloudRestoreMessage(){
   '端末のBB2設定とトレーニング履歴は変更せず保持されます。BB2はまだBVOMクラウドに保存されません。別の端末に備えてBVOMバックアップを書き出してください。 ')+ordinary;
 }
 
+// Read-only mapping of the existing BVOM account/document guards for the
+// dormant BB2 compatibility adapter. It performs no cloud I/O or registration.
+// The two rollout gates are deliberately hard-coded OFF in the real app.
+function bvomBb2DormantAccountSnapshot(){
+ const ownerId=bvomCloud.user?.id||null;
+ const app=document.querySelector('#app');
+ let localBlobUnchanged=false;
+ try{localBlobUnchanged=localStorage.getItem(BVOM_DATA_KEY)===bvomLastPersistedRaw}catch(e){}
+ return Object.freeze({
+  authUserId:window.__bvomAuthUserId,
+  cloudUserId:ownerId,
+  localOwnerId:bvomLocalOwnerId(),
+  appVisible:!!app&&!app.classList.contains('hidden'),
+  entitlementAllowed:!!ownerId&&bvomEntitlementAccessDecision(bvomEntitlement.record,
+   ownerId,!!bvomCloud.offlineLocalAccess).allowed===true,
+  documentLockOwned:bvomWindowLockOwned,
+  documentLockState:bvomWindowLockState,
+  legacyRecoveryBlocked:bvomRecoveryLegacyBlocked,
+  tabOwnerCompatible:!bvomSecondaryTabWriteBlocked(),
+  accountSwitchDeferred:bvomCloud.accountSwitchDeferred,
+  recoveryBusy:bvomRecoveryBusy,
+  localPersistenceHealthy:!bvomLocalPersistenceFailureActive&&!bvomLocalWriteConflictActive,
+  localBlobUnchanged,
+  legacyWorkoutActive:bvomAnyWorkoutActive(),
+  cloudConflict:bvomCloud.conflict,
+  bb2WriterEnabled:false,
+  multiDeviceFenceVerified:false
+ });
+}
+
 // BB2 Stage (ii): local-only Start, prescribed sets, recovery, Finish, quota,
 // History and Discard. The existing BVOM data document remains authoritative.
 let bvomBb2Day='upper_a';

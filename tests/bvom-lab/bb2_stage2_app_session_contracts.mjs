@@ -3,6 +3,8 @@ import { createRequire } from 'node:module';
 import { bb2AppWriteStatus, createBB2AppSessionHost } from '../../bb2/app-session.mjs';
 
 const require = createRequire(import.meta.url);
+const path = require('node:path');
+const H = require('./lib/bvom_harness');
 const { createBB2LocalStore } = require('../../bb2/local-store.cjs');
 const { createBB2Setup, setBB2OptionalCurls } = require('../../bb2/catalogue.cjs');
 const testCases = [];
@@ -31,6 +33,35 @@ const fakeRuntime = () => {
 test('all documented app, entitlement, window, persistence and cloud fences pass', () => {
   assert.deepEqual(bb2AppWriteStatus(baseline(), 'owner-1'),
     { allowed: true, reason: 'eligible' });
+});
+
+test('actual BVOM snapshot tracks account, lock and persisted data; rollout stays off', () => {
+  const root = path.resolve(import.meta.dirname, '../..');
+  const h = H.boot(H.loadBuild(root), { supabase: null, online: false });
+  H.configureLP(h);
+  h.ctx.bvomSetLocalOwnerId('owner-1');
+  h.ev(`window.__bvomAuthUserId='owner-1';bvomCloud.user={id:'owner-1'};
+    bvomEntitlement.record={user_id:'owner-1',status:'complimentary'};
+    bvomWindowLockOwned=true;bvomWindowLockState='owned';`);
+  h.els['#app'].classList.remove('hidden');
+  const read = () => h.ev('bvomBb2DormantAccountSnapshot()');
+  const initial = read();
+  assert.equal(Object.isFrozen(initial), true);
+  assert.equal(initial.entitlementAllowed, true);
+  assert.equal(initial.localOwnerId, 'owner-1');
+  assert.equal(initial.documentLockOwned, true);
+  assert.equal(initial.localBlobUnchanged, true);
+  assert.equal(initial.bb2WriterEnabled, false);
+  assert.equal(initial.multiDeviceFenceVerified, false);
+  assert.equal(bb2AppWriteStatus(initial, 'owner-1').allowed, false);
+  h.ev('bvomCloud.user={id:"other-owner"};bvomCloud.accountSwitchDeferred=true;');
+  assert.equal(read().cloudUserId, 'other-owner');
+  assert.equal(read().accountSwitchDeferred, true);
+  h.ev('bvomCloud.user={id:"owner-1"};bvomCloud.accountSwitchDeferred=false;');
+  h.ls.setItem('bvom_data', '{"changed":true}');
+  assert.equal(read().localBlobUnchanged, false);
+  h.els['#app'].classList.add('hidden');
+  assert.equal(read().appVisible, false);
 });
 
 test('every individual protective guard fails closed when absent or unsafe', () => {
