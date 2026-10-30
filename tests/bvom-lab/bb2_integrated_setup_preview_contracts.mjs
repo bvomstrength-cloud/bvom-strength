@@ -32,11 +32,18 @@ function fixture({ls}={}){
  return {h,before,row};
 }
 
-function recordBB2Dialog(h,i,j,{reps=8,extra=false}={}){
+function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  const o=h.lastOverlay(),key=i+'|'+j;
  assert.match(o.innerHTML,/class="bvomModal"/,'BB2 uses the shared set modal');
  o.querySelector('[data-bb2-reps="'+key+'"]').value=String(reps);
  o.querySelector('[data-bb2-hard="'+key+'"]').checked=false;
+ if(o.innerHTML.includes('data-bb2-actual="'+key+'"')){
+  const bb=h.S().bb2,sessionId=bb.activeSessionId;
+  const start=bb.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===sessionId);
+  const slot=h.ctx.bvomBb2WorkingSlot(start.slots[i],bb.events,sessionId);
+  const trial=h.ctx.bvomBb2SessionTrial(slot,bb.events,sessionId);
+  o.querySelector('[data-bb2-actual="'+key+'"]').value=actual??h.ctx.bvomBb2DisplayLoad(trial.grams);
+ }
  if(o.innerHTML.includes('data-bb2-bw-variation')){
   const start=h.S().bb2.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===h.S().bb2.activeSessionId);
   const slot=start.slots[i];
@@ -308,17 +315,32 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false}={}){
   'BB2 uses BB1 round set buttons, not always-visible input rows');
  assert.equal(h.ctx.bvomBb2SetModal(0,0),true,'tap opens BB1-style set entry dialog');
  const dialog=h.lastOverlay(),key='0|0';
+ assert.match(dialog.innerHTML,/Actual load \(kg\)/,'BB2 records actual load in shared set dialog');
+ dialog.querySelector('[data-bb2-actual="'+key+'"]').value='57.5';
+ assert.equal(h.S().timerStart,null,'new working session has no running rest timer');
  dialog.querySelector('[data-bb2-reps="'+key+'"]').value='';
  dialog.querySelector('[data-save]').onclick();
  assert.equal(h.S().bb2.events.length,1,'empty modal input refuses a phantom set');
+ assert.equal(h.S().timerStart,null,'rejected set does not start rest timer');
  assert.equal(dialog.removed,false,'invalid input keeps recording dialog open');
  dialog.querySelector('[data-bb2-reps="'+key+'"]').value='8';
  dialog.querySelector('[data-bb2-hard="'+key+'"]').checked=false;
+ dialog.querySelector('[data-bb2-actual="'+key+'"]').value='';
+ dialog.querySelector('[data-save]').onclick();
+ assert.equal(dialog.removed,false,'blank actual load keeps the dialog open');
+ assert.equal(h.S().bb2.events.length,1,'blank actual load cannot create a set');
+ assert.equal(h.S().timerStart,null,'blank actual load cannot start the timer');
+ dialog.querySelector('[data-bb2-actual="'+key+'"]').value='57.5';
  dialog.querySelector('[data-save]').onclick();
  assert.equal(dialog.removed,true,'durable save closes recording dialog');
  assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-set="0\|0"/);
  assert.match(h.ctx.document.querySelector('#workout').innerHTML,/class="set done"/);
  assert.equal(h.S().bb2.events.length,2);
+ assert.equal(h.S().bb2.events.at(-1).actualG,57500,'actual 57.5 kg preserved instead of 60 kg plan');
+ assert.equal(h.S().bb2.events.at(-1).actualOrigin.value,'57.5');
+ assert.ok(h.S().timerStart>0,'successful working set starts rest timer');
+ assert.equal(JSON.parse(h.ls.getItem('bvom_data')).timerStart,h.S().timerStart,
+  'working set and timer start share one durable local save');
  assert.equal(h.ctx.bvomBb2Log(0,0),false,'duplicate set refused');
  assert.equal(h.ctx.bvomCloudPayload().bb2,undefined,'development record absent from cloud');
  const written=h.ls.getItem('bvom_data');
@@ -330,6 +352,8 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false}={}){
  const restarted=fixture({ls:h.ls});
  assert.equal(restarted.h.S().bb2.activeSessionId,active,'reload retains active BB2 session');
  assert.equal(restarted.h.S().bb2.events.length,2);
+ assert.equal(restarted.h.S().bb2.events.at(-1).actualG,57500,
+  'reloading preserves the actual off-plan physical weight');
  restarted.h.ctx.location.origin='http://localhost:8000';
  restarted.h.ctx.location.search='?bb2Preview=1';
  restarted.h.ctx.__bb2CatalogueForTest=catalogue;
@@ -347,6 +371,41 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false}={}){
  assert.equal(h.S().history.length,JSON.parse(before).history.length);
  assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
  console.log('PASS: BB2 Start, set, duplicate fence, reload, cloud guard, lock refusal and Discard');
+}
+
+{
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const field=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
+  if(field)return field[1]==='hard'?{checked:false}:{value:field[1]==='load'?'60':
+   field[1]==='inc'?'2.5':field[1]==='assist'?'none':'8'};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ h.ev("state.unit='lb'");
+ assert.equal(h.ctx.bvomBb2SetModal(0,0),true);
+ const first=h.lastOverlay();
+ assert.match(first.innerHTML,/Actual load \(lb\)/);
+ first.querySelector('[data-bb2-actual="0|0"]').value=h.ctx.bvomBb2DisplayLoad(60000);
+ first.querySelector('[data-bb2-reps="0|0"]').value='8';
+ assert.equal(first.querySelector('[data-save]').onclick(),true);
+ const inherited=h.S().bb2.events.at(-1);
+ assert.equal(inherited.actualG,60000,'unchanged rounded pounds display retains 60,000 canonical grams');
+ assert.equal(inherited.actualOrigin.unit,'kg','unchanged pounds input retains kg provenance');
+ assert.equal(h.ctx.bvomBb2SetModal(0,1),true);
+ recordBB2Dialog(h,0,1,{actual:'127'});
+ const changed=h.S().bb2.events.at(-1);
+ assert.equal(changed.actualG,catalogue.BB2_BROWSER_MODULES.ledger.canonicalGrams('127','lb'));
+ assert.equal(changed.actualOrigin.unit,'lb','a genuinely different actual inherits the entry unit');
+ assert.equal(changed.actualOrigin.value,'127');
+ console.log('PASS: BB2 modal preserves rounded pounds provenance and records a different actual load');
 }
 
 {
@@ -429,10 +488,15 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false}={}){
  assert.equal(h.ctx.bvomBb2Log(0,3,true),false,'extra cannot bypass the Add button');
  assert.equal(h.ctx.bvomBb2OpenExtra(0),true);
  assert.match(h.lastOverlay().innerHTML,/data-bb2-reps="0\|3"/);
- recordBB2Dialog(h,0,3,{reps:11,extra:true});
+ const timerBeforeExtra=h.S().timerStart;
+ h.ev('state.timerStart=123');
+ recordBB2Dialog(h,0,3,{reps:11,extra:true,actual:'56'});
  const extra=h.S().bb2.events.find(e=>e.type==='EXTRA_SET_RECORDED');
  assert.equal(extra.setIndex,3);assert.equal(extra.prescribed,false);
  assert.equal(extra.sessionId,sessionId);
+ assert.equal(extra.actualG,56000,'extra set retains its separately entered actual load');
+ assert.ok(h.S().timerStart>123&&h.S().timerStart>=timerBeforeExtra,
+  'extra set also resets the rest clock');
  assert.equal(h.ctx.bvomBb2Log(0,3,true),false,'duplicate extra ordinal refused');
  assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-extra-done="0\|3"/);
  assert.match(h.ctx.document.querySelector('#workout').innerHTML,/1\/12 prescribed sets recorded/,
@@ -488,9 +552,11 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false}={}){
  assert.equal(h.ctx.bvomBb2Log(0,0),true);
  assert.equal(h.ctx.bvomBb2OpenExtra(0),true);
  const before=h.S().bb2,raw=h.ls.getItem('bvom_data'),setItem=h.ls.setItem;
+ const timerBeforeFailure=h.S().timerStart;
  h.ls.setItem=(k,v)=>{if(k==='bvom_data')throw Error('simulated full local storage');return setItem(k,v)};
  assert.equal(h.ctx.bvomBb2Log(0,3,true),false,'failed extra-set persistence rolls back');
  h.ls.setItem=setItem;
+ assert.equal(h.S().timerStart,timerBeforeFailure,'failed durable save cannot start a rest timer');
  assert.equal(h.S().bb2,before);
  assert.equal(h.ls.getItem('bvom_data'),raw);
  assert.equal(h.S().bb2.events.some(e=>e.type==='EXTRA_SET_RECORDED'),false);

@@ -17,8 +17,9 @@ const bb1=H.boot(H.loadBuild(root));H.bbStart(bb1);
 const bb1Fixture=JSON.parse(bb1.ls.getItem('bvom_data'));
 const mobile={viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,serviceWorkers:'block'};
 const screenshots=path.resolve(process.env.RUNNER_TEMP||'/tmp','bb2-ui-parity');
-async function recordBB2Set(page,key,reps,{opened=false}={}){
+async function recordBB2Set(page,key,reps,{opened=false,actual}={}){
  if(!opened)await page.locator('#workout [data-bb2-set="'+key+'"]').click();
+ if(actual!==undefined)await page.locator('.bvomModalOverlay [data-bb2-actual="'+key+'"]').fill(actual);
  await page.locator('.bvomModalOverlay [data-bb2-reps="'+key+'"]').fill(String(reps));
  await page.locator('.bvomModalOverlay [data-save]').click();
  await page.locator('.bvomModalOverlay').waitFor({state:'detached'});
@@ -174,11 +175,23 @@ const server=http.createServer((req,res)=>{
    {state:'visible'});
   assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
   await page.evaluate(()=>activateTab('workout'));
-  await recordBB2Set(page,'0|0',8);
+  await page.locator('#workout [data-bb2-set="0|0"]').click();
+  assert.equal(await page.locator('.bvomModalOverlay [data-bb2-actual="0|0"]').inputValue(),'60',
+   'actual load defaults to prescribed weight in the BB1-style set modal');
+  await page.locator('.bvomModalOverlay [data-bb2-actual="0|0"]').fill('');
+  await page.locator('.bvomModalOverlay [data-save]').click();
+  assert.equal(await page.locator('.bvomModalOverlay').count(),1,
+   'blank actual load refuses recording without closing the dialog');
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.events.length),1,
+   'invalid actual load cannot create a recorded working set');
+  await page.locator('.bvomModalOverlay [data-bb2-actual="0|0"]').fill('60');
+  await recordBB2Set(page,'0|0',8,{opened:true});
   await page.waitForSelector('#workout [data-bb2-set="0|0"].done');
   const logged=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
   assert.equal(logged.bb2.events[1].type,'SET_RECORDED');
   assert.equal(logged.bb2.events[1].actualG,60000);
+  assert.ok(logged.timerStart>0,'durably recorded working set starts the BVOM rest clock');
+  assert.equal(await page.locator('#timerbar.idle').count(),0,'rest timer becomes visible after save');
   assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
   await page.reload();
   await page.waitForSelector('#workout [data-bb2-set="0|0"].done');
@@ -266,8 +279,13 @@ const server=http.createServer((req,res)=>{
   assert.equal(prescribedPairs.length,12,'upper A has twelve prescribed sets');
   for(const [i,j] of prescribedPairs.slice(0,9)){
    const k=i+'|'+j;
-   await recordBB2Set(page,k,8);
+   await recordBB2Set(page,k,8,i===0?{actual:'57.5'}:{});
   }
+  assert.equal(await page.evaluate(()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   return b.events.filter(e=>e.type==='SET_RECORDED'&&e.roleSlotId===b.events.find(x=>x.type==='WORKOUT_STARTED'&&x.sessionId===b.activeSessionId).slots[0].roleSlotId)
+    .filter(e=>e.sessionId===b.activeSessionId).every(e=>e.actualG===57500&&e.actualOrigin.value==='57.5');
+  }),true,'all three off-plan 57.5 kg sets record the actual load, not prescribed 60 kg');
   await page.waitForSelector('#workout [data-bb2-finish]:not([disabled])');
   await page.locator('#workout [data-bb2-finish]').click();
   await page.waitForSelector('#history [data-bb2-history]',{state:'attached'});
@@ -438,6 +456,8 @@ const server=http.createServer((req,res)=>{
   await bb1Page.locator('#workout .setwrap button.set').first().click();
   assert.match(await page.locator('.bvomModalOverlay').textContent(),/回数/,
    'BB2 set recording modal localises to Japanese');
+  assert.match(await page.locator('.bvomModalOverlay').textContent(),/実際の使用重量/,
+   'actual load field also localises to Japanese');
   await page.screenshot({path:path.join(screenshots,'bb2-set-ja-mobile.png')});
   await bb1Page.screenshot({path:path.join(screenshots,'bb1-set-ja-mobile.png')});
   await page.locator('.bvomModalOverlay [data-cancel]').click();

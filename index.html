@@ -5883,7 +5883,10 @@ function bvomBb2SetModal(i,j,extra=false){
     '<input type="text" maxlength="80" data-bb2-bw-assist="'+id+'" value="'+bvomEsc(s.assistance)+'"></label>'+
     '<label>'+hlmTxt('Added weight (optional)','追加重量（任意）')+' ('+unit+')'+
     '<input type="number" min="0" step="any" data-bb2-bw-added="'+id+'" value="'+
-    (s.plannedG===undefined?'':bvomEsc(bvomBb2DisplayLoad(s.plannedG)))+'"></label>':'')+
+    (s.plannedG===undefined?'':bvomEsc(bvomBb2DisplayLoad(s.plannedG)))+'"></label>':
+    '<label>'+hlmTxt('Actual load','実際の使用重量')+' ('+unit+')'+
+    '<input type="number" min="0.01" step="any" inputmode="decimal" data-bb2-actual="'+id+'" value="'+
+    bvomEsc(bvomBb2DisplayLoad(trial.grams))+'"></label>')+
    '<label>'+hlmTxt('Reps','回数')+'<input type="number" min="1" step="1" inputmode="numeric" data-bb2-reps="'+id+'" value="'+s.ceiling+'"></label>'+
    '<label style="display:flex;gap:10px;align-items:center;margin-top:12px">'+
    '<input type="checkbox" data-bb2-hard="'+id+'"> '+
@@ -5903,6 +5906,11 @@ function bvomBb2SetModal(i,j,extra=false){
       now?.slots[i]?.roleSlotId!==s.roleSlotId||now.slots[i].exerciseId!==s.exerciseId){
     bvomBbInputNotice(o,hlmTxt('Workout changed. Close and reopen this set.',
      'ワークアウトが変更されました。閉じてセットを再度開いてください。'),'[data-bb2-reps]');return false;
+   }
+   const actual=s.equipment==='loaded'?o.querySelector('[data-bb2-actual="'+id+'"]'):null;
+   if(actual&&(!String(actual.value).trim()||!(Number(actual.value)>0))){
+    bvomBbInputNotice(o,hlmTxt('Enter the actual load used.',
+     '実際に使用した重量を入力してください。'),'[data-bb2-actual]');return false;
    }
    if(!bvomBb2Log(i,j,extra,o)){
     bvomBbInputNotice(o,hlmTxt('Set not saved. Check the entries and workout ownership.',
@@ -6049,7 +6057,22 @@ function bvomBb2Log(i,j,extra=false,entryRoot=null){
   commitOrdinal:b.events.length+1,blockId:b.opening.blockId,sessionId:b.activeSessionId,
   roleSlotId:slot.roleSlotId,exerciseId:slot.exerciseId,setIndex:j,reps:Number(raw),
   prescribed:!extra,harderThanIntended:!!field('hard')?.checked};
- if(slot.plannedG!==undefined){const trial=bvomBb2SessionTrial(slot,b.events,b.activeSessionId);
+ if(slot.equipment==='loaded'){
+  const trial=bvomBb2SessionTrial(slot,b.events,b.activeSessionId);
+  const actualField=entryRoot?field('actual'):null,entered=actualField?.value===undefined?
+   bvomBb2DisplayLoad(trial.grams):String(actualField.value??'').trim();
+  if(!entered||!Number.isFinite(Number(entered))||Number(entered)<=0)return false;
+  if(Number(entered)===Number(bvomBb2DisplayLoad(trial.grams))){
+   // Preserve canonical grams and provenance when the unchanged pounds
+   // display was rounded; never turn a derived plan into typed evidence.
+   e.actualG=trial.grams;e.actualOrigin=trial.origin;
+  }else{
+   const unit=state.unit==='lb'?'lb':'kg';
+   try{e.actualG=m.BB2_BROWSER_MODULES.ledger.canonicalGrams(entered,unit)}catch(error){return false}
+   if(e.actualG<=0)return false;
+   e.actualOrigin={value:entered,unit};
+  }
+ }else if(slot.plannedG!==undefined){const trial=bvomBb2SessionTrial(slot,b.events,b.activeSessionId);
   e.actualG=trial.grams;e.actualOrigin=trial.origin}
  if(slot.equipment==='bodyweight'){
   const variation=String(field('bw-variation')?.value??slot.variation).trim();
@@ -6078,8 +6101,16 @@ function bvomBb2Log(i,j,extra=false,entryRoot=null){
   const tx=m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(b.opening,b.events,[e],{
    ownerId:b.opening.ownerId,blockId:b.opening.blockId,expectedHead:b.events.length,
    foldRulesVersion:b.opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:true});
-  if(!bvomBb2Commit({...b,events:tx.events},{activity:true}))return false;
+  const priorTimer=state.timerStart;
+  state.timerStart=Date.now();
+  if(!bvomBb2Commit({...b,events:tx.events},{activity:true})){
+   state.timerStart=priorTimer;return false;
+  }
   if(extra)bvomBb2ExtraEntry=null;
+  if(bvomPersistenceBlocked())return true;
+  // The set and rest-timer start are one durable local save. Reuse BVOM's
+  // existing timer display reset without a second potentially failing save.
+  bvomBbWarmStageBClock();
   bvomBb2Workout();return true;
  }catch(error){console.error('BB2 set rejected',error);return false}
 }
