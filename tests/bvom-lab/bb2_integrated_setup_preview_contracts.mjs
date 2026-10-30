@@ -350,6 +350,63 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false}={}){
 }
 
 {
+ // BB1's remembered ↑/↓ display order now also applies to the four BB2 days.
+ // Display order is never a Start event, set identity, progression or cloud edit.
+ const {h}=fixture();
+ h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const f=selector.match(/data-bb2-(load|inc|assist)="[^"]+"/);
+  if(f)return {value:f[1]==='load'?'60':f[1]==='inc'?'2.5':'none'};
+  return query(selector);
+ };
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ const initial=h.ctx.bvomOrderEffective(),start=h.S().bb2.events[0];
+ assert.equal(h.ctx.bvomOrderDayKey(),'bb2:upper_a');
+ assert.deepEqual([...initial],start.slots.map(s=>s.roleSlotId),
+  'the frozen Start slot order remains the default display sequence');
+ const originalJournal=JSON.stringify(h.S().bb2.events),originalCloud=JSON.stringify(h.ctx.bvomCloudPayload());
+ const clock=h.S().workoutLastActivityAt,legacyOrder=JSON.stringify(h.S().exerciseDisplayOrder);
+ assert.equal(h.ctx.bvomOrderChange(initial[0],-1),false,'first arrow cannot move above top');
+ assert.equal(h.ctx.bvomOrderChange(initial[0],1),true,'move first exercise down one position');
+ const changed=h.ctx.bvomOrderEffective();
+ assert.equal(changed[0],initial[1]);assert.equal(changed[1],initial[0]);
+ assert.deepEqual([...h.S().bb2.exerciseDisplayOrder['bb2:upper_a']],[...changed],
+  'preference is saved in BB2 state, scoped to Upper A');
+ assert.equal(JSON.stringify(h.S().bb2.events),originalJournal,
+  'changing the view does not add or edit any frozen ledger events');
+ assert.equal(JSON.stringify(h.ctx.bvomCloudPayload()),originalCloud,'display preference is never uploaded');
+ assert.equal(JSON.stringify(h.S().exerciseDisplayOrder),legacyOrder,'BB1 order preference is untouched');
+ assert.equal(h.S().workoutLastActivityAt,clock,'moving an exercise does not reset the inactivity timer');
+ const reopened=fixture({ls:h.ls});
+ reopened.h.ctx.location.origin='http://localhost:8000';reopened.h.ctx.location.search='?bb2Preview=1';
+ assert.deepEqual([...reopened.h.ctx.bvomOrderEffective()],[...changed],'reload remembers Upper A display order');
+ assert.equal(h.ctx.bvomOrderReset(),true,'reset uses the existing BVOM ordering control');
+ assert.deepEqual([...h.ctx.bvomOrderEffective()],[...initial],'reset restores canonical Start order');
+ assert.equal(JSON.stringify(h.S().bb2.events),originalJournal,'reset has no training effect');
+ assert.equal(h.ctx.bvomOrderChange(initial[0],1),true,'custom order can be restored');
+ const saved=h.ls.getItem('bvom_data');
+ h.ev('bvomWindowLockOwned=false');
+ assert.equal(h.ctx.bvomOrderChange(changed[0],1),false,'unowned tab cannot change saved order');
+ assert.equal(h.ls.getItem('bvom_data'),saved);
+ h.ev('bvomWindowLockOwned=true');
+ const oldWrite=h.ls.setItem;
+ h.ls.setItem=(k,v)=>{if(k==='bvom_data')throw Error('simulated order-save quota failure');return oldWrite(k,v)};
+ assert.equal(h.ctx.bvomOrderChange(changed[0],1),false,'failed local save refuses to move exercise');
+ h.ls.setItem=oldWrite;
+ assert.deepEqual([...h.ctx.bvomOrderEffective()],[...changed],'failed save rolls memory back');
+ assert.equal(h.ls.getItem('bvom_data'),saved,'failed save preserves durable preference');
+ h.ev('state.bb2.exerciseDisplayOrder={"bb2:upper_a":["duplicate","duplicate"]}');
+ assert.deepEqual([...h.ctx.bvomOrderEffective()],[...initial],'malformed stored order is ignored safely');
+ console.log('PASS: BB2 ↑/↓ display order, owner/save rollback, reload, reset and ledger isolation');
+}
+
+{
  const {h}=fixture();
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;

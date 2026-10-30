@@ -4818,6 +4818,10 @@ window.addEventListener('pageshow',()=>{bvomRecoveryCheck()});
  * stay canonical. Custom Training already supports native compound ↑ ↓ ordering.
  */
 function bvomOrderEntries(){
+ if(bvomBb2PreviewEnabled()&&bvomBb2Active()){
+  const b=state.bb2,start=b.events?.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
+  return (start?.slots||[]).map(s=>({key:s.roleSlotId,label:bvomBb2PreviewLabel(s.exerciseId)}));
+ }
  if(isFreeTraining())return [];
  if(isBodybuilding()){
   const day=bvomBbOnRampActive()?bvomBbOnRampDay():bvomBbDay();
@@ -4828,6 +4832,10 @@ function bvomOrderEntries(){
  return program().map(([name])=>({key:name,label:liftLabel(name)}));
 }
 function bvomOrderDayKey(){
+ if(bvomBb2PreviewEnabled()&&bvomBb2Active()){
+  const b=state.bb2,start=b.events?.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
+  return start?'bb2:'+start.templateId:null;
+ }
  if(isFreeTraining())return null;
  const mode=isBodybuilding()?'bodybuilding':isFourDay()?'fourday':isHLM()?'hlm':'lprpt';
  const day=isBodybuilding()?(bvomBbOnRampActive()?bvomBbOnRampDay():bvomBbDay()):state.day;
@@ -4872,7 +4880,8 @@ function bvomOrderSavedValid(saved,canonical){
    new Set(saved).size===saved.length&&saved.every(x=>canonical.includes(x));
 }
 function bvomOrderEffective(entries=bvomOrderEntries(),scope=bvomOrderDayKey()){
- const canonical=entries.map(x=>x.key),record=state.exerciseDisplayOrder;
+ const canonical=entries.map(x=>x.key),record=scope?.startsWith('bb2:')?
+  state.bb2?.exerciseDisplayOrder:state.exerciseDisplayOrder;
  const defaults=bvomOrderDefault(entries,scope);
  if(!scope||!canonical.length||new Set(canonical).size!==canonical.length)return defaults;
  const saved=record&&typeof record==='object'&&!Array.isArray(record)?record[scope]:null;
@@ -4884,19 +4893,29 @@ function bvomOrderChange(key,direction){
  const scope=bvomOrderDayKey(),entries=bvomOrderEntries(),order=bvomOrderEffective(entries,scope);
  const i=order.indexOf(key),d=Number(direction),j=i+d;
  if(!scope||!(d===-1||d===1)||i<0||j<0||j>=order.length)return false;
- const previous=state.exerciseDisplayOrder;
+ const bb2=scope.startsWith('bb2:'),previous=bb2?state.bb2?.exerciseDisplayOrder:state.exerciseDisplayOrder;
  const next=previous&&typeof previous==='object'&&!Array.isArray(previous)?{...previous}:{};
  [order[i],order[j]]=[order[j],order[i]];
  if(order.every((x,n)=>x===bvomOrderDefault(entries,scope)[n]))delete next[scope];else next[scope]=order;
+ if(bb2){
+  if(!bvomBb2Commit({...state.bb2,exerciseDisplayOrder:next},{passive:true}))return false;
+  renderAll();return true;
+ }
  state.exerciseDisplayOrder=next;
  if(!save({durable:true})){if(previous===undefined)delete state.exerciseDisplayOrder;else state.exerciseDisplayOrder=previous;return false}
  renderAll();return true;
 }
 function bvomOrderReset(){
  if(!bvomWorkoutActionAllowed())return false;
- const scope=bvomOrderDayKey(),previous=state.exerciseDisplayOrder;
+ const scope=bvomOrderDayKey(),bb2=scope?.startsWith('bb2:');
+ const previous=bb2?state.bb2?.exerciseDisplayOrder:state.exerciseDisplayOrder;
  if(!scope||!previous||typeof previous!=='object'||!Object.prototype.hasOwnProperty.call(previous,scope))return false;
- const next={...previous};delete next[scope];state.exerciseDisplayOrder=next;
+ const next={...previous};delete next[scope];
+ if(bb2){
+  if(!bvomBb2Commit({...state.bb2,exerciseDisplayOrder:next},{passive:true}))return false;
+  renderAll();return true;
+ }
+ state.exerciseDisplayOrder=next;
  if(!save({durable:true})){state.exerciseDisplayOrder=previous;return false}
  renderAll();return true;
 }
@@ -5220,9 +5239,9 @@ function bvomBb2OnLegacyProgramChoice(){
  if(!bvomWorkoutActionAllowed()||bvomStateWorkoutActive(state))return false;
  return bvomBb2Commit({...state.bb2,selectedProgram:false});
 }
-function bvomBb2Commit(next,{activity=false}={}){
+function bvomBb2Commit(next,{activity=false,passive=false}={}){
  const before=state.bb2;state.bb2=next;
- if(!save({durable:true,localOnly:true,activity})){
+ if(!save({durable:true,localOnly:true,activity,passive})){
   if(before===undefined)delete state.bb2;else state.bb2=before;
   return false;
  }
@@ -6001,6 +6020,7 @@ function bvomBb2Workout(){
   ' onclick="bvomBb2End(\'FINISH\')">FINISH WORKOUT</button>'+
   '<button type="button" class="secondary wide" data-bb2-incomplete onclick="bvomBb2End(\'INCOMPLETE\')">END AS INCOMPLETE</button>'+
   '<button class="secondary wide" data-bb2-discard onclick="bvomBb2Discard()">DISCARD TEST WORKOUT</button>';
+ bvomOrderApply('workout');
 }
 function bvomBb2Log(i,j,extra=false,entryRoot=null){
  if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed())return false;
@@ -6573,15 +6593,16 @@ function bvomBb2WarmupRender(){
   const working=slot.plannedG!==undefined?
    '<div class="small">Working: '+bvomEsc(slot.plannedOrigin.value)+' '+
     bvomEsc(slot.plannedOrigin.unit)+'</div>':'';
-  return '<div class="exercise" data-bb2-warm-card="'+i+'"><div class="exhead"><b>'+
+  return '<div class="exercise" data-bb2-warm-card="'+i+'"><div class="exhead"><div class="exname">'+
    bvomEsc(bvomBb2PreviewLabel(slot.exerciseId))+
-   '</b><span class="small">'+bvomEsc(plan.kind)+'</span></div>'+working+
+   '</div><span class="small">'+bvomEsc(plan.kind)+'</span></div>'+working+
    (rows||'<p class="small">Guidance only</p>')+
    '<p class="small">'+bvomEsc(plan.note)+'</p></div>';
  }).join('');
  el.innerHTML='<div class="toprow"><b>BODYBUILDING 2 · WARM-UP</b></div>'+
   '<div class="notice">Optional preparation only; ticks never count as working sets, calibration or credits.</div>'+
   cards;
+ bvomOrderApply('warmup');
 }
 const bvomBb2OldRenderWarm=renderWarm;
 renderWarm=function(...args){

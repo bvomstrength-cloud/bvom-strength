@@ -118,9 +118,34 @@ const server=http.createServer((req,res)=>{
   assert.equal(started.bb2.events[0].type,'WORKOUT_STARTED');
   assert.equal(started.programMode,fixture.programMode);
   assert.equal(await page.evaluate(()=>bvomCloudWorkoutActive()),true);
+  const beforeOrderCloud=await page.evaluate(()=>JSON.stringify(bvomCloudPayload()));
+  const originalOrder=await page.locator('#workout > .exercise .exname').allTextContents();
+  assert.equal(originalOrder.length,5,'five real Upper A workout cards are available for ordering');
+  assert.equal(await page.locator('#workout > .exercise .bvomOrderArrow').count(),10,
+   'BB2 reuses the same two ordering arrows per exercise as BB1');
+  await page.locator('#workout > .exercise').first().locator('.bvomOrderArrow').nth(1).click();
+  const movedOrder=await page.locator('#workout > .exercise .exname').allTextContents();
+  assert.deepEqual(movedOrder,[originalOrder[1],originalOrder[0],...originalOrder.slice(2)],
+   'down arrow changes only the visible workout order');
+  assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.events),
+   started.bb2.events,'drag-free arrow reorder cannot rewrite immutable Start or add a ledger event');
+  assert.equal(await page.evaluate(()=>JSON.stringify(bvomCloudPayload())),beforeOrderCloud,
+   'BB2-only reordering does not introduce cloud fields');
   await page.evaluate(()=>activateTab('warmup'));
   await page.waitForSelector('#warmup [data-bb2-warm-tick="0|0"]');
   assert.equal(await page.locator('#warmup [data-bb2-warm-card]').count(),5);
+  assert.deepEqual(await page.locator('#warmup > .exercise .exname').allTextContents(),movedOrder,
+   'Warm-up shows the same remembered view order with unchanged slot identities');
+  await page.reload();
+  await page.waitForSelector('#app:not(.hidden)');
+  await page.evaluate(()=>activateTab('warmup'));
+  assert.deepEqual(await page.locator('#warmup > .exercise .exname').allTextContents(),movedOrder,
+   'reordered Warm-up and Workout survive a full app reload');
+  await page.evaluate(()=>activateTab('workout'));
+  await page.locator('#workout .bvomOrderReset button').click();
+  assert.deepEqual(await page.locator('#workout > .exercise .exname').allTextContents(),originalOrder,
+   'Reset Exercise Order restores the original workout display sequence');
+  await page.evaluate(()=>activateTab('warmup'));
   assert.match(await page.locator('#warmup').textContent(),/Preparation only/);
   const beforeWarm=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.events.length);
   await page.locator('#warmup [data-bb2-warm-tick="0|0"]').click();
