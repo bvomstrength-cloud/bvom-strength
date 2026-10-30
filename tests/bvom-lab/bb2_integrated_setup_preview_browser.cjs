@@ -17,6 +17,12 @@ const bb1=H.boot(H.loadBuild(root));H.bbStart(bb1);
 const bb1Fixture=JSON.parse(bb1.ls.getItem('bvom_data'));
 const mobile={viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,serviceWorkers:'block'};
 const screenshots=path.resolve(process.env.RUNNER_TEMP||'/tmp','bb2-ui-parity');
+async function recordBB2Set(page,key,reps,{opened=false}={}){
+ if(!opened)await page.locator('#workout [data-bb2-set="'+key+'"]').click();
+ await page.locator('.bvomModalOverlay [data-bb2-reps="'+key+'"]').fill(String(reps));
+ await page.locator('.bvomModalOverlay [data-save]').click();
+ await page.locator('.bvomModalOverlay').waitFor({state:'detached'});
+}
 const server=http.createServer((req,res)=>{
  const pathname=new URL(req.url,'http://localhost').pathname;
  if(pathname==='/seed'){res.writeHead(200,{'Content-Type':'text/html'});res.end('<!doctype html><title>Test setup</title>');return}
@@ -106,7 +112,7 @@ const server=http.createServer((req,res)=>{
    await increments.nth(i).fill('2.5');
   }
   await page.locator('#setup [data-bb2-start]').click();
-  await page.waitForSelector('#workout [data-bb2-log="0|0"]');
+  await page.waitForSelector('#workout [data-bb2-set="0|0"]');
   const started=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
   assert.ok(started.bb2.activeSessionId);
   assert.equal(started.bb2.events[0].type,'WORKOUT_STARTED');
@@ -129,15 +135,14 @@ const server=http.createServer((req,res)=>{
    {state:'visible'});
   assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
   await page.evaluate(()=>activateTab('workout'));
-  await page.locator('#workout [data-bb2-reps="0|0"]').fill('8');
-  await page.locator('#workout [data-bb2-log="0|0"]').click();
-  await page.waitForSelector('#workout .warmrow:has-text("8 reps")');
+  await recordBB2Set(page,'0|0',8);
+  await page.waitForSelector('#workout [data-bb2-set="0|0"].done');
   const logged=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
   assert.equal(logged.bb2.events[1].type,'SET_RECORDED');
   assert.equal(logged.bb2.events[1].actualG,60000);
   assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
   await page.reload();
-  await page.waitForSelector('#workout .warmrow:has-text("8 reps")');
+  await page.waitForSelector('#workout [data-bb2-set="0|0"].done');
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.events.length),2);
   // This is the first eligible exposure. A between-set trial must remain
   // session-scoped, survive reload and preserve the earlier 60 kg actual.
@@ -151,8 +156,7 @@ const server=http.createServer((req,res)=>{
   await page.reload();
   await page.waitForSelector('#workout [data-bb2-trial="0"]');
   assert.equal(await page.locator('#workout [data-bb2-trial="0"]').inputValue(),'67.5');
-  await page.locator('#workout [data-bb2-reps="0|1"]').fill('8');
-  await page.locator('#workout [data-bb2-log="0|1"]').click();
+  await recordBB2Set(page,'0|1',8);
   assert.equal(await page.evaluate(()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
    const rows=b.events.filter(e=>e.type==='SET_RECORDED');
@@ -173,10 +177,10 @@ const server=http.createServer((req,res)=>{
    return b.events.at(-2).type==='VARIATION_EDITED'&&b.events.at(-1).type==='PRESCRIPTION_EDITED'&&
     b.events.at(-1).loadG===2500;
   }),true,'one pre-lock save persists bodyweight variation and external weight');
-  assert.equal(await page.locator('#workout [data-bb2-bw-variation="'+bwKey+'"]').inputValue(),'assisted pullup');
-  assert.equal(await page.locator('#workout [data-bb2-bw-assist="'+bwKey+'"]').inputValue(),'light band');
-  await page.locator('#workout [data-bb2-reps="'+bwKey+'"]').fill('8');
-  await page.locator('#workout [data-bb2-log="'+bwKey+'"]').click();
+  await page.locator('#workout [data-bb2-set="'+bwKey+'"]').click();
+  assert.equal(await page.locator('.bvomModalOverlay [data-bb2-bw-variation="'+bwKey+'"]').inputValue(),'assisted pullup');
+  assert.equal(await page.locator('.bvomModalOverlay [data-bb2-bw-assist="'+bwKey+'"]').inputValue(),'light band');
+  await recordBB2Set(page,bwKey,8,{opened:true});
   assert.equal(await page.evaluate(()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
    const e=b.events.at(-1);
@@ -223,8 +227,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(prescribedPairs.length,12,'upper A has twelve prescribed sets');
   for(const [i,j] of prescribedPairs.slice(0,9)){
    const k=i+'|'+j;
-   await page.locator('#workout [data-bb2-reps="'+k+'"]').fill('8');
-   await page.locator('#workout [data-bb2-log="'+k+'"]').click();
+   await recordBB2Set(page,k,8);
   }
   await page.waitForSelector('#workout [data-bb2-finish]:not([disabled])');
   await page.locator('#workout [data-bb2-finish]').click();
@@ -362,6 +365,31 @@ const server=http.createServer((req,res)=>{
   await bb1Page.locator('#workout [data-bb-edit-weight]').first().click();
   assert.match(await bb1Page.locator('.bvomModalOverlay').textContent(),/進行時の増量幅/);
   await bb1Page.screenshot({path:path.join(screenshots,'bb1-edit-ja-mobile.png')});
+  await bb1Page.locator('.bvomModalOverlay [data-cancel]').click();
+  await bb1Page.evaluate(()=>changeLanguage('en'));
+  await bb1Page.locator('#workout .setwrap button.set').first().click();
+  await page.locator('#workout [data-bb2-set="0|0"]').click();
+  assert.equal(await page.locator('.bvomModalOverlay [data-bb2-reps="0|0"]').count(),1,
+   'BB2 round set opens the same modal interaction as BB1');
+  for(const p of [page,bb1Page]){
+   const bounds=await p.locator('.bvomModal').boundingBox();
+   assert.ok(bounds&&bounds.x>=0&&bounds.x+bounds.width<=391,
+    'set recording dialog fits the real 390px mobile viewport');
+  }
+  await page.screenshot({path:path.join(screenshots,'bb2-set-en-mobile.png')});
+  await bb1Page.screenshot({path:path.join(screenshots,'bb1-set-en-mobile.png')});
+  await page.locator('.bvomModalOverlay [data-cancel]').click();
+  await bb1Page.locator('.bvomModalOverlay [data-cancel]').click();
+  await page.evaluate(()=>changeLanguage('ja'));
+  await bb1Page.evaluate(()=>changeLanguage('ja'));
+  await page.locator('#workout [data-bb2-set="0|0"]').click();
+  await bb1Page.locator('#workout .setwrap button.set').first().click();
+  assert.match(await page.locator('.bvomModalOverlay').textContent(),/回数/,
+   'BB2 set recording modal localises to Japanese');
+  await page.screenshot({path:path.join(screenshots,'bb2-set-ja-mobile.png')});
+  await bb1Page.screenshot({path:path.join(screenshots,'bb1-set-ja-mobile.png')});
+  await page.locator('.bvomModalOverlay [data-cancel]').click();
+  await page.evaluate(()=>changeLanguage('en'));
   await bb1Context.close();
   await page.evaluate(()=>activateTab('warmup'));
   assert.match(await page.locator('#warmup').textContent(),/Working: 65 kg/);
@@ -370,8 +398,7 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>activateTab('workout'));
   assert.equal(await page.locator('#workout [data-bb2-edit-save="0"]').isDisabled(),true,
    'unticking preparation does not reopen the working-weight editor');
-  await page.locator('#workout [data-bb2-reps="0|0"]').fill('8');
-  await page.locator('#workout [data-bb2-log="0|0"]').click();
+  await recordBB2Set(page,'0|0',8);
   assert.equal(await page.evaluate(()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
    return b.events.at(-1).actualG;
@@ -399,10 +426,9 @@ const server=http.createServer((req,res)=>{
   for(let i=0;i<await recoveryInc.count();i++)await recoveryInc.nth(i).fill('2.5');
   await page.locator('#setup [data-bb2-start]').click();
   await page.evaluate(()=>activateTab('workout'));
-  await page.waitForSelector('#workout [data-bb2-reps="0|0"]');
+  await page.waitForSelector('#workout [data-bb2-set="0|0"]');
   assert.match(await page.locator('#workout').textContent(),/LOW-STRESS RECOVERY/);
-  await page.locator('#workout [data-bb2-reps="0|0"]').fill('7');
-  await page.locator('#workout [data-bb2-log="0|0"]').click();
+  await recordBB2Set(page,'0|0',7);
   await page.locator('#workout [data-bb2-finish]').click();
   assert.equal(await page.evaluate(async()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
@@ -429,12 +455,10 @@ const server=http.createServer((req,res)=>{
    if(await input.isEnabled()&&!(await input.inputValue()))await input.fill('2.5');
   }
   await page.locator('#setup [data-bb2-start]').click();
-  await page.waitForSelector('#workout [data-bb2-log="0|0"]');
-  await page.locator('#workout [data-bb2-reps="0|0"]').fill('8');
-  await page.locator('#workout [data-bb2-log="0|0"]').click();
+  await page.waitForSelector('#workout [data-bb2-set="0|0"]');
+  await recordBB2Set(page,'0|0',8);
   await page.locator('#workout [data-bb2-extra-add="0"]').click();
-  await page.locator('#workout [data-bb2-reps="0|3"]').fill('11');
-  await page.locator('#workout [data-bb2-extra-log="0|3"]').click();
+  await recordBB2Set(page,'0|3',11,{opened:true});
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.events
    .filter(e=>e.type==='EXTRA_SET_RECORDED'&&!e.prescribed).length),1,
    'actual extra-set button logs non-gating work in the shared BVOM document');
@@ -446,7 +470,7 @@ const server=http.createServer((req,res)=>{
   await page.reload();
   await page.waitForSelector('#app:not(.hidden)');
   await page.evaluate(()=>activateTab('workout'));
-  await page.waitForSelector('#workout [data-bb2-log="0|1"]');
+  await page.waitForSelector('#workout [data-bb2-set="0|1"]');
   assert.equal(await page.locator('#workout [data-bb2-extra-done="0|3"]').count(),1,
    'the additional recorded set survives a real PWA tab reload');
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.activeSessionId!==null),true,

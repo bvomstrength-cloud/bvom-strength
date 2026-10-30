@@ -32,6 +32,24 @@ function fixture({ls}={}){
  return {h,before,row};
 }
 
+function recordBB2Dialog(h,i,j,{reps=8,extra=false}={}){
+ const o=h.lastOverlay(),key=i+'|'+j;
+ assert.match(o.innerHTML,/class="bvomModal"/,'BB2 uses the shared set modal');
+ o.querySelector('[data-bb2-reps="'+key+'"]').value=String(reps);
+ o.querySelector('[data-bb2-hard="'+key+'"]').checked=false;
+ if(o.innerHTML.includes('data-bb2-bw-variation')){
+  const start=h.S().bb2.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===h.S().bb2.activeSessionId);
+  const slot=start.slots[i];
+  o.querySelector('[data-bb2-bw-variation="'+key+'"]').value=slot.variation;
+  o.querySelector('[data-bb2-bw-assist="'+key+'"]').value=slot.assistance;
+  o.querySelector('[data-bb2-bw-added="'+key+'"]').value=slot.plannedG===undefined?'':String(slot.plannedG/1000);
+ }
+ o.querySelector('[data-save]').onclick();
+ assert.equal(o.removed,true,'successful dialog recording closes');
+ const type=extra?'EXTRA_SET_RECORDED':'SET_RECORDED';
+ assert.equal(h.S().bb2.events.at(-1).type,type);
+}
+
 {
  const {h,row}=fixture();
  assert.doesNotMatch(h.ctx.bvomBb2CloudRestoreMessage(),/WARNING: BB2/,
@@ -285,7 +303,21 @@ function fixture({ls}={}){
  assert.equal(h.S().history.length,JSON.parse(before).history.length);
  assert.equal(h.S().bb2.events.length,1);
  assert.equal(h.ctx.bvomCloudWorkoutActive(),true,'BB2 active workout blocks normal cloud activity');
- assert.equal(h.ctx.bvomBb2Log(0,0),true,'prescribed on-plan set committed');
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,
+  /class="sets"><div class="setwrap"><button type="button" class="set /,
+  'BB2 uses BB1 round set buttons, not always-visible input rows');
+ assert.equal(h.ctx.bvomBb2SetModal(0,0),true,'tap opens BB1-style set entry dialog');
+ const dialog=h.lastOverlay(),key='0|0';
+ dialog.querySelector('[data-bb2-reps="'+key+'"]').value='';
+ dialog.querySelector('[data-save]').onclick();
+ assert.equal(h.S().bb2.events.length,1,'empty modal input refuses a phantom set');
+ assert.equal(dialog.removed,false,'invalid input keeps recording dialog open');
+ dialog.querySelector('[data-bb2-reps="'+key+'"]').value='8';
+ dialog.querySelector('[data-bb2-hard="'+key+'"]').checked=false;
+ dialog.querySelector('[data-save]').onclick();
+ assert.equal(dialog.removed,true,'durable save closes recording dialog');
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-set="0\|0"/);
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/class="set done"/);
  assert.equal(h.S().bb2.events.length,2);
  assert.equal(h.ctx.bvomBb2Log(0,0),false,'duplicate set refused');
  assert.equal(h.ctx.bvomCloudPayload().bb2,undefined,'development record absent from cloud');
@@ -339,8 +371,8 @@ function fixture({ls}={}){
  assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-extra-add="0"/);
  assert.equal(h.ctx.bvomBb2Log(0,3,true),false,'extra cannot bypass the Add button');
  assert.equal(h.ctx.bvomBb2OpenExtra(0),true);
- assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-extra-entry="0"/);
- assert.equal(h.ctx.bvomBb2Log(0,3,true),true,'first extra recorded in the frozen ledger');
+ assert.match(h.lastOverlay().innerHTML,/data-bb2-reps="0\|3"/);
+ recordBB2Dialog(h,0,3,{reps:11,extra:true});
  const extra=h.S().bb2.events.find(e=>e.type==='EXTRA_SET_RECORDED');
  assert.equal(extra.setIndex,3);assert.equal(extra.prescribed,false);
  assert.equal(extra.sessionId,sessionId);
@@ -354,13 +386,13 @@ function fixture({ls}={}){
  assert.equal(h.ctx.bvomBb2Log(bwSlot,0),true);
  assert.equal(h.ctx.bvomBb2OpenExtra(bwSlot),true);
  const bwStart=h.S().bb2.events.find(e=>e.type==='WORKOUT_STARTED').slots[bwSlot];
- assert.equal(h.ctx.bvomBb2Log(bwSlot,bwStart.sets,true),true);
+ recordBB2Dialog(h,bwSlot,bwStart.sets,{extra:true});
  const bwExtra=h.S().bb2.events.filter(e=>e.type==='EXTRA_SET_RECORDED').at(-1);
  assert.equal(bwExtra.prescribed,false);assert.equal(bwExtra.variation,bwStart.variation);
  assert.equal(bwExtra.assistance,bwStart.assistance);
  for(let n=1;n<30;n++){
   assert.equal(h.ctx.bvomBb2OpenExtra(0),true);
-  assert.equal(h.ctx.bvomBb2Log(0,3+n,true),true,'extra set '+(n+1)+' of 30');
+  recordBB2Dialog(h,0,3+n,{extra:true});
  }
  assert.equal(h.ctx.bvomBb2OpenExtra(0),false,'BB1-style 30-extra-set limit');
  assert.doesNotMatch(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-extra-add="0"/);
@@ -927,8 +959,11 @@ function fixture({ls}={}){
  assert.equal(slot.plannedG,5000,'starting numeric BW is only explicitly entered added load');
  assert.equal(slot.assistance,'medium band');
  assert.equal(h.ctx.bvomBb2DisplayLoad(5000),'5');
- assert.match(h.ctx.document.querySelector('#workout').innerHTML,/Actual variation/);
- assert.match(h.ctx.document.querySelector('#workout').innerHTML,/Added kg \(optional\)/);
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-set="3\|0"/);
+ assert.equal(h.ctx.bvomBb2SetModal(i,0),true);
+ assert.match(h.lastOverlay().innerHTML,/Actual variation/);
+ assert.match(h.lastOverlay().innerHTML,/Added weight \(optional\)/);
+ h.lastOverlay().querySelector('[data-cancel]').onclick();
  h.ctx.__bb2Actual.variation='';
  assert.equal(h.ctx.bvomBb2Log(i,0),false,'blank bodyweight variation refused');
  h.ctx.__bb2Actual.variation='pullup';h.ctx.__bb2Actual.assistance='';
