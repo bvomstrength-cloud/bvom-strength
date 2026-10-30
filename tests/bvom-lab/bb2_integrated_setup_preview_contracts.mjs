@@ -1321,6 +1321,8 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  const persisted=h.ls.getItem('bvom_data');
  assert.match(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-correct-save="0\|0"/);
  assert.match(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-correct-actual="0\|0"/);
+ assert.match(h.ctx.document.querySelector('#history').innerHTML,/class="warmrow bb2HistoryCorrection"/,
+  'BB2 History correction uses its own responsive row instead of generic warm-up grid');
  h.ctx.__bb2Correction.reps='0';
  assert.equal(h.ctx.bvomBb2CorrectSet(0,0),false,'invalid zero-rep edit refused');
  assert.equal(h.ls.getItem('bvom_data'),persisted,'invalid edit cannot write');

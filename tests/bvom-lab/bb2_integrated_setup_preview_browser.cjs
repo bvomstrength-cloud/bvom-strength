@@ -24,6 +24,25 @@ async function recordBB2Set(page,key,reps,{opened=false,actual}={}){
  await page.locator('.bvomModalOverlay [data-save]').click();
  await page.locator('.bvomModalOverlay').waitFor({state:'detached'});
 }
+async function assertMobileCorrectionLayout(page,language){
+ const bounds=await page.locator('#history .bb2HistoryCorrection').first().evaluate(row=>{
+  const rect=el=>{const r=el.getBoundingClientRect();return {
+   left:r.left,right:r.right,top:r.top,width:r.width,height:r.height};};
+  return {row:rect(row),scrollWidth:row.scrollWidth,clientWidth:row.clientWidth,
+   controls:[...row.querySelectorAll('label,input,button')].map(rect),
+   buttons:[...row.querySelectorAll('button')].map(rect)};
+ });
+ assert.equal(bounds.buttons.length,2,language+' offers both History correction actions');
+ assert.ok(bounds.scrollWidth<=bounds.clientWidth+1,
+  language+' BB2 correction row has no horizontal overflow');
+ assert.ok(bounds.controls.every(x=>x.left>=bounds.row.left-.5&&
+  x.right<=Math.min(390,bounds.row.right)+.5),
+ language+' BB2 History inputs/labels/buttons remain within their mobile card');
+ assert.ok(bounds.buttons.every(x=>x.width>=120&&x.height>=34),
+  language+' BB2 History correction actions have usable mobile hit targets');
+ assert.ok(Math.abs(bounds.buttons[0].top-bounds.buttons[1].top)<1,
+  language+' correction and remove actions align on one full-width button row');
+}
 const server=http.createServer((req,res)=>{
  const pathname=new URL(req.url,'http://localhost').pathname;
  if(pathname==='/seed'){res.writeHead(200,{'Content-Type':'text/html'});res.end('<!doctype html><title>Test setup</title>');return}
@@ -312,6 +331,7 @@ const server=http.createServer((req,res)=>{
   assert.match(jaHistory,/クレジット獲得/,'BB2 History credit and status show Japanese labels');
   assert.match(jaHistory,/セットを修正/,'BB2 History correction controls localise');
   assert.match(jaHistory,/実際の重量を修正/,'BB2 actual-load corrections localise');
+  await assertMobileCorrectionLayout(page,'Japanese 390px');
   assert.match(jaHistory,/ワークアウトを削除/,'BB2 History removal controls localise');
   assert.match(await page.locator('#history').textContent(),/BB2の現在の使用重量と設定/);
   const japaneseHistoryWidth=await page.locator('#history [data-bb2-history]').first().boundingBox();
@@ -320,6 +340,7 @@ const server=http.createServer((req,res)=>{
    'Japanese BB2 History fits the existing 390px mobile viewport');
   await page.evaluate(()=>changeLanguage('en'));
   await page.evaluate(()=>activateTab('history'));
+  await assertMobileCorrectionLayout(page,'English 390px');
   const correction=page.locator('#history [data-bb2-correct-reps="0|0"]');
   await correction.fill('7');
   await page.locator('#history [data-bb2-correct-hard="0|0"]').check();

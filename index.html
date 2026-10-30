@@ -25,6 +25,14 @@ main{max-width:590px;margin:auto;padding:12px 10px 126px}.card,.exercise{backgro
 .bvomBwSets .setload{overflow-wrap:anywhere;line-height:1.3}
 .bvomBwContext{font-size:12px;line-height:1.4;color:var(--muted);margin:8px 0 0;overflow-wrap:anywhere}
 .warmrow{display:grid;grid-template-columns:54px 82px 1fr;gap:8px;align-items:center;padding:7px 0;border-top:1px solid #eee}.plates{font-size:12px;color:#777}
+/* BB2 History edits share the existing controls but need room for three fields
+   and two touch-sized actions on narrow English/Japanese phone screens. */
+.warmrow.bb2HistoryCorrection{display:block}
+.bb2HistoryCorrectionFields,.bb2HistoryCorrectionActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:end}
+.bb2HistoryCorrectionFields label{min-width:0;margin:2px 0;overflow-wrap:anywhere}
+.bb2HistoryCorrectionFields input[type=number]{box-sizing:border-box;max-width:100%}
+.bb2HistoryCorrectionActions{margin-top:8px}
+.bb2HistoryCorrectionActions button{min-width:0;width:100%;white-space:normal;overflow-wrap:anywhere}
 .timer{position:fixed;left:0;right:0;bottom:0;background:#111;color:#fff;padding:8px 10px calc(8px + env(safe-area-inset-bottom));z-index:8}.timerin{max-width:590px;margin:auto;display:flex;align-items:center;gap:8px}.clock{font-size:28px;font-weight:950;min-width:78px}.marks{font-size:10px;color:#aaa}.cancel,.finish{border:0;border-radius:9px;padding:10px 12px;font-weight:900}.cancel{background:#333;color:#fff}.finish{margin-left:auto;background:var(--accent);color:#fff;min-width:92px}.timer.idle .clock{color:#777}
 .hidden{display:none!important}.notice{padding:10px;border-radius:9px;background:#fff3cd;margin:10px 0;font-size:13px}
 label{display:block;margin:11px 0}select{width:100%;padding:10px;border:1px solid #bbb;border-radius:8px;font-size:16px;background:#fff} input[type=number],input[type=text]{width:100%;padding:10px;border:1px solid #bbb;border-radius:8px;font-size:16px}
@@ -6516,18 +6524,18 @@ function bvomBb2RenderHistory(){
     bvomEsc(s.actualOrigin.unit):'')+
    (s.variation?' · '+bvomEsc(s.variation)+' · '+bvomEsc(s.assistance):'')+
    (s.harderThanIntended?' · '+hlmTxt('Hard','高強度'):'')+
-   (canCorrect&&!archived?'<div class="warmrow"><label>'+hlmTxt('Correct reps','回数を修正')+' <input type="number" min="1" step="1" '+
+   (canCorrect&&!archived?'<div class="warmrow bb2HistoryCorrection"><div class="bb2HistoryCorrectionFields"><label>'+hlmTxt('Correct reps','回数を修正')+' <input type="number" min="1" step="1" '+
      'data-bb2-correct-reps="'+historyIndex+'|'+setIndex+'" value="'+s.reps+'" style="width:80px"></label>'+
     (Number.isSafeInteger(s.actualG)?'<label>'+hlmTxt('Correct actual load','実際の重量を修正')+' ('+unitLabel()+') '+
      '<input type="number" min="'+(s.variation?'0':'0.01')+'" step="0.01" '+
      'data-bb2-correct-actual="'+historyIndex+'|'+setIndex+'" value="'+
      bvomEsc(bvomBb2DisplayLoad(s.actualG))+'" style="width:90px"></label>':'')+
     '<label><input type="checkbox" data-bb2-correct-hard="'+historyIndex+'|'+setIndex+'" '+
-     (s.harderThanIntended?'checked':'')+'> '+hlmTxt('Hard','高強度')+'</label>'+
+     (s.harderThanIntended?'checked':'')+'> '+hlmTxt('Hard','高強度')+'</label></div><div class="bb2HistoryCorrectionActions">'+
     '<button type="button" class="choice" data-bb2-correct-save="'+historyIndex+'|'+setIndex+'" '+
      'onclick="bvomBb2CorrectSet('+historyIndex+','+setIndex+')">'+hlmTxt('CORRECT SET','セットを修正')+'</button>'+
     '<button type="button" class="secondary" data-bb2-void-save="'+historyIndex+'|'+setIndex+'" '+
-     'onclick="bvomBb2VoidSet('+historyIndex+','+setIndex+')">'+hlmTxt('REMOVE SET','セットを削除')+'</button></div>':'')+
+     'onclick="bvomBb2VoidSet('+historyIndex+','+setIndex+')">'+hlmTxt('REMOVE SET','セットを削除')+'</button></div></div>':'')+
    '</div>').join('');
   return '<div class="histCard" data-bb2-history="'+bvomEsc(h.sessionId)+'"'+
    (archived?' data-bb2-archived="1"':'')+'>'+
