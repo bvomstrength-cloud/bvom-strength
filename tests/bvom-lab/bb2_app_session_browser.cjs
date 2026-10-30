@@ -92,8 +92,13 @@ test('real BVOM source mapping is read-only, accounts and document ownership are
     }), 'different-owner');
     assert.equal(await p.evaluate(() => {
       bvomCloud.user = { id: 'dummy-owner' };
-      localStorage.setItem(BVOM_DATA_KEY, '{}');
-      return bvomBb2DormantAccountSnapshot().localBlobUnchanged;
+      // Alter the test document's comparison marker, then restore it before
+      // closing: localStorage is shared by the next browser test cases.
+      const previous = bvomLastPersistedRaw;
+      try {
+        bvomLastPersistedRaw = '{"different":true}';
+        return bvomBb2DormantAccountSnapshot().localBlobUnchanged;
+      } finally { bvomLastPersistedRaw = previous; }
     }), false);
   } finally { await p.close(); }
 });
