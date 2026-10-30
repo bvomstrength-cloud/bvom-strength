@@ -311,6 +311,7 @@ const server=http.createServer((req,res)=>{
   const jaHistory=await page.locator('#history [data-bb2-history]').first().textContent();
   assert.match(jaHistory,/クレジット獲得/,'BB2 History credit and status show Japanese labels');
   assert.match(jaHistory,/セットを修正/,'BB2 History correction controls localise');
+  assert.match(jaHistory,/実際の重量を修正/,'BB2 actual-load corrections localise');
   assert.match(jaHistory,/ワークアウトを削除/,'BB2 History removal controls localise');
   assert.match(await page.locator('#history').textContent(),/BB2の現在の使用重量と設定/);
   const japaneseHistoryWidth=await page.locator('#history [data-bb2-history]').first().boundingBox();
@@ -327,8 +328,21 @@ const server=http.createServer((req,res)=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
    const e=b.events.at(-1);
    return e.type==='SET_CORRECTED'&&e.reps===7&&e.harderThanIntended&&
-    b.events.filter(x=>x.type==='CREDIT_GRANTED').length===1;
+    e.actualG===undefined&&b.events.filter(x=>x.type==='CREDIT_GRANTED').length===1;
   }),true,'real History correction is one ledger event and cannot duplicate credit');
+  const actual=page.locator('#history [data-bb2-correct-actual="0|0"]');
+  const priorActual=Number(await actual.inputValue());
+  await actual.fill(String(priorActual+1));
+  await page.locator('#history [data-bb2-correct-save="0|0"]').click();
+  assert.equal(await page.evaluate(()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   const e=b.events.at(-1);
+   const p=bvomBb2PreviewModule.foldBB2Block(b.opening,b.events);
+   return e.type==='SET_CORRECTED'&&e.actualOrigin?.unit==='kg'&&
+    e.actualOrigin?.value===String(e.actualG/1000)&&
+    p.history[0].sets[0].actualG===e.actualG&&
+    b.events.filter(x=>x.type==='CREDIT_GRANTED').length===1;
+  }),true,'real actual-load History correction preserves audit provenance and credit');
   assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/7 reps/);
   const correctedRaw=await page.evaluate(()=>localStorage.getItem('bvom_data'));
   await page.locator('#history [data-bb2-correct-save="0|0"]').click();
@@ -340,6 +354,11 @@ const server=http.createServer((req,res)=>{
   assert.match(await page.locator('#history').textContent(),/Credit awarded/);
   assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/7 reps/,
    'completed History corrections survive actual browser reload');
+  assert.equal(await page.evaluate(()=>{
+   const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
+   const p=bvomBb2PreviewModule.foldBB2Block(b.opening,b.events);
+   return p.history[0].sets[0].actualG===b.events.at(-1).actualG;
+  }),true,'corrected actual load survives browser reload');
   assert.match(await page.locator('#history').textContent(),/CURRENT BB2 WORKING PLANS/);
   assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
   await page.evaluate(()=>activateTab('history'));

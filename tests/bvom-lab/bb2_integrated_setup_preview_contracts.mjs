@@ -1296,7 +1296,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
 {
  const {h,before}=fixture();
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
- h.ctx.__bb2CatalogueForTest=catalogue;h.ctx.__bb2Correction={reps:'7',hard:true};
+ h.ctx.__bb2CatalogueForTest=catalogue;h.ctx.__bb2Correction={reps:'7',hard:true,actual:'60'};
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
   'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
@@ -1305,6 +1305,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.document.querySelector=selector=>{
   if(selector==='#history [data-bb2-correct-reps="0|0"]')return {value:h.ctx.__bb2Correction.reps};
   if(selector==='#history [data-bb2-correct-hard="0|0"]')return {checked:h.ctx.__bb2Correction.hard};
+  if(selector==='#history [data-bb2-correct-actual="0|0"]')return {value:h.ctx.__bb2Correction.actual};
   const field=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
   if(field)return {value:field[1]==='load'?'60':field[1]==='inc'?'2.5':
    field[1]==='assist'?'none':'8',checked:false};
@@ -1319,6 +1320,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  const original=h.S().bb2.events.find(e=>e.type==='SET_RECORDED');
  const persisted=h.ls.getItem('bvom_data');
  assert.match(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-correct-save="0\|0"/);
+ assert.match(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-correct-actual="0\|0"/);
  h.ctx.__bb2Correction.reps='0';
  assert.equal(h.ctx.bvomBb2CorrectSet(0,0),false,'invalid zero-rep edit refused');
  assert.equal(h.ls.getItem('bvom_data'),persisted,'invalid edit cannot write');
@@ -1339,6 +1341,40 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(bb.events.filter(e=>e.type==='CREDIT_GRANTED').length,1);
  assert.equal(h.ctx.bvomBb2CorrectSet(0,0),true,'unchanged input is idempotent');
  assert.equal(h.S().bb2.events.length,correct.commitOrdinal);
+ h.ctx.__bb2Correction.actual='61.5';
+ assert.equal(h.ctx.bvomBb2CorrectSet(0,0),true,'actual-only History correction committed');
+ bb=h.S().bb2;correct=bb.events.at(-1);projection=catalogue.foldBB2Block(bb.opening,bb.events);
+ assert.equal(correct.reps,7);
+ assert.equal(correct.actualG,61500);
+ assert.deepEqual(JSON.parse(JSON.stringify(correct.actualOrigin)),{value:'61.5',unit:'kg'});
+ assert.equal(projection.history[0].sets[0].actualG,61500);
+ assert.equal(projection.history[0].sets[0].variation,undefined,'load correction does not invent a variation');
+ assert.equal(projection.quotas.upper_a,1,'load correction cannot silently change quota');
+ assert.equal(h.ctx.bvomBb2CorrectSet(0,0),true,'same corrected mass does not append');
+ assert.equal(h.S().bb2.events.length,correct.commitOrdinal);
+ h.ev("state.unit='lb'");
+ const displayLb=h.ctx.bvomBb2DisplayLoad(61500);
+ h.ctx.__bb2Correction.actual=displayLb;
+ assert.equal(h.ctx.bvomBb2CorrectSet(0,0),true,'rounded unchanged lb display is a no-op');
+ assert.equal(h.S().bb2.events.length,correct.commitOrdinal,'rounded lb input retains exact kg provenance');
+ h.ctx.__bb2Correction.actual=String(Number(displayLb)+1);
+ assert.equal(h.ctx.bvomBb2CorrectSet(0,0),true,'real pound-unit actual correction commits');
+ bb=h.S().bb2;correct=bb.events.at(-1);
+ assert.equal(correct.actualOrigin.unit,'lb');
+ assert.equal(correct.actualOrigin.value,h.ctx.__bb2Correction.actual);
+ assert.equal(correct.actualG,catalogue.BB2_BROWSER_MODULES.ledger.canonicalGrams(correct.actualOrigin.value,'lb'));
+ assert.equal(catalogue.foldBB2Block(bb.opening,bb.events).history[0].sets[0].actualG,correct.actualG);
+ h.ev("state.unit='kg'");
+ h.ctx.__bb2Correction.actual=h.ctx.bvomBb2DisplayLoad(correct.actualG);
+ assert.equal(h.ctx.bvomBb2CorrectSet(0,0),true,'rounded kg display retains original lb provenance');
+ assert.equal(h.S().bb2.events.length,correct.commitOrdinal,'round-trip display is a no-op');
+ h.ctx.__bb2Correction.actual='-2';
+ const beforeInvalid=h.ls.getItem('bvom_data');
+ assert.equal(h.ctx.bvomBb2CorrectSet(0,0),false,'negative actual refused');
+ h.ctx.__bb2Correction.actual='';
+ assert.equal(h.ctx.bvomBb2CorrectSet(0,0),false,'blank actual refused');
+ assert.equal(h.ls.getItem('bvom_data'),beforeInvalid,'invalid mass cannot write');
+ h.ctx.__bb2Correction.actual=h.ctx.bvomBb2DisplayLoad(correct.actualG);
  assert.match(h.ctx.document.querySelector('#history').innerHTML,/7 reps/,'History rerenders corrected set');
  h.ctx.__bb2Correction.reps='6';
  const success=h.ls.getItem('bvom_data'),setItem=h.ls.setItem;
@@ -1348,8 +1384,10 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ls.getItem('bvom_data'),success,'failed correction leaves disk intact');
  assert.equal(h.S().bb2.events.at(-1).type,'SET_CORRECTED','failed correction rolls back memory');
  const reboot=fixture({ls:h.ls});
- assert.equal(catalogue.foldBB2Block(reboot.h.S().bb2.opening,reboot.h.S().bb2.events)
-  .history[0].sets[0].reps,7,'correction survives reload/replay');
+ const restored=catalogue.foldBB2Block(reboot.h.S().bb2.opening,reboot.h.S().bb2.events).history[0].sets[0];
+ assert.equal(restored.reps,7,'rep correction survives reload/replay');
+ assert.equal(restored.actualG,correct.actualG,'actual mass correction survives reload/replay');
+ assert.equal(restored.actualOrigin.unit,'lb','pound-origin evidence survives reload/replay');
  assert.equal(h.S().history.length,JSON.parse(before).history.length,'BB1 and legacy History untouched');
  assert.equal(h.ctx.bvomCloudPayload().bb2,undefined,'no BB2 correction cloud upload');
  console.log('PASS: BB2 post-Finish History correction, replay, idempotence, lock and failed-save rollback');
@@ -1636,6 +1674,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.document.querySelector=selector=>{
   if(/data-bb2-correct-reps="0\|0"/.test(selector))return {value:'8'};
   if(/data-bb2-correct-hard="0\|0"/.test(selector))return {checked:true};
+  if(/data-bb2-correct-actual="0\|0"/.test(selector))return {value:'55'};
   return lookup(selector);
  };
  h.ev('bvomChoiceModal=function(title,body,left,right,onLeft,onRight){'+

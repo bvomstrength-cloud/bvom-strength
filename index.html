@@ -6348,9 +6348,9 @@ function bvomBb2CommitHistoryRevision(b,before,proposed,validAfter){
   },true);
  return !!overlay;
 }
-// Post-Finish corrections use the immutable original set ID. Only reps and
-// difficulty can be amended here; mass, bodyweight identity and quota-credit
-// decisions remain with the frozen ledger's existing validation rules.
+// Post-Finish corrections use the immutable original set ID. Correct an
+// explicitly recorded numeric actual without changing bodyweight identity,
+// historical prescription or the frozen ledger's consent/credit rules.
 function bvomBb2CorrectSet(historyIndex,setIndex){
  if(!bvomBb2PreviewEnabled()||!bvomBb2PreviewModule||bvomBb2Active()||
     bvomStateWorkoutActive(state)||!bvomWorkoutActionAllowed()||
@@ -6371,11 +6371,28 @@ function bvomBb2CorrectSet(historyIndex,setIndex){
   const raw=String(document.querySelector('#history [data-bb2-correct-reps="'+key+'"]')?.value??'').trim();
   const harder=!!document.querySelector('#history [data-bb2-correct-hard="'+key+'"]')?.checked;
   if(!/^[1-9][0-9]*$/.test(raw)||!Number.isSafeInteger(Number(raw)))return false;
-  if(Number(raw)===set.reps&&harder===set.harderThanIntended)return true;
+  let correctedG=null,correctedOrigin=null;
+  const massField=document.querySelector('#history [data-bb2-correct-actual="'+key+'"]');
+  if(Number.isSafeInteger(set.actualG)){
+   if(!massField)return false;
+   const entered=String(massField.value??'').trim(),unit=state.unit==='lb'?'lb':'kg';
+   if(!/^\d+(?:\.\d{1,2})?$/.test(entered))return false;
+   if(Number(entered)===Number(bvomBb2DisplayLoad(set.actualG)))correctedG=set.actualG;
+   else try{correctedG=m.BB2_BROWSER_MODULES.ledger.canonicalGrams(entered,unit)}
+   catch(error){return false}
+   if((!set.variation&&correctedG<=0)||correctedG<0)return false;
+   // Displaying canonical pounds to two places is approximate. An unchanged
+   // display (or an equivalent canonical mass) must retain source provenance.
+   if(correctedG!==set.actualG){
+    correctedOrigin={value:entered,unit};
+   }
+  }else if(massField)return false;
+  if(Number(raw)===set.reps&&harder===set.harderThanIntended&&!correctedOrigin)return true;
   const event={type:'SET_CORRECTED',eventId:'correct:'+original.eventId+':'+(b.events.length+1),
    commitOrdinal:b.events.length+1,blockId:b.opening.blockId,sessionId:h.sessionId,
    targetEventId:original.eventId,roleSlotId:set.roleSlotId,
    exerciseId:set.exerciseId,setIndex:set.setIndex,reps:Number(raw),harderThanIntended:harder};
+  if(correctedOrigin){event.actualG=correctedG;event.actualOrigin=correctedOrigin}
   // A reps/difficulty correction must not silently reallocate quota credit.
   // Any invalidated ACCEPT is reviewed separately and committed atomically.
   return bvomBb2CommitHistoryRevision(b,before,[event],after=>
@@ -6501,6 +6518,10 @@ function bvomBb2RenderHistory(){
    (s.harderThanIntended?' · '+hlmTxt('Hard','高強度'):'')+
    (canCorrect&&!archived?'<div class="warmrow"><label>'+hlmTxt('Correct reps','回数を修正')+' <input type="number" min="1" step="1" '+
      'data-bb2-correct-reps="'+historyIndex+'|'+setIndex+'" value="'+s.reps+'" style="width:80px"></label>'+
+    (Number.isSafeInteger(s.actualG)?'<label>'+hlmTxt('Correct actual load','実際の重量を修正')+' ('+unitLabel()+') '+
+     '<input type="number" min="'+(s.variation?'0':'0.01')+'" step="0.01" '+
+     'data-bb2-correct-actual="'+historyIndex+'|'+setIndex+'" value="'+
+     bvomEsc(bvomBb2DisplayLoad(s.actualG))+'" style="width:90px"></label>':'')+
     '<label><input type="checkbox" data-bb2-correct-hard="'+historyIndex+'|'+setIndex+'" '+
      (s.harderThanIntended?'checked':'')+'> '+hlmTxt('Hard','高強度')+'</label>'+
     '<button type="button" class="choice" data-bb2-correct-save="'+historyIndex+'|'+setIndex+'" '+
