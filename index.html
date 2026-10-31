@@ -2954,7 +2954,38 @@ async function bvomCloudInit(){
   else if((error||navigator.onLine===false)&&bvomOpenVerifiedOfflineOwner()){}
   else bvomShowAuthGate();
  }catch(e){if(!bvomOpenVerifiedOfflineOwner())bvomShowAuthGate()}
- c.auth.onAuthStateChange((_event,session)=>{const old=bvomCloud.user?.id,next=session?.user||null,owner=bvomLocalOwnerId(),activeForeign=!!(next?.id&&owner&&owner!==next.id&&bvomAnyWorkoutActive());if(old!==next?.id)bvomBb2AccountDisconnect();bvomEraseAuthEvent(_event,old||null,next);if(_event==='SIGNED_OUT')bvomEntitlementCacheClear(old||owner);bvomCloud.user=next;if(next?.id)bvomCloud.offlineLocalAccess=false;else if(_event==='SIGNED_OUT')bvomCloud.offlineLocalAccess=false;window.__bvomAuthUserId=activeForeign?owner:(bvomCloud.user?.id||null);if(activeForeign){bvomCloud.accountSwitchDeferred=true;bvomCloud.syncReady=false;clearTimeout(bvomCloud.autoTimer);bvomCloud.pendingAuto=false}if(bvomCloud.user?.id&&bvomCloud.user.id!==old&&!bvomPublicAuthHandling)setTimeout(()=>bvomPublicContinueAfterSignIn('existing'),0);if(!bvomCloud.user){bvomCloud.syncReady=false;bvomCloud.conflict=false;bvomCloud.remoteFingerprint=null;bvomCloud.accountSwitchDeferred=false;if(!bvomPublicAuthHandling){if(_event!=='SIGNED_OUT'&&navigator.onLine===false&&bvomEntitlementOfflineAccessDecision(owner).allowed)setTimeout(()=>bvomOpenVerifiedOfflineOwner(),0);else setTimeout(()=>bvomShowAuthGate(),0)}}if(document.querySelector('#settings')&&!document.querySelector('#app')?.classList.contains('hidden'))renderSettings()});
+ c.auth.onAuthStateChange((_event,session)=>{
+  const old=bvomCloud.user?.id,next=session?.user||null,owner=bvomLocalOwnerId();
+  const wasOffline=!!bvomCloud.offlineLocalAccess;
+  const activeForeign=!!(next?.id&&owner&&owner!==next.id&&bvomAnyWorkoutActive());
+  if(old!==next?.id)bvomBb2AccountDisconnect();
+  bvomEraseAuthEvent(_event,old||null,next);
+  if(_event==='SIGNED_OUT')bvomEntitlementCacheClear(old||owner);
+  bvomCloud.user=next;
+  if(next?.id)bvomCloud.offlineLocalAccess=false;
+  else if(_event==='SIGNED_OUT')bvomCloud.offlineLocalAccess=false;
+  window.__bvomAuthUserId=activeForeign?owner:(bvomCloud.user?.id||null);
+  if(activeForeign){
+   bvomCloud.accountSwitchDeferred=true;bvomCloud.syncReady=false;
+   clearTimeout(bvomCloud.autoTimer);bvomCloud.pendingAuto=false;
+  }
+  // A verified offline owner can be the SAME UUID as a newly authenticated
+  // session. SIGNED_IN must still complete the live entitlement/cloud checks.
+  if(next?.id&&(next.id!==old||(_event==='SIGNED_IN'&&wasOffline))&&
+     !bvomPublicAuthHandling)setTimeout(()=>bvomPublicContinueAfterSignIn('existing'),0);
+  if(!bvomCloud.user){
+   bvomCloud.syncReady=false;bvomCloud.conflict=false;
+   bvomCloud.remoteFingerprint=null;bvomCloud.accountSwitchDeferred=false;
+   if(!bvomPublicAuthHandling){
+    if(_event!=='SIGNED_OUT'&&navigator.onLine===false&&
+       bvomEntitlementOfflineAccessDecision(owner).allowed)
+     setTimeout(()=>bvomOpenVerifiedOfflineOwner(),0);
+    else setTimeout(()=>bvomShowAuthGate(),0);
+   }
+  }
+  if(document.querySelector('#settings')&&
+     !document.querySelector('#app')?.classList.contains('hidden'))renderSettings();
+ });
 }
 if(document.addEventListener)document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&bvomCloud.user&&!bvomCloudWorkoutActive())setTimeout(()=>bvomCloudAssessSync(),150)});
 async function bvomShareApp(){

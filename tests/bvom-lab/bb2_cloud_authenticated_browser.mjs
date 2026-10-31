@@ -89,9 +89,23 @@ async function makeDevice(label, { userId = ownerId, login = credentials,
       const signed = await client.auth.signInWithPassword({ email, password });
       if (signed.error) throw signed.error;
     }, { url: apiUrl, key: anonKey, ...login });
-    await page.waitForFunction(id => bvomBb2AccountBinding?.ownerId === id &&
-      bvomCloud.user?.id === id && window.__bvomAuthUserId === id &&
-      bvomCloud.offlineLocalAccess === false, userId);
+    try {
+      await page.waitForFunction(id => bvomBb2AccountBinding?.ownerId === id &&
+        bvomCloud.user?.id === id && window.__bvomAuthUserId === id &&
+        bvomCloud.offlineLocalAccess === false, userId);
+    } catch (error) {
+      const state = await page.evaluate(() => ({
+        accountMatchesLocal: bvomCloud.user?.id === bvomLocalOwnerId(),
+        authMatchesLocal: window.__bvomAuthUserId === bvomLocalOwnerId(),
+        offline: bvomCloud.offlineLocalAccess, startup: bvomCloud.startupState,
+        entitlement: bvomEntitlement.record?.status,
+        accountSwitchDeferred: bvomCloud.accountSwitchDeferred,
+        appVisible: !document.querySelector('#app').classList.contains('hidden'),
+        bound: !!bvomBb2AccountBinding
+      }));
+      console.error('Isolated BVOM account binding diagnostic:', state);
+      throw error;
+    }
     return page;
   }
   const attached = await page.evaluate(async ({ url, key, email, password }) => {
