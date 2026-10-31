@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { createBB2CloudCoordinator,
   validateBB2PortableCatalogue } from '../../bb2/cloud-coordinator.mjs';
+import { createBB2CloudSidecar,
+  validateBB2CloudSidecar } from '../../bb2/cloud-sidecar.mjs';
 import * as core from '../../bb2/browser-core.mjs';
 const require=createRequire(import.meta.url);
 const H=require('./lib/bvom_harness');
@@ -94,6 +96,36 @@ await check('portable Start replays entered-weight provenance, refusing forged D
  forged.slots[0].plannedOrigin={kind:'DERIVED',sourceEventId:'never-earned'};
  assert.throws(()=>validateBB2PortableCatalogue(setup,[forged],{opening}),
   /BB2 Start/,'a real-user import cannot mint unearned progression provenance');
+});
+await check('non-catalogue swap cannot enter imported, sidecar or restored BB2 history',async()=>{
+ const setup=core.createBB2Setup(),opening=core.createBB2Opening({ownerId:owner,
+  blockId:'invalid-swap'});
+ const swap={type:'EXERCISE_SWAPPED',eventId:'swap:1',commitOrdinal:1,
+  blockId:opening.blockId,templateId:'upper_a',roleSlotId:'flat_press',
+  exerciseId:'dumbbell_flat_press'};
+ const tx=core.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(opening,[],[swap],{
+  ownerId:owner,blockId:opening.blockId,expectedHead:0,
+  foldRulesVersion:opening.foldRulesVersion,sealRevision:0,activeWorkout:false});
+ assert.equal(validateBB2PortableCatalogue(setup,tx.events,{opening}),true,
+  'historical legitimate swaps remain valid even if current setup differs');
+ const forged=tx.events.map(event=>({...event,exerciseId:'not_a_catalogue_exercise'}));
+ assert.throws(()=>validateBB2PortableCatalogue(setup,forged,{opening}),/non-catalogue/);
+ const wrongRole=tx.events.map(event=>({...event,roleSlotId:'unknown_role'}));
+ assert.throws(()=>validateBB2PortableCatalogue(setup,wrongRole,{opening}),/non-catalogue/);
+ const bb2={setup,opening,events:forged,sealedBlocks:[]};
+ assert.throws(()=>createBB2CloudSidecar({ownerId:owner,bb2,
+  previousRevision:null,requestId:'invalid-swap'}),/non-catalogue swap/);
+ const valid=createBB2CloudSidecar({ownerId:owner,
+  bb2:{...bb2,events:tx.events},previousRevision:null,requestId:'valid-swap'});
+ assert.equal(validateBB2CloudSidecar(valid,owner).revision,1);
+ assert.throws(()=>validateBB2CloudSidecar({ ...valid,
+  snapshot:{...valid.snapshot,events:forged}},owner),/non-catalogue swap/);
+ const h=H.boot(H.loadBuild(root));H.configureLP(h);
+ h.ctx.__bb2CatalogueForTest=core;
+ h.ctx.__bb2PortableCatalogueForTest={validateBB2PortableCatalogue};
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest');
+ await assert.rejects(h.ctx.bvomBb2ValidatePortableJournal(bb2,owner),
+  /non-catalogue/,'BVOM restore rejects forged swaps');
 });
 const first=device(db,{bb2:{setup:core.createBB2Setup(),
  opening:core.createBB2Opening({ownerId:owner,blockId:'portable-cloud'}),
@@ -222,6 +254,36 @@ await check('offline edits replace an uncommitted pending request after remote r
  assert.notEqual(offlineDb.server.row.state.requestId,abandoned);
  assert.equal(offline.get().cloudSync.pending,null);
 });
+await check('pending conflict allows confirmed cloud recovery only after durable local backup',async()=>{
+ const shared=fakeDatabase(),phone=device(shared,{bb2:{setup:core.createBB2Setup(),
+  opening:core.createBB2Opening({ownerId:owner,blockId:'pending-conflict'}),
+  events:[],sealedBlocks:[]}}),tablet=device(shared);
+ assert.equal((await phone.session.upload()).status,'committed');
+ assert.equal((await tablet.session.downloadIfEmpty()).status,'downloaded');
+ const local=tablet.get();local.setup.optionalUpperBCurls=true;tablet.set(local);
+ shared.server.failBeforeWrite=true;
+ assert.equal((await tablet.session.upload()).status,'conflict',
+  'the uncommitted request stays pending when reconciliation sees the old baseline');
+ const pending=tablet.get().cloudSync.pending;
+ assert.ok(pending,'uncertain upload has a durable intent');
+ const remote=phone.get();remote.setup.selections['upper_a|flat_press']='dumbbell_flat_press';
+ phone.set(remote);
+ assert.equal((await phone.session.upload()).status,'committed');
+ assert.equal((await tablet.session.upload()).status,'conflict');
+ tablet.failBackup(true);
+ assert.equal((await tablet.session.useCloudCopyConfirmed()).status,'blocked');
+ assert.deepEqual(tablet.get().cloudSync.pending,pending,
+  'failed recovery backup retains pending local intent');
+ tablet.failBackup(false);
+ assert.equal((await tablet.session.useCloudCopyConfirmed()).status,'downloaded');
+ assert.equal(tablet.backups().length,1);
+ assert.deepEqual(tablet.backups()[0].cloudSync.pending,pending,
+  'one-step backup contains the complete uncertain local request');
+ assert.equal(tablet.backups()[0].setup.optionalUpperBCurls,true);
+ assert.equal(tablet.get().setup.selections['upper_a|flat_press'],'dumbbell_flat_press');
+ assert.equal(tablet.get().cloudSync.pending,null);
+ assert.equal(tablet.get().cloudSync.baseline.revision,2);
+});
 
 await check('failed local intent write prevents every cloud mutation',async()=>{
  const change=first.get();change.setup.optionalUpperBCurls=true;first.set(change);
@@ -275,6 +337,70 @@ await check('real BVOM local document adapter preserves cloud exclusion and flag
   {backupBeforeReplace:true}),true);
  assert.equal(JSON.parse(h.ls.getItem('bvom_pre_cloud_restore')).bb2.opening.blockId,
   'bridge-local','the existing complete BVOM recovery document is retained');
+});
+await check('A to B to A preserves owner-scoped BB2 across ordinary account cloud loads',async()=>{
+ const seeded=H.boot(H.loadBuild(root));H.configureLP(seeded);
+ const base=JSON.parse(seeded.ls.getItem('bvom_data'));
+ const a={...base,history:[{id:'a'}],
+  bb2:{setup:core.createBB2Setup(),opening:core.createBB2Opening({ownerId:owner,
+   blockId:'owner-a-history'}),events:[],sealedBlocks:[]}};
+ const b={...base,history:[{id:'b'}]};
+ const storage=H.memStore({bvom_data:JSON.stringify(a),bvom_data_owner:owner});
+ const h=H.boot(H.loadBuild(root),{ls:storage});
+ h.ev('bvomWindowLockOwned=true');
+ assert.equal(h.ctx.bvomReplaceLocalForAccount(other,b),true);
+ assert.equal(JSON.parse(storage.getItem('bvom_data')).bb2,undefined);
+ assert.equal(JSON.parse(storage.getItem('bvom_account_switch_backup_owner_'+owner))
+  .data.bb2.opening.blockId,'owner-a-history');
+ const aCloud={...base,history:[{id:'a-cloud'}]};
+ assert.equal(h.ctx.bvomReplaceLocalForAccount(owner,aCloud),true);
+ const returned=JSON.parse(storage.getItem('bvom_data'));
+ assert.equal(storage.getItem('bvom_data_owner'),owner);
+ assert.equal(returned.bb2.opening.blockId,'owner-a-history');
+ assert.equal(returned.history[0].id,'a-cloud',
+  'legacy fields still use latest account cloud document');
+ assert.equal(JSON.parse(storage.getItem('bvom_account_switch_backup_owner_'+other))
+  .data.history[0].id,'b','B retains its own separate archive');
+ assert.equal(h.ctx.bvomReplaceLocalForAccount(other,null),true);
+ assert.equal(JSON.parse(storage.getItem('bvom_data')).history[0].id,'b');
+ assert.equal(h.ctx.bvomReplaceLocalForAccount(owner,null),true);
+ assert.equal(JSON.parse(storage.getItem('bvom_data')).bb2.opening.blockId,
+  'owner-a-history','repeat switches never erase A training');
+});
+await check('account archive quota failure stops replacement and keeps sole BB2 document',async()=>{
+ const seeded=H.boot(H.loadBuild(root));H.configureLP(seeded);
+ const original={...JSON.parse(seeded.ls.getItem('bvom_data')),
+  bb2:{marker:'unuploaded-local-training'}};
+ const storage=H.memStore({bvom_data:JSON.stringify(original),bvom_data_owner:owner});
+ const h=H.boot(H.loadBuild(root),{ls:storage});
+ h.ev('bvomWindowLockOwned=true');
+ const setItem=storage.setItem;
+ storage.setItem=(key,value)=>{
+  if(key==='bvom_account_switch_backup_owner_'+owner)
+   throw Error('quota exhausted');
+  return setItem(key,value);
+ };
+ assert.equal(h.ctx.bvomReplaceLocalForAccount(other,{configured:true}),false);
+ assert.equal(storage.getItem('bvom_data'),JSON.stringify(original));
+ assert.equal(storage.getItem('bvom_data_owner'),owner);
+ assert.equal(storage.getItem('bvom_account_switch_backup_owner_'+owner),null);
+});
+await check('account owner-marker failure rolls back the original document',async()=>{
+ const seeded=H.boot(H.loadBuild(root));H.configureLP(seeded);
+ const original={...JSON.parse(seeded.ls.getItem('bvom_data')),
+  bb2:{marker:'never-lose-unsynced-data'}};
+ const storage=H.memStore({bvom_data:JSON.stringify(original),bvom_data_owner:owner});
+ const h=H.boot(H.loadBuild(root),{ls:storage});h.ev('bvomWindowLockOwned=true');
+ const setItem=storage.setItem;
+ storage.setItem=(key,value)=>{
+  if(key==='bvom_data_owner'&&value===other)throw Error('owner tag unavailable');
+  return setItem(key,value);
+ };
+ assert.equal(h.ctx.bvomReplaceLocalForAccount(other,{...original,bb2:undefined}),false);
+ assert.equal(storage.getItem('bvom_data'),JSON.stringify(original));
+ assert.equal(storage.getItem('bvom_data_owner'),owner);
+ assert.equal(JSON.parse(storage.getItem('bvom_account_switch_backup_owner_'+owner))
+  .data.bb2.marker,'never-lose-unsynced-data');
 });
 
 await check('real BVOM adapter enables isolated local Auth only behind localhost preview',async()=>{

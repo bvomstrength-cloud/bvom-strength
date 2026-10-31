@@ -48,6 +48,13 @@ function checkLedgerOwnership(ownerId, bb2) {
     if (!opening || opening.ownerId !== ownerId || !Array.isArray(events) ||
         seen.has(opening.blockId)) throw new Error('Invalid BB2 block identity');
     seen.add(opening.blockId);
+    for (const event of events) {
+      if (event?.type !== 'EXERCISE_SWAPPED') continue;
+      try {
+        BB2_BROWSER_MODULES.catalogue.chooseBB2Exercise(bb2.setup,
+          event.templateId, event.roleSlotId, event.exerciseId);
+      } catch (_) { throw Error('BB2 cloud journal contains a non-catalogue swap'); }
+    }
     const projection = validateBB2RestoredBlock(opening, events);
     if (sealed && projection.sealed !== true) throw new Error('BB2 archive is not sealed');
     const open = new Set();

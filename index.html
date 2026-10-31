@@ -270,6 +270,7 @@ const profiles={
 const BVOM_DATA_KEY="bvom_data";
 const BVOM_DATA_OWNER_KEY="bvom_data_owner";
 const BVOM_ACCOUNT_SWITCH_BACKUP_KEY="bvom_account_switch_backup";
+const BVOM_ACCOUNT_SWITCH_OWNER_PREFIX="bvom_account_switch_backup_owner_";
 const BVOM_WORKOUT_TAB_OWNER_KEY="bvom_workout_tab_owner";
 const BVOM_TAB_SESSION_KEY="bvom_tab_id";
 window.__bvomAuthUserId=null;
@@ -314,28 +315,83 @@ function bvomSecondaryTabWriteBlocked(){
  }catch(e){return true}
 }
 function bvomSetLocalOwnerId(id){try{if(id)localStorage.setItem(BVOM_DATA_OWNER_KEY,String(id));else localStorage.removeItem(BVOM_DATA_OWNER_KEY)}catch(e){}}
+function bvomAccountSwitchArchiveKey(ownerId){return BVOM_ACCOUNT_SWITCH_OWNER_PREFIX+encodeURIComponent(ownerId||'unowned')}
+function bvomReadAccountSwitchArchive(ownerId){
+ if(!ownerId)return null;
+ // The historical single-slot archive is read only, so a saved copy from an
+ // older build can still be recovered without ever overwriting that slot.
+ for(const key of [bvomAccountSwitchArchiveKey(ownerId),BVOM_ACCOUNT_SWITCH_BACKUP_KEY]){
+  try{
+   const raw=localStorage.getItem(key);if(!raw)continue;
+   const saved=JSON.parse(raw);
+   if(saved?.owner_id!==ownerId||!saved.data||typeof saved.data!=='object'||
+      Array.isArray(saved.data))continue;
+   const bb2=saved.data.bb2;
+   if(bb2&&(typeof bb2!=='object'||Array.isArray(bb2)||
+      bb2.opening?.ownerId&&bb2.opening.ownerId!==ownerId||
+      !Array.isArray(bb2.sealedBlocks||[])||
+      (bb2.sealedBlocks||[]).some(block=>block?.opening?.ownerId!==ownerId)))continue;
+   return saved.data;
+  }catch(e){}
+ }
+ return null;
+}
 function bvomArchiveForeignLocalData(){
  try{
   const raw=localStorage.getItem(BVOM_DATA_KEY);
-  if(raw)localStorage.setItem(BVOM_ACCOUNT_SWITCH_BACKUP_KEY,JSON.stringify({saved_at:new Date().toISOString(),owner_id:bvomLocalOwnerId()||null,data:JSON.parse(raw)}));
- }catch(e){}
+  if(!raw)return true;
+  const ownerId=bvomLocalOwnerId()||null,original=JSON.parse(raw);
+  const key=bvomAccountSwitchArchiveKey(ownerId);
+  const previous=bvomReadAccountSwitchArchive(ownerId);
+  // A blank/stale local document must never erase the only BB2-bearing copy
+  // previously archived for this owner.
+  if(previous?.bb2&&!original.bb2)original.bb2=previous.bb2;
+  const archived=JSON.stringify({saved_at:new Date().toISOString(),owner_id:ownerId,data:original});
+  localStorage.setItem(key,archived);
+  return localStorage.getItem(key)===archived;
+ }catch(e){return false}
 }
 function bvomReplaceLocalForAccount(userId,data){
  if(!bvomWindowLockOwned)return false;
  // Archive only genuine pre-existing/account-owned data. A fresh boot writes a default
  // placeholder blob during migrate17(); that placeholder is not another user's data.
- if(bvomLocalOwnerId()||bvomHadLocalData)bvomArchiveForeignLocalData();
+ const previousOwner=bvomLocalOwnerId();
+ let previousRaw;
+ try{previousRaw=localStorage.getItem(BVOM_DATA_KEY)}catch(e){return false}
+ if((previousOwner||bvomHadLocalData)&&!bvomArchiveForeignLocalData())return false;
  try{
-  const raw=(data&&typeof data==='object')?JSON.stringify(data):null;
+  const owned=bvomReadAccountSwitchArchive(userId);
+  let incoming=data&&typeof data==='object'&&!Array.isArray(data)?{...data}:null;
+  if(owned){
+   if(!incoming)incoming=owned;
+   else if(owned.bb2!==undefined){
+    // Only this owner's local archive may supply BB2; legacy cloud records
+    // intentionally exclude BB2 and cannot be used to import it.
+    if(Object.prototype.hasOwnProperty.call(incoming,'bb2'))return false;
+    incoming.bb2=owned.bb2;
+   }
+  }
+  const raw=incoming?JSON.stringify(incoming):null;
   if(raw!==null)localStorage.setItem(BVOM_DATA_KEY,raw);else localStorage.removeItem(BVOM_DATA_KEY);
   localStorage.removeItem('bvom_cloud_restore_baseline');
   bvomSetLocalOwnerId(userId);
+  if(bvomLocalOwnerId()!==userId||localStorage.getItem(BVOM_DATA_KEY)!==raw)
+   throw Error('Account data replacement did not persist');
   // Keep stale-tab bookkeeping aligned with the direct replacement so the next legitimate
   // save from this account is not rejected as an external write conflict.
   bvomLastPersistedRaw=raw;
   bvomLocalWriteConflictActive=false;
   return true;
- }catch(e){return false}
+ }catch(e){
+  // The outgoing owner's archive is durable, even if rollback is unavailable.
+  try{
+   if(previousRaw!==null)localStorage.setItem(BVOM_DATA_KEY,previousRaw);
+   else localStorage.removeItem(BVOM_DATA_KEY);
+   if(previousOwner)localStorage.setItem(BVOM_DATA_OWNER_KEY,previousOwner);
+   else localStorage.removeItem(BVOM_DATA_OWNER_KEY);
+  }catch(_){}
+  return false;
+ }
 }
 let state=bvomLoadedData||{
  configured:false,setupMode:"guided",profile:"male",balance:true,tolerance:.20,day:"A",

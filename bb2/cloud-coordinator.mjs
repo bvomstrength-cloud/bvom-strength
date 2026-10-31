@@ -29,6 +29,16 @@ export function validateBB2PortableCatalogue(setup, events,
   validateBB2Setup(setup);
   if (!Array.isArray(events)) throw Error('BB2 portable journal is not an array');
   for (const [index, event] of events.entries()) {
+    if (event?.type === 'EXERCISE_SWAPPED') {
+      // The frozen ledger validates event shape, not versioned exercise choices.
+      // A portable journal must reject swaps outside this slot's catalogue,
+      // including swaps made before the latest saved setup selections.
+      try {
+        BB2_BROWSER_MODULES.catalogue.chooseBB2Exercise(setup,
+          event.templateId, event.roleSlotId, event.exerciseId);
+      } catch (_) { throw Error('BB2 portable swap uses a non-catalogue exercise'); }
+      continue;
+    }
     if (event?.type !== 'WORKOUT_STARTED') continue;
     if (!Array.isArray(event.slots) ||
         !['NORMAL', 'EXTRA_NORMAL', 'RECOVERY'].includes(event.kind))
@@ -305,7 +315,18 @@ export function createBB2CloudCoordinator({ client, ownerId, readAppSnapshot,
     let meta;
     try {validatePortableLedger(before.bb2);meta=metadata(before.bb2)}
     catch(error){return {status:'incompatible',error}}
-    if(meta.pending)return {status:'pending_local_write'};
+    // A durable pending request is not permission to silently discard history.
+    // Here the owner has explicitly chosen the cloud copy; reconciliation
+    // establishes whether the uncertain request reached the server first.
+    // The full local document is still backed up before any replacement.
+    if(meta.pending){
+      const reconciled=await reconcileBB2CloudSidecar({client,ownerId,
+        envelope:meta.pending});
+      if(!ready()||!same(local(),before))return {status:'blocked'};
+      if(reconciled.status==='unavailable'||reconciled.status==='incompatible')
+        return reconciled;
+      if(reconciled.status==='empty')return {status:'empty'};
+    }
     const remote=await readBB2CloudSidecar({client,ownerId});
     if(!ready()||!same(local(),before))return {status:'blocked'};
     if(remote.status!=='ready')return remote;
