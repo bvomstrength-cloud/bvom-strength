@@ -195,4 +195,33 @@ await check('real BVOM local document adapter preserves cloud exclusion and flag
   'a stale BVOM document token cannot commit another copy');
 });
 
+await check('real BVOM adapter enables isolated local Auth only behind localhost preview',async()=>{
+ const h=H.boot(H.loadBuild(root));H.configureLP(h);
+ let adapter;
+ h.ctx.__bb2CloudCoordinatorForTest={createBB2CloudCoordinator:opts=>{
+  adapter=opts;return {upload(){},downloadIfEmpty(){}}}};
+ h.ev('bvomBb2CloudCoordinatorModule=__bb2CloudCoordinatorForTest;'+
+  'bvomCloud.user={id:"'+owner+'"};window.__bvomAuthUserId="'+owner+'";'+
+  'bvomSetLocalOwnerId("'+owner+'");bvomEntitlementAccessDecision=()=>({allowed:true})');
+ const authClient={supabaseUrl:'http://127.0.0.1:54321',
+  auth:{getUser:async()=>({data:{user:{id:owner}},error:null})}};
+ h.ctx.location.origin='https://app.bvomstrength.com';
+ h.ctx.location.search='?bb2Preview=1';
+ await assert.rejects(h.ctx.bvomBb2CreateDormantCloudCoordinator({
+  isolatedClient:authClient}),/non-local client or preview/);
+ h.ctx.location.origin='http://127.0.0.1:8000';
+ await assert.rejects(h.ctx.bvomBb2CreateDormantCloudCoordinator({
+  isolatedClient:{...authClient,supabaseUrl:'https://hkteienxwdsjncchuvnz.supabase.co'}}),
+  /non-local client or preview/,'a real production Supabase client is refused');
+ await assert.rejects(h.ctx.bvomBb2CreateDormantCloudCoordinator({
+  isolatedClient:{...authClient,auth:{getUser:async()=>({
+   data:{user:{id:other}},error:null})}}}),/authenticated owner differs/);
+ await h.ctx.bvomBb2CreateDormantCloudCoordinator({isolatedClient:authClient});
+ assert.equal(adapter.client,authClient,'the test receives only the isolated client');
+ assert.equal(adapter.readAppSnapshot().bb2WriterEnabled,true);
+ assert.equal(adapter.readAppSnapshot().multiDeviceFenceVerified,true);
+ assert.equal(adapter.readAppSnapshot().authUserId,owner);
+ assert.equal(adapter.readAppSnapshot().cloudUserId,owner);
+});
+
 console.log(`BB2 cloud coordinator: ${passed}/${passed} PASS (mock only, rollout OFF)`);

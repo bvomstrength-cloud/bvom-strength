@@ -5303,15 +5303,33 @@ function bvomBb2DormantAccountSnapshot(){
 
 // A real BVOM document adapter for the import-inert BB2 cloud coordinator.
 // Nothing calls this from production navigation, startup, Settings or Finish.
-// Even an explicit call cannot upload: both real-account rollout gates above
-// remain hard-coded false until independently approved and proven safe.
+// Normal invocations keep both rollout gates OFF. The isolated test-only path
+// requires localhost preview, a local Supabase URL and matching authenticated
+// owner; it cannot contact the configured production BVOM Cloud backend.
 let bvomBb2CloudCoordinatorModule=null;
-async function bvomBb2CreateDormantCloudCoordinator(){
+async function bvomBb2CreateDormantCloudCoordinator({isolatedClient=null}={}){
+ const isolated=isolatedClient!==null;
+ if(isolated){
+  if(!bvomBb2PreviewEnabled()||!/^http:\/\/(?:127\.0\.0\.1|localhost):54321\/?$/.test(
+      String(isolatedClient?.supabaseUrl||''))||
+     typeof isolatedClient?.auth?.getUser!=='function')
+   throw new Error('BB2 isolated cloud test refused: non-local client or preview');
+  const verified=await isolatedClient.auth.getUser();
+  if(verified.error||!verified.data?.user?.id||
+     verified.data.user.id!==bvomCloud.user?.id||
+     verified.data.user.id!==window.__bvomAuthUserId||
+     verified.data.user.id!==bvomLocalOwnerId())
+   throw new Error('BB2 isolated cloud test refused: authenticated owner differs');
+ }
  const module=bvomBb2CloudCoordinatorModule||await import('./bb2/cloud-coordinator.mjs');
  const ownerId=bvomCloud.user?.id||null;
  return module.createBB2CloudCoordinator({
-  client:bvomCloudClient(),ownerId,
-  readAppSnapshot:bvomBb2DormantAccountSnapshot,
+  client:isolated?isolatedClient:bvomCloudClient(),ownerId,
+  readAppSnapshot:()=>{
+   const snapshot=bvomBb2DormantAccountSnapshot();
+   return isolated?Object.freeze({...snapshot,bb2WriterEnabled:true,
+    multiDeviceFenceVerified:true}):snapshot;
+  },
   readLocal:()=>{
    try{
     const raw=localStorage.getItem(BVOM_DATA_KEY);
