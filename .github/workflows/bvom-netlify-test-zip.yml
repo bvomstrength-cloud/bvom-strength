@@ -53,6 +53,7 @@ jobs:
           cp i18n/en.js i18n/ja.js .bvom-netlify-test/i18n/
           cp vendor/supabase-js-2.117.3.js .bvom-netlify-test/vendor/
           cp bb2/browser-core.mjs .bvom-netlify-test/bb2/
+          cp bb2/browser-host.mjs bb2/app-session.mjs bb2/cloud-sidecar.mjs bb2/cloud-coordinator.mjs .bvom-netlify-test/bb2/
           printf '%s\n' 'BVOM VERSIONED TEST SITE - NOT PRODUCTION' \
             'Manual upload to a DIFFERENT Netlify site only.' \
             'Uses the SAME cloud backend as normal BVOM; sign in ONLY with a disposable test account.' \
@@ -64,6 +65,7 @@ jobs:
           test -s .bvom-netlify-test/i18n/en.js
           test -s .bvom-netlify-test/i18n/ja.js
           test -s .bvom-netlify-test/bb2/browser-core.mjs
+          test -s .bvom-netlify-test/bb2/cloud-coordinator.mjs
           (cd .bvom-netlify-test && zip -q -r "../${ZIP}" .)
           unzip -t "$ZIP" | tail -2
           printf '%s\n' 'NETLIFY ZIP CONTENTS:'

@@ -1,0 +1,48 @@
+name: BB2 authenticated cloud proof
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ephemeral-supabase:
+    name: Isolated Auth / RLS / concurrent revision writes
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out draft application
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Supabase local CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start disposable local Supabase services
+        run: |
+          supabase init --yes
+          supabase start
+
+      - name: Mirror existing BVOM cloud table and owner policies locally
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -p 54322 -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -f tests/bvom-lab/fixtures/bb2_cloud_state.sql
+
+      - name: Install test-only client matching BVOM's bundled version
+        run: npm install --no-save --no-package-lock @supabase/supabase-js@2.117.3
+
+      - name: Verify authenticated two-device transport and database conflicts
+        run: node tests/bvom-lab/bb2_cloud_authenticated_local.mjs

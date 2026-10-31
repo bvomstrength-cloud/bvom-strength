@@ -5288,6 +5288,37 @@ function bvomBb2DormantAccountSnapshot(){
  });
 }
 
+// A real BVOM document adapter for the import-inert BB2 cloud coordinator.
+// Nothing calls this from production navigation, startup, Settings or Finish.
+// Even an explicit call cannot upload: both real-account rollout gates above
+// remain hard-coded false until independently approved and proven safe.
+let bvomBb2CloudCoordinatorModule=null;
+async function bvomBb2CreateDormantCloudCoordinator(){
+ const module=bvomBb2CloudCoordinatorModule||await import('./bb2/cloud-coordinator.mjs');
+ const ownerId=bvomCloud.user?.id||null;
+ return module.createBB2CloudCoordinator({
+  client:bvomCloudClient(),ownerId,
+  readAppSnapshot:bvomBb2DormantAccountSnapshot,
+  readLocal:()=>{
+   try{
+    const raw=localStorage.getItem(BVOM_DATA_KEY);
+    if(!raw||raw!==bvomLastPersistedRaw)return null;
+    const doc=JSON.parse(raw);
+    if(JSON.stringify(doc.bb2??null)!==JSON.stringify(state.bb2??null))return null;
+    return {token:raw,ownerId:bvomLocalOwnerId(),bb2:doc.bb2??null};
+   }catch(_){return null}
+  },
+  commitLocal:(expectedRaw,next)=>{
+   if(!bvomWorkoutActionAllowed()||bvomLocalOwnerId()!==ownerId||
+      bvomLastPersistedRaw!==expectedRaw)return false;
+   try{if(localStorage.getItem(BVOM_DATA_KEY)!==expectedRaw)return false}
+   catch(_){return false}
+   return bvomBb2Commit(next,{passive:true});
+  },
+  makeRequestId:()=>crypto.randomUUID()
+ });
+}
+
 // BB2 Stage (ii): local-only Start, prescribed sets, recovery, Finish, quota,
 // History and Discard. The existing BVOM data document remains authoritative.
 let bvomBb2Day='upper_a';

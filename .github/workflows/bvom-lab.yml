@@ -48,7 +48,9 @@ jobs:
           cp i18n/ja.js .bvom-candidate/i18n/
           cp vendor/supabase-js-2.117.3.js .bvom-candidate/vendor/
           cp bb2/browser-core.mjs .bvom-candidate/bb2/
+          cp bb2/browser-host.mjs bb2/app-session.mjs bb2/cloud-sidecar.mjs bb2/cloud-coordinator.mjs .bvom-candidate/bb2/
           test -s .bvom-candidate/bb2/browser-core.mjs
+          test -s .bvom-candidate/bb2/cloud-coordinator.mjs
 
           echo "Staged BVOM production candidate:"
           find .bvom-candidate -type f -print | sort

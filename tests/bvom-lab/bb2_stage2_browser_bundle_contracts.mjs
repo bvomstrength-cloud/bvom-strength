@@ -41,6 +41,14 @@ test('BB2 browser module is in draft Netlify ZIP and offline service-worker cach
     'packaging must fail if the dynamic module is missing');
   assert.ok(labWorkflow.includes('cp bb2/browser-core.mjs .bvom-candidate/bb2/'),
     'the full regression candidate must include every service-worker precache file');
+  for (const module of ['browser-host.mjs','app-session.mjs',
+    'cloud-sidecar.mjs','cloud-coordinator.mjs']) {
+    assert.ok(sw.includes("'./bb2/"+module+"'"),module+' must be cached');
+    assert.ok(zipWorkflow.includes('bb2/'+module),
+      module+' must be included in test packages');
+    assert.ok(labWorkflow.includes('bb2/'+module),
+      module+' must be included in regression packages');
+  }
 });
 
 test('whitelist rejects Node imports and computed dependency paths', () => {
