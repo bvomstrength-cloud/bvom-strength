@@ -5042,21 +5042,24 @@ function bvomBb2InjectProgramChoice(){
  // Make BB2 reachable there too, while keeping the existing editor unchanged.
  if(!row&&!setup.querySelector('[data-bb2-preview]')){
   row=document.createElement('div');row.className='card';
-  row.innerHTML='<b>OTHER TRAINING PROGRAMS</b><p class="small">Bodybuilding 2 is available as a local development preview.</p>';
+  row.innerHTML='<b>'+hlmTxt('OTHER TRAINING PROGRAMS','その他のトレーニングプログラム')+'</b><p class="small">'+
+   hlmTxt('Bodybuilding 2 is available as a local development preview.',
+    'ボディビルディング2は、この端末限定の開発用プレビューで利用できます。')+'</p>';
   setup.appendChild(row);
  }
  if(!row)return;
  let button=row.querySelector('[data-bb2-preview]');
  if(!button){
   button=document.createElement('button');button.type='button';button.className='choice';
-  button.dataset.bb2Preview='1';button.textContent='BODYBUILDING 2 · PREVIEW';
+  button.dataset.bb2Preview='1';
   button.onclick=bvomBb2OpenPreview;row.appendChild(button);
  }
+ button.textContent=hlmTxt('BODYBUILDING 2 · PREVIEW','ボディビルディング2 · プレビュー');
  if(bvomBb2Selected())row.querySelectorAll?.('.choice').forEach(choice=>choice.classList.remove('on'));
  button.classList.toggle('on',bvomBb2Selected());
  if(bvomBb2Selected()){
   const start=setup.querySelector('button[onclick="completeSetup()"]');
-  if(start){start.textContent='CONTINUE BODYBUILDING 2';start.onclick=()=>showApp()}
+  if(start){start.textContent=hlmTxt('CONTINUE BODYBUILDING 2','ボディビルディング2を続ける');start.onclick=()=>showApp()}
  }
 }
 const bvomBb2BaseInjectProgramChoice=bvomBbInjectProgramChoice;

@@ -86,6 +86,12 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>{showSetup();showSetup()});
   assert.equal(await page.locator('#setup [data-bb2-preview]').count(),1,'one BB2 button in the standard program chooser');
   assert.equal(await page.locator('#setup [data-bb-program]').count(),1,'BB1 chooser remains available');
+  await page.evaluate(()=>{changeLanguage('ja');showSetup()});
+  assert.match(await page.locator('#setup [data-bb2-preview]').textContent(),
+   /ボディビルディング2 · プレビュー/,'BB2 programme entry follows Japanese locale');
+  await page.evaluate(()=>{changeLanguage('en');showSetup()});
+  assert.match(await page.locator('#setup [data-bb2-preview]').textContent(),
+   /BODYBUILDING 2 · PREVIEW/,'BB2 programme entry returns to English');
   const savedBefore=await page.evaluate(()=>localStorage.getItem('bvom_data'));
   await page.locator('#setup [data-bb2-preview]').click();
   await page.waitForSelector('#setup [data-bb2-template]');
