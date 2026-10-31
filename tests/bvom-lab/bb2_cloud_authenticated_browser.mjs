@@ -8,6 +8,8 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { chromium } from 'playwright';
 import { createClient } from '@supabase/supabase-js';
+import { createBB2CloudSidecar } from '../../bb2/cloud-sidecar.mjs';
+import { createBB2Setup } from '../../bb2/browser-core.mjs';
 
 const require = createRequire(import.meta.url);
 const H = require('./lib/bvom_harness');
@@ -249,15 +251,54 @@ try {
   });
 
   const accountTablet = await makeDevice('signed-in tablet', {
-    userId: accountId, login: accountCredentials, accountFlow: true,
-    configured: false });
-  await check('first-run Setup retrieves BB2 through the real account with training screen hidden', async () => {
+    userId: accountId, login: accountCredentials, accountFlow: true });
+  await check('BVOM actual sign-in automatically retrieves BB2 on an existing second device', async () => {
     await accountTablet.waitForFunction(() =>
       bvomBb2AccountBinding?.lastDownload?.status === 'downloaded');
     assert.equal(await accountTablet.evaluate(() => state.bb2.cloudSync.baseline.revision), 1);
     assert.equal(await accountTablet.evaluate(() => state.programMode), fixture.programMode);
-    assert.equal(await accountTablet.locator('#app').evaluate(el => el.classList.contains('hidden')),
-      true,'a cloud download must not bypass normal BVOM first-run Setup');
+  });
+
+  // A truly first-run account has BB2 sidecar history but no different legacy
+  // BVOM document on the account. An unconfigured *existing* LP device is a
+  // separate legacy-data conflict and must not be silently bypassed.
+  const firstRunCredentials = { email: 'bb2-first-run@example.invalid',
+    password: 'Local-Only-First-Run-2026!' };
+  const firstRunUser = await admin.auth.admin.createUser({ ...firstRunCredentials,
+    email_confirm: true });
+  if (firstRunUser.error) throw firstRunUser.error;
+  const firstRunId = firstRunUser.data.user.id;
+  const firstRunClient = createClient(apiUrl, anonKey,
+    { auth: { persistSession: false, autoRefreshToken: false } });
+  const firstRunAuth = await firstRunClient.auth.signInWithPassword(firstRunCredentials);
+  if (firstRunAuth.error) throw firstRunAuth.error;
+  const sidecar = createBB2CloudSidecar({ ownerId: firstRunId,
+    bb2: { setup: createBB2Setup(), opening: null, events: [], sealedBlocks: [] },
+    previousRevision: null, requestId: 'first-run-seeded-owner-record' });
+  const seeded = await firstRunClient.from('bvom_cloud_state').insert({
+    user_id: firstRunId, revision: 1, data_version: sidecar.protocol,
+    state: sidecar }).select().maybeSingle();
+  if (seeded.error) throw seeded.error;
+  const firstRunDevice = await makeDevice('unconfigured first-run phone', {
+    userId: firstRunId, login: firstRunCredentials, accountFlow: true,
+    configured: false });
+  await check('unconfigured first-run Setup retrieves owner BB2 without opening the workout screen', async () => {
+    try {
+      await firstRunDevice.waitForFunction(() =>
+        bvomBb2AccountBinding?.lastDownload?.status === 'downloaded');
+    } catch (error) {
+      const diagnostic = await firstRunDevice.evaluate(() => ({
+        status: bvomBb2AccountBinding?.lastDownload?.status,
+        localBB2: !!state.bb2, legacyConflict: bvomCloud.conflict,
+        snapshot: bvomBb2DormantAccountSnapshot(),
+        appHidden: document.querySelector('#app').classList.contains('hidden')
+      }));
+      console.error('First-run BB2 account diagnostic:', diagnostic);
+      throw error;
+    }
+    assert.equal(await firstRunDevice.evaluate(() => state.bb2.cloudSync.baseline.revision), 1);
+    assert.equal(await firstRunDevice.locator('#app').evaluate(el => el.classList.contains('hidden')),
+      true,'downloading BB2 must not bypass normal BVOM first-run Setup');
   });
 
   await check('a finished BVOM workout uploads automatically and sign-out revokes the account binding', async () => {
