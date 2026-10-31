@@ -3209,7 +3209,24 @@ function importBackupFile(input){if(!bvomWorkoutActionAllowed())return;
   return;
  }
  const f=input.files?.[0];if(!f)return;const token=bvomRestoreToken(),r=new FileReader();
- r.onload=()=>{if(!bvomRestoreCommitAllowed(token)){input.value='';return}let d;try{const obj=JSON.parse(r.result),candidate=obj.data||obj;if(!candidate||typeof candidate!=='object'||!candidate.weights||!Array.isArray(candidate.history))throw Error();d=candidate}catch(e){input.value='';bvomBeeModal(hlmTxt('BACKUP NOT RESTORED','バックアップを復元できませんでした'),hlmTxt('That does not look like a valid BVOM backup.','有効なBVOMバックアップではないようです。'));return}
+ r.onload=async()=>{if(!bvomRestoreCommitAllowed(token)){input.value='';return}let d;try{const obj=JSON.parse(r.result),candidate=obj.data||obj;if(!candidate||typeof candidate!=='object'||!candidate.weights||!Array.isArray(candidate.history))throw Error();d=candidate}catch(e){input.value='';bvomBeeModal(hlmTxt('BACKUP NOT RESTORED','バックアップを復元できませんでした'),hlmTxt('That does not look like a valid BVOM backup.','有効なBVOMバックアップではないようです。'));return}
+  // An imported BB2 journal can come from another device. Validate its owner,
+  // frozen ledger replay and sealed ancestry before offering a destructive
+  // restore. An older backup without BB2 retains the normal legacy path.
+  if(Object.prototype.hasOwnProperty.call(d,'bb2')){
+   try{
+    if(!token.auth||token.auth!==token.user||token.owner!==token.auth)
+     throw Error('BB2 import requires the matching signed-in account');
+    await bvomBb2ValidatePortableJournal(d.bb2,token.auth);
+   }catch(error){
+    console.warn('BB2 backup rejected',error);
+    input.value='';bvomBeeModal(hlmTxt('BB2 BACKUP NOT RESTORED','BB2バックアップを復元できませんでした'),
+     hlmTxt('The BB2 record could not be verified for this account. Your training data was not changed.',
+      'BB2の記録をこのアカウントで確認できませんでした。トレーニングデータは変更されていません。'));
+    return;
+   }
+   if(!bvomRestoreCommitAllowed(token)){input.value='';return}
+  }
   const bb2Warning=bvomBb2BackupRestoreWarning(state,d);
   const body=(bb2Warning?'<p style="font-weight:700">'+bb2Warning+'</p>':'')+
    hlmTxt('This will replace BVOM data currently on this device. A one-step pre-restore copy will be kept on this device.',
@@ -5182,49 +5199,54 @@ bvomCloudPayload=function(){const d=bvomBb2BaseCloudPayload();delete d.bb2;retur
 // Before cloud-sidecar activation, legacy cloud restores may replace legacy
 // training fields, but must retain the *verified same-device* BB2 ledger.
 // An unknown remote BB2 subtree never gets silently imported or merged.
-async function bvomBb2PrepareCloudRestore(remote,ownerId){
- if(Object.prototype.hasOwnProperty.call(remote,'bb2'))throw new Error(hlmTxt(
-  'Cloud restore stopped: this cloud copy contains incompatible BB2 data. Your device has not been changed.',
-  'クラウド復元を停止しました。クラウドのBB2データに互換性がありません。端末のデータは変更されていません。'));
- const local=state.bb2;
- if(local===undefined)return remote;
- if(!local||typeof local!=='object'||Array.isArray(local)||local.activeSessionId||
-    !ownerId||ownerId!==window.__bvomAuthUserId||ownerId!==bvomLocalOwnerId())
-  throw new Error('BB2 cloud restore refused: unsafe local owner or active workout');
+async function bvomBb2ValidatePortableJournal(local,ownerId){
+ if(!local||typeof local!=='object'||Array.isArray(local)||local.activeSessionId||!ownerId)
+  throw new Error('BB2 restore refused: unsafe owner or active workout');
  const m=bvomBb2PreviewModule||await import('./bb2/browser-core.mjs');
  m.validateBB2Setup(local.setup);
  const archives=local.sealedBlocks===undefined?[]:local.sealedBlocks;
  const events=local.events===undefined?[]:local.events;
  if(!Array.isArray(archives)||!Array.isArray(events)||
     (!local.opening&&(events.length||archives.length)))
-  throw new Error('BB2 cloud restore refused: invalid local journal');
+  throw new Error('BB2 restore refused: invalid journal');
  const seen=new Set(),blocks=[...archives,...(local.opening?[{opening:local.opening,events}]:[])];
  const stable=x=>Array.isArray(x)?'['+x.map(stable).join(',')+']':
   x&&typeof x==='object'?'{'+Object.keys(x).sort().map(k=>JSON.stringify(k)+':'+stable(x[k])).join(',')+'}':JSON.stringify(x);
  for(const [i,block] of blocks.entries()){
   if(!block?.opening||block.opening.ownerId!==ownerId||
      !Array.isArray(block.events)||seen.has(block.opening.blockId))
-   throw new Error('BB2 cloud restore refused: invalid local block owner or identity');
+   throw new Error('BB2 restore refused: invalid block owner or identity');
   seen.add(block.opening.blockId);
   const projection=m.validateBB2RestoredBlock(block.opening,block.events);
   if(i<archives.length&&projection.sealed!==true)
-   throw new Error('BB2 cloud restore refused: unsealed archive');
+   throw new Error('BB2 restore refused: unsealed archive');
   const open=new Set();
   for(const event of block.events){
    if(event.type==='WORKOUT_STARTED')open.add(event.sessionId);
    if(['WORKOUT_FINISHED','WORKOUT_INCOMPLETE','WORKOUT_DISCARDED'].includes(event.type))
     open.delete(event.sessionId);
   }
-  if(open.size)throw new Error('BB2 cloud restore refused: unfinished local workout');
+  if(open.size)throw new Error('BB2 restore refused: unfinished workout');
   if(i===0&&block.opening.previousSealId)
-   throw new Error('BB2 cloud restore refused: missing predecessor');
+   throw new Error('BB2 restore refused: missing predecessor');
   if(i>0){
    const prior=blocks[i-1],expected=m.BB2_BROWSER_MODULES.ledger.createNextBB2Opening(
     prior.opening,prior.events,block.opening.blockId);
    if(stable(expected)!==stable(block.opening))
-    throw new Error('BB2 cloud restore refused: invalid block ancestry');
+    throw new Error('BB2 restore refused: invalid block ancestry');
   }
  }
+ return true;
+}
+async function bvomBb2PrepareCloudRestore(remote,ownerId){
+ if(Object.prototype.hasOwnProperty.call(remote,'bb2'))throw new Error(hlmTxt(
+  'Cloud restore stopped: this cloud copy contains incompatible BB2 data. Your device has not been changed.',
+  'クラウド復元を停止しました。クラウドのBB2データに互換性がありません。端末のデータは変更されていません。'));
+ const local=state.bb2;
+ if(local===undefined)return remote;
+ if(!ownerId||ownerId!==window.__bvomAuthUserId||ownerId!==bvomLocalOwnerId())
+  throw new Error('BB2 cloud restore refused: unsafe local owner');
+ await bvomBb2ValidatePortableJournal(local,ownerId);
  return {...remote,bb2:JSON.parse(JSON.stringify(local))};
 }
 function bvomBb2CloudRestoreMessage(){

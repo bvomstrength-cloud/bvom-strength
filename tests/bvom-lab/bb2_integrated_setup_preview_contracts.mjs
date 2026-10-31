@@ -146,8 +146,9 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  const oldBackup=JSON.parse(h.ls.getItem('bvom_data'));
  assert.equal(h.ctx.bvomBb2BackupRestoreWarning(h.S(),oldBackup),'',
   'ordinary BVOM backups have no new warning when BB2 is absent');
+ const owner='11111111-1111-4111-8111-111111111111';
  const bb2={setup:catalogue.createBB2Setup(),opening:catalogue.createBB2Opening({
-  ownerId:'bb2-test-owner',blockId:'bb2-backup-guard'}),events:[]};
+  ownerId:owner,blockId:'bb2-backup-guard'}),events:[]};
  h.ctx.__bb2BackupFixture=bb2;
  h.ev('state.bb2=__bb2BackupFixture');
  const untouched=JSON.stringify(h.S()),raw=h.ls.getItem('bvom_data');
@@ -164,6 +165,12 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.FileReader=function(){reader=this;this.readAsText=()=>{}};
  h.ctx.bvomChoiceModal=(title,body,left,right,onLeft,onRight)=>{
   prompt=body;restore={onLeft,onRight};return restore};
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest');
+ h.ctx.__bb2ImportOwner=owner;
+ h.ev('window.__bvomAuthUserId=__bb2ImportOwner;'+
+  'bvomCloud.user={id:__bb2ImportOwner};bvomSetLocalOwnerId(__bb2ImportOwner);'+
+  'bvomEntitlementAccessDecision=()=>({allowed:true})');
  h.ctx.importBackupFile({files:[{name:'old-bvom.json'}]});
  reader.result=JSON.stringify({app:'BVOM',data:oldBackup});reader.onload();
  assert.match(prompt,/Bodybuilding 2 setup or workouts/,
@@ -174,7 +181,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(JSON.stringify(h.S()),untouched,'cancelled restore preserves in-memory BB2 data');
  assert.equal(h.ls.getItem('bvom_pre_restore'),null,'cancel creates no recovery backup');
  h.ctx.importBackupFile({files:[{name:'same-bvom.json'}]});
- reader.result=JSON.stringify({app:'BVOM',data:{...oldBackup,bb2}});reader.onload();
+ reader.result=JSON.stringify({app:'BVOM',data:{...oldBackup,bb2}});await reader.onload();
  assert.doesNotMatch(prompt,/Bodybuilding 2 setup or workouts/,
   'the same BB2 data does not create unnecessary warning prompts');
  h.ctx.importBackupFile({files:[{name:'old-bvom.json'}]});
@@ -185,6 +192,52 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(JSON.parse(h.ls.getItem('bvom_pre_restore')).bb2.opening.blockId,
   'bb2-backup-guard','the existing pre-restore recovery snapshot contains old BB2 data');
  console.log('PASS: BB2 local-only backup restore warning, cancellation and pre-restore recovery');
+}
+
+{
+ // Exercise the actual file reader and restore callback, not just the
+ // standalone ledger: a backup from another device must prove the same owner.
+ const {h}=fixture();
+ const owner='11111111-1111-4111-8111-111111111111';
+ const other='22222222-2222-4222-8222-222222222222';
+ h.ctx.__bb2ImportOwner=owner;
+ h.ev('window.__bvomAuthUserId=__bb2ImportOwner;'+
+  'bvomCloud.user={id:__bb2ImportOwner};bvomSetLocalOwnerId(__bb2ImportOwner);'+
+  'bvomEntitlementAccessDecision=()=>({allowed:true})');
+ let reader,confirmRestore=null,refusals=0;
+ h.ctx.FileReader=function(){reader=this;this.readAsText=()=>{}};
+ h.ctx.bvomBeeModal=()=>{refusals++};
+ h.ctx.bvomChoiceModal=(_title,_body,_cancel,_confirm,_left,right)=>{confirmRestore=right};
+ h.ctx.__bb2CatalogueForTest=catalogue;
+ h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest');
+ const before=h.ls.getItem('bvom_data');
+ const bb2={setup:catalogue.createBB2Setup(),opening:catalogue.createBB2Opening({
+  ownerId:owner,blockId:'portable-bb2'}),events:[],sealedBlocks:[],selectedProgram:true};
+ const upload=async candidate=>{
+  confirmRestore=null;
+  h.ctx.importBackupFile({files:[{name:'portable.json'}],value:'portable.json'});
+  reader.result=JSON.stringify({app:'BVOM',data:{...JSON.parse(before),bb2:candidate}});
+  await reader.onload();
+ };
+ await upload({...bb2,opening:catalogue.createBB2Opening({ownerId:other,blockId:'foreign'})});
+ assert.equal(confirmRestore,null,'foreign-account BB2 cannot reach restore confirmation');
+ assert.equal(refusals,1);
+ assert.equal(h.ls.getItem('bvom_data'),before,'foreign-account import preserves existing data');
+ await upload({...bb2,events:[{type:'FORGED'}]});
+ assert.equal(confirmRestore,null,'forged BB2 events fail frozen-ledger validation');
+ assert.equal(refusals,2);
+ assert.equal(h.ls.getItem('bvom_data'),before);
+ await upload({...bb2,activeSessionId:'unfinished'});
+ assert.equal(confirmRestore,null,'active BB2 workout cannot be transplanted between devices');
+ assert.equal(refusals,3);
+ await upload(bb2);
+ assert.equal(typeof confirmRestore,'function','valid same-owner BB2 reaches normal restore confirmation');
+ confirmRestore();
+ assert.deepEqual(JSON.parse(h.ls.getItem('bvom_data')).bb2,bb2,
+  'same-account backup carries the complete verified BB2 journal onto this device');
+ assert.equal(h.ls.getItem('bvom_pre_restore'),before,
+  'successful cross-device import retains a local pre-restore recovery copy');
+ console.log('PASS: cross-device BB2 backup import rejects foreign, forged and active data; same-owner restore succeeds');
 }
 
 {
@@ -221,7 +274,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
    incrementG:2500,incrementOrigin:{value:'2.5',unit:'kg'}}]};
  h.ctx.__bb2UnclosedForTest=[unclosed];
  h.ev('state.bb2={...state.bb2,events:__bb2UnclosedForTest}');
- await assert.rejects(h.ctx.bvomBb2PrepareCloudRestore(remote,owner),/unfinished local workout/,
+ await assert.rejects(h.ctx.bvomBb2PrepareCloudRestore(remote,owner),/unfinished workout/,
   'an unclosed journal is refused even when activeSessionId was lost');
  h.ev('state.bb2=__bvomBb2LocalForTest');
  // Exercise the actual Settings > Restore from Cloud confirmation callback.
