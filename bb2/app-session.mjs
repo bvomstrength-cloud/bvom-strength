@@ -35,6 +35,16 @@ export function bb2AppWriteStatus(snapshot, ownerId) {
   return Object.freeze({ allowed: true, reason: 'eligible' });
 }
 
+// Cloud transport may open a verified owner's BB2 journal while BVOM is on
+// first-run Setup. This does not grant the training host permission to write
+// a workout from Setup; all other account/document fences remain identical.
+export function bb2CloudTransferStatus(snapshot, ownerId) {
+  if (!snapshot || (snapshot.appVisible !== true &&
+      snapshot.setupVisible !== true)) return denied('BVOM screen not open');
+  if (snapshot.bb2EditorOpen === true) return denied('BB2 editor has unsaved choices');
+  return bb2AppWriteStatus({ ...snapshot, appVisible: true }, ownerId);
+}
+
 export function createBB2AppSessionHost({ runtime, ownerId, readAppSnapshot } = {}) {
   if (typeof readAppSnapshot !== 'function') {
     throw Error('BB2 app: a synchronous BVOM snapshot reader is required');

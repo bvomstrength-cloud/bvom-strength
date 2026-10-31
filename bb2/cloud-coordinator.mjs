@@ -4,11 +4,12 @@
  * A caller must inject the existing BVOM account, locked durable document
  * reader/writer, and an authenticated client. This module never owns auth.
  */
-import { bb2AppWriteStatus } from './app-session.mjs';
+import { bb2CloudTransferStatus } from './app-session.mjs';
 import { BB2_BROWSER_MODULES, createBB2Opening, createBB2Setup, getBB2TemplatePrescription,
   validateBB2Setup } from './browser-core.mjs';
 import { createBB2CloudSidecar, readBB2CloudSidecar,
   writeBB2CloudSidecar, reconcileBB2CloudSidecar,
+  bb2CloudDescendsFromBaseline,
   validateBB2CloudSidecar } from './cloud-sidecar.mjs';
 
 const PROTOCOL = 'bvom-bb2-local-cloud-v1';
@@ -117,7 +118,7 @@ export function createBB2CloudCoordinator({ client, ownerId, readAppSnapshot,
     return snapshot;
   }
   function ready() {
-    try { return bb2AppWriteStatus(readAppSnapshot(), ownerId).allowed === true; }
+    try { return bb2CloudTransferStatus(readAppSnapshot(), ownerId).allowed === true; }
     catch (_) { return false; }
   }
   function metadata(bb2) {
@@ -256,5 +257,72 @@ export function createBB2CloudCoordinator({ client, ownerId, readAppSnapshot,
     if (!commitLocal(before.token, incoming)) return { status: 'blocked' };
     return { status: 'downloaded', revision: remote.envelope.revision };
   }
-  return Object.freeze({ upload, downloadIfEmpty });
+
+  // A populated device may adopt newer cloud training only if its portable
+  // journal is still byte-equivalent to the last acknowledged cloud baseline.
+  // Any local edit, pending write or unrecognised ancestry is a conflict: no
+  // automatic choice between two users' legitimate workout histories.
+  async function refreshIfUnchanged() {
+    if (!ready()) return { status: 'blocked' };
+    const before=local();
+    if (!before?.bb2) return { status: 'no_local_bb2' };
+    let meta, current;
+    try {
+      validatePortableLedger(before.bb2);
+      meta=metadata(before.bb2);
+      current=createBB2CloudSidecar({ownerId,bb2:before.bb2,
+        previousRevision:meta.baseline?.revision??null,requestId:'bb2-refresh-check'}).snapshot;
+    } catch (error) { return { status: 'incompatible', error }; }
+    if (meta.pending) return { status: 'pending_local_write' };
+    const remote=await readBB2CloudSidecar({client,ownerId});
+    if (!ready()||!same(local(),before)) return { status: 'blocked' };
+    if (remote.status==='unavailable'||remote.status==='incompatible') return remote;
+    if (remote.status==='empty')
+      return { status:meta.baseline?'conflict':'local_unsynced' };
+    if (!meta.baseline) return { status:'conflict' };
+    if (same(remote.envelope,meta.baseline))
+      return {status:same(current,meta.baseline.snapshot)?'up_to_date':'local_unsynced'};
+    if (!bb2CloudDescendsFromBaseline(meta.baseline,remote.envelope,ownerId)||
+        !same(current,meta.baseline.snapshot)) return { status:'conflict' };
+    try {
+      const incoming=clone(remote.envelope.snapshot);
+      validatePortableLedger(incoming);
+      const genesis=incoming.sealedBlocks?.[0]?.opening||incoming.opening;
+      if(genesis)validateBB2PortableGenesis(genesis,ownerId);
+    } catch(error) { return { status:'incompatible',error }; }
+    const next=withMeta({...before.bb2,...clone(remote.envelope.snapshot)},
+      remote.envelope,null);
+    if(!commitLocal(before.token,next))return {status:'blocked'};
+    return {status:'downloaded',revision:remote.envelope.revision};
+  }
+
+  // Explicit conflict resolution only. The UI must obtain the user's choice;
+  // the host must durably back up the full BVOM document before replacing BB2.
+  async function useCloudCopyConfirmed() {
+    if (!ready()) return {status:'blocked'};
+    const before=local();
+    if (!before?.bb2) return {status:'no_local_bb2'};
+    let meta;
+    try {validatePortableLedger(before.bb2);meta=metadata(before.bb2)}
+    catch(error){return {status:'incompatible',error}}
+    if(meta.pending)return {status:'pending_local_write'};
+    const remote=await readBB2CloudSidecar({client,ownerId});
+    if(!ready()||!same(local(),before))return {status:'blocked'};
+    if(remote.status!=='ready')return remote;
+    if(meta.baseline && !same(remote.envelope,meta.baseline) &&
+       !bb2CloudDescendsFromBaseline(meta.baseline,remote.envelope,ownerId))
+      return {status:'conflict'};
+    try{
+      validatePortableLedger(remote.envelope.snapshot);
+      const incoming=remote.envelope.snapshot;
+      const genesis=incoming.sealedBlocks?.[0]?.opening||incoming.opening;
+      if(genesis)validateBB2PortableGenesis(genesis,ownerId);
+    }catch(error){return {status:'incompatible',error}}
+    const next=withMeta({...before.bb2,...clone(remote.envelope.snapshot)},
+      remote.envelope,null);
+    if(!commitLocal(before.token,next,{backupBeforeReplace:true}))
+      return {status:'blocked'};
+    return {status:'downloaded',revision:remote.envelope.revision};
+  }
+  return Object.freeze({upload,downloadIfEmpty,refreshIfUnchanged,useCloudCopyConfirmed});
 }

@@ -5239,6 +5239,7 @@ function bvomBb2ClosePreview(){
  bvomBb2NextBlockReview=false;bvomBb2NextBlockBase=null;bvomBb2NextBlockInputs={};
  bvomBb2PreviewFromWorkout=false;
  if(fromWorkout)showApp();else bvomBb2ShowProgramChooser();
+ bvomBb2AccountSyncSchedule();
 }
 // Development-only BB2 setup is part of BVOM's local backup, not the current
 // whole-row cloud payload. Remote unknown BB2 fields remain visible to the
@@ -5317,6 +5318,7 @@ function bvomBb2CloudRestoreMessage(){
 function bvomBb2DormantAccountSnapshot(){
  const ownerId=bvomCloud.user?.id||null;
  const app=document.querySelector('#app');
+ const setup=document.querySelector('#setup');
  let localBlobUnchanged=false;
  try{localBlobUnchanged=localStorage.getItem(BVOM_DATA_KEY)===bvomLastPersistedRaw}catch(e){}
  return Object.freeze({
@@ -5324,6 +5326,8 @@ function bvomBb2DormantAccountSnapshot(){
   cloudUserId:ownerId,
   localOwnerId:bvomLocalOwnerId(),
   appVisible:!!app&&!app.classList.contains('hidden'),
+  setupVisible:!!setup&&!setup.classList.contains('hidden'),
+  bb2EditorOpen:bvomBb2PreviewOpen,
   entitlementAllowed:!!ownerId&&bvomEntitlementAccessDecision(bvomEntitlement.record,
    ownerId,!!bvomCloud.offlineLocalAccess).allowed===true,
   documentLockOwned:bvomWindowLockOwned,
@@ -5379,11 +5383,16 @@ async function bvomBb2CreateDormantCloudCoordinator({isolatedClient=null}={}){
     return {token:raw,ownerId:bvomLocalOwnerId(),bb2:doc.bb2??null};
    }catch(_){return null}
   },
-  commitLocal:(expectedRaw,next)=>{
+  commitLocal:(expectedRaw,next,{backupBeforeReplace=false}={})=>{
    if(!bvomWorkoutActionAllowed()||bvomLocalOwnerId()!==ownerId||
       bvomLastPersistedRaw!==expectedRaw)return false;
    try{if(localStorage.getItem(BVOM_DATA_KEY)!==expectedRaw)return false}
    catch(_){return false}
+   if(backupBeforeReplace){
+    try{localStorage.setItem('bvom_pre_cloud_restore',JSON.stringify(state))}
+    catch(error){console.warn('BB2 pre-cloud backup not saved',error);return false}
+    if(localStorage.getItem(BVOM_DATA_KEY)!==expectedRaw)return false;
+   }
    return bvomBb2Commit(next,{passive:true});
   },
   makeRequestId:()=>crypto.randomUUID()
@@ -5399,6 +5408,66 @@ function bvomBb2AccountDisconnect(){
  clearTimeout(bvomBb2AccountUploadTimer);bvomBb2AccountUploadTimer=null;
  bvomBb2AccountBinding=null;
 }
+function bvomBb2AccountStatus(){
+ const binding=bvomBb2AccountBinding;
+ if(!binding?.isolated)return null;
+ return binding.lastUpload?.status==='conflict'||binding.lastDownload?.status==='conflict'?
+  'conflict':binding.lastUpload?.status==='uncertain'||binding.lastDownload?.status==='uncertain'?
+  'uncertain':binding.lastUpload?.status==='unavailable'||binding.lastDownload?.status==='unavailable'?
+  'unavailable':binding.lastUpload?.status==='incompatible'||binding.lastDownload?.status==='incompatible'?
+  'incompatible':binding.lastUpload?.status==='committed'||
+  ['downloaded','up_to_date'].includes(binding.lastDownload?.status)?'current':
+  'checking';
+}
+function bvomBb2AccountStatusRender(){
+ if(document.querySelector('#settings:not(.hidden)'))renderSettings();
+}
+async function bvomBb2AccountSyncNow(binding=bvomBb2AccountBinding){
+ if(!binding?.isolated||binding!==bvomBb2AccountBinding||
+    !bvomBb2PreviewEnabled()||bvomAnyWorkoutActive())return;
+ if(binding.syncing){binding.resync=true;return}
+ binding.syncing=true;
+ try{
+  let result=await binding.coordinator.downloadIfEmpty();
+  if(binding!==bvomBb2AccountBinding)return;
+  binding.lastDownload=result;
+  if(result.status==='local_data_present'){
+   result=await binding.coordinator.refreshIfUnchanged();
+   if(binding!==bvomBb2AccountBinding)return;
+   binding.lastDownload=result;
+   if(result.status==='local_unsynced'||result.status==='pending_local_write'){
+    binding.lastUpload=await binding.coordinator.upload();
+   }
+  }
+  if(binding!==bvomBb2AccountBinding)return;
+  if(['downloaded','up_to_date'].includes(binding.lastDownload?.status))
+   binding.lastUpload=null;
+  if(binding.lastDownload?.status==='downloaded'){
+   bvomBb2InjectProgramChoice();
+   if(!document.querySelector('#app').classList.contains('hidden'))renderAll();
+  }
+  bvomBb2AccountStatusRender();
+  const status=bvomBb2AccountStatus();
+  if(status==='conflict'&&!binding.conflictNoticeShown){
+   binding.conflictNoticeShown=true;
+   bvomBeeModal(hlmTxt('BB2 CLOUD SYNC PAUSED','BB2クラウド同期を停止しました'),
+    hlmTxt('This device and your other device have different BB2 changes. Both copies are preserved. Open Settings for a backup and a confirmed recovery option.',
+     'この端末と別の端末に異なるBB2の変更があります。両方のデータは保持されています。Settingsからバックアップと確認付き復元を利用してください。'));
+  }
+  if(status!=='conflict')binding.conflictNoticeShown=false;
+ }catch(error){
+  if(binding===bvomBb2AccountBinding){
+   binding.lastUpload={status:'unavailable'};
+   console.warn('BB2 isolated account sync unavailable',error);
+   bvomBb2AccountStatusRender();
+  }
+ }finally{
+  binding.syncing=false;
+  if(binding.resync&&binding===bvomBb2AccountBinding){
+   binding.resync=false;bvomBb2AccountSyncSchedule();
+  }
+ }
+}
 async function bvomBb2ConnectSignedInAccount(){
  const ownerId=bvomCloud.user?.id||null,client=bvomCloudClient();
  bvomBb2AccountDisconnect();
@@ -5411,11 +5480,10 @@ async function bvomBb2ConnectSignedInAccount(){
   if(bvomCloud.user?.id!==ownerId||window.__bvomAuthUserId!==ownerId||
      bvomLocalOwnerId()!==ownerId||bvomCloud.offlineLocalAccess||
      bvomCloud.accountSwitchDeferred)return false;
-  const binding={ownerId,client,isolated,coordinator,lastDownload:null,lastUpload:null};
+  const binding={ownerId,client,isolated,coordinator,lastDownload:null,lastUpload:null,
+   syncing:false,resync:false,conflictNoticeShown:false};
   bvomBb2AccountBinding=binding;
-  if(isolated){
-   binding.lastDownload=await coordinator.downloadIfEmpty();
-  }
+  if(isolated)await bvomBb2AccountSyncNow(binding);
   return true;
  }catch(error){console.warn('BB2 dormant account binding unavailable',error);return false}
 }
@@ -5424,17 +5492,80 @@ function bvomBb2AccountSyncSchedule(){
  if(!binding?.isolated||!bvomBb2PreviewEnabled()||!state.bb2?.setup||
     bvomAnyWorkoutActive())return;
  clearTimeout(bvomBb2AccountUploadTimer);
- bvomBb2AccountUploadTimer=setTimeout(async()=>{
-  if(bvomBb2AccountBinding!==binding)return;
-  try{binding.lastUpload=await binding.coordinator.upload()}
-  catch(error){console.warn('BB2 isolated account upload unavailable',error)}
+ bvomBb2AccountUploadTimer=setTimeout(()=>{
+  if(bvomBb2AccountBinding===binding)void bvomBb2AccountSyncNow(binding);
  },300);
 }
+function bvomBb2AccountUseCloud(){
+ const binding=bvomBb2AccountBinding;
+ if(!binding?.isolated||bvomBb2AccountStatus()!=='conflict'||
+    !bvomBb2PreviewEnabled()||bvomAnyWorkoutActive())return;
+ bvomChoiceModal(hlmTxt('REPLACE LOCAL BB2 WITH CLOUD?','端末のBB2をクラウドで置き換えますか？'),
+  hlmTxt('Only BB2 setup and completed BB2 history will be replaced. Other BVOM programmes remain untouched. A complete one-step local recovery copy will be saved first. Export a BVOM backup too if you want a separate file.',
+   'BB2の設定と完了済みのBB2履歴のみが置き換わります。他のBVOMプログラムは変更されません。まず端末に復元用コピーを保存します。別のファイルも必要な場合はBVOMバックアップを書き出してください。'),
+  hlmTxt('CANCEL','キャンセル'),hlmTxt('USE CLOUD BB2','クラウドのBB2を使用'),()=>{},async()=>{
+   if(binding!==bvomBb2AccountBinding||binding.syncing)return;
+   binding.syncing=true;
+   try{
+    const result=await binding.coordinator.useCloudCopyConfirmed();
+    if(binding!==bvomBb2AccountBinding)return;
+    binding.lastDownload=result;
+    if(result.status==='downloaded'){
+     binding.lastUpload=null;binding.conflictNoticeShown=false;
+     bvomBb2InjectProgramChoice();renderAll();
+    }else if(result.status==='blocked')bvomBeeModal(hlmTxt('BB2 CLOUD RESTORE STOPPED','BB2のクラウド復元を停止しました'),
+     hlmTxt('Your BB2 data could not be backed up and safely replaced. Nothing was overwritten.',
+      'BB2のデータを安全にバックアップして置き換えられませんでした。何も上書きされていません。'));
+    bvomBb2AccountStatusRender();
+   }catch(error){console.warn('BB2 confirmed cloud recovery unavailable',error)}
+   finally{binding.syncing=false}
+  });
+}
+const bvomBb2BaseRenderSettings=renderSettings;
+renderSettings=function(...args){
+ const result=bvomBb2BaseRenderSettings(...args);
+ if(!bvomBb2AccountBinding?.isolated)return result;
+ const settings=document.querySelector('#settings');
+ if(!settings)return result;
+ const status=bvomBb2AccountStatus();
+ const message={
+  conflict:hlmTxt('This device and BVOM Cloud have different BB2 changes. Neither copy was overwritten. Export a backup and use the latest device until the conflict is resolved.',
+   'この端末とBVOMクラウドに異なるBB2の変更があります。どちらも上書きされていません。バックアップを書き出し、競合が解決するまで新しいデータの端末を使ってください。'),
+  uncertain:hlmTxt('BB2 cloud saving could not be confirmed. Keep this device\'s data and try again.',
+   'BB2のクラウド保存を確認できませんでした。この端末のデータを保持して再試行してください。'),
+  unavailable:hlmTxt('BB2 cloud is unavailable. Your local workouts are preserved; try again when connected.',
+   'BB2クラウドを利用できません。端末の記録は保持されています。接続後に再試行してください。'),
+  incompatible:hlmTxt('BB2 cloud data could not be safely validated. No data was replaced.',
+   'BB2クラウドのデータを安全に検証できませんでした。データは置き換えられていません。'),
+  current:hlmTxt('BB2 account data is up to date on this device.',
+   'この端末のBB2アカウントデータは最新です。'),
+  checking:hlmTxt('BB2 account check pending; local workouts remain on this device.',
+   'BB2アカウントの確認待ちです。記録はこの端末に保持されています。')
+ }[status];
+ const card=document.createElement('div');card.className='card';
+ card.innerHTML='<b>'+hlmTxt('BB2 CLOUD · TEST PREVIEW','BB2クラウド · テストプレビュー')+'</b><p class="small">'+
+  message+'</p><button type="button" class="secondary wide" data-bb2-sync-retry>'+hlmTxt(
+   'CHECK BB2 CLOUD AGAIN','BB2クラウドを再確認')+'</button>'+
+  (status==='conflict'?'<button type="button" class="secondary wide" data-bb2-sync-backup>'+hlmTxt(
+   'EXPORT LOCAL BACKUP','端末のバックアップを書き出す')+'</button><button type="button" class="secondary wide" data-bb2-use-cloud>'+hlmTxt(
+   'USE CLOUD BB2 (CONFIRM)','クラウドのBB2を使用（確認）')+'</button>':'');
+ card.querySelector('[data-bb2-sync-retry]').onclick=()=>void bvomBb2AccountSyncNow();
+ const backup=card.querySelector('[data-bb2-sync-backup]');if(backup)backup.onclick=()=>exportBackup();
+ const useCloud=card.querySelector('[data-bb2-use-cloud]');if(useCloud)useCloud.onclick=()=>bvomBb2AccountUseCloud();
+ settings.appendChild(card);
+ return result;
+};
 const bvomBb2BaseShowApp=showApp;
 showApp=function(...args){
  const result=bvomBb2BaseShowApp(...args);
  bvomBb2AccountSyncSchedule();return result;
 };
+// Resuming an older device must recheck the latest account revision before
+// recording more work. These listeners remain inert outside localhost proof.
+window.addEventListener('focus',()=>bvomBb2AccountSyncSchedule());
+document.addEventListener('visibilitychange',()=>{
+ if(document.visibilityState==='visible')bvomBb2AccountSyncSchedule();
+});
 
 // BB2 Stage (ii): local-only Start, prescribed sets, recovery, Finish, quota,
 // History and Discard. The existing BVOM data document remains authoritative.

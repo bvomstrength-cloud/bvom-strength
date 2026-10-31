@@ -61,16 +61,19 @@ const safe=()=>({authUserId:owner,cloudUserId:owner,localOwnerId:owner,
  bb2WriterEnabled:true,multiDeviceFenceVerified:true});
 
 function device(db,{bb2=null,enabled=true}={}){
- let state={token:1,bb2:copy(bb2)},failed=false,app=safe(),request=0;
+ let state={token:1,bb2:copy(bb2)},failed=false,backupFailed=false,
+  backups=[],app=safe(),request=0;
  const session=createBB2CloudCoordinator({client:db.client(owner),ownerId:owner,
   readAppSnapshot:()=>enabled?app:{...app,bb2WriterEnabled:false},
   readLocal:()=>({ownerId:owner,token:String(state.token),bb2:copy(state.bb2)}),
-  commitLocal:(expected,next)=>{
-   if(failed||expected!==String(state.token))return false;
+  commitLocal:(expected,next,{backupBeforeReplace=false}={})=>{
+   if(failed||expected!==String(state.token)||backupBeforeReplace&&backupFailed)return false;
+   if(backupBeforeReplace)backups.push(copy(state.bb2));
    state={token:state.token+1,bb2:copy(next)};return true;
   },makeRequestId:()=>`req-${++request}`});
  return {session,get:()=>copy(state.bb2),set(next){state={token:state.token+1,bb2:copy(next)}},
-  failSave(value){failed=value},setApp(next){app=next}};
+  failSave(value){failed=value},failBackup(value){backupFailed=value},
+  backups:()=>copy(backups),setApp(next){app=next}};
 }
 
 const db=fakeDatabase();
@@ -138,6 +141,71 @@ await check('lost cloud response reconciles without duplicate upload or credit',
  assert.equal(first.get().cloudSync.pending,null);
 });
 
+await check('unchanged populated devices safely adopt newer remote revisions in both directions',async()=>{
+ const shared=fakeDatabase();
+ const phone=device(shared,{bb2:{setup:core.createBB2Setup(),
+  opening:core.createBB2Opening({ownerId:owner,blockId:'handoff'}),
+  events:[],sealedBlocks:[],selectedProgram:true}});
+ const tablet=device(shared);
+ assert.equal((await phone.session.upload()).status,'committed');
+ assert.equal((await tablet.session.downloadIfEmpty()).status,'downloaded');
+ const next=phone.get();next.setup.optionalUpperBCurls=true;phone.set(next);
+ assert.equal((await phone.session.upload()).status,'committed');
+ assert.equal((await tablet.session.refreshIfUnchanged()).status,'downloaded');
+ assert.equal(tablet.get().setup.optionalUpperBCurls,true);
+ assert.equal(tablet.get().cloudSync.baseline.revision,2);
+ assert.equal(tablet.get().selectedProgram,false,'device-only programme choice survives');
+ const offline=tablet.get();offline.setup.optionalUpperBCurls=false;tablet.set(offline);
+ assert.equal((await tablet.session.refreshIfUnchanged()).status,'local_unsynced');
+ assert.equal((await tablet.session.upload()).status,'committed');
+ assert.equal(shared.server.row.revision,3);
+ assert.equal((await phone.session.refreshIfUnchanged()).status,'downloaded');
+ assert.equal(phone.get().selectedProgram,true);
+ assert.equal(phone.get().cloudSync.baseline.revision,3);
+});
+
+await check('concurrent divergent BB2 edits remain local and cannot be fast-forwarded',async()=>{
+ const shared=fakeDatabase();
+ const phone=device(shared,{bb2:{setup:core.createBB2Setup(),
+  opening:core.createBB2Opening({ownerId:owner,blockId:'diverge'}),
+  events:[],sealedBlocks:[]}}),tablet=device(shared);
+ assert.equal((await phone.session.upload()).status,'committed');
+ assert.equal((await tablet.session.downloadIfEmpty()).status,'downloaded');
+ const remote=phone.get();remote.setup.optionalUpperBCurls=true;phone.set(remote);
+ assert.equal((await phone.session.upload()).status,'committed');
+ const local=tablet.get();local.setup.selections['upper_a|flat_press']='dumbbell_flat_press';
+ tablet.set(local);
+ assert.equal((await tablet.session.refreshIfUnchanged()).status,'conflict');
+ assert.equal((await tablet.session.upload()).status,'conflict');
+ assert.equal(tablet.get().setup.selections['upper_a|flat_press'],'dumbbell_flat_press');
+ assert.equal(tablet.get().cloudSync.baseline.revision,1);
+ assert.equal(shared.server.row.revision,2);
+ tablet.failBackup(true);
+ assert.equal((await tablet.session.useCloudCopyConfirmed()).status,'blocked');
+ assert.equal(tablet.get().cloudSync.baseline.revision,1);
+ assert.equal(tablet.backups().length,0);
+ tablet.failBackup(false);
+ assert.equal((await tablet.session.useCloudCopyConfirmed()).status,'downloaded');
+ assert.equal(tablet.backups().length,1,'full pre-replacement state was kept');
+ assert.equal(tablet.backups()[0].setup.selections['upper_a|flat_press'],
+  'dumbbell_flat_press');
+ assert.equal(tablet.get().setup.optionalUpperBCurls,true);
+ assert.equal(tablet.get().cloudSync.baseline.revision,2);
+});
+
+await check('verified owner can download first-run setup without opening the training host',async()=>{
+ const shared=fakeDatabase(),source=device(shared,{bb2:{setup:core.createBB2Setup(),
+  opening:null,events:[],sealedBlocks:[]}});
+ assert.equal((await source.session.upload()).status,'committed');
+ const fresh=device(shared);fresh.setApp({...safe(),appVisible:false,setupVisible:true});
+ assert.equal((await fresh.session.downloadIfEmpty()).status,'downloaded');
+ assert.equal(fresh.get().cloudSync.baseline.revision,1);
+ fresh.setApp({...safe(),appVisible:false,setupVisible:true,bb2EditorOpen:true});
+ assert.equal((await fresh.session.refreshIfUnchanged()).status,'blocked');
+ fresh.setApp({...safe(),appVisible:false,setupVisible:false});
+ assert.equal((await fresh.session.refreshIfUnchanged()).status,'blocked');
+});
+
 await check('offline edits replace an uncommitted pending request after remote recheck',async()=>{
  const offlineDb=fakeDatabase(),offline=device(offlineDb,{bb2:{
   setup:core.createBB2Setup(),opening:core.createBB2Opening({ownerId:owner,
@@ -193,6 +261,20 @@ await check('real BVOM local document adapter preserves cloud exclusion and flag
  assert.equal(JSON.stringify(h.ctx.bvomCloudPayload()),initial);
  assert.equal(bridge.commitLocal(before.token,bb2),false,
   'a stale BVOM document token cannot commit another copy');
+ const replaceFrom=bridge.readLocal();
+ const originalSetItem=h.ls.setItem;
+ h.ls.setItem=(key,value)=>{
+  if(key==='bvom_pre_cloud_restore')throw Error('quota exhausted');
+  return originalSetItem(key,value);
+ };
+ assert.equal(bridge.commitLocal(replaceFrom.token,{...bb2,selectedProgram:true},
+  {backupBeforeReplace:true}),false,'missing recovery backup blocks replacement');
+ assert.equal(bridge.readLocal().bb2.selectedProgram,undefined);
+ h.ls.setItem=originalSetItem;
+ assert.equal(bridge.commitLocal(replaceFrom.token,{...bb2,selectedProgram:true},
+  {backupBeforeReplace:true}),true);
+ assert.equal(JSON.parse(h.ls.getItem('bvom_pre_cloud_restore')).bb2.opening.blockId,
+  'bridge-local','the existing complete BVOM recovery document is retained');
 });
 
 await check('real BVOM adapter enables isolated local Auth only behind localhost preview',async()=>{
@@ -241,6 +323,31 @@ await check('normal signed-in BVOM registers an inert production coordinator and
  assert.equal(h.ev('bvomBb2AccountBinding?.ownerId'),owner);
  h.ctx.bvomBb2AccountDisconnect();
  assert.equal(h.ev('bvomBb2AccountBinding'),null);
+});
+
+await check('BVOM account lifecycle catches offline changes and reports conflicts without upload',async()=>{
+ const h=H.boot(H.loadBuild(root));H.configureLP(h);
+ h.ctx.location.origin='http://127.0.0.1:8000';
+ h.ctx.location.search='?bb2Preview=1';
+ const calls=[];
+ h.ctx.__bb2AccountTest={
+  downloadIfEmpty:async()=>{calls.push('check');return {status:'local_data_present'}},
+  refreshIfUnchanged:async()=>{calls.push('refresh');return {status:'local_unsynced'}},
+  upload:async()=>{calls.push('upload');return {status:'committed'}}
+ };
+ h.ev('bvomBb2AccountBinding={isolated:true,ownerId:"'+owner+'",'+
+  'coordinator:__bb2AccountTest,lastUpload:null,lastDownload:null,syncing:false,resync:false}');
+ await h.ctx.bvomBb2AccountSyncNow();
+ assert.deepEqual(calls,['check','refresh','upload']);
+ assert.equal(h.ev('bvomBb2AccountBinding.lastUpload.status'),'committed');
+ h.ctx.__bb2AccountTest.refreshIfUnchanged=async()=>{
+  calls.push('conflict');return {status:'conflict'};
+ };
+ calls.length=0;
+ await h.ctx.bvomBb2AccountSyncNow();
+ assert.deepEqual(calls,['check','conflict']);
+ assert.equal(h.ev('bvomBb2AccountStatus()'),'conflict');
+ assert.equal(h.ev('bvomBb2DormantAccountSnapshot().bb2WriterEnabled'),false);
 });
 
 console.log(`BB2 cloud coordinator: ${passed}/${passed} PASS (mock only, rollout OFF)`);

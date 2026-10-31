@@ -9,7 +9,7 @@
  */
 import { validateBB2Setup, validateBB2RestoredBlock,
   BB2_BROWSER_MODULES } from './browser-core.mjs';
-import { bb2AppWriteStatus } from './app-session.mjs';
+import { bb2CloudTransferStatus } from './app-session.mjs';
 
 const VERSION = 'bvom-bb2-sidecar-v1';
 const copy = value => JSON.parse(JSON.stringify(value));
@@ -149,11 +149,19 @@ function descendsFromBaseline(baseline, next) {
     eventLineage(prev.events, archived.events);
 }
 
+// Readers must prove ancestry as well as ownership before fast-forwarding a
+// populated device. This is the same lineage rule used by cloud writers.
+export function bb2CloudDescendsFromBaseline(baseline, next, ownerId) {
+  const older=validateBB2CloudSidecar(baseline,ownerId);
+  const newer=validateBB2CloudSidecar(next,ownerId);
+  return newer.revision>older.revision && descendsFromBaseline(older,newer);
+}
+
 function appReady(ownerId, readAppSnapshot, durableIntentVerified, intent) {
   try {
     return typeof readAppSnapshot === 'function' &&
       typeof durableIntentVerified === 'function' &&
-      bb2AppWriteStatus(readAppSnapshot(), ownerId).allowed === true &&
+      bb2CloudTransferStatus(readAppSnapshot(), ownerId).allowed === true &&
       durableIntentVerified(intent) === true;
   } catch (_) { return false; }
 }

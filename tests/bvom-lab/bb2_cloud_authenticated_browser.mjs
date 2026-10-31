@@ -51,7 +51,7 @@ const contexts = [];
 let passed = 0;
 async function check(label, body) { await body(); passed++; console.log('PASS:', label); }
 async function makeDevice(label, { userId = ownerId, login = credentials,
-  accountFlow = false } = {}) {
+  accountFlow = false, configured = true } = {}) {
   const context = await browser.newContext({ serviceWorkers: 'block',
     viewport: { width: 390, height: 844 }, deviceScaleFactor: 2,
     isMobile: true, hasTouch: true });
@@ -73,9 +73,9 @@ async function makeDevice(label, { userId = ownerId, login = credentials,
       userId: id, verifiedAt: new Date().toISOString(),
       record: { user_id: id, status: 'complimentary' }
     }));
-  }, { data: fixture, id: userId });
+  }, { data: { ...fixture, configured }, id: userId });
   await page.goto(origin + '/index.html?bb2Preview=1');
-  await page.waitForSelector('#app:not(.hidden)');
+  await page.waitForSelector(configured?'#app:not(.hidden)':'#setup:not(.hidden)');
   await page.waitForFunction(() => bvomWindowLockOwned === true);
   if (accountFlow) {
     // Only the Supabase client is supplied by the isolated test. Let BVOM's
@@ -241,7 +241,6 @@ try {
     await accountPhone.locator('#setup [data-bb2-preview]').click();
     await accountPhone.locator('#setup [data-bb2-save]').click();
     await accountPhone.locator('#setup [data-bb2-back]').click();
-    await accountPhone.evaluate(() => showApp());
     await accountPhone.waitForFunction(() =>
       bvomBb2AccountBinding?.lastUpload?.status === 'committed');
     assert.equal(await accountPhone.evaluate(() =>
@@ -250,12 +249,15 @@ try {
   });
 
   const accountTablet = await makeDevice('signed-in tablet', {
-    userId: accountId, login: accountCredentials, accountFlow: true });
-  await check('BVOM actual sign-in automatically retrieves BB2 on the second device', async () => {
+    userId: accountId, login: accountCredentials, accountFlow: true,
+    configured: false });
+  await check('first-run Setup retrieves BB2 through the real account with training screen hidden', async () => {
     await accountTablet.waitForFunction(() =>
       bvomBb2AccountBinding?.lastDownload?.status === 'downloaded');
     assert.equal(await accountTablet.evaluate(() => state.bb2.cloudSync.baseline.revision), 1);
     assert.equal(await accountTablet.evaluate(() => state.programMode), fixture.programMode);
+    assert.equal(await accountTablet.locator('#app').evaluate(el => el.classList.contains('hidden')),
+      true,'a cloud download must not bypass normal BVOM first-run Setup');
   });
 
   await check('a finished BVOM workout uploads automatically and sign-out revokes the account binding', async () => {
@@ -278,12 +280,26 @@ try {
     await accountPhone.locator('#workout [data-bb2-finish]').click();
     await accountPhone.waitForFunction(() =>
       bvomBb2AccountBinding?.lastUpload?.envelope?.revision === 2);
+    await accountTablet.evaluate(() => bvomBb2AccountSyncNow());
+    assert.equal(await accountTablet.evaluate(() => state.bb2.cloudSync.baseline.revision), 2,
+      'the already-populated tablet fast-forwards instead of becoming stuck');
+    assert.equal(await accountTablet.evaluate(() =>
+      state.bb2.events.filter(e => e.type === 'CREDIT_GRANTED').length), 1);
+    await accountTablet.evaluate(() => bvomBb2OpenPreview());
+    await accountTablet.locator('#setup [data-bb2-curls]').click();
+    await accountTablet.locator('#setup [data-bb2-save]').click();
+    await accountTablet.locator('#setup [data-bb2-back]').click();
+    await accountTablet.waitForFunction(() =>
+      bvomBb2AccountBinding?.lastUpload?.envelope?.revision === 3);
+    await accountPhone.evaluate(() => bvomBb2AccountSyncNow());
+    assert.equal(await accountPhone.evaluate(() => state.bb2.cloudSync.baseline.revision), 3,
+      'phone accepts tablet updates without losing its finished workout');
     await accountTablet.evaluate(() => bvomCloudSignOut());
     assert.equal(await accountTablet.evaluate(() => bvomBb2AccountBinding), null);
     const third = await makeDevice('signed-in fresh device', {
       userId: accountId, login: accountCredentials, accountFlow: true });
     await third.waitForFunction(() =>
-      bvomBb2AccountBinding?.lastDownload?.revision === 2);
+      bvomBb2AccountBinding?.lastDownload?.revision === 3);
     const history = await third.evaluate(() => state.bb2.events);
     assert.equal(history.filter(e => e.type === 'SET_RECORDED').length, 9);
     assert.equal(history.filter(e => e.type === 'CREDIT_GRANTED').length, 1);
