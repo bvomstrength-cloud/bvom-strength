@@ -72,6 +72,7 @@ function device(account, bb2 = null) {
 
 const owner = await createLogin('owner');
 const stranger = await createLogin('stranger');
+const victim = await createLogin('victim');
 const initialBB2 = { setup: createBB2Setup(),
   opening: createBB2Opening({ ownerId: owner.ownerId,
     blockId: 'authenticated-test-block' }),
@@ -97,12 +98,15 @@ await check('RLS prevents another authenticated user from reading or inserting o
   const hidden = await readBB2CloudSidecar({ client: stranger.client,
     ownerId: owner.ownerId });
   assert.equal(hidden.status, 'empty');
-  const payload = createBB2CloudSidecar({ ownerId: owner.ownerId,
-    bb2: initialBB2, previousRevision: null, requestId: 'other-user' });
+  const payload = createBB2CloudSidecar({ ownerId: victim.ownerId,
+    bb2: { ...initialBB2, opening: createBB2Opening({
+      ownerId: victim.ownerId, blockId: 'unowned-row' }) },
+    previousRevision: null, requestId: 'other-user' });
   const attempt = await stranger.client.from('bvom_cloud_state').insert({
-    user_id: owner.ownerId, revision: 1,
+    user_id: victim.ownerId, revision: 1,
     data_version: payload.protocol, state: payload }).select().maybeSingle();
-  assert.ok(attempt.error, 'another authenticated account cannot insert the owner row');
+  assert.ok(attempt.error, 'another account cannot insert even a currently empty owner row');
+  assert.equal((await readBB2CloudSidecar(victim)).status, 'empty');
   const updated = await stranger.client.from('bvom_cloud_state')
     .update({ revision: 99 }).eq('user_id', owner.ownerId).select().maybeSingle();
   assert.equal(updated.data, null);

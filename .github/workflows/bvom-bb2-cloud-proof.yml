@@ -22,7 +22,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install Supabase local CLI
         uses: supabase/setup-cli@v1
@@ -32,7 +32,8 @@ jobs:
       - name: Start disposable local Supabase services
         run: |
           supabase init --yes
-          supabase start
+          # Auth + PostgREST + Postgres + gateway only; no unrelated services.
+          supabase start -x realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor,mailpit
 
       - name: Mirror existing BVOM cloud table and owner policies locally
         env:
