@@ -2638,6 +2638,7 @@ function bvomHandleCheckoutReturn(){
  },250);
 }
 async function bvomPublicContinueAfterSignIn(mode){
+ bvomBb2AccountDisconnect();
  bvomHideAuthGate();
  const userId=bvomCloud.user?.id;if(!userId){bvomShowAuthGate();return}
  bvomCloud.offlineLocalAccess=false;bvomCloud.startupState='VERIFYING';
@@ -2707,6 +2708,10 @@ async function bvomPublicContinueAfterSignIn(mode){
  }
  if(bvomReadyForSavedOnRamp())showApp();else showSetup();
  if(!latest?.error)setTimeout(()=>bvomCloudAssessSync(),0);
+ // Register the dormant BB2 adapter only after BVOM has resolved the actual
+ // signed-in account, entitlement, and local-document ownership. Registration
+ // itself never reads or writes the BB2 cloud record in production.
+ void bvomBb2ConnectSignedInAccount();
 }
 
 function bvomCloudClient(){
@@ -2940,7 +2945,7 @@ async function bvomCloudRestore(){
   bvomChoiceModal(hlmTxt('RESTORE FROM BVOM CLOUD?','BVOM CLOUDから復元しますか？'),bvomBb2CloudRestoreMessage(),hlmTxt('CANCEL','キャンセル'),hlmTxt('RESTORE','復元'),()=>{},()=>{if(!bvomRestoreCommitAllowed(token,true))return false;try{localStorage.setItem('bvom_pre_cloud_restore',JSON.stringify(state));localStorage.setItem('bvom_cloud_restore_baseline',bvomCloudComparableFingerprint(d));if(!bvomRestoreCommitAllowed(token,true)){localStorage.removeItem('bvom_cloud_restore_baseline');return false}localStorage.setItem(BVOM_DATA_KEY,JSON.stringify(restored));location.reload()}catch(e){localStorage.removeItem('bvom_cloud_restore_baseline');bvomBeeModal(hlmTxt('RESTORE FAILED','復元できませんでした'),hlmTxt('BVOM could not replace the data on this device. Your current local data has not been changed.','この端末のデータを置き換えられませんでした。現在の端末データは変更されていません。'))}});
  }catch(e){bvomCloud.busy=false;bvomCloud.message=e?.message||hlmTxt('Cloud backup could not be loaded.','クラウドバックアップを読み込めませんでした。');bvomCloud.error=true;renderSettings()}
 }
-async function bvomCloudSignOut(){const signedOutUser=bvomCloud.user?.id||bvomLocalOwnerId();bvomEntitlementCacheClear(signedOutUser);const c=bvomCloudClient();let error=null;if(c){bvomCloud.busy=true;renderSettings();try{const result=await c.auth.signOut({scope:'local'});error=result?.error||null}catch(e){error=e}}bvomCloud.busy=false;bvomCloud.user=null;bvomCloud.offlineLocalAccess=false;window.__bvomAuthUserId=null;bvomCloud.codeSent=false;bvomCloud.syncReady=false;bvomCloud.conflict=false;bvomCloud.remoteFingerprint=null;bvomCloud.message=error?(error.message||hlmTxt('Signed out on this device. Cloud sign-out could not be confirmed.','この端末ではサインアウトしましたが、クラウド側のサインアウトを確認できませんでした。')):hlmTxt('Signed out on this device.','この端末でサインアウトしました。');bvomCloud.error=!!error;bvomShowAuthGate()}
+async function bvomCloudSignOut(){bvomBb2AccountDisconnect();const signedOutUser=bvomCloud.user?.id||bvomLocalOwnerId();bvomEntitlementCacheClear(signedOutUser);const c=bvomCloudClient();let error=null;if(c){bvomCloud.busy=true;renderSettings();try{const result=await c.auth.signOut({scope:'local'});error=result?.error||null}catch(e){error=e}}bvomCloud.busy=false;bvomCloud.user=null;bvomCloud.offlineLocalAccess=false;window.__bvomAuthUserId=null;bvomCloud.codeSent=false;bvomCloud.syncReady=false;bvomCloud.conflict=false;bvomCloud.remoteFingerprint=null;bvomCloud.message=error?(error.message||hlmTxt('Signed out on this device. Cloud sign-out could not be confirmed.','この端末ではサインアウトしましたが、クラウド側のサインアウトを確認できませんでした。')):hlmTxt('Signed out on this device.','この端末でサインアウトしました。');bvomCloud.error=!!error;bvomShowAuthGate()}
 async function bvomCloudInit(){
  const c=bvomCloudClient();if(!c){if(!bvomOpenVerifiedOfflineOwner())bvomShowAuthGate();return}
  try{
@@ -2949,7 +2954,7 @@ async function bvomCloudInit(){
   else if((error||navigator.onLine===false)&&bvomOpenVerifiedOfflineOwner()){}
   else bvomShowAuthGate();
  }catch(e){if(!bvomOpenVerifiedOfflineOwner())bvomShowAuthGate()}
- c.auth.onAuthStateChange((_event,session)=>{const old=bvomCloud.user?.id,next=session?.user||null,owner=bvomLocalOwnerId(),activeForeign=!!(next?.id&&owner&&owner!==next.id&&bvomAnyWorkoutActive());bvomEraseAuthEvent(_event,old||null,next);if(_event==='SIGNED_OUT')bvomEntitlementCacheClear(old||owner);bvomCloud.user=next;if(next?.id)bvomCloud.offlineLocalAccess=false;else if(_event==='SIGNED_OUT')bvomCloud.offlineLocalAccess=false;window.__bvomAuthUserId=activeForeign?owner:(bvomCloud.user?.id||null);if(activeForeign){bvomCloud.accountSwitchDeferred=true;bvomCloud.syncReady=false;clearTimeout(bvomCloud.autoTimer);bvomCloud.pendingAuto=false}if(bvomCloud.user?.id&&bvomCloud.user.id!==old&&!bvomPublicAuthHandling)setTimeout(()=>bvomPublicContinueAfterSignIn('existing'),0);if(!bvomCloud.user){bvomCloud.syncReady=false;bvomCloud.conflict=false;bvomCloud.remoteFingerprint=null;bvomCloud.accountSwitchDeferred=false;if(!bvomPublicAuthHandling){if(_event!=='SIGNED_OUT'&&navigator.onLine===false&&bvomEntitlementOfflineAccessDecision(owner).allowed)setTimeout(()=>bvomOpenVerifiedOfflineOwner(),0);else setTimeout(()=>bvomShowAuthGate(),0)}}if(document.querySelector('#settings')&&!document.querySelector('#app')?.classList.contains('hidden'))renderSettings()});
+ c.auth.onAuthStateChange((_event,session)=>{const old=bvomCloud.user?.id,next=session?.user||null,owner=bvomLocalOwnerId(),activeForeign=!!(next?.id&&owner&&owner!==next.id&&bvomAnyWorkoutActive());if(old!==next?.id)bvomBb2AccountDisconnect();bvomEraseAuthEvent(_event,old||null,next);if(_event==='SIGNED_OUT')bvomEntitlementCacheClear(old||owner);bvomCloud.user=next;if(next?.id)bvomCloud.offlineLocalAccess=false;else if(_event==='SIGNED_OUT')bvomCloud.offlineLocalAccess=false;window.__bvomAuthUserId=activeForeign?owner:(bvomCloud.user?.id||null);if(activeForeign){bvomCloud.accountSwitchDeferred=true;bvomCloud.syncReady=false;clearTimeout(bvomCloud.autoTimer);bvomCloud.pendingAuto=false}if(bvomCloud.user?.id&&bvomCloud.user.id!==old&&!bvomPublicAuthHandling)setTimeout(()=>bvomPublicContinueAfterSignIn('existing'),0);if(!bvomCloud.user){bvomCloud.syncReady=false;bvomCloud.conflict=false;bvomCloud.remoteFingerprint=null;bvomCloud.accountSwitchDeferred=false;if(!bvomPublicAuthHandling){if(_event!=='SIGNED_OUT'&&navigator.onLine===false&&bvomEntitlementOfflineAccessDecision(owner).allowed)setTimeout(()=>bvomOpenVerifiedOfflineOwner(),0);else setTimeout(()=>bvomShowAuthGate(),0)}}if(document.querySelector('#settings')&&!document.querySelector('#app')?.classList.contains('hidden'))renderSettings()});
 }
 if(document.addEventListener)document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&bvomCloud.user&&!bvomCloudWorkoutActive())setTimeout(()=>bvomCloudAssessSync(),150)});
 async function bvomShareApp(){
@@ -5193,7 +5198,8 @@ function bvomBb2SaveSetup(){
   return false;
  }
  if(bvomPersistenceBlocked())return false;
- bvomBb2PreviewSaved=true;bvomBb2RenderPreview();return true;
+ bvomBb2PreviewSaved=true;bvomBb2RenderPreview();
+ bvomBb2AccountSyncSchedule();return true;
 }
 function bvomBb2ClosePreview(){
  if(!bvomBb2PreviewOpen)return;
@@ -5353,6 +5359,52 @@ async function bvomBb2CreateDormantCloudCoordinator({isolatedClient=null}={}){
  });
 }
 
+// The normal BVOM account lifecycle owns this binding. In production the
+// coordinator is registered with BOTH writer gates still hard-OFF; there is
+// no BB2 cloud I/O. Only the authenticated localhost Supabase proof can run
+// the gated download and debounced post-workout/setup uploads.
+let bvomBb2AccountBinding=null,bvomBb2AccountUploadTimer=null;
+function bvomBb2AccountDisconnect(){
+ clearTimeout(bvomBb2AccountUploadTimer);bvomBb2AccountUploadTimer=null;
+ bvomBb2AccountBinding=null;
+}
+async function bvomBb2ConnectSignedInAccount(){
+ const ownerId=bvomCloud.user?.id||null,client=bvomCloudClient();
+ bvomBb2AccountDisconnect();
+ if(!ownerId||!client||bvomCloud.offlineLocalAccess)return false;
+ const isolated=bvomBb2PreviewEnabled()&&
+  /^http:\/\/(?:127\.0\.0\.1|localhost):54321\/?$/.test(String(client.supabaseUrl||''));
+ try{
+  const coordinator=await bvomBb2CreateDormantCloudCoordinator(
+   isolated?{isolatedClient:client}:{});
+  if(bvomCloud.user?.id!==ownerId||window.__bvomAuthUserId!==ownerId||
+     bvomLocalOwnerId()!==ownerId||bvomCloud.offlineLocalAccess||
+     bvomCloud.accountSwitchDeferred)return false;
+  const binding={ownerId,client,isolated,coordinator,lastDownload:null,lastUpload:null};
+  bvomBb2AccountBinding=binding;
+  if(isolated){
+   binding.lastDownload=await coordinator.downloadIfEmpty();
+  }
+  return true;
+ }catch(error){console.warn('BB2 dormant account binding unavailable',error);return false}
+}
+function bvomBb2AccountSyncSchedule(){
+ const binding=bvomBb2AccountBinding;
+ if(!binding?.isolated||!bvomBb2PreviewEnabled()||!state.bb2?.setup||
+    bvomAnyWorkoutActive())return;
+ clearTimeout(bvomBb2AccountUploadTimer);
+ bvomBb2AccountUploadTimer=setTimeout(async()=>{
+  if(bvomBb2AccountBinding!==binding)return;
+  try{binding.lastUpload=await binding.coordinator.upload()}
+  catch(error){console.warn('BB2 isolated account upload unavailable',error)}
+ },300);
+}
+const bvomBb2BaseShowApp=showApp;
+showApp=function(...args){
+ const result=bvomBb2BaseShowApp(...args);
+ bvomBb2AccountSyncSchedule();return result;
+};
+
 // BB2 Stage (ii): local-only Start, prescribed sets, recovery, Finish, quota,
 // History and Discard. The existing BVOM data document remains authoritative.
 let bvomBb2Day='upper_a';
@@ -5370,6 +5422,7 @@ function bvomBb2Commit(next,{activity=false,passive=false}={}){
   if(before===undefined)delete state.bb2;else state.bb2=before;
   return false;
  }
+ if(!passive)bvomBb2AccountSyncSchedule();
  return true;
 }
 function bvomBb2LeaveProgram(){

@@ -224,4 +224,23 @@ await check('real BVOM adapter enables isolated local Auth only behind localhost
  assert.equal(adapter.readAppSnapshot().cloudUserId,owner);
 });
 
+await check('normal signed-in BVOM registers an inert production coordinator and revokes it',async()=>{
+ const h=H.boot(H.loadBuild(root));H.configureLP(h);
+ let options,networkCalls=0;
+ h.ctx.__bb2CloudCoordinatorForTest={createBB2CloudCoordinator:opts=>{
+  options=opts;return {upload(){networkCalls++},downloadIfEmpty(){networkCalls++}};
+ }};
+ h.ev('bvomBb2CloudCoordinatorModule=__bb2CloudCoordinatorForTest;'+
+  'bvomCloud.client={supabaseUrl:"https://production.example.invalid"};'+
+  'bvomCloud.user={id:"'+owner+'"};window.__bvomAuthUserId="'+owner+'";'+
+  'bvomSetLocalOwnerId("'+owner+'");bvomCloud.offlineLocalAccess=false');
+ assert.equal(await h.ctx.bvomBb2ConnectSignedInAccount(),true);
+ assert.equal(options.readAppSnapshot().bb2WriterEnabled,false);
+ assert.equal(options.readAppSnapshot().multiDeviceFenceVerified,false);
+ assert.equal(networkCalls,0,'production account registration has no BB2 cloud I/O');
+ assert.equal(h.ev('bvomBb2AccountBinding?.ownerId'),owner);
+ h.ctx.bvomBb2AccountDisconnect();
+ assert.equal(h.ev('bvomBb2AccountBinding'),null);
+});
+
 console.log(`BB2 cloud coordinator: ${passed}/${passed} PASS (mock only, rollout OFF)`);

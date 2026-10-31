@@ -50,7 +50,8 @@ let browser;
 const contexts = [];
 let passed = 0;
 async function check(label, body) { await body(); passed++; console.log('PASS:', label); }
-async function makeDevice(label) {
+async function makeDevice(label, { userId = ownerId, login = credentials,
+  accountFlow = false } = {}) {
   const context = await browser.newContext({ serviceWorkers: 'block',
     viewport: { width: 390, height: 844 }, deviceScaleFactor: 2,
     isMobile: true, hasTouch: true });
@@ -72,10 +73,27 @@ async function makeDevice(label) {
       userId: id, verifiedAt: new Date().toISOString(),
       record: { user_id: id, status: 'complimentary' }
     }));
-  }, { data: fixture, id: ownerId });
+  }, { data: fixture, id: userId });
   await page.goto(origin + '/index.html?bb2Preview=1');
   await page.waitForSelector('#app:not(.hidden)');
   await page.waitForFunction(() => bvomWindowLockOwned === true);
+  if (accountFlow) {
+    // Only the Supabase client is supplied by the isolated test. Let BVOM's
+    // real Auth state listener, entitlement check, account opening and BB2
+    // coordinator binding derive identity from the signed-in session.
+    await page.evaluate(async ({ url, key, email, password }) => {
+      const client = window.supabase.createClient(url, key, { auth: {
+        persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+      bvomCloud.client = client;
+      await bvomCloudInit();
+      const signed = await client.auth.signInWithPassword({ email, password });
+      if (signed.error) throw signed.error;
+    }, { url: apiUrl, key: anonKey, ...login });
+    await page.waitForFunction(id => bvomBb2AccountBinding?.ownerId === id &&
+      bvomCloud.user?.id === id && window.__bvomAuthUserId === id &&
+      bvomCloud.offlineLocalAccess === false, userId);
+    return page;
+  }
   const attached = await page.evaluate(async ({ url, key, email, password }) => {
     const client = window.supabase.createClient(url, key, { auth: {
       persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
@@ -88,8 +106,8 @@ async function makeDevice(label) {
       isolatedClient: client });
     return { owner: signed.data.user.id,
       ready: bvomBb2DormantAccountSnapshot().documentLockOwned };
-  }, { url: apiUrl, key: anonKey, ...credentials });
-  assert.equal(attached.owner, ownerId, label + ' local Supabase Auth account');
+  }, { url: apiUrl, key: anonKey, ...login });
+  assert.equal(attached.owner, userId, label + ' local Supabase Auth account');
   assert.equal(attached.ready, true, label + ' owns its BVOM document lock');
   return page;
 }
@@ -177,6 +195,84 @@ try {
     assert.equal(data.events.filter(e => e.type === 'SET_RECORDED').length, 9);
     assert.equal(data.events.filter(e => e.type === 'WORKOUT_FINISHED').length, 1);
     assert.equal(data.events.filter(e => e.type === 'CREDIT_GRANTED').length, 1);
+  });
+
+  // A separate owner signs in through BVOM's real Auth listener and verified
+  // entitlement path. No test directly assigns bvomCloud.user or its owner ID.
+  const accountCredentials = { email: 'bb2-account-flow@example.invalid',
+    password: 'Local-Only-Account-Flow-2026!' };
+  const accountUser = await admin.auth.admin.createUser({ ...accountCredentials,
+    email_confirm: true });
+  if (accountUser.error) throw accountUser.error;
+  const accountId = accountUser.data.user.id;
+  const accountPhone = await makeDevice('signed-in phone', {
+    userId: accountId, login: accountCredentials, accountFlow: true });
+  await check('BVOM actual sign-in binds the right authenticated account without a writer in production', async () => {
+    const binding = await accountPhone.evaluate(() => ({
+      ownerId: bvomBb2AccountBinding?.ownerId,
+      verifiedId: bvomCloud.user?.id,
+      authId: window.__bvomAuthUserId,
+      isolated: bvomBb2AccountBinding?.isolated,
+      defaultWriterOff: bvomBb2DormantAccountSnapshot().bb2WriterEnabled === false
+    }));
+    assert.equal(binding.ownerId, accountId);
+    assert.equal(binding.verifiedId, accountId);
+    assert.equal(binding.authId, accountId);
+    assert.equal(binding.isolated, true);
+    assert.equal(binding.defaultWriterOff, true);
+  });
+
+  await check('a BVOM Setup save automatically uploads only through the isolated account binding', async () => {
+    await accountPhone.evaluate(() => showSetup());
+    await accountPhone.locator('#setup [data-bb2-preview]').click();
+    await accountPhone.locator('#setup [data-bb2-save]').click();
+    await accountPhone.locator('#setup [data-bb2-back]').click();
+    await accountPhone.evaluate(() => showApp());
+    await accountPhone.waitForFunction(() =>
+      bvomBb2AccountBinding?.lastUpload?.status === 'committed');
+    assert.equal(await accountPhone.evaluate(() =>
+      bvomBb2AccountBinding.lastUpload.envelope.revision), 1);
+    assert.equal(await accountPhone.evaluate(() => bvomCloudPayload().bb2), undefined);
+  });
+
+  const accountTablet = await makeDevice('signed-in tablet', {
+    userId: accountId, login: accountCredentials, accountFlow: true });
+  await check('BVOM actual sign-in automatically retrieves BB2 on the second device', async () => {
+    await accountTablet.waitForFunction(() =>
+      bvomBb2AccountBinding?.lastDownload?.status === 'downloaded');
+    assert.equal(await accountTablet.evaluate(() => state.bb2.cloudSync.baseline.revision), 1);
+    assert.equal(await accountTablet.evaluate(() => state.programMode), fixture.programMode);
+  });
+
+  await check('a finished BVOM workout uploads automatically and sign-out revokes the account binding', async () => {
+    await accountPhone.evaluate(() => bvomBb2OpenPreview());
+    const loads = accountPhone.locator('#setup [data-bb2-load]');
+    const increments = accountPhone.locator('#setup [data-bb2-inc]');
+    for (let i = 0; i < 4; i++) {
+      await loads.nth(i).fill('60');
+      await increments.nth(i).fill('2.5');
+    }
+    await accountPhone.locator('#setup [data-bb2-start]').click();
+    const pairs = await accountPhone.evaluate(() => {
+      const b = state.bb2;
+      const start = b.events.find(e => e.type === 'WORKOUT_STARTED' &&
+        e.sessionId === b.activeSessionId);
+      return start.slots.flatMap((s, i) =>
+        Array.from({ length: s.sets }, (_, j) => i + '|' + j));
+    });
+    for (const key of pairs.slice(0, 9)) await recordSet(accountPhone, key);
+    await accountPhone.locator('#workout [data-bb2-finish]').click();
+    await accountPhone.waitForFunction(() =>
+      bvomBb2AccountBinding?.lastUpload?.envelope?.revision === 2);
+    await accountTablet.evaluate(() => bvomCloudSignOut());
+    assert.equal(await accountTablet.evaluate(() => bvomBb2AccountBinding), null);
+    const third = await makeDevice('signed-in fresh device', {
+      userId: accountId, login: accountCredentials, accountFlow: true });
+    await third.waitForFunction(() =>
+      bvomBb2AccountBinding?.lastDownload?.revision === 2);
+    const history = await third.evaluate(() => state.bb2.events);
+    assert.equal(history.filter(e => e.type === 'SET_RECORDED').length, 9);
+    assert.equal(history.filter(e => e.type === 'CREDIT_GRANTED').length, 1);
   });
 
   console.log(`BB2 real app authenticated Chromium: ${passed}/${passed} PASS`);
