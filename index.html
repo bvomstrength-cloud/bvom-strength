@@ -256,7 +256,7 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
 <div class="timer idle" id="timerbar"><div class="timerin"><div><div class="clock" id="clock">0:00</div><div class="marks">DINGS 3 · 5 · 10</div></div><button class="cancel" onclick="if(bvomWorkoutActionAllowed())cancelTimer()">CANCEL</button><button class="finish" onclick="finishWorkout()">FINISH</button></div></div>
 </div>
 <script src="./i18n/en.js?v=6090d2f48f09"></script>
-<script src="./i18n/ja.js?v=326ff8e97bb8"></script>
+<script src="./i18n/ja.js?v=2c5d1ff918c6"></script>
 <script src="./vendor/supabase-js-2.117.3.js"></script>
 <script>
 const BVOM_BUILD='2.9.20';
@@ -4995,7 +4995,16 @@ function bvomBb2PreviewEnabled(){
  const host=String(location.origin||'').replace(/^https?:\/\//,'').split(':')[0];
  return (host==='localhost'||host==='127.0.0.1')&&/(?:^|[?&])bb2Preview=1(?:&|$)/.test(String(location.search||''));
 }
-function bvomBb2PreviewLabel(id){return String(id).replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase())}
+function bvomBb2PreviewLabel(id){
+ if(String(id).includes('|'))return String(id).split('|').map(bvomBb2PreviewLabel).join(' · ');
+ return bvomLang().bb2?.labels?.[id]||String(id).replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
+}
+function bvomBb2WarmupClassLabel(kind){
+ return ({FULL:hlmTxt('Full warm-up','通常のウォームアップ'),
+  FEEDER:hlmTxt('Short warm-up','短いウォームアップ'),
+  QUALITATIVE:hlmTxt('Movement preparation','動作の準備'),
+  NONE:hlmTxt('No dedicated warm-up','専用ウォームアップなし')})[kind]||kind;
+}
 function bvomBb2NextBlockFieldMarkup(templateId,slot,projection){
  const identity=templateId+'|'+slot.roleSlotId+'|'+slot.exerciseId;
  const p=projection?.progress[identity];
@@ -5111,9 +5120,9 @@ function bvomBb2RenderPreview(){
     const key=templateId+'|'+role.roleSlotId,selected=setup.selections[key];
     const slot=prescribed.slots.find(s=>s.roleSlotId===role.roleSlotId);
     const options=role.options.map(o=>`<option value="${bvomEsc(o.id)}" ${o.id===selected?'selected':''}>${bvomEsc(bvomBb2PreviewLabel(o.id))}</option>`).join('');
-    return `<label style="display:block;margin:10px 0"><b>${bvomEsc(bvomBb2PreviewLabel(role.roleSlotId))}</b><select data-bb2-role="${bvomEsc(key)}" onchange="bvomBb2PreviewChoose('${templateId}','${role.roleSlotId}',this.value)" style="width:100%;margin-top:6px" ${selectionsLocked?'disabled':''}>${options}</select><span class="small">${slot.sets} × ${slot.floor}–${slot.ceiling} ${hlmTxt('reps','回')} · ${slot.warmup}</span>${bvomBb2NextBlockReview?bvomBb2NextBlockFieldMarkup(templateId,slot,projection):''}</label>`;
+    return `<label style="display:block;margin:10px 0"><b>${bvomEsc(bvomBb2PreviewLabel(role.roleSlotId))}</b><select data-bb2-role="${bvomEsc(key)}" onchange="bvomBb2PreviewChoose('${templateId}','${role.roleSlotId}',this.value)" style="width:100%;margin-top:6px" ${selectionsLocked?'disabled':''}>${options}</select><span class="small">${slot.sets} × ${slot.floor}–${slot.ceiling} ${hlmTxt('reps','回')} · ${bvomBb2WarmupClassLabel(slot.warmup)}</span>${bvomBb2NextBlockReview?bvomBb2NextBlockFieldMarkup(templateId,slot,projection):''}</label>`;
    }).join('');
-  return `<div class="card" data-bb2-template="${templateId}"><b>${headings[templateId]}</b><div class="small">${prescribed.prescribedCount} ${hlmTxt('working sets','ワーキングセット')} · ${hlmTxt('minimum to finish','完了に必要な最低セット数')} ${prescribed.minimumToFinish}</div>${rows}</div>`;
+  return `<div class="card" data-bb2-template="${templateId}"><b>${bvomLocale()==='ja'?bvomBb2PreviewLabel(templateId):headings[templateId]}</b><div class="small">${prescribed.prescribedCount} ${hlmTxt('working sets','ワーキングセット')} · ${hlmTxt('minimum to finish','完了に必要な最低セット数')} ${prescribed.minimumToFinish}</div>${rows}</div>`;
  }).join('');
  const el=document.querySelector('#setup');document.querySelector('#app').classList.add('hidden');el.classList.remove('hidden');
  el.innerHTML=`<div class="setupBee"><img src="./icon-192.png" alt="Power Bee"><div class="setupBeeTag">BEST VERSION OF MYSELF</div></div><div class="card"><b>${bvomBb2NextBlockReview?hlmTxt('BODYBUILDING 2 · NEXT BLOCK SETUP','ボディビルディング2 · 次のブロック設定'):hlmTxt('BODYBUILDING 2 · SETUP PREVIEW','ボディビルディング2 · 設定プレビュー')}</b><p class="small">${bvomBb2NextBlockReview?hlmTxt('Review your carried exercise choices, working weights and increments. Nothing changes until you confirm Start Next Block.','引き継ぐ種目・重量・増量幅を確認してください。「次のブロックを開始」を確定するまで変更されません。'):hlmTxt('Development preview: BB2 setup and workouts are saved on this device and in exported BVOM backups. BB2 training is not sent to BVOM Cloud yet.','開発中のプレビューです。BB2の設定とトレーニング記録はこの端末とBVOMバックアップに保存されます。BVOMクラウドにはまだ送信されません。')}</p><label class="toggle"><input type="checkbox" data-bb2-curls ${setup.optionalUpperBCurls?'checked':''} ${selectionsLocked?'disabled':''} onchange="bvomBb2PreviewCurls(this.checked)"><span>${hlmTxt('Include optional Upper B curls','Upper Bのカール種目を追加')}</span></label></div>${templates}${bvomBb2NextBlockReview?'<button type="button" class="primary wide" data-bb2-next-commit onclick="bvomBb2CommitNextBlock()">'+hlmTxt('START NEXT BLOCK · SEAL PREVIOUS','次のブロックを開始 · 前のブロックを確定')+'</button><button type="button" class="secondary wide" data-bb2-next-cancel onclick="bvomBb2CancelNextBlock()">'+hlmTxt('CANCEL NEXT-BLOCK REVIEW','次のブロックの確認をキャンセル')+'</button>':blockComplete?'<p class="small">'+hlmTxt('All 32 credits earned. Use Review Next Block Setup below to change choices without altering completed training.','32回分のクレジットを獲得しました。完了した記録を変更せず、次のブロック設定を確認できます。')+'</p>':'<button type="button" class="primary wide" data-bb2-save onclick="bvomBb2SaveSetup()">'+(bvomBb2PreviewSaved?hlmTxt('SAVED ON THIS DEVICE','この端末に保存済み'):hlmTxt('SAVE BB2 SETUP','BB2設定を保存'))+'</button>'}${bvomBb2NextBlockReview?'':bvomBb2StartForm()}<button type="button" class="secondary wide" data-bb2-back onclick="bvomBb2ClosePreview()">${hlmTxt('BACK TO PROGRAMS','プログラム選択に戻る')}</button>`;
@@ -5203,6 +5212,7 @@ async function bvomBb2ValidatePortableJournal(local,ownerId){
  if(!local||typeof local!=='object'||Array.isArray(local)||local.activeSessionId||!ownerId)
   throw new Error('BB2 restore refused: unsafe owner or active workout');
  const m=bvomBb2PreviewModule||await import('./bb2/browser-core.mjs');
+ const portable=window.__bb2PortableCatalogueForTest||await import('./bb2/cloud-coordinator.mjs');
  m.validateBB2Setup(local.setup);
  const archives=local.sealedBlocks===undefined?[]:local.sealedBlocks;
  const events=local.events===undefined?[]:local.events;
@@ -5227,8 +5237,11 @@ async function bvomBb2ValidatePortableJournal(local,ownerId){
     open.delete(event.sessionId);
   }
   if(open.size)throw new Error('BB2 restore refused: unfinished workout');
+  portable.validateBB2PortableCatalogue(local.setup,block.events,{
+   opening:block.opening,priorSealedBlock:i?blocks[i-1]:null});
   if(i===0&&block.opening.previousSealId)
    throw new Error('BB2 restore refused: missing predecessor');
+  if(i===0)portable.validateBB2PortableGenesis(block.opening,ownerId);
   if(i>0){
    const prior=blocks[i-1],expected=m.BB2_BROWSER_MODULES.ledger.createNextBB2Opening(
     prior.opening,prior.events,block.opening.blockId);
@@ -5350,7 +5363,7 @@ function bvomBb2IdleWorkout(){
   '<div class="small">'+hlmTxt('Four-day upper/lower training · development preview','週4日の上半身／下半身トレーニング · 開発用プレビュー')+'</div></div></div>'+
   '<div class="card"><b>'+hlmTxt('READY FOR YOUR NEXT WORKOUT','次のワークアウトの準備ができました')+'</b>'+
   '<p class="small">'+hlmTxt('Your BB2 setup and completed sessions are saved in BVOM on this device. Choose Upper A, Lower A, Upper B or Lower B when you start; the audited progression engine keeps each exercise\'s history.',
-   'BB2の設定と完了済みセッションは、この端末のBVOMに保存されています。開始時にUpper A、Lower A、Upper B、Lower Bを選択できます。種目ごとの履歴は進行管理エンジンに保持されます。')+'</p>'+
+   'BB2の設定と完了済みセッションは、この端末のBVOMに保存されています。開始時に上半身A、下半身A、上半身B、下半身Bを選択できます。種目ごとの履歴は進行管理エンジンに保持されます。')+'</p>'+
   '<button type="button" class="primary wide" data-bb2-next-workout onclick="bvomBb2OpenPreview()">'+hlmTxt('PREPARE NEXT WORKOUT','次のワークアウトを準備')+'</button>'+
   '<button type="button" class="secondary wide" data-bb2-leave-program onclick="bvomBb2LeaveProgram()">'+hlmTxt('SWITCH PROGRAM','プログラムを変更')+'</button></div>';
 }

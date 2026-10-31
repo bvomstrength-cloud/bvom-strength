@@ -2,7 +2,8 @@
 // database and exact BVOM local save adapters. No real cloud account is used.
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { createBB2CloudCoordinator } from '../../bb2/cloud-coordinator.mjs';
+import { createBB2CloudCoordinator,
+  validateBB2PortableCatalogue } from '../../bb2/cloud-coordinator.mjs';
 import * as core from '../../bb2/browser-core.mjs';
 const require=createRequire(import.meta.url);
 const H=require('./lib/bvom_harness');
@@ -14,7 +15,8 @@ let passed=0;
 const check=async(name,fn)=>{await fn();passed++;console.log('PASS:',name)};
 
 function fakeDatabase(){
- const server={row:null,readCount:0,writeCount:0,loseReply:false};
+ const server={row:null,readCount:0,writeCount:0,loseReply:false,
+  failBeforeWrite:false};
  function client(authOwner){return {from(table){
   assert.equal(table,'bvom_cloud_state');
   let operation='read',values,fields='user_id,revision,data_version,state',filters=[];
@@ -30,6 +32,8 @@ function fakeDatabase(){
      const row=server.row?.user_id===authOwner&&match(server.row)?server.row:null;
      return {data:row?Object.fromEntries(fields.split(',').map(k=>[k,copy(row[k])])):null,error:null};
     }
+    if(server.failBeforeWrite){server.failBeforeWrite=false;
+     return {data:null,error:{code:'NETWORK',message:'write never reached database'}};}
     if(authOwner!==values?.user_id&&operation==='insert')
      return {data:null,error:{code:'42501',message:'owner RLS denied'}};
     if(operation==='insert'){
@@ -70,6 +74,24 @@ function device(db,{bb2=null,enabled=true}={}){
 }
 
 const db=fakeDatabase();
+await check('portable Start replays entered-weight provenance, refusing forged DERIVED sources',async()=>{
+ const setup=core.createBB2Setup(),opening=core.createBB2Opening({
+  ownerId:owner,blockId:'provenance-start'});
+ const slots=core.getBB2TemplatePrescription(setup,'upper_a').slots.map(s=>({
+  roleSlotId:s.roleSlotId,exerciseId:s.exerciseId,sets:s.sets,floor:s.floor,
+  ceiling:s.ceiling,equipment:s.equipment,...(s.equipment==='loaded'?{
+   plannedG:60000,plannedOrigin:{value:'60',unit:'kg'},
+   incrementG:2500,incrementOrigin:{value:'2.5',unit:'kg'}}:{
+   variation:s.exerciseId,assistance:'none'})}));
+ const start={type:'WORKOUT_STARTED',eventId:'valid-start',commitOrdinal:1,
+  blockId:opening.blockId,sessionId:'started',templateId:'upper_a',
+  kind:'NORMAL',slots};
+ assert.equal(validateBB2PortableCatalogue(setup,[start],{opening}),true);
+ const forged=copy(start);
+ forged.slots[0].plannedOrigin={kind:'DERIVED',sourceEventId:'never-earned'};
+ assert.throws(()=>validateBB2PortableCatalogue(setup,[forged],{opening}),
+  /BB2 Start/,'a real-user import cannot mint unearned progression provenance');
+});
 const first=device(db,{bb2:{setup:core.createBB2Setup(),
  opening:core.createBB2Opening({ownerId:owner,blockId:'portable-cloud'}),
  events:[],sealedBlocks:[],selectedProgram:true}});
@@ -114,6 +136,23 @@ await check('lost cloud response reconciles without duplicate upload or credit',
  assert.equal(db.server.row.revision,3);
  assert.equal(db.server.writeCount,3);
  assert.equal(first.get().cloudSync.pending,null);
+});
+
+await check('offline edits replace an uncommitted pending request after remote recheck',async()=>{
+ const offlineDb=fakeDatabase(),offline=device(offlineDb,{bb2:{
+  setup:core.createBB2Setup(),opening:core.createBB2Opening({ownerId:owner,
+   blockId:'offline-retry'}),events:[],sealedBlocks:[]}});
+ offlineDb.server.failBeforeWrite=true;
+ assert.equal((await offline.session.upload()).status,'uncertain');
+ const abandoned=offline.get().cloudSync.pending.requestId;
+ assert.equal(offlineDb.server.row,null);
+ const newer=offline.get();newer.setup.optionalUpperBCurls=true;
+ offline.set(newer);
+ assert.equal((await offline.session.upload()).status,'committed');
+ assert.equal(offlineDb.server.row.revision,1);
+ assert.equal(offlineDb.server.row.state.snapshot.setup.optionalUpperBCurls,true);
+ assert.notEqual(offlineDb.server.row.state.requestId,abandoned);
+ assert.equal(offline.get().cloudSync.pending,null);
 });
 
 await check('failed local intent write prevents every cloud mutation',async()=>{

@@ -3,6 +3,8 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import * as catalogue from '../../bb2/browser-core.mjs';
+import { validateBB2PortableCatalogue,
+  validateBB2PortableGenesis } from '../../bb2/cloud-coordinator.mjs';
 
 const require=createRequire(import.meta.url);
 const H=require('./lib/bvom_harness');
@@ -11,6 +13,8 @@ const root=path.resolve(import.meta.dirname,'../..');
 
 function fixture({ls}={}){
  const h=H.boot(H.loadBuild(root),ls?{ls}:{});if(!ls)H.configureLP(h);
+ h.ctx.__bb2PortableCatalogueForTest={validateBB2PortableCatalogue,
+  validateBB2PortableGenesis};
  const before=h.ls.getItem('bvom_data');
  const document=h.ctx.document,query=document.querySelector;
  const row={children:[],appendChild(el){this.children.push(el);return el},
@@ -92,6 +96,20 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;bvomBb2RenderPreview()');
  const html=()=>h.ctx.document.querySelector('#setup').innerHTML;
  assert.match(html(),/BODYBUILDING 2 · SETUP PREVIEW/);
+ const jaLabels=h.ctx.BVOM_LOCALES.ja.bb2.labels;
+ const ids=new Set(catalogue.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER);
+ for(const template of catalogue.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER)
+  for(const role of catalogue.BB2_BROWSER_MODULES.catalogue.CATALOGUE[template]){
+   ids.add(role.roleSlotId);for(const option of role.options)ids.add(option.id);
+  }
+ assert.equal([...ids].filter(id=>!jaLabels[id]).length,0,'every BB2 catalogue label is Japanese');
+ h.ev("state.language='ja';bvomBb2RenderPreview()");
+ assert.match(html(),/インクライン・ダンベルプレス/,'Japanese setup translates exercise options');
+ assert.match(html(),/上半身A/,'Japanese setup translates day headings');
+ assert.match(html(),/通常のウォームアップ/,'Japanese setup translates warm-up class');
+ assert.equal(h.ctx.bvomBb2PreviewLabel('upper_a|flat_press|bench_press'),
+  '上半身A · 水平プレス · ベンチプレス','decision keys are localized');
+ h.ev("state.language='en';bvomBb2RenderPreview()");
  for(const template of ['upper_a','lower_a','upper_b','lower_b']){
   assert.match(html(),new RegExp(`data-bb2-template="${template}"`));
  }
@@ -181,6 +199,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(JSON.stringify(h.S()),untouched,'cancelled restore preserves in-memory BB2 data');
  assert.equal(h.ls.getItem('bvom_pre_restore'),null,'cancel creates no recovery backup');
  h.ctx.importBackupFile({files:[{name:'same-bvom.json'}]});
+ await h.ctx.bvomBb2ValidatePortableJournal(bb2,owner);
  reader.result=JSON.stringify({app:'BVOM',data:{...oldBackup,bb2}});await reader.onload();
  assert.doesNotMatch(prompt,/Bodybuilding 2 setup or workouts/,
   'the same BB2 data does not create unnecessary warning prompts');
@@ -227,9 +246,39 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(confirmRestore,null,'forged BB2 events fail frozen-ledger validation');
  assert.equal(refusals,2);
  assert.equal(h.ls.getItem('bvom_data'),before);
+ const syntheticSlot={roleSlotId:'synthetic_role',exerciseId:'synthetic_lift',
+  sets:1,floor:6,ceiling:10,equipment:'loaded',plannedG:60000,
+  plannedOrigin:{value:'60',unit:'kg'},incrementG:2500,
+  incrementOrigin:{value:'2.5',unit:'kg'}};
+ const syntheticEvents=[
+  {type:'WORKOUT_STARTED',sessionId:'synthetic-session',templateId:'upper_a',
+   kind:'NORMAL',slots:[syntheticSlot]},
+  {type:'SET_RECORDED',sessionId:'synthetic-session',
+   roleSlotId:'synthetic_role',exerciseId:'synthetic_lift',
+   setIndex:0,reps:6,prescribed:true,actualG:60000,
+   actualOrigin:{value:'60',unit:'kg'}},
+  {type:'WORKOUT_FINISHED',sessionId:'synthetic-session'},
+  {type:'CREDIT_GRANTED',sessionId:'synthetic-session',creditId:'fake-credit'}
+ ].map((event,i)=>({...event,eventId:'synthetic-'+i,
+  commitOrdinal:i+1,blockId:'portable-bb2'}));
+ assert.equal(catalogue.validateBB2RestoredBlock(bb2.opening,syntheticEvents).quotas.upper_a,1,
+  'Stage (i) generic replay alone permits a one-set synthetic credit');
+ await upload({...bb2,events:syntheticEvents});
+ assert.equal(confirmRestore,null,'portable BB2 import requires genuine catalogue sessions');
+ assert.equal(refusals,3);
+ assert.equal(h.ls.getItem('bvom_data'),before);
+ const forgedGenesis=catalogue.createBB2Opening({ownerId:owner,blockId:'portable-bb2',
+  progress:{'upper_a|flat_press|bench_press':{loadG:1000000,
+   loadOrigin:{value:'1000',unit:'kg'},calibrated:true,bestReps:30,stallCount:0}}});
+ assert.equal(catalogue.validateBB2RestoredBlock(forgedGenesis,[]).progress[
+  'upper_a|flat_press|bench_press'].loadG,1000000,
+  'generic Stage (i) replay permits a supplied opening progression');
+ await upload({...bb2,opening:forgedGenesis});
+ assert.equal(confirmRestore,null,'portable BB2 cannot import forged initial progression');
+ assert.equal(refusals,4);
  await upload({...bb2,activeSessionId:'unfinished'});
  assert.equal(confirmRestore,null,'active BB2 workout cannot be transplanted between devices');
- assert.equal(refusals,3);
+ assert.equal(refusals,5);
  await upload(bb2);
  assert.equal(typeof confirmRestore,'function','valid same-owner BB2 reaches normal restore confirmation');
  confirmRestore();

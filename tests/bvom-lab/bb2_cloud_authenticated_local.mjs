@@ -113,6 +113,18 @@ await check('RLS prevents another authenticated user from reading or inserting o
   assert.equal((await readBB2CloudSidecar(owner)).envelope.revision, 1);
 });
 
+await check('two authenticated first-device inserts cannot create competing owner rows', async () => {
+  const fresh = await createLogin('first-insert');
+  const initial = { setup: createBB2Setup(),
+    opening: createBB2Opening({ ownerId: fresh.ownerId, blockId: 'first-race' }),
+    events: [], sealedBlocks: [] };
+  const a = device(fresh, initial);
+  const b = device({ ...fresh, client: fresh.secondClient }, initial);
+  const [one, two] = await Promise.all([a.session.upload(), b.session.upload()]);
+  assert.deepEqual([one.status, two.status].sort(), ['committed', 'conflict']);
+  assert.equal((await readBB2CloudSidecar(fresh)).envelope.revision, 1);
+});
+
 await check('stale second device cannot replace newer owner training', async () => {
   const next = phone.get(); next.setup.optionalUpperBCurls = true;
   phone.set(next);
