@@ -142,6 +142,19 @@ jobs:
           node -e "const a=require('node:assert/strict'),r=require('./.bvom-red.json');a.equal(r.length,7);a.ok(r.every(t=>!t.pass));console.log('PASS: 7/7 new recovery contracts RED on exact pre-recovery source')"
       - name: Run isolated real BVOM application checks
         run: node tests/bvom-lab/recovery_browser.cjs
+      - name: Prove dormant BB2 owner-scoped Web Locks in real Chromium tabs
+        run: node tests/bvom-lab/bb2_browser_host_browser.cjs
+      - name: Prove dormant BB2 guards against real BVOM account and browser state
+        run: node tests/bvom-lab/bb2_app_session_browser.cjs
+      - name: Check developer-only BB2 setup preview in the real BVOM program chooser
+        run: node tests/bvom-lab/bb2_integrated_setup_preview_browser.cjs
+      - name: Preserve mobile BB1/BB2 Edit Weight comparison screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bb1-bb2-edit-weight-mobile-parity
+          path: ${{ runner.temp }}/bb2-ui-parity/*.png
+          if-no-files-found: ignore
       - name: Run isolated deferred Starting Setup interactions
         run: node tests/bvom-lab/starting_setup_browser.cjs
 

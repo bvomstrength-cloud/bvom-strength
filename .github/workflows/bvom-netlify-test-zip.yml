@@ -28,7 +28,7 @@ jobs:
           PR_NUMBER="${{ github.event.pull_request.number }}"
           SOURCE_SHA="${{ github.event.pull_request.head.sha }}"
           ZIP="BVOM-v${BUILD}-PR${PR_NUMBER}-TEST.zip"
-          mkdir -p .bvom-netlify-test/i18n .bvom-netlify-test/vendor
+          mkdir -p .bvom-netlify-test/i18n .bvom-netlify-test/vendor .bvom-netlify-test/bb2
           cp index.html admin.html sw.js manifest.json .bvom-netlify-test/
           # Only the manually uploaded test-site copy of sw.js is changed.
           # Production source keeps its release version. A PR's app JS can
@@ -52,6 +52,8 @@ jobs:
           cp theme-bee-v23c.svg theme-cherry-v23f.svg theme-coastal-v23f.svg .bvom-netlify-test/
           cp i18n/en.js i18n/ja.js .bvom-netlify-test/i18n/
           cp vendor/supabase-js-2.117.3.js .bvom-netlify-test/vendor/
+          cp bb2/browser-core.mjs .bvom-netlify-test/bb2/
+          cp bb2/browser-host.mjs bb2/app-session.mjs bb2/cloud-sidecar.mjs bb2/cloud-coordinator.mjs .bvom-netlify-test/bb2/
           printf '%s\n' 'BVOM VERSIONED TEST SITE - NOT PRODUCTION' \
             'Manual upload to a DIFFERENT Netlify site only.' \
             'Uses the SAME cloud backend as normal BVOM; sign in ONLY with a disposable test account.' \
@@ -62,6 +64,8 @@ jobs:
           test -s .bvom-netlify-test/vendor/supabase-js-2.117.3.js
           test -s .bvom-netlify-test/i18n/en.js
           test -s .bvom-netlify-test/i18n/ja.js
+          test -s .bvom-netlify-test/bb2/browser-core.mjs
+          test -s .bvom-netlify-test/bb2/cloud-coordinator.mjs
           (cd .bvom-netlify-test && zip -q -r "../${ZIP}" .)
           unzip -t "$ZIP" | tail -2
           printf '%s\n' 'NETLIFY ZIP CONTENTS:'
