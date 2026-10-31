@@ -1,6 +1,6 @@
-// v2.9.20 BB1 per-exercise progression increment editor; versioned shell cache.
-const CACHE = 'bvom-2.9.20';
-const BUILD = '2.9.20';
+// v2.9.21 BB2 draft release-candidate shell; new cache isolates production v2.9.20.
+const CACHE = 'bvom-2.9.21';
+const BUILD = '2.9.21';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './og-image.png', './i18n/en.js?v=6090d2f48f09', './i18n/ja.js?v=2c5d1ff918c6',
   './theme-bee-v23c.svg',
   './theme-cherry-v23f.svg',
