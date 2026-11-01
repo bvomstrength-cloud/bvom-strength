@@ -1,0 +1,15 @@
+'use strict';
+const assert = require('node:assert/strict');
+const {DAYS,OPTIONAL_CURL,SET_COUNTS} = require('../../bb2/approved-programme-v2.cjs');
+assert.deepEqual(SET_COUNTS,{upper_a:10,lower_a:10,upper_b:13,lower_b:9});
+assert.equal(Object.values(SET_COUNTS).reduce((a,b)=>a+b,0),42);
+assert.deepEqual(DAYS.lower_b.map(x=>x[0]),['quad','hip_hinge','calf_raise','abdominal']);
+assert.equal(DAYS.lower_b[0][4],'front_squat');
+assert.equal(DAYS.lower_a.find(x=>x[0]==='hamstring_curl')[1],3);
+assert.equal(DAYS.upper_a.some(x=>x[0]==='vertical_pull'),false);
+assert.equal(DAYS.lower_b.some(x=>x[0]==='hamstring_curl'),false);
+assert.equal(DAYS.upper_b.find(x=>x[0]==='secondary_chest')[1],2);
+assert.equal(OPTIONAL_CURL[1],2);
+assert.equal(DAYS.upper_a.some(x=>x[0]==='biceps_curl'),false);
+assert.equal(DAYS.upper_b.some(x=>x[0]==='biceps_curl'),false);
+console.log('PASS BB2 owner-approved 42-set design contract');
