@@ -113,7 +113,7 @@ test('LP-PROGRESSION','CONTROL','LP success progresses only the lifts of the day
   const h=H.boot(build);configureLP(h);for(const n of ['Squat','Bench Press','Prone Row'])for(let i=0;i<3;i++)h.ctx.tapSet(n,i);finish(h);
   const w=h.S().weights;return ok(w.Squat===102.5&&w['Bench Press']===72.5&&w['Prone Row']===62.5&&w['Overhead Press']===45&&w.Deadlift===120&&h.S().history.length===1,JSON.stringify(w));
 });
-test('LP-INCREMENT-EDIT-PRESERVES-FAILURE-STREAK','CONTROL','LP changing only the increment (or saving unchanged settings) preserves two failures; an actual working-weight edit still resets them',()=>{
+test('LP-INCREMENT-EDIT-PRESERVES-FAILURE-STREAK','DEFECT','LP changing only the increment (or saving unchanged settings) preserves two failures; an actual working-weight edit still resets them',()=>{
   const results=[];
   for(const [change,mode] of [['increment','straight'],['increment','rpt'],['unchanged','straight'],['weight','straight']]){
     const ls=H.memStore(),h=H.boot(build,{ls});configureLP(h);
