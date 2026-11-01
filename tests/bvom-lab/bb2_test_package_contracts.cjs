@@ -28,6 +28,17 @@ try{
  }
  const note=fs.readFileSync(path.join(output,'NETLIFY-TEST-BUILD.txt'),'utf8');
  assert.match(note,/42/);assert.match(note,/46/);assert.match(note,/cloud sync is disabled/);assert.match(note,/disposable test account/);
+ const guard=path.join(root,'tests/bvom-lab/regression_guard.js');
+ const production=cp.spawnSync(process.execPath,[guard,output],{encoding:'utf8'});
+ assert.equal(production.status,1,'ordinary production gate rejects test-only cache');
+ assert.match(production.stdout,/29 passed, 1 failed/);
+ const packaged=cp.spawnSync(process.execPath,[guard,output,'--bb2-test-package'],{encoding:'utf8'});
+ assert.equal(packaged.status,0,packaged.stdout+packaged.stderr);
+ assert.match(packaged.stdout,/30 passed, 0 failed/);
+ const swFile=path.join(output,'sw.js'),goodSw=fs.readFileSync(swFile,'utf8');
+ fs.writeFileSync(swFile,goodSw.replace('pr73-1234567890ab','pr73-ffffffffffff'));
+ assert.equal(cp.spawnSync(process.execPath,[guard,output,'--bb2-test-package']).status,1,'mismatched source cache is refused');
+ fs.writeFileSync(swFile,goodSw);
  assert.equal(result.files.length,19);
  assert.match(fs.readFileSync(path.join(output,'sw.js'),'utf8'),/pr73-1234567890ab/);
  assert.equal(H.boot(H.loadBuild(output)).ctx.bvomCloudPayload().bb2,undefined);
