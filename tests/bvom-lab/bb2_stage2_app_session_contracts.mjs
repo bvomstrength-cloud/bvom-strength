@@ -112,7 +112,7 @@ test('owner or auth switch blocks reads of previous account and all further writ
   await store.initialize('block-1');
   state = { ...state, cloudUserId: 'owner-2', accountSwitchDeferred: true };
   assert.throws(() => store.read(), /owner changed/);
-  await assert.rejects(store.saveSetup(setBB2OptionalCurls(createBB2Setup(), true), {
+  await assert.rejects(store.saveSetup(setBB2OptionalCurls(createBB2Setup({catalogueVersion:1}), true), {
     expectedRevision: 0, activeWorkout: false }), /owner changed/);
   assert.equal(runtime.data.size, 1);
   state = baseline();
@@ -126,10 +126,10 @@ test('lost document lock and stale legacy blob reject even while BB2 lock exists
   const store = createBB2LocalStore({ ownerId: 'owner-1', ...host });
   await store.initialize('block-1');
   state = { ...state, documentLockOwned: false };
-  await assert.rejects(store.saveSetup(setBB2OptionalCurls(createBB2Setup(), true), {
+  await assert.rejects(store.saveSetup(setBB2OptionalCurls(createBB2Setup({catalogueVersion:1}), true), {
     expectedRevision: 0, activeWorkout: false }), /writer disabled/);
   state = { ...baseline(), localBlobUnchanged: false };
-  await assert.rejects(store.saveSetup(setBB2OptionalCurls(createBB2Setup(), true), {
+  await assert.rejects(store.saveSetup(setBB2OptionalCurls(createBB2Setup({catalogueVersion:1}), true), {
     expectedRevision: 0, activeWorkout: false }), /writer disabled/);
   assert.equal(store.read().revision, 0);
 });
@@ -161,7 +161,7 @@ test('a broken app snapshot reader fails closed without modifying local data', a
   const store = createBB2LocalStore({ ownerId: 'owner-1', ...host });
   await store.initialize('block-1');
   reader = () => { throw Error('app state unavailable'); };
-  await assert.rejects(store.saveSetup(setBB2OptionalCurls(createBB2Setup(), true), {
+  await assert.rejects(store.saveSetup(setBB2OptionalCurls(createBB2Setup({catalogueVersion:1}), true), {
     expectedRevision: 0, activeWorkout: false }), /app state unavailable/);
   assert.equal(runtime.data.size, 1);
 });

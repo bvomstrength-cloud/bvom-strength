@@ -92,6 +92,44 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>{changeLanguage('en');showSetup()});
   assert.match(await page.locator('#setup [data-bb2-preview]').textContent(),
    /BODYBUILDING 2 · PREVIEW/,'BB2 programme entry returns to English');
+  // A fresh install now renders the approved v2 plan. Then load an explicit
+  // v1 preview fixture to keep the full historical recovery suite below.
+  await page.locator('#setup [data-bb2-preview]').click();
+  await page.waitForSelector('#setup [data-bb2-template]');
+  for(const [day,count] of Object.entries({upper_a:10,lower_a:10,upper_b:13,lower_b:9}))
+   assert.match(await page.locator('#setup [data-bb2-template="'+day+'"]').textContent(),new RegExp(count+' working sets'));
+  assert.deepEqual(await page.locator('#setup [data-bb2-template="lower_b"] [data-bb2-role]').evaluateAll(els=>els.map(el=>el.dataset.bb2Role)),
+   ['lower_b|quad','lower_b|hip_hinge','lower_b|calf_raise','lower_b|abdominal']);
+  assert.equal(await page.locator('#setup [data-bb2-role="lower_a|hamstring_curl"]').inputValue(),'nordic_curl');
+  await page.locator('#setup [data-bb2-curls]').click();
+  assert.match(await page.locator('#setup [data-bb2-template="upper_b"]').textContent(),/15 working sets/);
+  await page.locator('#setup [data-bb2-curls]').click();
+  await page.locator('#setup [data-bb2-save]').click();
+  assert.equal(await page.evaluate(()=>state.bb2.setup.catalogueVersion),2);
+  await page.locator('#setup [data-bb2-back]').click();
+  await page.reload();await page.waitForSelector('#app:not(.hidden)');
+  assert.equal(await page.evaluate(()=>state.bb2.setup.catalogueVersion),2,'v2 persists across actual browser reload');
+  await page.evaluate(()=>showSetup());
+  await page.locator('#setup [data-bb2-preview]').click();
+  await page.waitForSelector('#setup [data-bb2-start]');
+  for(const el of await page.locator('#setup [data-bb2-load]').all())await el.fill('60');
+  for(const el of await page.locator('#setup [data-bb2-inc]').all())await el.fill('1');
+  await page.locator('#setup [data-bb2-start]').click();
+  await page.waitForSelector('#workout [data-bb2-finish]');
+  assert.equal(await page.locator('#workout [data-bb2-set]').count(),10,'v2 renders ten Upper A sets');
+  for(const key of ['0|0','0|1','0|2','1|0','1|1','1|2'])await recordBB2Set(page,key,8);
+  assert.equal(await page.locator('#workout [data-bb2-finish]').isDisabled(),true);
+  await recordBB2Set(page,'2|0',8);
+  assert.equal(await page.locator('#workout [data-bb2-finish]').isDisabled(),false);
+  await page.locator('#workout [data-bb2-finish]').click();
+  assert.equal(await page.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events).quotas.upper_a),1);
+  await page.reload();await page.waitForSelector('#app:not(.hidden)');
+  assert.equal(await page.evaluate(()=>state.bb2.events.filter(e=>e.type==='CREDIT_GRANTED').length),1);
+  await page.evaluate(async()=>{
+   const m=await import('./bb2/browser-core.mjs');
+   state.bb2={setup:m.createBB2Setup({catalogueVersion:1})};
+   save({durable:true,localOnly:true});showSetup();
+  });
   const savedBefore=await page.evaluate(()=>localStorage.getItem('bvom_data'));
   await page.locator('#setup [data-bb2-preview]').click();
   await page.waitForSelector('#setup [data-bb2-template]');

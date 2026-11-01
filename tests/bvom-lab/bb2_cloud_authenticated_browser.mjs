@@ -273,7 +273,7 @@ try {
   const firstRunAuth = await firstRunClient.auth.signInWithPassword(firstRunCredentials);
   if (firstRunAuth.error) throw firstRunAuth.error;
   const sidecar = createBB2CloudSidecar({ ownerId: firstRunId,
-    bb2: { setup: createBB2Setup(), opening: null, events: [], sealedBlocks: [] },
+    bb2: { setup: createBB2Setup({catalogueVersion:1}), opening: null, events: [], sealedBlocks: [] },
     previousRevision: null, requestId: 'first-run-seeded-owner-record' });
   const seeded = await firstRunClient.from('bvom_cloud_state').insert({
     user_id: firstRunId, revision: 1, data_version: sidecar.protocol,

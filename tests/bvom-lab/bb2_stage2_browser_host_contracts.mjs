@@ -44,7 +44,7 @@ test('actual local writer uses only its isolated owner key and browser lock', as
   const initialized = await store.initialize('block-1');
   assert.equal(initialized.snapshot.revision, 0);
   assert.deepEqual([...runtime.localStorage.map.keys()], [host.key]);
-  await store.saveSetup(setBB2OptionalCurls(createBB2Setup(), true), {
+  await store.saveSetup(setBB2OptionalCurls(createBB2Setup({catalogueVersion:1}), true), {
     expectedRevision: 0, activeWorkout: false });
   assert.equal(store.read().revision, 1);
   assert.equal(store.read().setup.optionalUpperBCurls, true);
@@ -64,7 +64,7 @@ test('unsupported Web Locks fails closed with a readable existing local block', 
   await store.initialize('block-1');
   runtime.navigator.locks = undefined;
   assert.equal(store.read().revision, 0);
-  await assert.rejects(store.saveSetup(createBB2Setup(), {
+  await assert.rejects(store.saveSetup(createBB2Setup({catalogueVersion:1}), {
     expectedRevision: 0, activeWorkout: false }), /Web Locks unavailable/);
   assert.equal(store.read().revision, 0);
 });
@@ -75,7 +75,7 @@ test('closed writer policy denies writes, even if Web Locks are available', asyn
   await store.initialize('block-1');
   setEnabled(false);
   assert.equal(store.read().revision, 0);
-  await assert.rejects(store.saveSetup(setBB2OptionalCurls(createBB2Setup(), true), {
+  await assert.rejects(store.saveSetup(setBB2OptionalCurls(createBB2Setup({catalogueVersion:1}), true), {
     expectedRevision: 0, activeWorkout: false }), /writer disabled/);
 });
 
@@ -85,7 +85,7 @@ test('account switching fences reads and writes, including mid-transaction', asy
   await store.initialize('block-1');
   setAuth('owner-2');
   assert.throws(() => store.read(), /owner changed/);
-  await assert.rejects(store.saveSetup(createBB2Setup(), {
+  await assert.rejects(store.saveSetup(createBB2Setup({catalogueVersion:1}), {
     expectedRevision: 0, activeWorkout: false }), /owner changed/);
   setAuth('owner-1'); setLocal('owner-2');
   assert.throws(() => store.read(), /owner changed/);

@@ -92,7 +92,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  // Supply the exact generated module and run the actual application renderer.
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;bvomBb2RenderPreview()');
  const html=()=>h.ctx.document.querySelector('#setup').innerHTML;
  assert.match(html(),/BODYBUILDING 2 · SETUP PREVIEW/);
@@ -165,7 +165,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ctx.bvomBb2BackupRestoreWarning(h.S(),oldBackup),'',
   'ordinary BVOM backups have no new warning when BB2 is absent');
  const owner='11111111-1111-4111-8111-111111111111';
- const bb2={setup:catalogue.createBB2Setup(),opening:catalogue.createBB2Opening({
+ const bb2={setup:catalogue.createBB2Setup({catalogueVersion:1}),opening:catalogue.createBB2Opening({
   ownerId:owner,blockId:'bb2-backup-guard'}),events:[]};
  h.ctx.__bb2BackupFixture=bb2;
  h.ev('state.bb2=__bb2BackupFixture');
@@ -241,7 +241,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest');
  const before=h.ls.getItem('bvom_data');
- const bb2={setup:catalogue.createBB2Setup(),opening:catalogue.createBB2Opening({
+ const bb2={setup:catalogue.createBB2Setup({catalogueVersion:1}),opening:catalogue.createBB2Opening({
   ownerId:owner,blockId:'portable-bb2'}),events:[],sealedBlocks:[],selectedProgram:true};
  const upload=async candidate=>{
   confirmRestore=null;
@@ -305,7 +305,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  // the verified BB2 block that is saved on this device. No real cloud access.
  const {h}=fixture();
  const owner='11111111-1111-4111-8111-111111111111';
- const bb2={setup:catalogue.createBB2Setup(),
+ const bb2={setup:catalogue.createBB2Setup({catalogueVersion:1}),
   opening:catalogue.createBB2Opening({ownerId:owner,blockId:'cloud-preserve'}),
   events:[],sealedBlocks:[],selectedProgram:true,warmupTouched:{local:true}};
  h.ctx.__bb2CatalogueForTest=catalogue;
@@ -363,7 +363,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  h.ctx.bvomBb2PreviewChoose('upper_a','shoulder_press','log_push_press');
  h.ev('bvomWindowLockOwned=false');
@@ -400,7 +400,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;bvomBb2RenderPreview()');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  assert.match(h.ctx.document.querySelector('#setup').innerHTML,/data-bb2-start/);
@@ -495,7 +495,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -532,7 +532,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -587,7 +587,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -659,7 +659,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -691,7 +691,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -749,7 +749,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -778,7 +778,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -859,7 +859,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -890,7 +890,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -1000,7 +1000,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -1052,7 +1052,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -1080,7 +1080,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;h.ctx.__bb2TrialLoad='65';
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -1158,7 +1158,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -1187,7 +1187,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ctx.__bb2Actual={variation:'pullup',assistance:'medium band',added:'5'};
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -1259,7 +1259,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -1286,7 +1286,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -1316,7 +1316,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ctx.__bb2Plan={variation:'assisted pullup',assistance:'light band',added:'2.5'};
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -1380,7 +1380,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -1411,7 +1411,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;h.ctx.__bb2Correction={reps:'7',hard:true,actual:'60'};
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -1513,7 +1513,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -1572,7 +1572,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -1602,7 +1602,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -1649,7 +1649,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -1675,7 +1675,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
@@ -1702,7 +1702,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  let query=h.ctx.document.querySelector;
@@ -1750,7 +1750,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const opening=catalogue.createBB2Opening({ownerId:'bb2-test-owner',blockId:'bb2-pending-test',
@@ -1820,7 +1820,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const owner=h.ls.getItem('bvom_data_owner')||'bb2-test-owner',opening={
@@ -1973,7 +1973,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const opening=catalogue.createBB2Opening({ownerId:'bb2-test-owner',blockId:'bb2-stall-test',
@@ -2003,7 +2003,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const opening=catalogue.createBB2Opening({ownerId:'bb2-test-owner',blockId:'bb2-swap-test'});
@@ -2030,7 +2030,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const opening=catalogue.createBB2Opening({ownerId:'bb2-test-owner',blockId:'bb2-extra-credit-test'});
@@ -2189,7 +2189,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__bb2CatalogueForTest=catalogue;
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  const cloudBefore=JSON.stringify(h.ctx.bvomCloudPayload());
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
@@ -2247,7 +2247,7 @@ function bb2RecoveryFixture(){
   "bvomEntitlement.record={status:'complimentary',user_id:'dummy'}");
  h.ls.setItem('bvom_data_owner','dummy');h.ctx.showApp();
  h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest;'+
-  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup();'+
+  'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;

@@ -112,7 +112,7 @@ async function main() {
     bvomCloud.offlineLocalAccess=false; bvomCloud.accountSwitchDeferred=false;`);
   db.server.row = { id: 'row-1', user_id: ownerId, data: copy(h.S()) };
   const originalLegacy = copy(db.server.row.data);
-  const bb2 = { setup: core.createBB2Setup(),
+  const bb2 = { setup: core.createBB2Setup({catalogueVersion:1}),
     opening: core.createBB2Opening({ ownerId, blockId: 'test-block' }), events: [],
     sealedBlocks: [], selectedProgram: true, warmupTouched: { deviceTick: true } };
   const envelope = sidecar.createBB2CloudSidecar({ ownerId, bb2,

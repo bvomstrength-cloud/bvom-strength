@@ -1,7 +1,7 @@
 'use strict';
 // Owner-approved BB2 four-day prescription, 2026-11-01.
-// Deliberately isolated until catalogue v1 state migration, app UI, and
-// generated browser bundle are updated together. Do not import into production.
+// Used by catalogue v2 and its generated browser bundle. Catalogue v1 remains
+// available for saved preview journals; production enablement is still off.
 const DAYS = Object.freeze({
   upper_a: [
     ['flat_press',3,6,8,'bench_press'],

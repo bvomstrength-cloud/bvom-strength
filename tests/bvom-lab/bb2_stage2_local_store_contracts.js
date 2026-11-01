@@ -67,22 +67,22 @@ check('requires explicit owner, storage API and exclusive lock provider', async 
 check('setup is saved in one owner-local key before any workout can Start', async () => {
   const storage = mem(), store = makeStore(storage);
   assert.equal(store.read(), null);
-  const saved = await store.initialize('block-one');
+  const saved = await store.initialize('block-one',createBB2Setup({catalogueVersion:1}));
   assert.equal(saved.snapshot.revision, 0);
   assert.equal(storage.writes, 1);
   assert.ok(store.key.startsWith('bvom.bb2.local.v1.'));
   assert.equal(storage.data.size, 1);
   assert.equal(saved.snapshot.opening.ownerId, 'owner-1');
   assert.deepEqual(store.read(), saved.snapshot);
-  assert.equal((await store.initialize('block-one')).noOp, true);
+  assert.equal((await store.initialize('block-one',createBB2Setup({catalogueVersion:1}))).noOp, true);
   assert.equal(storage.writes, 1);
   await assert.rejects(store.initialize('other-block'), /replace existing block/);
 });
 
 check('persisted optional curls and exercise selection drive Start, not an unsaved draft', async () => {
   const store = makeStore();
-  await store.initialize('block-one');
-  let selected = setBB2OptionalCurls(createBB2Setup(), true);
+  await store.initialize('block-one',createBB2Setup({catalogueVersion:1}));
+  let selected = setBB2OptionalCurls(createBB2Setup({catalogueVersion:1}), true);
   selected = chooseBB2Exercise(selected, 'upper_a', 'shoulder_press', 'log_push_press');
   const result = await store.saveSetup(selected, { expectedRevision: 0, activeWorkout: false });
   assert.equal(result.snapshot.revision, 1);
@@ -104,13 +104,13 @@ check('persisted optional curls and exercise selection drive Start, not an unsav
   const valid = start(result.snapshot);
   assert.equal((await store.commitStart(valid,
     { expectedRevision: 1, activeWorkout: false })).snapshot.events.length, 1);
-  await assert.rejects(store.saveSetup(createBB2Setup(),
+  await assert.rejects(store.saveSetup(createBB2Setup({catalogueVersion:1}),
     { expectedRevision: 2, activeWorkout: false }), /active workout/);
 });
 
 check('workout sets and Finish+credit save in one durable revision and stay valid on reload', async () => {
   const storage = mem(), store = makeStore(storage);
-  await store.initialize('block-one');
+  await store.initialize('block-one',createBB2Setup({catalogueVersion:1}));
   let snapshot = store.read();
   await store.commitStart(start(snapshot), { expectedRevision: 0, activeWorkout: false });
   snapshot = store.read();
@@ -136,7 +136,7 @@ check('workout sets and Finish+credit save in one durable revision and stay vali
 
 check('Finish retry is a durable no-op with same or newer revision', async () => {
   const storage = mem(), store = makeStore(storage);
-  await store.initialize('block-one');
+  await store.initialize('block-one',createBB2Setup({catalogueVersion:1}));
   await store.commitStart(start(store.read()), { expectedRevision: 0, activeWorkout: false });
   await store.appendEvents(filledSets(store.read()), { expectedRevision: 1, activeWorkout: true });
   const pending = store.read();
@@ -158,7 +158,7 @@ check('Finish retry is a durable no-op with same or newer revision', async () =>
 
 check('post-write Finish failure is recovered without a second credit', async () => {
   const storage = mem(), store = makeStore(storage);
-  await store.initialize('block-one');
+  await store.initialize('block-one',createBB2Setup({catalogueVersion:1}));
   await store.commitStart(start(store.read()), { expectedRevision: 0, activeWorkout: false });
   await store.appendEvents(filledSets(store.read()), { expectedRevision: 1, activeWorkout: true });
   const oldSetItem = storage.setItem;
@@ -181,7 +181,7 @@ check('post-write Finish failure is recovered without a second credit', async ()
 check('simultaneous duplicate Finish taps across locked tabs grant once', async () => {
   const storage = mem(), lock = exclusiveLock();
   const a = makeStore(storage, 'owner-1', lock), b = makeStore(storage, 'owner-1', lock);
-  await a.initialize('block-one');
+  await a.initialize('block-one',createBB2Setup({catalogueVersion:1}));
   await a.commitStart(start(a.read()), { expectedRevision: 0, activeWorkout: false });
   await a.appendEvents(filledSets(a.read()), { expectedRevision: 1, activeWorkout: true });
   const opts = { expectedRevision: 2, eventRevision: 2, activeWorkout: true };
@@ -196,28 +196,28 @@ check('simultaneous duplicate Finish taps across locked tabs grant once', async 
 
 check('failed writes do not claim success; an uncertain write is safely recoverable', async () => {
   const storage = mem(), store = makeStore(storage);
-  await store.initialize('block-one');
+  await store.initialize('block-one',createBB2Setup({catalogueVersion:1}));
   const original = structuredClone(store.read());
   const priorWriter = storage.setItem;
   storage.setItem = () => { throw Error('QuotaExceededError'); };
-  await assert.rejects(store.saveSetup(setBB2OptionalCurls(createBB2Setup(), true), {
+  await assert.rejects(store.saveSetup(setBB2OptionalCurls(createBB2Setup({catalogueVersion:1}), true), {
     expectedRevision: 0, activeWorkout: false }), /LOCAL WRITE FAILED OR UNCERTAIN/);
   assert.deepEqual(store.read(), original);
   storage.setItem = (key, value) => { priorWriter(key, value); throw Error('post-commit failure'); };
-  await assert.rejects(store.saveSetup(setBB2OptionalCurls(createBB2Setup(), true), {
+  await assert.rejects(store.saveSetup(setBB2OptionalCurls(createBB2Setup({catalogueVersion:1}), true), {
     expectedRevision: 0, activeWorkout: false }), /UNCERTAIN/);
   assert.equal(store.read().revision, 1);
   assert.equal(store.read().setup.optionalUpperBCurls, true);
-  await assert.rejects(store.saveSetup(createBB2Setup(),
+  await assert.rejects(store.saveSetup(createBB2Setup({catalogueVersion:1}),
     { expectedRevision: 0, activeWorkout: false }), /stale local revision/);
 });
 
 check('exclusive lock serializes two tabs; stale second save cannot clobber first', async () => {
   const storage = mem(), lock = exclusiveLock();
   const a = makeStore(storage, 'owner-1', lock), b = makeStore(storage, 'owner-1', lock);
-  await a.initialize('block-one');
-  const changes = [setBB2OptionalCurls(createBB2Setup(), true),
-    chooseBB2Exercise(createBB2Setup(), 'upper_a', 'flat_press', 'dumbbell_flat_press')];
+  await a.initialize('block-one',createBB2Setup({catalogueVersion:1}));
+  const changes = [setBB2OptionalCurls(createBB2Setup({catalogueVersion:1}), true),
+    chooseBB2Exercise(createBB2Setup({catalogueVersion:1}), 'upper_a', 'flat_press', 'dumbbell_flat_press')];
   const results = await Promise.allSettled(changes.map((setup, index) =>
     [a, b][index].saveSetup(setup, { expectedRevision: 0, activeWorkout: false })));
   assert.deepEqual(results.map(x => x.status).sort(), ['fulfilled', 'rejected']);
@@ -240,7 +240,7 @@ check('different owners never read or overwrite each other', async () => {
 
 check('tampered imports cannot smuggle bare Finish, unknown fields, or forged credit key', async () => {
   const storage = mem(), store = makeStore(storage);
-  await store.initialize('block-one');
+  await store.initialize('block-one',createBB2Setup({catalogueVersion:1}));
   await store.commitStart(start(store.read()), { expectedRevision: 0, activeWorkout: false });
   await store.appendEvents(filledSets(store.read()), { expectedRevision: 1, activeWorkout: true });
   const good = storage.getItem(store.key);
@@ -262,13 +262,13 @@ check('tampered imports cannot smuggle bare Finish, unknown fields, or forged cr
 });
 
 check('legacy bypass and stale start revision cannot append', async () => {
-  const store = makeStore(); await store.initialize('block-one');
+  const store = makeStore(); await store.initialize('block-one',createBB2Setup({catalogueVersion:1}));
   const initial = store.read(), event = start(initial);
   await assert.rejects(store.appendEvents([event], { expectedRevision: 0,
     activeWorkout: false }), /bypasses/);
   await assert.rejects(store.commitStart(event, { expectedRevision: 0,
     activeWorkout: undefined }), /inactive-workout/);
-  await store.saveSetup(setBB2OptionalCurls(createBB2Setup(), true), {
+  await store.saveSetup(setBB2OptionalCurls(createBB2Setup({catalogueVersion:1}), true), {
     expectedRevision: 0, activeWorkout: false });
   await assert.rejects(store.commitStart(event, { expectedRevision: 0,
     activeWorkout: false }), /stale local revision/);
@@ -276,7 +276,7 @@ check('legacy bypass and stale start revision cannot append', async () => {
 
 check('full 32-credit / 673-event restored history remains within a conservative budget', async () => {
   const storage = mem(), store = makeStore(storage);
-  await store.initialize('block-one');
+  await store.initialize('block-one',createBB2Setup({catalogueVersion:1}));
   const saved = store.read(), events = [];
   const add = (type, fields) => events.push({ type, eventId: `perf-${events.length + 1}`,
     commitOrdinal: events.length + 1, blockId: 'block-one', ...fields });

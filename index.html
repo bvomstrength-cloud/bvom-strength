@@ -5262,7 +5262,7 @@ function bvomBb2RenderPreview(){
  const headings={upper_a:'UPPER A',lower_a:'LOWER A',upper_b:'UPPER B',lower_b:'LOWER B'};
  const templates=m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.map(templateId=>{
   const prescribed=m.getBB2TemplatePrescription(setup,templateId);
-  const rows=m.BB2_BROWSER_MODULES.catalogue.CATALOGUE[templateId].filter(role=>
+  const rows=m.BB2_BROWSER_MODULES.catalogue.getBB2Catalogue(setup.catalogueVersion)[templateId].filter(role=>
    !role.optional||setup.optionalUpperBCurls).map(role=>{
     const key=templateId+'|'+role.roleSlotId,selected=setup.selections[key];
     const slot=prescribed.slots.find(s=>s.roleSlotId===role.roleSlotId);
@@ -5303,6 +5303,8 @@ function bvomBb2SaveSetup(){
   bvomBb2PreviewSaved=true;bvomBb2RenderPreview();return true;
  }
  const before=state.bb2;
+ // A live or archived block keeps its versioned prescription.
+ if(before?.setup&&before.setup.catalogueVersion!==snapshot.catalogueVersion)return false;
  let nextEvents=before?.events;
  if(before?.opening&&Array.isArray(before.events)){
   try{

@@ -1,3 +1,48 @@
+# BB2 current implementation — 1 November 2026
+
+PR #73 remains draft. Do not merge, deploy, enable customer BB2, or activate
+cloud syncing. Production v2.9.21 is incorporated in the draft branch.
+
+## Owner-approved programme revision
+
+The owner replaced the original 48-set rotation with **42 core sets**, spreading
+BB1's six sessions per fortnight into eight with only a modest volume increase.
+`bb2/approved-programme-v2.cjs` is the executable prescription authority for
+catalogue v2 and supersedes the original specification's workout table:
+
+| Day | Core sets | Minimum valid prescribed sets to Finish |
+| --- | ---: | ---: |
+| Upper A | 10 | 7 |
+| Lower A | 10 | 7 |
+| Upper B | 13 | 10 |
+| Lower B | 9 | 7 |
+
+Upper B optional curls add two sets (15 total, 11 required). Friday begins with
+front squat, then RDL, calves and abdominal work. Nordics appear on Lower A only.
+Defaults, rep ranges and ordering come directly from the approved source, shared
+by setup, Start, Workout, Warm-up, History and low-stress volume calculations.
+Finite existing equipment alternatives and specialist deadlift/log prescriptions
+remain supported. Exercise swaps preserve the prescribed role order in v2.
+
+Saved v1 preview setups retain their exact catalogue, defaults, counts, ranges,
+ordering and immutable history. Copying/editing choices or optional curls retains
+the setup version. No automatic mid-block reinterpretation or schema rewrite is
+performed. New setups use v2. Portable journal validation reads the saved version;
+ordinary setup saving refuses a version replacement in an existing BB2 document.
+The frozen Stage (i) ledger is unchanged.
+
+Coverage: original fixtures explicitly retain v1, the approved-v2 test checks
+all default prescriptions and every allowed swap, and the real application v2
+integration runs a complete 32-credit block, reloads, progression, recovery and
+completion boundaries. Both v2 suites run in the main regression gate. The
+Chromium workflow checks fresh v2 setup/mobile order and reload before running
+the complete v1 recovery/history/ownership suite. Local browser availability and
+exact commit workflow results must be reported honestly in the PR review.
+
+---
+
+The following notes are historical implementation checkpoints.
+
 # BB2 Stage (ii) — isolated setup and catalogue checkpoint
 
 **Design authority:** `BVOM-BB2-SPEC-REVIEW-V3.5.1.md`, SHA-256 `c1cfb71c60e38e0bf64b290def561eb5787da488556db7c5d0eb652fe76591a6`. Read the original design specification before expanding this implementation. This note is only a development checkpoint.

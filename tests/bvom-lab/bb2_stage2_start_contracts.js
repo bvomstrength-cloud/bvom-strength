@@ -33,7 +33,7 @@ const check = (name, fn) => {
 };
 
 check('valid full-catalogue Start commits via Stage (i) guarded transaction', () => {
-  const opening = makeOpening(), setup = createBB2Setup(), event = start(setup);
+  const opening = makeOpening(), setup = createBB2Setup({catalogueVersion:1}), event = start(setup);
   const saved = commitBB2Start(opening, [], setup, event, guard());
   assert.equal(saved.events.length, 1);
   assert.equal(saved.projection.headOrdinal, 1);
@@ -43,11 +43,11 @@ check('valid full-catalogue Start commits via Stage (i) guarded transaction', ()
 });
 
 check('pre-Start curls and explicit conventional deadlift affect required sets', () => {
-  let setup = setBB2OptionalCurls(createBB2Setup(), true);
+  let setup = setBB2OptionalCurls(createBB2Setup({catalogueVersion:1}), true);
   let event = start(setup, 'upper_b');
   assert.deepEqual([event.slots.reduce((n, s) => n + s.sets, 0), event.slots.length], [15, 6]);
   commitBB2Start(makeOpening(), [], setup, event, guard());
-  setup = chooseBB2Exercise(createBB2Setup(), 'lower_b', 'hip_hinge', 'conventional_deadlift');
+  setup = chooseBB2Exercise(createBB2Setup({catalogueVersion:1}), 'lower_b', 'hip_hinge', 'conventional_deadlift');
   event = start(setup, 'lower_b');
   const hinge = event.slots.find(s => s.roleSlotId === 'hip_hinge');
   assert.deepEqual([hinge.sets, hinge.floor, hinge.ceiling], [2, 4, 6]);
@@ -56,7 +56,7 @@ check('pre-Start curls and explicit conventional deadlift affect required sets',
 });
 
 check('catalogue disallows altered denominators, floor, role identity and order', () => {
-  const setup = createBB2Setup(), opening = makeOpening(), clean = start(setup);
+  const setup = createBB2Setup({catalogueVersion:1}), opening = makeOpening(), clean = start(setup);
   const cases = [
     e => e.slots[0].sets--,
     e => { delete e.slots[0].floor; },
@@ -74,7 +74,7 @@ check('catalogue disallows altered denominators, floor, role identity and order'
 });
 
 check('no forged DERIVED origin or fictitious entered grams on initial Start', () => {
-  const setup = createBB2Setup(), opening = makeOpening(), clean = start(setup);
+  const setup = createBB2Setup({catalogueVersion:1}), opening = makeOpening(), clean = start(setup);
   const forged = deep(clean);
   forged.slots[0].plannedOrigin = { kind: 'DERIVED', sourceEventId: 'nope' };
   assert.throws(() => commitBB2Start(opening, [], setup, forged, guard()), /manually entered/i);
@@ -88,7 +88,7 @@ check('no forged DERIVED origin or fictitious entered grams on initial Start', (
 });
 
 check('bodyweight Start needs variation and explicit assistance, never guessed weight', () => {
-  const setup = createBB2Setup(), opening = makeOpening(), clean = start(setup);
+  const setup = createBB2Setup({catalogueVersion:1}), opening = makeOpening(), clean = start(setup);
   const i = clean.slots.findIndex(s => s.equipment === 'bodyweight');
   assert.ok(i >= 0);
   const noAssistance = deep(clean); delete noAssistance.slots[i].assistance;
@@ -105,7 +105,7 @@ check('bodyweight Start needs variation and explicit assistance, never guessed w
 check('existing entered prescription cannot be overridden by an invented Start', () => {
   const opening = makeOpening({ [key]: { loadG: 55000, loadOrigin: mass(55000),
     incrementG: 1250, incrementOrigin: mass(1250) } });
-  const setup = createBB2Setup(), event = start(setup);
+  const setup = createBB2Setup({catalogueVersion:1}), event = start(setup);
   assert.throws(() => commitBB2Start(opening, [], setup, event, guard()), /inherit/i);
   const first = event.slots.find(s => s.roleSlotId === 'flat_press');
   first.plannedG = 55000; first.plannedOrigin = mass(55000);
@@ -133,7 +133,7 @@ check('in-block legitimately earned DERIVED progression is inherited with real F
   assert.equal(current.loadG, 62500);
   assert.deepEqual(current.loadOrigin,
     { kind: 'DERIVED', sourceEventId: 'history-7' });
-  const setup = createBB2Setup(), event = start(setup, 'upper_a', historical, 'session-next');
+  const setup = createBB2Setup({catalogueVersion:1}), event = start(setup, 'upper_a', historical, 'session-next');
   const first = event.slots.find(s => s.roleSlotId === 'flat_press');
   first.plannedG = current.loadG; first.plannedOrigin = current.loadOrigin;
   assert.equal(commitBB2Start(opening, historical, setup, event, guard(historical)).events.length, 9);
@@ -147,7 +147,7 @@ check('carried DERIVED snapshot without verified sealed predecessor cannot Start
   const opening = makeOpening({ [key]: { loadG: 62500,
     loadOrigin: { kind: 'DERIVED', sourceEventId: 'nonexistent' },
     incrementG: 2500, incrementOrigin: mass(2500) } });
-  const setup = createBB2Setup(), event = start(setup);
+  const setup = createBB2Setup({catalogueVersion:1}), event = start(setup);
   event.slots[0].plannedG = 62500;
   event.slots[0].plannedOrigin = { kind: 'DERIVED', sourceEventId: 'nonexistent' };
   assert.throws(() => commitBB2Start(opening, [], setup, event, guard()),
@@ -183,7 +183,7 @@ check('real sealed 32-credit carry proves DERIVED lineage; forged carry is refus
   assert.equal(nextOpening.progress[key].loadG, 62500);
   assert.deepEqual(nextOpening.progress[key].loadOrigin,
     { kind: 'DERIVED', sourceEventId: 'prev-7' });
-  const setup = createBB2Setup(), event = start(setup);
+  const setup = createBB2Setup({catalogueVersion:1}), event = start(setup);
   event.slots[0].plannedG = 62500;
   event.slots[0].plannedOrigin = nextOpening.progress[key].loadOrigin;
   const saved = commitBB2Start(nextOpening, [], setup, event,
@@ -197,7 +197,7 @@ check('real sealed 32-credit carry proves DERIVED lineage; forged carry is refus
 });
 
 check('guard and canonical new Start reject stale, foreign, overlapping and recovery plans', () => {
-  const opening = makeOpening(), setup = createBB2Setup(), clean = start(setup);
+  const opening = makeOpening(), setup = createBB2Setup({catalogueVersion:1}), clean = start(setup);
   assert.throws(() => commitBB2Start(opening, [], setup, clean,
     { ...guard(), activeWorkout: undefined }), /inactive-workout guard/);
   assert.throws(() => commitBB2Start(opening, [], setup, clean,

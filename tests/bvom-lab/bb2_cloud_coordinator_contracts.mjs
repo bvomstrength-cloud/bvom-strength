@@ -80,7 +80,7 @@ function device(db,{bb2=null,enabled=true}={}){
 
 const db=fakeDatabase();
 await check('portable Start replays entered-weight provenance, refusing forged DERIVED sources',async()=>{
- const setup=core.createBB2Setup(),opening=core.createBB2Opening({
+ const setup=core.createBB2Setup({catalogueVersion:1}),opening=core.createBB2Opening({
   ownerId:owner,blockId:'provenance-start'});
  const slots=core.getBB2TemplatePrescription(setup,'upper_a').slots.map(s=>({
   roleSlotId:s.roleSlotId,exerciseId:s.exerciseId,sets:s.sets,floor:s.floor,
@@ -98,7 +98,7 @@ await check('portable Start replays entered-weight provenance, refusing forged D
   /BB2 Start/,'a real-user import cannot mint unearned progression provenance');
 });
 await check('non-catalogue swap cannot enter imported, sidecar or restored BB2 history',async()=>{
- const setup=core.createBB2Setup(),opening=core.createBB2Opening({ownerId:owner,
+ const setup=core.createBB2Setup({catalogueVersion:1}),opening=core.createBB2Opening({ownerId:owner,
   blockId:'invalid-swap'});
  const swap={type:'EXERCISE_SWAPPED',eventId:'swap:1',commitOrdinal:1,
   blockId:opening.blockId,templateId:'upper_a',roleSlotId:'flat_press',
@@ -127,7 +127,7 @@ await check('non-catalogue swap cannot enter imported, sidecar or restored BB2 h
  await assert.rejects(h.ctx.bvomBb2ValidatePortableJournal(bb2,owner),
   /non-catalogue/,'BVOM restore rejects forged swaps');
 });
-const first=device(db,{bb2:{setup:core.createBB2Setup(),
+const first=device(db,{bb2:{setup:core.createBB2Setup({catalogueVersion:1}),
  opening:core.createBB2Opening({ownerId:owner,blockId:'portable-cloud'}),
  events:[],sealedBlocks:[],selectedProgram:true}});
 
@@ -175,7 +175,7 @@ await check('lost cloud response reconciles without duplicate upload or credit',
 
 await check('unchanged populated devices safely adopt newer remote revisions in both directions',async()=>{
  const shared=fakeDatabase();
- const phone=device(shared,{bb2:{setup:core.createBB2Setup(),
+ const phone=device(shared,{bb2:{setup:core.createBB2Setup({catalogueVersion:1}),
   opening:core.createBB2Opening({ownerId:owner,blockId:'handoff'}),
   events:[],sealedBlocks:[],selectedProgram:true}});
  const tablet=device(shared);
@@ -198,7 +198,7 @@ await check('unchanged populated devices safely adopt newer remote revisions in 
 
 await check('concurrent divergent BB2 edits remain local and cannot be fast-forwarded',async()=>{
  const shared=fakeDatabase();
- const phone=device(shared,{bb2:{setup:core.createBB2Setup(),
+ const phone=device(shared,{bb2:{setup:core.createBB2Setup({catalogueVersion:1}),
   opening:core.createBB2Opening({ownerId:owner,blockId:'diverge'}),
   events:[],sealedBlocks:[]}}),tablet=device(shared);
  assert.equal((await phone.session.upload()).status,'committed');
@@ -226,7 +226,7 @@ await check('concurrent divergent BB2 edits remain local and cannot be fast-forw
 });
 
 await check('verified owner can download first-run setup without opening the training host',async()=>{
- const shared=fakeDatabase(),source=device(shared,{bb2:{setup:core.createBB2Setup(),
+ const shared=fakeDatabase(),source=device(shared,{bb2:{setup:core.createBB2Setup({catalogueVersion:1}),
   opening:null,events:[],sealedBlocks:[]}});
  assert.equal((await source.session.upload()).status,'committed');
  const fresh=device(shared);fresh.setApp({...safe(),appVisible:false,setupVisible:true});
@@ -240,7 +240,7 @@ await check('verified owner can download first-run setup without opening the tra
 
 await check('offline edits replace an uncommitted pending request after remote recheck',async()=>{
  const offlineDb=fakeDatabase(),offline=device(offlineDb,{bb2:{
-  setup:core.createBB2Setup(),opening:core.createBB2Opening({ownerId:owner,
+  setup:core.createBB2Setup({catalogueVersion:1}),opening:core.createBB2Opening({ownerId:owner,
    blockId:'offline-retry'}),events:[],sealedBlocks:[]}});
  offlineDb.server.failBeforeWrite=true;
  assert.equal((await offline.session.upload()).status,'uncertain');
@@ -255,7 +255,7 @@ await check('offline edits replace an uncommitted pending request after remote r
  assert.equal(offline.get().cloudSync.pending,null);
 });
 await check('pending conflict allows confirmed cloud recovery only after durable local backup',async()=>{
- const shared=fakeDatabase(),phone=device(shared,{bb2:{setup:core.createBB2Setup(),
+ const shared=fakeDatabase(),phone=device(shared,{bb2:{setup:core.createBB2Setup({catalogueVersion:1}),
   opening:core.createBB2Opening({ownerId:owner,blockId:'pending-conflict'}),
   events:[],sealedBlocks:[]}}),tablet=device(shared);
  assert.equal((await phone.session.upload()).status,'committed');
@@ -315,7 +315,7 @@ await check('real BVOM local document adapter preserves cloud exclusion and flag
  assert.equal(bridge.readAppSnapshot().multiDeviceFenceVerified,false);
  const before=bridge.readLocal();
  assert.equal(before.bb2,null);
- const bb2={setup:core.createBB2Setup(),opening:core.createBB2Opening({
+ const bb2={setup:core.createBB2Setup({catalogueVersion:1}),opening:core.createBB2Opening({
   ownerId:owner,blockId:'bridge-local'}),events:[],sealedBlocks:[]};
  assert.equal(bridge.commitLocal(before.token,bb2),true);
  assert.equal(bridge.readLocal().bb2.opening.blockId,'bridge-local');
@@ -342,7 +342,7 @@ await check('A to B to A preserves owner-scoped BB2 across ordinary account clou
  const seeded=H.boot(H.loadBuild(root));H.configureLP(seeded);
  const base=JSON.parse(seeded.ls.getItem('bvom_data'));
  const a={...base,history:[{id:'a'}],
-  bb2:{setup:core.createBB2Setup(),opening:core.createBB2Opening({ownerId:owner,
+  bb2:{setup:core.createBB2Setup({catalogueVersion:1}),opening:core.createBB2Opening({ownerId:owner,
    blockId:'owner-a-history'}),events:[],sealedBlocks:[]}};
  const b={...base,history:[{id:'b'}]};
  const storage=H.memStore({bvom_data:JSON.stringify(a),bvom_data_owner:owner});
@@ -370,7 +370,7 @@ await check('A to B to A preserves owner-scoped BB2 across ordinary account clou
 await check('Erase Everything removes every account archive and cannot resurrect erased BB2',async()=>{
  const seed=H.boot(H.loadBuild(root));H.configureLP(seed);
  const base=JSON.parse(seed.ls.getItem('bvom_data'));
- const journal={setup:core.createBB2Setup(),opening:core.createBB2Opening({
+ const journal={setup:core.createBB2Setup({catalogueVersion:1}),opening:core.createBB2Opening({
   ownerId:owner,blockId:'erased-private-bb2'}),events:[],sealedBlocks:[]};
  const storage=H.memStore({
   bvom_data:JSON.stringify({...base,bb2:journal}),bvom_data_owner:owner,
@@ -397,7 +397,7 @@ await check('failed owner-archive deletion cannot report a successful Erase Ever
  const seed=H.boot(H.loadBuild(root));H.configureLP(seed);
  const base=JSON.parse(seed.ls.getItem('bvom_data'));
  const archiveKey='bvom_account_switch_backup_owner_'+owner;
- const original={...base,bb2:{setup:core.createBB2Setup(),
+ const original={...base,bb2:{setup:core.createBB2Setup({catalogueVersion:1}),
   opening:core.createBB2Opening({ownerId:owner,blockId:'private-unremoved'}),
   events:[],sealedBlocks:[]}};
  const storage=H.memStore({bvom_data:JSON.stringify(original),bvom_data_owner:owner,

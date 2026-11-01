@@ -10,14 +10,14 @@ const crypto = require('node:crypto');
 const root = path.resolve(__dirname, '..');
 const output = path.join(root, 'bb2', 'browser-core.mjs');
 const modules = Object.freeze([
-  'ledger.cjs', 'catalogue.cjs', 'start.cjs', 'restore.cjs', 'local-store.cjs'
+  'ledger.cjs', 'approved-programme-v2.cjs', 'catalogue.cjs', 'start.cjs', 'restore.cjs', 'local-store.cjs'
 ]);
 const allowed = new Set(modules.map(file => './' + file));
 
 function inspectImports(file, source) {
   const imports = [...source.matchAll(/\brequire\s*\(([^)]*)\)/gs)];
   for (const [, argument] of imports) {
-    const match = /^(['"])(\.\/[a-z-]+\.cjs)\1$/.exec(argument.trim());
+    const match = /^(['"])(\.\/[a-z0-9-]+\.cjs)\1$/.exec(argument.trim());
     if (!match || !allowed.has(match[2])) {
       throw Error(`BB2 browser: unexpected or dynamic require in ${file}`);
     }

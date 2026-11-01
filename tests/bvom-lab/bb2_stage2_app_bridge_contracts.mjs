@@ -58,7 +58,7 @@ test('setup, catalogue Start and replay share the same guarded ESM engine', asyn
     ...safe(), bb2WriterEnabled: true, multiDeviceFenceVerified: true
   } }, app = make(host, state);
   await app.initialize('bridge-block');
-  const newSetup = setBB2OptionalCurls(createBB2Setup(), true);
+  const newSetup = setBB2OptionalCurls(createBB2Setup({catalogueVersion:1}), true);
   assert.equal((await app.saveSetup(newSetup,
     { expectedRevision: 0, activeWorkout: false })).snapshot.revision, 1);
   const slots = getBB2TemplatePrescription(newSetup, 'upper_b').slots.map(s => {
@@ -77,7 +77,7 @@ test('setup, catalogue Start and replay share the same guarded ESM engine', asyn
   assert.equal(started.snapshot.events.length, 1);
   assert.equal(foldBB2Block(started.snapshot.opening,
     started.snapshot.events).headOrdinal, 1);
-  await assert.rejects(app.saveSetup(createBB2Setup(),
+  await assert.rejects(app.saveSetup(createBB2Setup({catalogueVersion:1}),
     { expectedRevision: 2, activeWorkout: false }), /active workout/);
 });
 
@@ -88,15 +88,15 @@ test('sign-out, competing tab, old workout and corrupt storage fail closed', asy
   await app.initialize('bridge-block');
   state.current = { ...state.current, cloudUserId: 'other' };
   assert.throws(() => app.read(), /owner changed/);
-  await assert.rejects(app.saveSetup(createBB2Setup(),
+  await assert.rejects(app.saveSetup(createBB2Setup({catalogueVersion:1}),
     { expectedRevision: 0, activeWorkout: false }), /owner changed/);
   state.current = { ...safe(), bb2WriterEnabled: true,
     multiDeviceFenceVerified: true, tabOwnerCompatible: false };
-  await assert.rejects(app.saveSetup(createBB2Setup(),
+  await assert.rejects(app.saveSetup(createBB2Setup({catalogueVersion:1}),
     { expectedRevision: 0, activeWorkout: false }), /writer disabled/);
   state.current = { ...state.current, tabOwnerCompatible: true,
     legacyWorkoutActive: true };
-  await assert.rejects(app.saveSetup(createBB2Setup(),
+  await assert.rejects(app.saveSetup(createBB2Setup({catalogueVersion:1}),
     { expectedRevision: 0, activeWorkout: false }), /writer disabled/);
   state.current = { ...state.current, legacyWorkoutActive: false };
   host.items.set(app.key, '{bad json');

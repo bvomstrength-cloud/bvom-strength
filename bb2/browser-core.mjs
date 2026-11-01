@@ -1,5 +1,5 @@
 /* GENERATED BB2 browser core — no direct edits. */
-/* Source fingerprint SHA-256: 58f7a4d4c4a17ce7ef829562d465a6efd1f0f10e911604d373c3150aecd9a0c8 */
+/* Source fingerprint SHA-256: d0362f1f84cdbdb29e5ea502c9c0011fc811a57f3bdefb343692e14d74482570 */
 /* Regenerate: node scripts/build-bb2-browser.cjs */
 /* Import has no app, storage, network or clock side effects. */
 const factories = Object.create(null);
@@ -1476,6 +1476,49 @@ module.exports = { SCHEMA_VERSION, FOLD_RULES_VERSION, TEMPLATES, EVENT_TYPES,
   foldBB2Block, commitBB2Transaction, planBB2Finish, createNextBB2Opening,
   discardBB2Session };
 };
+factories["./approved-programme-v2.cjs"] = function (module, exports, require) {
+'use strict';
+// Owner-approved BB2 four-day prescription, 2026-11-01.
+// Used by catalogue v2 and its generated browser bundle. Catalogue v1 remains
+// available for saved preview journals; production enablement is still off.
+const DAYS = Object.freeze({
+  upper_a: [
+    ['flat_press',3,6,8,'bench_press'],
+    ['horizontal_row',3,8,12,'chest_supported_row'],
+    ['shoulder_press',2,8,12,'dumbbell_shoulder_press'],
+    ['triceps_extension',2,10,15,'lying_barbell_triceps_extension']
+  ],
+  lower_a: [
+    ['squat',3,6,8,'high_bar_squat'],
+    ['unilateral_quad',2,8,12,'bulgarian_split_squat'],
+    ['hamstring_curl',3,6,10,'nordic_curl'],
+    ['calf_raise',2,10,20,'standing_calf_raise']
+  ],
+  upper_b: [
+    ['incline_press',3,8,12,'incline_dumbbell_press'],
+    ['vertical_pull',3,6,10,'chinup'],
+    ['horizontal_row',2,8,12,'chest_supported_row'],
+    ['lateral_raise',3,12,20,'dumbbell_lateral_raise'],
+    ['secondary_chest',2,10,15,'dumbbell_fly']
+  ],
+  lower_b: [
+    ['quad',2,8,12,'front_squat'],
+    ['hip_hinge',3,6,8,'romanian_deadlift'],
+    ['calf_raise',2,10,20,'standing_calf_raise'],
+    ['abdominal',2,10,15,'weighted_crunch']
+  ]
+});
+const OPTIONAL_CURL = Object.freeze(['biceps_curl',2,10,15,'dumbbell_curl']);
+const SET_COUNTS = Object.freeze(Object.fromEntries(Object.entries(DAYS).map(([day,slots]) =>
+  [day,slots.reduce((n,s)=>n+s[1],0)])));
+if (Object.values(SET_COUNTS).reduce((a,b)=>a+b,0)!==42) throw Error('BB2 approved core set budget drift');
+for (const [day,slots] of Object.entries(DAYS)) {
+  const names = slots.map(s=>s[0]);
+  if (new Set(names).size!==names.length) throw Error('duplicate role in '+day);
+  if (slots.some(s=>s[1]<1||s[2]>s[3])) throw Error('invalid prescription in '+day);
+}
+module.exports = Object.freeze({DAYS,OPTIONAL_CURL,SET_COUNTS});
+};
 factories["./catalogue.cjs"] = function (module, exports, require) {
 /* BVOM BB2 Stage (ii) — pure, versioned setup/catalogue contracts.
  * No storage, BB1 imports, app shell or runtime enablement.
@@ -1483,7 +1526,7 @@ factories["./catalogue.cjs"] = function (module, exports, require) {
  */
 'use strict';
 
-const CATALOGUE_VERSION = 1;
+const CATALOGUE_VERSION = 2;
 const TEMPLATE_ORDER = Object.freeze(['upper_a', 'lower_a', 'upper_b', 'lower_b']);
 const WARMUP_ORDER = Object.freeze(['FULL', 'FEEDER', 'QUALITATIVE', 'NONE']);
 const fail = message => { throw Error('BB2 catalogue: ' + message); };
@@ -1502,7 +1545,7 @@ const R = (roleSlotId, sets, floor, ceiling, warmup, options, optional = false) 
 // The prescribed counts, ranges, and the four specialist overrides are from
 // Rev 3.5.1 §§3,6. Other equipment choices are a finite initial setup list;
 // extending that list later requires catalogue-version/compatibility review.
-const CATALOGUE = Object.freeze({
+const LEGACY_CATALOGUE = Object.freeze({
   upper_a: Object.freeze([
     R('flat_press', 3, 6, 10, 'FULL', [E('bench_press'), E('dumbbell_flat_press'), E('machine_chest_press')]),
     R('horizontal_row', 3, 8, 12, 'FEEDER', [E('chest_supported_row'), E('barbell_row'), E('dumbbell_row'), E('cable_row')]),
@@ -1555,20 +1598,47 @@ const CATALOGUE = Object.freeze({
   ])
 });
 
+// Keep v1 intact for saved setups, immutable Starts and historical backups.
+// New setups use the owner's 1 November 2026 prescription. Never reinterpret
+// a saved v1 session with v2 counts, rep ranges, defaults or ordering.
+const { DAYS, OPTIONAL_CURL } = require('./approved-programme-v2.cjs');
+const CATALOGUE = Object.freeze(Object.fromEntries(TEMPLATE_ORDER.map(day => {
+  const rows = [...DAYS[day], ...(day === 'upper_b' ? [OPTIONAL_CURL] : [])];
+  return [day, Object.freeze(rows.map(([id, sets, floor, ceiling, defaultId]) => {
+    const old = LEGACY_CATALOGUE[day].find(role => role.roleSlotId === id);
+    const options = old.options.map(option => {
+      // The approved Nordic range is 6–10; retain its qualitative preparation.
+      if (day === 'lower_a' && id === 'hamstring_curl' && option.id === 'nordic_curl') {
+        const { floor: ignoredFloor, ceiling: ignoredCeiling, ...rest } = option;
+        return E(rest.id, rest.equipment, { warmup: rest.warmup });
+      }
+      return option;
+    });
+    options.sort((a,b) => Number(b.id === defaultId) - Number(a.id === defaultId));
+    const warmup = day === 'lower_b' && id === 'quad' ? 'FULL' : old.warmup;
+    return R(id, sets, floor, ceiling, warmup, options, old.optional);
+  }))];
+})));
+function getBB2Catalogue(version = CATALOGUE_VERSION) {
+  if (version === 1) return LEGACY_CATALOGUE;
+  if (version === 2) return CATALOGUE;
+  fail('unsupported catalogue version');
+}
+
 const selectionKey = (templateId, roleSlotId) => `${templateId}|${roleSlotId}`;
-const allRoles = TEMPLATE_ORDER.flatMap(templateId =>
-  CATALOGUE[templateId].map(role => ({ templateId, ...role })));
-const selectionsDefault = () => Object.fromEntries(allRoles.map(role =>
+const allRoles = version => TEMPLATE_ORDER.flatMap(templateId =>
+  getBB2Catalogue(version)[templateId].map(role => ({ templateId, ...role })));
+const selectionsDefault = version => Object.fromEntries(allRoles(version).map(role =>
   [selectionKey(role.templateId, role.roleSlotId), role.defaultExerciseId]));
 
 function validateBB2Setup(setup) {
   only(setup, ['catalogueVersion', 'optionalUpperBCurls', 'selections'], 'setup');
-  if (setup.catalogueVersion !== CATALOGUE_VERSION) fail('unsupported catalogue version');
+  if (![1, 2].includes(setup.catalogueVersion)) fail('unsupported catalogue version');
   if (typeof setup.optionalUpperBCurls !== 'boolean') fail('invalid optional curls selection');
-  const expected = selectionsDefault();
+  const expected = selectionsDefault(setup.catalogueVersion);
   only(setup.selections, Object.keys(expected), 'setup selections');
   if (Object.keys(setup.selections).length !== Object.keys(expected).length) fail('incomplete setup selections');
-  for (const role of allRoles) {
+  for (const role of allRoles(setup.catalogueVersion)) {
     const selected = setup.selections[selectionKey(role.templateId, role.roleSlotId)];
     if (typeof selected !== 'string' || !role.options.some(option => option.id === selected)) {
       fail('exercise is not in finite catalogue: ' + selectionKey(role.templateId, role.roleSlotId));
@@ -1577,32 +1647,33 @@ function validateBB2Setup(setup) {
   return setup;
 }
 
-function createBB2Setup({ optionalUpperBCurls = false, selections = {} } = {}) {
-  only(selections, Object.keys(selectionsDefault()), 'setup selections');
-  const result = { catalogueVersion: CATALOGUE_VERSION, optionalUpperBCurls,
-    selections: { ...selectionsDefault(), ...selections } };
+function createBB2Setup({ catalogueVersion = CATALOGUE_VERSION, optionalUpperBCurls = false, selections = {} } = {}) {
+  only(selections, Object.keys(selectionsDefault(catalogueVersion)), 'setup selections');
+  const result = { catalogueVersion, optionalUpperBCurls,
+    selections: { ...selectionsDefault(catalogueVersion), ...selections } };
   validateBB2Setup(result);
   return Object.freeze({ ...result, selections: Object.freeze(result.selections) });
 }
 
 function chooseBB2Exercise(setup, templateId, roleSlotId, exerciseId) {
   validateBB2Setup(setup);
-  if (!CATALOGUE[templateId]?.some(role => role.roleSlotId === roleSlotId)) {
+  if (!getBB2Catalogue(setup.catalogueVersion)[templateId]?.some(role => role.roleSlotId === roleSlotId)) {
     fail('invalid exercise role');
   }
-  return createBB2Setup({ optionalUpperBCurls: setup.optionalUpperBCurls,
+  return createBB2Setup({ catalogueVersion: setup.catalogueVersion, optionalUpperBCurls: setup.optionalUpperBCurls,
     selections: { ...setup.selections, [selectionKey(templateId, roleSlotId)]: exerciseId } });
 }
 
 function setBB2OptionalCurls(setup, enabled) {
   validateBB2Setup(setup);
-  return createBB2Setup({ optionalUpperBCurls: enabled, selections: setup.selections });
+  return createBB2Setup({ catalogueVersion: setup.catalogueVersion, optionalUpperBCurls: enabled, selections: setup.selections });
 }
 
 function getBB2TemplatePrescription(setup, templateId) {
   validateBB2Setup(setup);
-  if (!own(CATALOGUE, templateId)) fail('unknown template');
-  const prescribed = CATALOGUE[templateId].filter(role =>
+  const catalogue = getBB2Catalogue(setup.catalogueVersion);
+  if (!own(catalogue, templateId)) fail('unknown template');
+  const prescribed = catalogue[templateId].filter(role =>
     !role.optional || setup.optionalUpperBCurls).map((role, originalIndex) => {
     const exerciseId = setup.selections[selectionKey(templateId, role.roleSlotId)];
     const variant = role.options.find(option => option.id === exerciseId);
@@ -1611,18 +1682,18 @@ function getBB2TemplatePrescription(setup, templateId) {
       ceiling: variant.ceiling ?? role.ceiling, equipment: variant.equipment,
       warmup: variant.warmup ?? role.warmup, originalIndex };
   });
-  // One shared stable order for future Workout and Warm-up rendering; FULL
-  // and FEEDER numeric preparation precedes qualitative and small work.
-  prescribed.sort((a, b) => WARMUP_ORDER.indexOf(a.warmup) - WARMUP_ORDER.indexOf(b.warmup) ||
+  // Both screens share the same order. Preserve v1 numerical-first sorting;
+  // v2 follows the explicit owner-approved exercise order, even after swaps.
+  if (setup.catalogueVersion === 1) prescribed.sort((a, b) => WARMUP_ORDER.indexOf(a.warmup) - WARMUP_ORDER.indexOf(b.warmup) ||
     a.originalIndex - b.originalIndex);
   const slots = prescribed.map(({ originalIndex, ...slot }) => Object.freeze(slot));
   const setCount = slots.reduce((sum, slot) => sum + slot.sets, 0);
-  return Object.freeze({ catalogueVersion: CATALOGUE_VERSION, templateId,
+  return Object.freeze({ catalogueVersion: setup.catalogueVersion, templateId,
     slots: Object.freeze(slots), prescribedCount: setCount,
     minimumToFinish: Math.ceil(.70 * setCount) });
 }
 
-module.exports = { CATALOGUE_VERSION, TEMPLATE_ORDER, WARMUP_ORDER, CATALOGUE,
+module.exports = { CATALOGUE_VERSION, TEMPLATE_ORDER, WARMUP_ORDER, CATALOGUE, getBB2Catalogue,
   createBB2Setup, validateBB2Setup, chooseBB2Exercise,
   setBB2OptionalCurls, getBB2TemplatePrescription };
 };
@@ -2017,7 +2088,7 @@ function load(id) {
   factories[id](module, module.exports, load);
   return module.exports;
 }
-export const BB2_BROWSER_SOURCE_SHA256 = "58f7a4d4c4a17ce7ef829562d465a6efd1f0f10e911604d373c3150aecd9a0c8";
+export const BB2_BROWSER_SOURCE_SHA256 = "d0362f1f84cdbdb29e5ea502c9c0011fc811a57f3bdefb343692e14d74482570";
 export const BB2_BROWSER_MODULES = Object.freeze({
   ledger: Object.freeze(load("./ledger.cjs")),
   catalogue: Object.freeze(load("./catalogue.cjs")),

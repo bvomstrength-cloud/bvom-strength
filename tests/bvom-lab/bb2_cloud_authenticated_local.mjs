@@ -73,7 +73,7 @@ function device(account, bb2 = null) {
 const owner = await createLogin('owner');
 const stranger = await createLogin('stranger');
 const victim = await createLogin('victim');
-const initialBB2 = { setup: createBB2Setup(),
+const initialBB2 = { setup: createBB2Setup({catalogueVersion:1}),
   opening: createBB2Opening({ ownerId: owner.ownerId,
     blockId: 'authenticated-test-block' }),
   events: [], sealedBlocks: [], selectedProgram: true };
@@ -115,7 +115,7 @@ await check('RLS prevents another authenticated user from reading or inserting o
 
 await check('two authenticated first-device inserts cannot create competing owner rows', async () => {
   const fresh = await createLogin('first-insert');
-  const initial = { setup: createBB2Setup(),
+  const initial = { setup: createBB2Setup({catalogueVersion:1}),
     opening: createBB2Opening({ ownerId: fresh.ownerId, blockId: 'first-race' }),
     events: [], sealedBlocks: [] };
   const a = device(fresh, initial);

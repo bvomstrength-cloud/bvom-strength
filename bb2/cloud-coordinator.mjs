@@ -57,7 +57,7 @@ export function validateBB2PortableCatalogue(setup, events,
       event.slots.some(slot => slot.roleSlotId === 'biceps_curl');
     let prescribed, historical;
     try {
-      historical = createBB2Setup({ optionalUpperBCurls: hasCurls,
+      historical = createBB2Setup({ catalogueVersion: setup.catalogueVersion, optionalUpperBCurls: hasCurls,
         selections });
       prescribed = getBB2TemplatePrescription(historical, event.templateId).slots;
     } catch (_) { throw Error('BB2 portable Start uses a non-catalogue exercise'); }

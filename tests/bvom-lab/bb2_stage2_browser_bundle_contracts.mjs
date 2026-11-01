@@ -71,8 +71,8 @@ test('every exported module contract matches the original Node implementation', 
 test('browser and Node agree on opening, setup, templates, and gram conversion', () => {
   const input = { ownerId: 'owner-bundle', blockId: 'block-bundle' };
   assert.deepEqual(browser.createBB2Opening(input), node.ledger.createBB2Opening(input));
-  const setup = browser.createBB2Setup();
-  assert.deepEqual(setup, node.catalogue.createBB2Setup());
+  const setup = browser.createBB2Setup({catalogueVersion:1});
+  assert.deepEqual(setup, node.catalogue.createBB2Setup({catalogueVersion:1}));
   for (const templateId of node.catalogue.TEMPLATE_ORDER) {
     assert.deepEqual(browser.getBB2TemplatePrescription(setup, templateId),
       node.catalogue.getBB2TemplatePrescription(setup, templateId));
@@ -118,7 +118,7 @@ test('gated browser module invokes real local writer only with explicit test fla
     ownerId: 'owner-bundle', blockId: 'block-bundle' }));
   snapshot = { ...snapshot, localBlobUnchanged: false };
   await assert.rejects(store.saveSetup(browser.setBB2OptionalCurls(
-    browser.createBB2Setup(), true), { expectedRevision: 0, activeWorkout: false }), /writer disabled/);
+    browser.createBB2Setup({catalogueVersion:1}), true), { expectedRevision: 0, activeWorkout: false }), /writer disabled/);
   assert.equal(store.read().revision, 0);
 });
 

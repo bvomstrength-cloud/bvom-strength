@@ -52,7 +52,7 @@ async function open() {
       BB2_BROWSER_SOURCE_SHA256 } = await import('/bb2/browser-core.mjs');
     window.bb2StaticCoreHash = BB2_BROWSER_SOURCE_SHA256;
     window.bb2StaticOptionalCurls = setBB2OptionalCurls;
-    window.bb2StaticSetup = createBB2Setup;
+    window.bb2StaticSetup = () => createBB2Setup({catalogueVersion:1});
     // ONLY this offline test substitutes both rollout gates. The real app's
     // read-only snapshot always returns false for both and cannot enable sync.
     window.bb2AppRead = () => ({
@@ -69,7 +69,7 @@ async function open() {
 const status = p => p.evaluate(() => window.bb2RealLocalStore.status());
 const attempt = p => p.evaluate(async () => {
   try {
-    await window.bb2RealLocalStore.initialize('browser-block-1');
+    await window.bb2RealLocalStore.initialize('browser-block-1',window.bb2StaticSetup());
     return true;
   } catch (error) { return error.message; }
 });
@@ -115,7 +115,7 @@ test('real app boots with both BB2 rollout gates shut; no local/cloud mutation',
     assert.match(await p.evaluate(() => window.bb2StaticCoreHash), /^[0-9a-f]{64}$/);
     assert.equal(await p.evaluate(() => window.bb2RealLocalStore.read()), null);
     assert.match(await p.evaluate(async () => {
-      try { await window.bb2RealLocalStore.initialize('browser-block-1'); return 'unexpected'; }
+      try { await window.bb2RealLocalStore.initialize('browser-block-1',window.bb2StaticSetup()); return 'unexpected'; }
       catch (error) { return error.message; }
     }), /writer disabled/);
     await p.evaluate(() => { window.bb2TestEnable = true; });
@@ -140,7 +140,7 @@ test('test-only permitted BB2 write changes neither BVOM data nor cloud fingerpr
       window.bb2TestDeviceFence = true; });
     assert.deepEqual(await status(p), { allowed: true, reason: 'eligible' });
     assert.deepEqual(await p.evaluate(async () => {
-      const stored = await window.bb2RealLocalStore.initialize('browser-block-1');
+      const stored = await window.bb2RealLocalStore.initialize('browser-block-1',window.bb2StaticSetup());
       return [stored.snapshot.revision, stored.snapshot.opening.blockId,
         window.bb2RealLocalStore.read().setup.catalogueVersion];
     }), [0, 'browser-block-1', 1]);
