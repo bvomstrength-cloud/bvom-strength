@@ -47,6 +47,23 @@ cache isolation and hostname gating; `bb2_test_package_browser.cjs` opens the
 actual package on a routed test hostname and proves setup/reload and production
 exclusion in mobile Chromium. Existing packaging for other PRs is preserved.
 
+## Final catalogue v3 screen and restore audit
+
+Earned prescriptions carry canonical grams plus a DERIVED source reference,
+without a typed value/unit pair. Warm-up previously showed an empty working
+weight and History could omit the actual load for those earned prescriptions.
+Both screens now display the canonical mass correctly; original entered History
+units remain intact. No progression/event/schema changes were made.
+
+`bb2_catalogue_v3_screen_contracts.mjs` covers actual v3 setup, independent
+per-day curl variants, a 30 kg + 1 kg earned increase, returning exercise swaps,
+kg/lb display, History, and the real Export Backup / FileReader Restore Backup
+confirmation and reload. The packaged mobile Chromium test now records two
+complete v3 workouts, verifies the earned weight in Warm-up and History, downloads
+a genuine JSON backup, imports that file through Settings and verifies the
+restored journal, exact increment, choices and credits. The new screen contract
+is included in the full regression gate.
+
 ---
 
 The following notes are historical implementation checkpoints.

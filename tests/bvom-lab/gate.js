@@ -10,6 +10,7 @@ steps.splice(-1,0,['BB2 CLOUD COORDINATOR','bb2_cloud_coordinator_contracts.mjs'
 steps.splice(-1,0,['BB2 APPROVED PROGRAMME V2','bb2_approved_programme_v2.js',[]]);
 steps.splice(-1,0,['BB2 V2 INTEGRATION','bb2_programme_v2_integration.mjs',[]]);
 steps.splice(-1,0,['BB2 TEST PACKAGE','bb2_test_package_contracts.cjs',[]]);
+steps.splice(-1,0,['BB2 CATALOGUE V3 SCREENS','bb2_catalogue_v3_screen_contracts.mjs',[]]);
 const out=[];for(const [name,file,args] of steps){console.log(`\n######## ${name} ########`);const r=spawnSync(process.execPath,[path.join(__dirname,file),...args],{stdio:'inherit'});out.push([name,r.status===0])}
 console.log('\n######## GATE SUMMARY ########');for(const [n,ok] of out)console.log(`${ok?'PASS':'FAIL'}  ${n}`);
 const go=out.every(x=>x[1]);console.log(`\nVERDICT: ${go?'GO':'NO-GO'}`);process.exit(go?0:1);

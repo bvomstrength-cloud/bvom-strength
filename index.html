@@ -6965,8 +6965,9 @@ function bvomBb2RenderHistory(){
   const sets=h.sets.map((s,setIndex)=>'<div class="histLift"><b>'+
    bvomEsc(bvomBb2PreviewLabel(s.exerciseId))+'</b> · '+
    s.reps+' '+hlmTxt('reps','回')+(!s.prescribed?' · '+hlmTxt('EXTRA SET','追加セット'):'')+
-   (s.actualOrigin?' · '+bvomEsc(s.actualOrigin.value)+' '+
-    bvomEsc(s.actualOrigin.unit):'')+
+   (Number.isSafeInteger(s.actualG)?' · '+
+    bvomEsc(s.actualOrigin?.unit?s.actualOrigin.value:bvomBb2DisplayLoad(s.actualG))+' '+
+    bvomEsc(s.actualOrigin?.unit||unitLabel()):'')+
    (s.variation?' · '+bvomEsc(s.variation)+' · '+bvomEsc(s.assistance):'')+
    (s.harderThanIntended?' · '+hlmTxt('Hard','高強度'):'')+
    (canCorrect&&!archived?'<div class="warmrow bb2HistoryCorrection"><div class="bb2HistoryCorrectionFields"><label>'+hlmTxt('Correct reps','回数を修正')+' <input type="number" min="1" step="1" '+
@@ -7146,8 +7147,8 @@ function bvomBb2WarmupRender(){
    '<b>'+bvomEsc(String(weight))+' '+bvomEsc(plan.unit)+' × '+reps+
    '</b><span class="plates">'+hlmTxt('Preparation only','ウォームアップのみ')+'</span></div>').join('');
   const working=slot.plannedG!==undefined?
-   '<div class="small">'+hlmTxt('Working:','使用重量：')+' '+bvomEsc(slot.plannedOrigin.value)+' '+
-    bvomEsc(slot.plannedOrigin.unit)+'</div>':'';
+   '<div class="small">'+hlmTxt('Working:','使用重量：')+' '+bvomEsc(bvomBb2DisplayLoad(slot.plannedG))+' '+
+    bvomEsc(unitLabel())+'</div>':'';
   const kindLabel=hlmTxt(plan.kind,({FULL:'フル',FEEDER:'軽め',NONE:'なし',QUALITATIVE:'動作で準備'})[plan.kind]||plan.kind);
   return '<div class="exercise" data-bb2-warm-card="'+i+'"><div class="exhead"><div class="exname">'+
    bvomEsc(bvomBb2PreviewLabel(slot.exerciseId))+
