@@ -113,6 +113,20 @@ test('LP-PROGRESSION','CONTROL','LP success progresses only the lifts of the day
   const h=H.boot(build);configureLP(h);for(const n of ['Squat','Bench Press','Prone Row'])for(let i=0;i<3;i++)h.ctx.tapSet(n,i);finish(h);
   const w=h.S().weights;return ok(w.Squat===102.5&&w['Bench Press']===72.5&&w['Prone Row']===62.5&&w['Overhead Press']===45&&w.Deadlift===120&&h.S().history.length===1,JSON.stringify(w));
 });
+test('LP-INCREMENT-EDIT-PRESERVES-FAILURE-STREAK','CONTROL','LP changing only the increment (or saving unchanged settings) preserves two failures; an actual working-weight edit still resets them',()=>{
+  const results=[];
+  for(const [change,mode] of [['increment','straight'],['increment','rpt'],['unchanged','straight'],['weight','straight']]){
+    const ls=H.memStore(),h=H.boot(build,{ls});configureLP(h);
+    const n='Bench Press',c=h.S().core[n],w=h.S().weights[n];
+    if(mode==='rpt'){c.mode='rpt';c.rptLevel=1;}
+    h.S().attempts[n]=2;h.ev('save()');
+    setLiftSettingsFields(h,n,{weight:w+(change==='weight'?2.5:0),increment:change==='increment'?1:c.increment,drop:c.drop,mode:c.mode,level:c.rptLevel,bar:h.S().barByLift[n]});
+    h.ctx.saveLiftSettings(n);
+    const expected=change==='weight'?0:2,actual=h.S().attempts[n],persisted=JSON.parse(ls.getItem('bvom_data')).attempts[n];
+    results.push({change,mode,expected,actual,persisted,increment:h.S().core[n].increment,weight:h.S().weights[n],pass:actual===expected&&persisted===expected});
+  }
+  return ok(results.every(x=>x.pass),JSON.stringify(results));
+});
 test('HLM-ENTRY-LIVE','CONTROL','HLM entry via live (wrapped) chooseProgramMode seeds drivers; re-entry preserves them',()=>{
   const h=H.boot(build);configureLP(h,{...H.LP_W,Squat:100,'Bench Press':80});
   h.choices.push('R');h.ctx.chooseProgramMode('hlm');const S=h.S();
