@@ -2081,8 +2081,16 @@ function bvomUnitChangeModal(from,to){const fromName=bvomT(from==='lb'?'modals.p
 function bvomStartingSetupModal(){if(!bvomWorkoutActionAllowed())return;if(bvomStateWorkoutActive(state)){bvomBeeModal(hlmTxt('FINISH WORKOUT FIRST','先にワークアウトを終了してください'),hlmTxt('Finish or exit the current workout before running Starting Setup again.','Starting Setupを再実行する前に、現在のワークアウトを終了または中止してください。'));return}if(bvomDeferredSetupValid()){bvomOfferDeferredSetup();return}const o=document.createElement('div');o.className='bvomModalOverlay';o.innerHTML=`<div class="bvomModal"><h3>${bvomT('modals.setupTitle')}</h3><div class="sub">${bvomT('modals.setupBody')}</div><div class="modalActions"><button type="button" data-c>${bvomT('shell.cancel')}</button><button type="button" class="primary" data-r>${bvomT('modals.runSetup')}</button></div></div>`;document.body.appendChild(o);o.querySelector('[data-c]').onclick=()=>o.remove();o.querySelector('[data-r]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;if(bvomStateWorkoutActive(state)||bvomStoredWorkoutActive()){bvomWorkoutReadOnlyNotice();return}const before=state.configured;state.configured=false;if(!save({durable:true})){state.configured=before;return}o.remove();showSetup()}}
 function bvomClearLocalCloudSession(){for(const store of [localStorage,sessionStorage]){try{store.removeItem('sb-hkteienxwdsjncchuvnz-auth-token')}catch(e){}try{if(typeof store.key==='function'){const keys=[];for(let n=0;n<store.length;n++){const k=store.key(n);if(k&&k.startsWith('sb-hkteienxwdsjncchuvnz-auth-token'))keys.push(k)}keys.forEach(k=>store.removeItem(k))}}catch(e){}}}
 const BVOM_ERASE_KEYS=[BVOM_DATA_KEY,BVOM_DATA_OWNER_KEY,BVOM_ACCOUNT_SWITCH_BACKUP_KEY,BVOM_WORKOUT_TAB_OWNER_KEY,'bvom_legacy_workout_before_archive','bvom13','bvom12','bvom_pre_restore','bvom_pre_cloud_restore','bvom_cloud_restore_baseline','bvom_bee_layoff_ack'];
+function bvomEraseLocalKeys(){
+ const keys=[...BVOM_ERASE_KEYS];
+ for(let n=0;n<localStorage.length;n++){
+  const key=localStorage.key(n);
+  if(key&&key.startsWith(BVOM_ACCOUNT_SWITCH_OWNER_PREFIX))keys.push(key);
+ }
+ return keys.sort();
+}
 let bvomEraseOperation=null;
-function bvomEraseSnapshot(){return {saved:BVOM_ERASE_KEYS.map(k=>localStorage.getItem(k)),memory:JSON.stringify(state),auth:window.__bvomAuthUserId||null,user:bvomCloud.user?.id||null,deferred:!!bvomCloud.accountSwitchDeferred,offline:!!bvomCloud.offlineLocalAccess,tab:sessionStorage.getItem(BVOM_TAB_SESSION_KEY)}}
+function bvomEraseSnapshot(){return {saved:bvomEraseLocalKeys().map(k=>[k,localStorage.getItem(k)]),memory:JSON.stringify(state),auth:window.__bvomAuthUserId||null,user:bvomCloud.user?.id||null,deferred:!!bvomCloud.accountSwitchDeferred,offline:!!bvomCloud.offlineLocalAccess,tab:sessionStorage.getItem(BVOM_TAB_SESSION_KEY)}}
 // Only the expected local SIGNED_OUT event may advance this operation's auth snapshot.
 function bvomEraseAuthEvent(event,old,next){const op=bvomEraseOperation;if(!op||op.phase!=='pending')return;if(event==='SIGNED_OUT'&&!next&&old===op.snapshot.user&&!op.authChanged){op.snapshot.auth=null;op.snapshot.user=null;op.snapshot.offline=false;op.snapshot.deferred=false;op.signedOut=true}else op.authChanged=true}
 function bvomEraseStillCurrent(op){try{return !op.authChanged&&JSON.stringify(bvomEraseSnapshot())===JSON.stringify(op.snapshot)}catch(e){return false}}
@@ -2103,7 +2111,24 @@ async function bvomEraseModal(){
   // Last synchronous check before ANY application local-destructive operation. No await follows.
   if(op.cancelled||closed||!bvomEraseStillCurrent(op)){closed=true;bvomEraseOperation=null;bvomEraseStopped(op,op.cancelled);return}
   op.phase='committing';cancel.disabled=true;cancel.onclick=null;e.onclick=null;
-  bvomClearLocalCloudSession();for(const k of BVOM_ERASE_KEYS){try{localStorage.removeItem(k)}catch(err){}}
+  try{
+   const keys=bvomEraseLocalKeys();
+   // Remove both archive formats first: a failed private-history deletion must
+   // never be followed by a misleading successful wipe of the active document.
+   const archives=keys.filter(k=>k===BVOM_ACCOUNT_SWITCH_BACKUP_KEY||k.startsWith(BVOM_ACCOUNT_SWITCH_OWNER_PREFIX));
+   const rest=keys.filter(k=>!archives.includes(k));
+   bvomClearLocalCloudSession();
+   for(const k of [...archives,...rest]){
+    localStorage.removeItem(k);
+    if(localStorage.getItem(k)!==null)throw Error('Local erasure did not remove '+k);
+   }
+  }catch(err){
+   closed=true;bvomEraseOperation=null;o.remove();
+   bvomBeeModal(hlmTxt('ERASE INCOMPLETE','削除が完了しませんでした'),
+    hlmTxt('The browser could not remove all local BVOM data. Some training information may remain on this device. Clear this website’s stored data in your browser settings before sharing the device. Cloud backup was not deleted.',
+     'ブラウザーが端末内のBVOMデータをすべて削除できませんでした。この端末にトレーニング情報が残っている可能性があります。端末を他の人に渡す前に、ブラウザーの設定からこのサイトの保存データを削除してください。クラウドのバックアップは削除されていません。'));
+   return;
+  }
   closed=true;bvomEraseOperation=null;o.remove();location.reload();
  };
 }
@@ -3323,7 +3348,31 @@ function importBackupFile(input){if(!bvomWorkoutActionAllowed())return;
   const body=(bb2Warning?'<p style="font-weight:700">'+bb2Warning+'</p>':'')+
    hlmTxt('This will replace BVOM data currently on this device. A one-step pre-restore copy will be kept on this device.',
     'この端末の現在のBVOMデータを置き換えます。復元前のデータは、この端末に1段階の復元用コピーとして保存されます。');
-  bvomChoiceModal(hlmTxt('RESTORE BACKUP?','バックアップを復元しますか？'),body,hlmTxt('CANCEL','キャンセル'),hlmTxt('RESTORE','復元'),()=>{input.value=''},()=>{if(!bvomRestoreCommitAllowed(token)){input.value='';return false}try{localStorage.setItem('bvom_pre_restore',JSON.stringify(state));if(!bvomRestoreCommitAllowed(token))return false;localStorage.setItem(BVOM_DATA_KEY,JSON.stringify(d));if(window.__bvomAuthUserId)bvomSetLocalOwnerId(window.__bvomAuthUserId);location.reload()}catch(e){input.value='';bvomBeeModal(hlmTxt('RESTORE FAILED','復元できませんでした'),hlmTxt('BVOM could not save the restored data on this device. Your current session has not been replaced.','復元したデータをこの端末に保存できませんでした。現在のセッションは置き換えられていません。'))}});
+  bvomChoiceModal(hlmTxt('RESTORE BACKUP?','バックアップを復元しますか？'),body,hlmTxt('CANCEL','キャンセル'),hlmTxt('RESTORE','復元'),()=>{input.value=''},()=>{
+   if(!bvomRestoreCommitAllowed(token)){input.value='';return false}
+   let archiveKey=null,archivePrevious=null,archiveTouched=false;
+   try{
+    localStorage.setItem('bvom_pre_restore',JSON.stringify(state));
+    if(!bvomRestoreCommitAllowed(token))return false;
+    // A confirmed restore supersedes any older owner archive. Otherwise a later
+    // account switch could resurrect BB2 that the user deliberately removed.
+    const ownerId=token.auth||token.owner;
+    if(ownerId){
+     archiveKey=bvomAccountSwitchArchiveKey(ownerId);
+     archivePrevious=localStorage.getItem(archiveKey);
+     const restoredArchive=JSON.stringify({saved_at:new Date().toISOString(),owner_id:ownerId,data:d});
+     archiveTouched=true;
+     localStorage.setItem(archiveKey,restoredArchive);
+     if(localStorage.getItem(archiveKey)!==restoredArchive)throw Error('Restored archive write failed');
+    }
+    localStorage.setItem(BVOM_DATA_KEY,JSON.stringify(d));
+    if(window.__bvomAuthUserId)bvomSetLocalOwnerId(window.__bvomAuthUserId);
+    location.reload();
+   }catch(e){
+    if(archiveTouched)try{if(archivePrevious===null)localStorage.removeItem(archiveKey);else localStorage.setItem(archiveKey,archivePrevious)}catch(_e){}
+    input.value='';bvomBeeModal(hlmTxt('RESTORE FAILED','復元できませんでした'),hlmTxt('BVOM could not save the restored data on this device. Your current session has not been replaced.','復元したデータをこの端末に保存できませんでした。現在のセッションは置き換えられていません。'));
+   }
+  });
  };
  r.onerror=()=>{input.value='';bvomBeeModal(hlmTxt('BACKUP NOT RESTORED','バックアップを復元できませんでした'),hlmTxt('BVOM could not read that backup file.','そのバックアップファイルを読み込めませんでした。'))};r.readAsText(f);
 }

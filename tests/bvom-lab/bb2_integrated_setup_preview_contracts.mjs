@@ -189,6 +189,9 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ev('window.__bvomAuthUserId=__bb2ImportOwner;'+
   'bvomCloud.user={id:__bb2ImportOwner};bvomSetLocalOwnerId(__bb2ImportOwner);'+
   'bvomEntitlementAccessDecision=()=>({allowed:true})');
+ const ownerArchive='bvom_account_switch_backup_owner_'+owner;
+ h.ls.setItem(ownerArchive,JSON.stringify({owner_id:owner,
+  data:{...oldBackup,bb2},saved_at:'2026-10-01T00:00:00.000Z'}));
  h.ctx.importBackupFile({files:[{name:'old-bvom.json'}]});
  reader.result=JSON.stringify({app:'BVOM',data:oldBackup});reader.onload();
  assert.match(prompt,/Bodybuilding 2 setup or workouts/,
@@ -210,7 +213,15 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   'a deliberately confirmed legacy restore retains existing replacement semantics');
  assert.equal(JSON.parse(h.ls.getItem('bvom_pre_restore')).bb2.opening.blockId,
   'bb2-backup-guard','the existing pre-restore recovery snapshot contains old BB2 data');
- console.log('PASS: BB2 local-only backup restore warning, cancellation and pre-restore recovery');
+ assert.equal(JSON.parse(h.ls.getItem(ownerArchive)).data.bb2,undefined,
+  'confirmed restore replaces the stale account archive without BB2');
+ h.ev('bvomWindowLockOwned=true');
+ const foreign='22222222-2222-4222-8222-222222222222';
+ assert.equal(h.ctx.bvomReplaceLocalForAccount(foreign,oldBackup),true);
+ assert.equal(h.ctx.bvomReplaceLocalForAccount(owner,oldBackup),true);
+ assert.equal(JSON.parse(h.ls.getItem('bvom_data')).bb2,undefined,
+  'switching accounts after a confirmed restore cannot resurrect removed BB2');
+ console.log('PASS: BB2 local-only backup warning, confirmed restore and archive-safe account switch');
 }
 
 {

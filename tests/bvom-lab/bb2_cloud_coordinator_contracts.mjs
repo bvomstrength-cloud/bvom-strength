@@ -367,6 +367,55 @@ await check('A to B to A preserves owner-scoped BB2 across ordinary account clou
  assert.equal(JSON.parse(storage.getItem('bvom_data')).bb2.opening.blockId,
   'owner-a-history','repeat switches never erase A training');
 });
+await check('Erase Everything removes every account archive and cannot resurrect erased BB2',async()=>{
+ const seed=H.boot(H.loadBuild(root));H.configureLP(seed);
+ const base=JSON.parse(seed.ls.getItem('bvom_data'));
+ const journal={setup:core.createBB2Setup(),opening:core.createBB2Opening({
+  ownerId:owner,blockId:'erased-private-bb2'}),events:[],sealedBlocks:[]};
+ const storage=H.memStore({
+  bvom_data:JSON.stringify({...base,bb2:journal}),bvom_data_owner:owner,
+  ['bvom_account_switch_backup_owner_'+owner]:JSON.stringify({owner_id:owner,
+   data:{...base,bb2:journal}}),
+  ['bvom_account_switch_backup_owner_'+other]:JSON.stringify({owner_id:other,
+   data:base})});
+ const h=H.boot(H.loadBuild(root),{ls:storage});H.configureLP(h);
+ await h.ctx.eraseAll();
+ const overlay=h.lastOverlay(),input=overlay.querySelector('[data-i]');
+ input.value='RESET';input.oninput();
+ await overlay.querySelector('[data-e]').onclick();
+ for(const key of ['bvom_data','bvom_data_owner',
+  'bvom_account_switch_backup_owner_'+owner,
+  'bvom_account_switch_backup_owner_'+other])
+  assert.equal(storage.getItem(key),null,`Erase Everything must remove ${key}`);
+ const reopened=H.boot(H.loadBuild(root),{ls:storage});
+ reopened.ev('bvomWindowLockOwned=true');
+ assert.equal(reopened.ctx.bvomReplaceLocalForAccount(owner,null),true);
+ assert.equal(JSON.parse(storage.getItem('bvom_data'))?.bb2,undefined,
+  'reopening the erased account cannot resurrect removed BB2');
+});
+await check('failed owner-archive deletion cannot report a successful Erase Everything',async()=>{
+ const seed=H.boot(H.loadBuild(root));H.configureLP(seed);
+ const base=JSON.parse(seed.ls.getItem('bvom_data'));
+ const archiveKey='bvom_account_switch_backup_owner_'+owner;
+ const original={...base,bb2:{setup:core.createBB2Setup(),
+  opening:core.createBB2Opening({ownerId:owner,blockId:'private-unremoved'}),
+  events:[],sealedBlocks:[]}};
+ const storage=H.memStore({bvom_data:JSON.stringify(original),bvom_data_owner:owner,
+  [archiveKey]:JSON.stringify({owner_id:owner,data:original})});
+ const h=H.boot(H.loadBuild(root),{ls:storage});H.configureLP(h);
+ const remove=storage.removeItem;
+ storage.removeItem=key=>{if(key===archiveKey)throw Error('browser denied archive deletion');return remove(key)};
+ await h.ctx.eraseAll();
+ const overlay=h.lastOverlay(),input=overlay.querySelector('[data-i]');
+ input.value='RESET';input.oninput();await overlay.querySelector('[data-e]').onclick();
+ assert.equal(storage.getItem('bvom_data'),JSON.stringify(original),
+  'failed archive removal leaves the original training document intact');
+ assert.notEqual(storage.getItem(archiveKey),null,'undeleted archive is acknowledged');
+ assert.equal(h.log.some(entry=>entry[0]==='reload'),false,
+  'failed erasure does not claim success by reloading');
+ assert.match(h.lastOverlay().innerHTML,/ERASE INCOMPLETE/,
+  'user sees an honest incomplete-erasure warning');
+});
 await check('account archive quota failure stops replacement and keeps sole BB2 document',async()=>{
  const seeded=H.boot(H.loadBuild(root));H.configureLP(seeded);
  const original={...JSON.parse(seeded.ls.getItem('bvom_data')),
