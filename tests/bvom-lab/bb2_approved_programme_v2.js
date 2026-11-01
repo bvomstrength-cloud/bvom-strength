@@ -16,7 +16,7 @@ console.log('PASS BB2 owner-approved 42-set design contract');
 
 const core = require('../../bb2/catalogue.cjs');
 const setup = core.createBB2Setup();
-assert.equal(setup.catalogueVersion,2);
+assert.equal(setup.catalogueVersion,3);
 for (const [day,rows] of Object.entries(DAYS)) {
  const plan=core.getBB2TemplatePrescription(setup,day);
  assert.deepEqual(plan.slots.map(s=>[s.roleSlotId,s.sets,s.floor,s.ceiling,s.exerciseId]),rows);
@@ -41,3 +41,13 @@ for(const day of core.TEMPLATE_ORDER) for(const role of core.CATALOGUE[day]) for
  assert.equal(plan.minimumToFinish,Math.ceil(.7*plan.prescribedCount));
 }
 console.log('PASS BB2 v2 real catalogue, all choices, ordering, optional curls and v1 preservation');
+
+// Upper A and B curls are independent optional additions to the 42-set core.
+const both=core.setBB2OptionalCurls(curls,true,'upper_a');
+assert.deepEqual(core.TEMPLATE_ORDER.map(d=>core.getBB2TemplatePrescription(both,d).prescribedCount),[12,10,15,9]);
+assert.deepEqual(core.TEMPLATE_ORDER.map(d=>core.getBB2TemplatePrescription(both,d).minimumToFinish),[9,7,11,7]);
+assert.equal(core.getBB2TemplatePrescription(both,'upper_a').slots.at(-1).exerciseId,'dumbbell_curl');
+const aOnly=core.setBB2OptionalCurls(both,false,'upper_b');
+assert.equal(aOnly.optionalUpperACurls,true);
+assert.equal(aOnly.optionalUpperBCurls,false);
+console.log('PASS independent optional curls on both upper days');

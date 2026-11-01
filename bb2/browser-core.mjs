@@ -1,5 +1,5 @@
 /* GENERATED BB2 browser core — no direct edits. */
-/* Source fingerprint SHA-256: d0362f1f84cdbdb29e5ea502c9c0011fc811a57f3bdefb343692e14d74482570 */
+/* Source fingerprint SHA-256: 67834a1e0fb4a9f12d0e4b0b8953618e68171fea664ccf86f1b6030dce7abfce */
 /* Regenerate: node scripts/build-bb2-browser.cjs */
 /* Import has no app, storage, network or clock side effects. */
 const factories = Object.create(null);
@@ -1526,7 +1526,7 @@ factories["./catalogue.cjs"] = function (module, exports, require) {
  */
 'use strict';
 
-const CATALOGUE_VERSION = 2;
+const CATALOGUE_VERSION = 3;
 const TEMPLATE_ORDER = Object.freeze(['upper_a', 'lower_a', 'upper_b', 'lower_b']);
 const WARMUP_ORDER = Object.freeze(['FULL', 'FEEDER', 'QUALITATIVE', 'NONE']);
 const fail = message => { throw Error('BB2 catalogue: ' + message); };
@@ -1602,7 +1602,7 @@ const LEGACY_CATALOGUE = Object.freeze({
 // New setups use the owner's 1 November 2026 prescription. Never reinterpret
 // a saved v1 session with v2 counts, rep ranges, defaults or ordering.
 const { DAYS, OPTIONAL_CURL } = require('./approved-programme-v2.cjs');
-const CATALOGUE = Object.freeze(Object.fromEntries(TEMPLATE_ORDER.map(day => {
+const V2_CATALOGUE = Object.freeze(Object.fromEntries(TEMPLATE_ORDER.map(day => {
   const rows = [...DAYS[day], ...(day === 'upper_b' ? [OPTIONAL_CURL] : [])];
   return [day, Object.freeze(rows.map(([id, sets, floor, ceiling, defaultId]) => {
     const old = LEGACY_CATALOGUE[day].find(role => role.roleSlotId === id);
@@ -1619,9 +1619,14 @@ const CATALOGUE = Object.freeze(Object.fromEntries(TEMPLATE_ORDER.map(day => {
     return R(id, sets, floor, ceiling, warmup, options, old.optional);
   }))];
 })));
+// Catalogue v3 adds Upper A curls without changing saved v1/v2 prescriptions.
+const curlRole = V2_CATALOGUE.upper_b.find(role => role.roleSlotId === 'biceps_curl');
+const CATALOGUE = Object.freeze({ ...V2_CATALOGUE,
+  upper_a: Object.freeze([...V2_CATALOGUE.upper_a, curlRole]) });
 function getBB2Catalogue(version = CATALOGUE_VERSION) {
   if (version === 1) return LEGACY_CATALOGUE;
-  if (version === 2) return CATALOGUE;
+  if (version === 2) return V2_CATALOGUE;
+  if (version === 3) return CATALOGUE;
   fail('unsupported catalogue version');
 }
 
@@ -1632,9 +1637,12 @@ const selectionsDefault = version => Object.fromEntries(allRoles(version).map(ro
   [selectionKey(role.templateId, role.roleSlotId), role.defaultExerciseId]));
 
 function validateBB2Setup(setup) {
-  only(setup, ['catalogueVersion', 'optionalUpperBCurls', 'selections'], 'setup');
-  if (![1, 2].includes(setup.catalogueVersion)) fail('unsupported catalogue version');
+  if (setup && ![1,2,3].includes(setup.catalogueVersion)) fail('unsupported catalogue version');
+  only(setup, ['catalogueVersion', 'optionalUpperBCurls', 'selections',
+    ...(setup?.catalogueVersion === 3 ? ['optionalUpperACurls'] : [])], 'setup');
+  if (![1, 2, 3].includes(setup.catalogueVersion)) fail('unsupported catalogue version');
   if (typeof setup.optionalUpperBCurls !== 'boolean') fail('invalid optional curls selection');
+  if (setup.catalogueVersion === 3 && typeof setup.optionalUpperACurls !== 'boolean') fail('invalid optional Upper A curls selection');
   const expected = selectionsDefault(setup.catalogueVersion);
   only(setup.selections, Object.keys(expected), 'setup selections');
   if (Object.keys(setup.selections).length !== Object.keys(expected).length) fail('incomplete setup selections');
@@ -1647,9 +1655,11 @@ function validateBB2Setup(setup) {
   return setup;
 }
 
-function createBB2Setup({ catalogueVersion = CATALOGUE_VERSION, optionalUpperBCurls = false, selections = {} } = {}) {
+function createBB2Setup({ catalogueVersion = CATALOGUE_VERSION, optionalUpperBCurls = false, optionalUpperACurls = false, selections = {} } = {}) {
+  if (catalogueVersion !== 3 && optionalUpperACurls !== false) fail('optional Upper A curls need catalogue version 3');
   only(selections, Object.keys(selectionsDefault(catalogueVersion)), 'setup selections');
   const result = { catalogueVersion, optionalUpperBCurls,
+    ...(catalogueVersion === 3 ? { optionalUpperACurls } : {}),
     selections: { ...selectionsDefault(catalogueVersion), ...selections } };
   validateBB2Setup(result);
   return Object.freeze({ ...result, selections: Object.freeze(result.selections) });
@@ -1660,13 +1670,17 @@ function chooseBB2Exercise(setup, templateId, roleSlotId, exerciseId) {
   if (!getBB2Catalogue(setup.catalogueVersion)[templateId]?.some(role => role.roleSlotId === roleSlotId)) {
     fail('invalid exercise role');
   }
-  return createBB2Setup({ catalogueVersion: setup.catalogueVersion, optionalUpperBCurls: setup.optionalUpperBCurls,
+  return createBB2Setup({ ...setup, optionalUpperBCurls: setup.optionalUpperBCurls,
     selections: { ...setup.selections, [selectionKey(templateId, roleSlotId)]: exerciseId } });
 }
 
-function setBB2OptionalCurls(setup, enabled) {
+function setBB2OptionalCurls(setup, enabled, templateId = 'upper_b') {
   validateBB2Setup(setup);
-  return createBB2Setup({ catalogueVersion: setup.catalogueVersion, optionalUpperBCurls: enabled, selections: setup.selections });
+  if (!['upper_a','upper_b'].includes(templateId) ||
+      (templateId === 'upper_a' && setup.catalogueVersion !== 3)) fail('optional curls unavailable for this template/version');
+  if (typeof enabled !== 'boolean') fail('invalid optional curls selection');
+  return createBB2Setup({ ...setup,
+    [templateId === 'upper_a' ? 'optionalUpperACurls' : 'optionalUpperBCurls']: enabled });
 }
 
 function getBB2TemplatePrescription(setup, templateId) {
@@ -1674,7 +1688,7 @@ function getBB2TemplatePrescription(setup, templateId) {
   const catalogue = getBB2Catalogue(setup.catalogueVersion);
   if (!own(catalogue, templateId)) fail('unknown template');
   const prescribed = catalogue[templateId].filter(role =>
-    !role.optional || setup.optionalUpperBCurls).map((role, originalIndex) => {
+    !role.optional || (templateId === 'upper_a' ? setup.optionalUpperACurls : setup.optionalUpperBCurls)).map((role, originalIndex) => {
     const exerciseId = setup.selections[selectionKey(templateId, role.roleSlotId)];
     const variant = role.options.find(option => option.id === exerciseId);
     return { roleSlotId: role.roleSlotId, exerciseId,
@@ -2088,7 +2102,7 @@ function load(id) {
   factories[id](module, module.exports, load);
   return module.exports;
 }
-export const BB2_BROWSER_SOURCE_SHA256 = "d0362f1f84cdbdb29e5ea502c9c0011fc811a57f3bdefb343692e14d74482570";
+export const BB2_BROWSER_SOURCE_SHA256 = "67834a1e0fb4a9f12d0e4b0b8953618e68171fea664ccf86f1b6030dce7abfce";
 export const BB2_BROWSER_MODULES = Object.freeze({
   ledger: Object.freeze(load("./ledger.cjs")),
   catalogue: Object.freeze(load("./catalogue.cjs")),

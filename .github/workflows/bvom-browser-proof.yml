@@ -148,6 +148,9 @@ jobs:
         run: node tests/bvom-lab/bb2_app_session_browser.cjs
       - name: Check developer-only BB2 setup preview in the real BVOM program chooser
         run: node tests/bvom-lab/bb2_integrated_setup_preview_browser.cjs
+
+      - name: Verify packaged BB2 test-site entry and both optional curl days
+        run: node tests/bvom-lab/bb2_test_package_browser.cjs
       - name: Preserve mobile BB1/BB2 Edit Weight comparison screenshots
         if: always()
         uses: actions/upload-artifact@v4

@@ -18,7 +18,7 @@ const slot = (setup, template, role) => plan(setup, template).slots.find(s => s.
 const ids = setup => Object.entries(setup.selections);
 
 check('four versioned templates and closed role inventory', () => {
-  assert.equal(CATALOGUE_VERSION, 2);
+  assert.equal(CATALOGUE_VERSION, 3);
   assert.deepEqual(TEMPLATE_ORDER, ['upper_a', 'lower_a', 'upper_b', 'lower_b']);
   assert.deepEqual(WARMUP_ORDER, ['FULL', 'FEEDER', 'QUALITATIVE', 'NONE']);
   assert.deepEqual(TEMPLATE_ORDER.map(k => CATALOGUE[k].length), [5, 5, 6, 5]);
@@ -129,7 +129,7 @@ check('strict closed setup, unsupported version, missing/unknown role and bad va
   const base = createBB2Setup({catalogueVersion:1});
   assert.equal(validateBB2Setup(base), base);
   assert.throws(() => validateBB2Setup({ ...base, extra: 'x' }), /unknown setup field/);
-  assert.throws(() => validateBB2Setup({ ...base, catalogueVersion: 3 }), /version/);
+  assert.throws(() => validateBB2Setup({ ...base, catalogueVersion: 4 }), /version/);
   assert.throws(() => validateBB2Setup({ ...base, optionalUpperBCurls: 1 }), /optional curls/);
   const { 'upper_a|flat_press': removed, ...short } = base.selections;
   assert.throws(() => validateBB2Setup({ ...base, selections: short }), /incomplete/);

@@ -27,7 +27,7 @@ function open(h){h.ev('bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.
  'bvomBb2PreviewDraft=__core.createBB2Setup(state.bb2?.setup);bvomBb2PreviewSaved=!!state.bb2?.setup;bvomBb2RenderPreview()')}
 let h=boot();open(h);
 assert.equal(h.ctx.bvomBb2SaveSetup(),true);
-assert.equal(h.S().bb2.setup.catalogueVersion,2);
+assert.equal(h.S().bb2.setup.catalogueVersion,3);
 const counts={upper_a:10,lower_a:10,upper_b:13,lower_b:9};
 const cloud=JSON.stringify(h.ctx.bvomCloudPayload()),legacyHistory=JSON.stringify(h.S().history);
 for(let round=0;round<8;round++)for(const day of Object.keys(counts)){
@@ -48,7 +48,7 @@ for(let round=0;round<8;round++)for(const day of Object.keys(counts)){
  if(round===0){
   // Persisted v2 sessions reopen with unchanged immutable prescriptions.
   h=boot(h.ls);
-  assert.equal(h.S().bb2.setup.catalogueVersion,2);
+  assert.equal(h.S().bb2.setup.catalogueVersion,3);
   assert.equal(core.foldBB2Block(h.S().bb2.opening,h.S().bb2.events).quotas[day],1);
  }
 }
@@ -74,7 +74,7 @@ console.log('PASS v2 low-stress session follows approved ordering and half-volum
 open(h);assert.equal(h.ctx.bvomBb2NextBlock(),true);
 const previousLoad=core.foldBB2Block(h.S().bb2.opening,h.S().bb2.events).progress['upper_a|flat_press|bench_press'].loadG;
 assert.equal(h.ctx.bvomBb2CommitNextBlock(),true);
-assert.equal(h.S().bb2.setup.catalogueVersion,2);
+assert.equal(h.S().bb2.setup.catalogueVersion,3);
 assert.equal(h.S().bb2.sealedBlocks.length,1);
 assert.equal(core.foldBB2Block(h.S().bb2.opening,h.S().bb2.events).progress['upper_a|flat_press|bench_press'].loadG,previousLoad);
 assert.deepEqual(core.foldBB2Block(h.S().bb2.opening,h.S().bb2.events).quotas,{upper_a:0,lower_a:0,upper_b:0,lower_b:0});
@@ -87,3 +87,40 @@ const raw=h.ls.getItem('bvom_data');assert.equal(h.ctx.bvomBb2End('FINISH'),fals
 assert.equal(h.ctx.bvomBb2Log(2,0),true);assert.equal(h.ctx.bvomBb2End('FINISH'),true);
 assert.equal(core.foldBB2Block(h.S().bb2.opening,h.S().bb2.events).quotas.upper_a,1);
 console.log('PASS v2 exact 70% Finish boundary, insufficient-work refusal and unchanged durable data');
+// Optional work is per upper day, retained in setup, snapshots and portable History.
+h=boot();open(h);
+h.ctx.bvomBb2PreviewCurls(true,'upper_a');h.ctx.bvomBb2PreviewCurls(true,'upper_b');
+assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+h=boot(h.ls);open(h);
+assert.equal(h.S().bb2.setup.optionalUpperACurls,true);
+assert.equal(h.S().bb2.setup.optionalUpperBCurls,true);
+for(const day of ['upper_a','upper_b']){
+ open(h);h.ctx.bvomBb2ChooseDay(day);assert.equal(h.ctx.bvomBb2Begin(),true);
+ const b=h.S().bb2,start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
+ assert.equal(start.slots.at(-1).roleSlotId,'biceps_curl');
+ assert.equal(start.slots.at(-1).sets,2);
+ const before=JSON.stringify(h.S().bb2.setup);
+ h.ctx.bvomBb2PreviewCurls(false,day);
+ assert.equal(JSON.stringify(h.S().bb2.setup),before,'active workout cannot change optional work');
+ for(const [i,s] of start.slots.entries())for(let j=0;j<s.sets;j++)assert.equal(h.ctx.bvomBb2Log(i,j),true);
+ assert.equal(h.ctx.bvomBb2End('FINISH'),true);
+}
+open(h);h.ctx.bvomBb2PreviewCurls(false,'upper_a');h.ctx.bvomBb2PreviewCurls(false,'upper_b');
+assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+await h.ctx.bvomBb2ValidatePortableJournal(JSON.parse(JSON.stringify(h.S().bb2)),h.S().bb2.opening.ownerId);
+const optionalHistory=core.foldBB2Block(h.S().bb2.opening,h.S().bb2.events).history;
+assert.equal(optionalHistory.length,2);
+assert.deepEqual(optionalHistory.map(w=>w.prescribedCount),[12,15]);
+assert.equal(optionalHistory.every(w=>w.slots.some(s=>s.roleSlotId==='biceps_curl')),true);
+console.log('PASS both optional curl days: reload, actual work, independent selection, immutable History and backup after disabling');
+// An older v2 journal is still v2; no silent opt-in or prescription rewriting.
+h=boot();open(h);h.ev('bvomBb2PreviewDraft=__core.createBB2Setup({catalogueVersion:2})');
+assert.equal(h.ctx.bvomBb2SaveSetup(),true);assert.equal(h.ctx.bvomBb2Begin(),true);
+const oldStart=h.S().bb2.events[0];
+assert.equal(oldStart.slots.reduce((n,s)=>n+s.sets,0),10);
+for(const [i,s] of oldStart.slots.entries())for(let j=0;j<s.sets;j++)assert.equal(h.ctx.bvomBb2Log(i,j),true);
+assert.equal(h.ctx.bvomBb2End('FINISH'),true);
+h=boot(h.ls);await h.ctx.bvomBb2ValidatePortableJournal(JSON.parse(JSON.stringify(h.S().bb2)),h.S().bb2.opening.ownerId);
+assert.equal(h.S().bb2.setup.catalogueVersion,2);
+assert.equal(h.S().bb2.setup.optionalUpperACurls,undefined);
+console.log('PASS unchanged catalogue v2 saved workout and portable reload');

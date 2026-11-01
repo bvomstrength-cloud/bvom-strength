@@ -28,6 +28,10 @@ jobs:
           PR_NUMBER="${{ github.event.pull_request.number }}"
           SOURCE_SHA="${{ github.event.pull_request.head.sha }}"
           ZIP="BVOM-v${BUILD}-PR${PR_NUMBER}-TEST.zip"
+          if [ "$PR_NUMBER" = '73' ]; then
+            node scripts/package-bb2-test.cjs --source-sha "$SOURCE_SHA" \
+              --output .bvom-netlify-test --zip "$ZIP"
+          else
           mkdir -p .bvom-netlify-test/i18n .bvom-netlify-test/vendor .bvom-netlify-test/bb2
           cp index.html admin.html sw.js manifest.json .bvom-netlify-test/
           # Only the manually uploaded test-site copy of sw.js is changed.
@@ -60,13 +64,16 @@ jobs:
             "App version: ${BUILD}" "Source PR: #${PR_NUMBER}" "Source head commit: ${SOURCE_SHA}" \
             "Test-only SW cache: ${TEST_CACHE}" \
             > .bvom-netlify-test/NETLIFY-TEST-BUILD.txt
+          fi
           test -s .bvom-netlify-test/index.html
           test -s .bvom-netlify-test/vendor/supabase-js-2.117.3.js
           test -s .bvom-netlify-test/i18n/en.js
           test -s .bvom-netlify-test/i18n/ja.js
           test -s .bvom-netlify-test/bb2/browser-core.mjs
           test -s .bvom-netlify-test/bb2/cloud-coordinator.mjs
-          (cd .bvom-netlify-test && zip -q -r "../${ZIP}" .)
+          if [ "$PR_NUMBER" != '73' ]; then
+            (cd .bvom-netlify-test && zip -q -r "../${ZIP}" .)
+          fi
           unzip -t "$ZIP" | tail -2
           printf '%s\n' 'NETLIFY ZIP CONTENTS:'
           unzip -Z1 "$ZIP" | head -35
