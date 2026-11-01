@@ -48,7 +48,7 @@ async function proveV3TrainingAndRestore(page){
  await page.locator('.tab[data-tab="settings"]').click();
  const downloadEvent=page.waitForEvent('download');await page.locator('#settings button[onclick="exportBackup()"]').click();
  const download=await downloadEvent,bytes=fs.readFileSync(await download.path()),backup=JSON.parse(bytes);
- assert.equal(backup.data.bb2.setup.catalogueVersion,3);
+ assert.equal(backup.data.bb2.setup.catalogueVersion,4);
  const before=JSON.stringify(backup.data.bb2);
  await page.evaluate(()=>{state.weights.Squat+=1;save({durable:true,localOnly:true});renderSettings()});
  const reload=page.waitForEvent('domcontentloaded');

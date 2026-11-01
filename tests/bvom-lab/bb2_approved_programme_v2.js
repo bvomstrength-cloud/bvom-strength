@@ -16,7 +16,9 @@ console.log('PASS BB2 owner-approved 42-set design contract');
 
 const core = require('../../bb2/catalogue.cjs');
 const setup = core.createBB2Setup();
-assert.equal(setup.catalogueVersion,3);
+assert.equal(setup.catalogueVersion,4);
+assert.equal(setup.optionalUpperACurls,false);
+assert.equal(setup.optionalUpperBCurls,false);
 for (const [day,rows] of Object.entries(DAYS)) {
  const plan=core.getBB2TemplatePrescription(setup,day);
  assert.deepEqual(plan.slots.map(s=>[s.roleSlotId,s.sets,s.floor,s.ceiling,s.exerciseId]),rows);
@@ -34,13 +36,13 @@ assert.equal(core.setBB2OptionalCurls(legacy,true).catalogueVersion,1);
 assert.equal(core.chooseBB2Exercise(legacy,'lower_b','hamstring_curl','nordic_curl').catalogueVersion,1);
 assert.throws(()=>core.chooseBB2Exercise(setup,'lower_b','hamstring_curl','nordic_curl'),/invalid exercise role/);
 assert.throws(()=>core.validateBB2Setup({...setup,catalogueVersion:undefined}),/version/);
-for(const day of core.TEMPLATE_ORDER) for(const role of core.CATALOGUE[day]) for(const option of role.options) {
+for(const day of core.TEMPLATE_ORDER) for(const role of core.getBB2Catalogue(setup.catalogueVersion)[day]) for(const option of role.options) {
  const chosen=core.chooseBB2Exercise(setup,day,role.roleSlotId,option.id);
  const plan=core.getBB2TemplatePrescription(chosen,day);
  assert.deepEqual(plan.slots.map(s=>s.roleSlotId),DAYS[day].map(s=>s[0]));
  assert.equal(plan.minimumToFinish,Math.ceil(.7*plan.prescribedCount));
 }
-console.log('PASS BB2 v2 real catalogue, all choices, ordering, optional curls and v1 preservation');
+console.log('PASS BB2 v4 real catalogue, all choices, ordering, optional curls and v1 preservation');
 
 // Upper A and B curls are independent optional additions to the 42-set core.
 const both=core.setBB2OptionalCurls(curls,true,'upper_a');
@@ -51,3 +53,28 @@ const aOnly=core.setBB2OptionalCurls(both,false,'upper_b');
 assert.equal(aOnly.optionalUpperACurls,true);
 assert.equal(aOnly.optionalUpperBCurls,false);
 console.log('PASS independent optional curls on both upper days');
+
+// Saved catalogues keep their original choices and optional-role availability.
+for(const version of [2,3]) {
+ const saved=core.createBB2Setup({catalogueVersion:version});
+ assert.equal(core.createBB2Setup(saved).catalogueVersion,version);
+ for(const [day,rows] of Object.entries(DAYS)) {
+  assert.deepEqual(core.getBB2TemplatePrescription(saved,day).slots.map(s=>
+   [s.roleSlotId,s.sets,s.floor,s.ceiling,s.exerciseId]),rows);
+ }
+ const calf=core.chooseBB2Exercise(saved,'lower_a','calf_raise','bodyweight_calf_raise');
+ assert.equal(calf.catalogueVersion,version);
+ assert.equal(core.getBB2TemplatePrescription(calf,'lower_a').slots.at(-1).exerciseId,'bodyweight_calf_raise');
+ assert.throws(()=>core.chooseBB2Exercise(saved,'lower_a','squat','safety_bar_squat'),/finite catalogue/);
+ if(version===2)assert.throws(()=>core.setBB2OptionalCurls(saved,true,'upper_a'),/unavailable/);
+ else assert.equal(core.getBB2TemplatePrescription(core.setBB2OptionalCurls(saved,true,'upper_a'),'upper_a').prescribedCount,12);
+}
+for(const [day,roleId] of [['lower_a','squat'],['lower_b','quad']]) {
+ const swapped=core.chooseBB2Exercise(setup,day,roleId,'safety_bar_squat');
+ const plan=core.getBB2TemplatePrescription(swapped,day);
+ assert.equal(plan.slots[0].exerciseId,'safety_bar_squat');
+ assert.equal(plan.prescribedCount,SET_COUNTS[day]);
+ assert.deepEqual(plan.slots.map(s=>s.roleSlotId),DAYS[day].map(s=>s[0]));
+ assert.throws(()=>core.chooseBB2Exercise(setup,day,'calf_raise','bodyweight_calf_raise'),/finite catalogue/);
+}
+console.log('PASS v2/v3 historical choices and v4 safety squat/calf choice boundaries');

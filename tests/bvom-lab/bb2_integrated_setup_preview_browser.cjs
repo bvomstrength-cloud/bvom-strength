@@ -107,10 +107,10 @@ const server=http.createServer((req,res)=>{
   await page.locator('#setup [data-bb2-curls]').click();
   assert.match(await page.locator('#setup [data-bb2-template="upper_b"]').textContent(),/15 working sets/);
   await page.locator('#setup [data-bb2-save]').click();
-  assert.equal(await page.evaluate(()=>state.bb2.setup.catalogueVersion),3);
+  assert.equal(await page.evaluate(()=>state.bb2.setup.catalogueVersion),4);
   await page.locator('#setup [data-bb2-back]').click();
   await page.reload();await page.waitForSelector('#app:not(.hidden)');
-  assert.equal(await page.evaluate(()=>state.bb2.setup.catalogueVersion),3,'v2 persists across actual browser reload');
+  assert.equal(await page.evaluate(()=>state.bb2.setup.catalogueVersion),4,'v4 persists across actual browser reload');
   await page.evaluate(()=>showSetup());
   await page.locator('#setup [data-bb2-preview]').click();
   await page.waitForSelector('#setup [data-bb2-start]');
