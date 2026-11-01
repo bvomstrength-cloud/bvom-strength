@@ -2,7 +2,18 @@
 
 Production source repository for BVOM Strength.
 
-## Current approved release — v2.9.20
+## Current approved release — v2.9.21
+
+- **GitHub application baseline:** merged `main` application commit `4f31e590e2849580e47d672e32aa1d0e23a18e96` (1 November 2026). Later documentation-only commits may advance `main` without changing deployable application files.
+- **App version:** `v2.9.21` in the title/header and `BVOM_BUILD`; service worker `BUILD = '2.9.21'` with production cache `bvom-2.9.21`.
+- **Owner deployment confirmation:** On 1 November 2026, Richard confirmed uploading the v2.9.21 production ZIP to Netlify. Independently fetched live `https://app.bvomstrength.com/` and `/index.html` both matched Git blob `707aed447316d4c13e06f65366a24164242222e7`; live `/sw.js` matched Git blob `0835af513997988372a09322c29b63a171b9d861`. This verifies the public static release, not signed-in data, cloud sync or an installed Android PWA after updating.
+- **Production ZIP:** `BVOM-v2.9.21-PRODUCTION.zip`, 13 deployable files (1,620,956 bytes); SHA-256 `0672bcf379a88816c4fcf8178e88c915cf4ef734b905e00b04a0e48db5297da6`. Archive integrity passed; all 13 members matched the exact merged release-source files and the previously tested release candidate byte-for-byte. Retain the v2.9.20 ZIP for rollback.
+- **Change:** LP/RPT Advanced Settings now preserves a lift's existing failure-attempt count when saving an increment-only edit or unchanged settings. A working-weight or other prescription change still resets attempts as before; HLM/4-Day handling is unchanged. No workout data schema change.
+- **Release trail:** [PR #78](https://github.com/bvomstrength-cloud/bvom-strength/pull/78) (LP failure-streak fix, merged as `4b6dacad`) and [PR #79](https://github.com/bvomstrength-cloud/bvom-strength/pull/79) (v2.9.21 build/cache markers, merged as `4f31e590`).
+- **Verification:** PR #78 Lab #630, Browser Runner #383 and test packaging #374 PASS; PR #79 Lab #632, Browser Runner #384 and test packaging #375 PASS. Post-merge local full regression returned **GO** (static, behaviour, sequence, all mutations killed and known-bad reference). Owner reported test-site acceptance before production upload; installed Android PWA and signed-in cloud state were not independently tested after deployment.
+- **Safety:** GitHub merges do not automatically deploy Netlify. Keep previous verified ZIPs, stored workout data, and service-worker update/ownership protections intact.
+
+## Previous approved release — v2.9.20 (superseded 1 November 2026)
 
 - **GitHub application baseline:** merged `main` application commit `bbfe880719838b183386db0f54395963d8f9b81a` (29 October 2026). A later documentation-only commit may advance `main` without changing deployable application files.
 - **App version:** `v2.9.20` in the title/header and `BVOM_BUILD`; service worker `BUILD = '2.9.20'` with production cache `bvom-2.9.20`.
