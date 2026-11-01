@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const CATALOGUE_VERSION = 3;
+const CATALOGUE_VERSION = 4;
 const TEMPLATE_ORDER = Object.freeze(['upper_a', 'lower_a', 'upper_b', 'lower_b']);
 const WARMUP_ORDER = Object.freeze(['FULL', 'FEEDER', 'QUALITATIVE', 'NONE']);
 const fail = message => { throw Error('BB2 catalogue: ' + message); };
@@ -101,10 +101,25 @@ const V2_CATALOGUE = Object.freeze(Object.fromEntries(TEMPLATE_ORDER.map(day => 
 const curlRole = V2_CATALOGUE.upper_b.find(role => role.roleSlotId === 'biceps_curl');
 const CATALOGUE = Object.freeze({ ...V2_CATALOGUE,
   upper_a: Object.freeze([...V2_CATALOGUE.upper_a, curlRole]) });
+// v4 changes only new setup choices. Earlier catalogues remain immutable for saved history.
+const CATALOGUE_V4 = Object.freeze(Object.fromEntries(TEMPLATE_ORDER.map(day => [
+  day, Object.freeze(CATALOGUE[day].map(role => {
+    if (role.roleSlotId === 'calf_raise') {
+      const options = role.options.filter(option => option.id !== 'bodyweight_calf_raise');
+      return R(role.roleSlotId, role.sets, role.floor, role.ceiling, role.warmup, options, role.optional);
+    }
+    if (role.roleSlotId === 'squat' || role.roleSlotId === 'quad') {
+      const options = [...role.options, E('safety_bar_squat')];
+      return R(role.roleSlotId, role.sets, role.floor, role.ceiling, role.warmup, options, role.optional);
+    }
+    return role;
+  }))
+])));
 function getBB2Catalogue(version = CATALOGUE_VERSION) {
   if (version === 1) return LEGACY_CATALOGUE;
   if (version === 2) return V2_CATALOGUE;
   if (version === 3) return CATALOGUE;
+  if (version === 4) return CATALOGUE_V4;
   fail('unsupported catalogue version');
 }
 
@@ -115,12 +130,12 @@ const selectionsDefault = version => Object.fromEntries(allRoles(version).map(ro
   [selectionKey(role.templateId, role.roleSlotId), role.defaultExerciseId]));
 
 function validateBB2Setup(setup) {
-  if (setup && ![1,2,3].includes(setup.catalogueVersion)) fail('unsupported catalogue version');
+  if (setup && ![1,2,3,4].includes(setup.catalogueVersion)) fail('unsupported catalogue version');
   only(setup, ['catalogueVersion', 'optionalUpperBCurls', 'selections',
-    ...(setup?.catalogueVersion === 3 ? ['optionalUpperACurls'] : [])], 'setup');
-  if (![1, 2, 3].includes(setup.catalogueVersion)) fail('unsupported catalogue version');
+    ...(setup?.catalogueVersion >= 3 ? ['optionalUpperACurls'] : [])], 'setup');
+  if (![1, 2, 3, 4].includes(setup.catalogueVersion)) fail('unsupported catalogue version');
   if (typeof setup.optionalUpperBCurls !== 'boolean') fail('invalid optional curls selection');
-  if (setup.catalogueVersion === 3 && typeof setup.optionalUpperACurls !== 'boolean') fail('invalid optional Upper A curls selection');
+  if (setup.catalogueVersion >= 3 && typeof setup.optionalUpperACurls !== 'boolean') fail('invalid optional Upper A curls selection');
   const expected = selectionsDefault(setup.catalogueVersion);
   only(setup.selections, Object.keys(expected), 'setup selections');
   if (Object.keys(setup.selections).length !== Object.keys(expected).length) fail('incomplete setup selections');
@@ -134,10 +149,10 @@ function validateBB2Setup(setup) {
 }
 
 function createBB2Setup({ catalogueVersion = CATALOGUE_VERSION, optionalUpperBCurls = false, optionalUpperACurls = false, selections = {} } = {}) {
-  if (catalogueVersion !== 3 && optionalUpperACurls !== false) fail('optional Upper A curls need catalogue version 3');
+  if (catalogueVersion < 3 && optionalUpperACurls !== false) fail('optional Upper A curls need catalogue version 3');
   only(selections, Object.keys(selectionsDefault(catalogueVersion)), 'setup selections');
   const result = { catalogueVersion, optionalUpperBCurls,
-    ...(catalogueVersion === 3 ? { optionalUpperACurls } : {}),
+    ...(catalogueVersion >= 3 ? { optionalUpperACurls } : {}),
     selections: { ...selectionsDefault(catalogueVersion), ...selections } };
   validateBB2Setup(result);
   return Object.freeze({ ...result, selections: Object.freeze(result.selections) });
@@ -155,7 +170,7 @@ function chooseBB2Exercise(setup, templateId, roleSlotId, exerciseId) {
 function setBB2OptionalCurls(setup, enabled, templateId = 'upper_b') {
   validateBB2Setup(setup);
   if (!['upper_a','upper_b'].includes(templateId) ||
-      (templateId === 'upper_a' && setup.catalogueVersion !== 3)) fail('optional curls unavailable for this template/version');
+      (templateId === 'upper_a' && setup.catalogueVersion < 3)) fail('optional curls unavailable for this template/version');
   if (typeof enabled !== 'boolean') fail('invalid optional curls selection');
   return createBB2Setup({ ...setup,
     [templateId === 'upper_a' ? 'optionalUpperACurls' : 'optionalUpperBCurls']: enabled });
