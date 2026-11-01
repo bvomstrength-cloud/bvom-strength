@@ -2531,8 +2531,11 @@ function saveLiftSettings(n){if(!bvomWorkoutActionAllowed())return;
   c.mode=document.getElementById('mode'+id).value;c.increment=+document.getElementById('inc'+id).value||c.increment;c.drop=Math.max(1,Math.min(25,+document.getElementById('drop'+id).value||c.drop));c.rptLevel=+document.getElementById('level'+id).value||0;
   let w=+document.getElementById('weight'+id).value;if(w>0)state.weights[n]=roundFor(n,w);let b=+document.getElementById('bar'+id).value;if(b>0)state.barByLift[n]=b;
  }
- state.attempts[n]=0;
  const afterSettings=JSON.stringify({plateMode:state.plateMode?.[n]||'standard',mode:c.mode,increment:c.increment,drop:c.drop,rptLevel:c.rptLevel,weight:state.weights?.[n],bar:state.barByLift?.[n],hlm:isIntermediate()&&(n==='Squat'||n==='Bench Press')?{driver:state.hlm?.driver?.[n],rep:state.hlm?.rep?.[n]}:null});
+ // An LP increment-only (or no-op) save must not forget failed attempts at the same prescription.
+ const beforeWithoutIncrement=JSON.parse(beforeSettings),afterWithoutIncrement=JSON.parse(afterSettings);
+ delete beforeWithoutIncrement.increment;delete afterWithoutIncrement.increment;
+ if(isIntermediate()||JSON.stringify(beforeWithoutIncrement)!==JSON.stringify(afterWithoutIncrement))state.attempts[n]=0;
  if(active&&hasRecorded&&beforeSettings!==afterSettings){
   state.processedSnapshots=state.processedSnapshots||{};
   const snap=state.processedSnapshots[n]||(state.processedSnapshots[n]=preEditSnap||bvomMakeProcessedSnapshot(n)),beforeObj=JSON.parse(beforeSettings),afterObj=JSON.parse(afterSettings),weightChanged=Number(beforeObj.weight)!==Number(afterObj.weight);

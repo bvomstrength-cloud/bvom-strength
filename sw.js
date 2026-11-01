@@ -1,4 +1,4 @@
-// v2.9.21 BB2 draft release-candidate shell; new cache isolates production v2.9.20.
+// BB2 draft based on v2.9.21 production; release will require a distinct build/cache.
 const CACHE = 'bvom-2.9.21';
 const BUILD = '2.9.21';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './og-image.png', './i18n/en.js?v=6090d2f48f09', './i18n/ja.js?v=2c5d1ff918c6',
