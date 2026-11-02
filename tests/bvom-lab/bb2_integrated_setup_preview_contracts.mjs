@@ -1428,6 +1428,13 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  for(const [i,j] of [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[3,0]]){
   assert.equal(h.ctx.bvomBb2Log(i,j),true);
  }
+ // F1: exporting cannot produce an unrestorable active-session backup.
+ let downloads=0,notice='';h.ctx.alert=message=>{notice=message};
+ h.ctx.Blob=function(){downloads++};h.ctx.URL.createObjectURL=()=>'blob:audit-test';h.ctx.URL.revokeObjectURL=()=>{};
+ const interrupted=JSON.stringify(h.S()),interruptedRaw=h.ls.getItem('bvom_data');
+ assert.equal(h.ctx.exportBackup(),false);
+ assert.equal(downloads,0);assert.match(notice,/active BB2 workout.*incomplete/);
+ assert.equal(JSON.stringify(h.S()),interrupted);assert.equal(h.ls.getItem('bvom_data'),interruptedRaw);
  assert.equal(h.ctx.bvomBb2CorrectSet(0,0),false,'active BB2 workout cannot retrospectively correct');
  assert.equal(h.ctx.bvomBb2End('FINISH'),true);
  const original=h.S().bb2.events.find(e=>e.type==='SET_RECORDED');
@@ -1438,6 +1445,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   'BB2 History correction uses its own responsive row instead of generic warm-up grid');
  h.ctx.__bb2Correction.reps='0';
  assert.equal(h.ctx.bvomBb2CorrectSet(0,0),false,'invalid zero-rep edit refused');
+ assert.match(notice,/whole rep count of at least 1/,'F3 invalid correction explains the valid range');
  assert.equal(h.ls.getItem('bvom_data'),persisted,'invalid edit cannot write');
  h.ctx.__bb2Correction.reps='7';
  h.ev('bvomWindowLockOwned=false');
@@ -1871,6 +1879,13 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ls.getItem('bvom_data'),raw);
  assert.equal(h.ctx.bvomBb2NextBlock(),true);
  h.ctx.bvomBb2PreviewChoose('upper_a','shoulder_press','log_push_press');
+ let swapNotice='';h.ctx.alert=message=>{swapNotice=message};
+ const beforeInvalidSwap=h.ls.getItem('bvom_data');
+ assert.equal(h.ctx.bvomBb2CommitNextBlock(),false,'F4 swapped exercise requires starting fields');
+ assert.match(swapNotice,/Log Push Press.*starting load/i);
+ assert.match(swapNotice,/Log Push Press.*increase/i);
+ assert.equal(h.ls.getItem('bvom_data'),beforeInvalidSwap);
+ assert.equal(h.S().bb2.sealedBlocks?.length||0,0);
  const nextSetup=catalogue.BB2_BROWSER_MODULES.catalogue.chooseBB2Exercise(h.S().bb2.setup,
   'upper_a','shoulder_press','log_push_press');
  for(const day of days)for(const slot of catalogue.getBB2TemplatePrescription(nextSetup,day).slots){
@@ -1887,7 +1902,11 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.S().bb2.sealedBlocks?.length||0,0);
  h.ctx.confirm=()=>true;
  assert.equal(h.ctx.bvomBb2NextBlockChange('upper_a|flat_press|bench_press','load',''),true);
+ let validation='';h.ctx.alert=message=>{validation=message};
  assert.equal(h.ctx.bvomBb2CommitNextBlock(),false,'required next load cannot be omitted');
+ assert.match(validation,/Upper A.*Bench Press.*starting load/i,'F4 identifies the invalid exercise and field');
+ assert.equal(h.S().bb2.sealedBlocks?.length||0,0);
+ assert.deepEqual(Object.values(catalogue.foldBB2Block(h.S().bb2.opening,h.S().bb2.events).quotas),[8,8,8,8]);
  assert.equal(h.ls.getItem('bvom_data'),raw);
  h.ctx.bvomBb2NextBlockChange('upper_a|flat_press|bench_press','load','65');
  const beforeCommit=JSON.parse(JSON.stringify(h.S().bb2));
@@ -2358,4 +2377,36 @@ H.withClock(c=>{
  console.log('PASS: BB2 chooser cancel, HLM, LP, Custom and BB1 switches preserve history and cloud isolation');
 }
 
-console.log('BB2 BVOM integrated setup preview: 41/41 PASS');
+
+
+{
+ const {h}=fixture();h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
+ h.ctx.__core=catalogue;
+ h.ev('bvomBb2PreviewModule=__core;bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;bvomBb2PreviewDraft=__core.createBB2Setup()');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+ const query=h.ctx.document.querySelector;
+ h.ctx.document.querySelector=selector=>{
+  const f=selector.match(/data-bb2-(load|inc|assist|reps|hard)="([^"]+)"/);
+  if(f){const b=h.S().bb2,start=b.events?.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
+   return {value:f[1]==='load'?'60':f[1]==='inc'?'2.5':f[1]==='assist'?'none':String(start?.slots[Number(f[2].split('|')[0])]?.ceiling||8),checked:false};}
+  return query(selector);
+ };
+ const open=()=>h.ev('bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;bvomBb2PreviewDraft=__core.createBB2Setup(state.bb2.setup);bvomBb2PreviewSaved=true;bvomBb2RenderPreview()');
+ h.ev("bvomBb2Day='upper_b'");
+ for(let n=0;n<2;n++){
+  open();assert.equal(h.ctx.bvomBb2Begin(),true);
+  const start=h.S().bb2.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===h.S().bb2.activeSessionId);
+  for(const [i,slot] of start.slots.entries())for(let j=0;j<slot.sets;j++)assert.equal(h.ctx.bvomBb2Log(i,j),true);
+  assert.equal(h.ctx.bvomBb2End('FINISH'),true);
+ }
+ open();const b=h.S().bb2,p=catalogue.foldBB2Block(b.opening,b.events);
+ assert.ok(Object.values(p.pending).some(x=>x.kind==='DIFFICULTY'));
+ let message='';h.ctx.alert=m=>{message=m};const saved=h.ls.getItem('bvom_data');
+ assert.equal(h.ctx.bvomBb2Begin(),false);assert.match(message,/Resolve the pending decision.*BB2 Decisions to Review/);
+ assert.equal(h.ls.getItem('bvom_data'),saved,'F2 cannot change progression or pending decisions');
+ assert.equal(h.ctx.bvomBb2ResolveChoice(Object.values(p.pending).findIndex(x=>x.kind==='DIFFICULTY'),'HOLD'),true);
+ open();assert.equal(h.ctx.bvomBb2Begin(),true,'resolving the decision permits Start');
+ console.log('PASS: F2 pending difficulty Start feedback and explicit resolution');
+}
+
+console.log('BB2 BVOM integrated setup preview: 42/42 PASS (including F1–F4 audit regressions)');

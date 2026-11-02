@@ -197,6 +197,13 @@ const server=http.createServer((req,res)=>{
   await page.waitForSelector('#workout [data-bb2-set="0|0"]');
   const started=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
   assert.ok(started.bb2.activeSessionId);
+  const exportDialog=page.waitForEvent('dialog');
+  const exportAttempt=page.evaluate(()=>exportBackup());
+  const exportNotice=await exportDialog;
+  assert.match(exportNotice.message(),/active BB2 workout.*incomplete/);
+  await exportNotice.accept();assert.equal(await exportAttempt,false);
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.activeSessionId),started.bb2.activeSessionId);
+
   assert.equal(started.bb2.events[0].type,'WORKOUT_STARTED');
   assert.equal(started.programMode,fixture.programMode);
   assert.equal(await page.evaluate(()=>bvomCloudWorkoutActive()),true);
@@ -404,6 +411,13 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>activateTab('history'));
   await assertMobileCorrectionLayout(page,'English 390px');
   const correction=page.locator('#history [data-bb2-correct-reps="0|0"]');
+  await correction.fill('0');
+  const invalidRaw=await page.evaluate(()=>localStorage.getItem('bvom_data'));
+  const invalidDialog=page.waitForEvent('dialog');
+  const invalidClick=page.locator('#history [data-bb2-correct-save="0|0"]').click();
+  const invalidNotice=await invalidDialog;
+  assert.match(invalidNotice.message(),/whole rep count of at least 1/);await invalidNotice.accept();await invalidClick;
+  assert.equal(await page.evaluate(()=>localStorage.getItem('bvom_data')),invalidRaw);
   await correction.fill('7');
   await page.locator('#history [data-bb2-correct-hard="0|0"]').check();
   await page.locator('#history [data-bb2-correct-save="0|0"]').click();
