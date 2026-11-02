@@ -2890,6 +2890,9 @@ function bvomCloudConflictNotice(){
  o.querySelector('[data-settings]').onclick=()=>{o.remove();document.querySelector('.tab[data-tab="settings"]')?.click();};
 }
 function bvomCloudStatusText(){
+ if(bvomCloud.conflict)return hlmTxt('Sync paused — choose which copy to keep.','同期を一時停止中 — 使用するデータを選んでください。');
+ const programmeStatus=bvomBb2CloudStatusText();
+ if(programmeStatus)return programmeStatus;
  if(bvomCloud.assessing)return hlmTxt(hlmTxt('Checking BVOM Cloud…','BVOM Cloudを確認しています…'),'BVOM Cloudを確認しています…');
  if(bvomCloud.conflict)return hlmTxt('Sync paused — choose which copy to keep.','同期を一時停止中 — 使用するデータを選んでください。');
  if(bvomCloud.syncReady)return bvomCloud.cloudExists?hlmTxt('Cloud and device match. Automatic backup is on.','クラウドとこの端末のデータは一致しています。自動バックアップはオンです。'):hlmTxt('Creating your first cloud backup…','最初のクラウドバックアップを作成しています…');
@@ -2897,11 +2900,14 @@ function bvomCloudStatusText(){
 }
 function bvomCloudCard(){
  const u=bvomCloud.user;
- const msg=bvomCloud.message?`<div class="notice" style="${bvomCloud.error?'background:#fde8e8':''}">${bvomCloudEscape(bvomCloud.message)}</div>`:'';
+ const programmeNeedsAttention=bvomBb2CloudRelevant()&&['conflict','uncertain','unavailable','incompatible'].includes(bvomBb2AccountStatus());
+ const msg=bvomCloud.message&&(!programmeNeedsAttention||bvomCloud.error)?`<div class="notice" style="${bvomCloud.error?'background:#fde8e8':''}">${bvomCloudEscape(bvomCloud.message)}</div>`:'';
  if(u){
   const conflict=bvomCloud.conflict?`<div class="notice" style="background:#fff0c7"><b>${hlmTxt('SYNC PAUSED','同期を一時停止')}</b><br>${hlmTxt('This device and BVOM Cloud contain different saved data. Nothing will be overwritten automatically. Choose which copy you want to keep.','この端末とBVOM Cloudに異なる保存データがあります。自動的に上書きはしません。使用するデータを選んでください。')}</div>`:'';
-  const saveLabel=bvomCloud.conflict?hlmTxt('KEEP THIS DEVICE','この端末のデータを使用'):hlmTxt('SYNC NOW','今すぐ同期'),restoreLabel=bvomCloud.conflict?hlmTxt('USE CLOUD COPY','クラウドのデータを使用'):hlmTxt('RESTORE FROM CLOUD','クラウドから復元');
-  return `<div class="card"><b>BVOM Cloud</b><p class="small" style="margin-bottom:8px">${hlmTxt('Optional cloud backup and cross-device restore. BVOM always saves on this device first.','任意のクラウドバックアップと端末間の復元機能です。BVOMは必ず最初にこの端末へ保存します。')}</p><p class="small" style="margin-bottom:4px">${hlmTxt('Signed in as','サインイン中')}</p><div style="font-weight:850;overflow-wrap:anywhere">${bvomCloudEscape(u.email||'BVOM user')}</div><div class="small" style="font-weight:750;margin:12px 0">${bvomCloudEscape(bvomCloudStatusText())}</div>${conflict}${msg}<button class="primary wide" onclick="bvomCloudSaveNow()" ${bvomCloud.busy?'disabled':''}>${bvomCloud.busy?hlmTxt('WORKING…','処理中…'):saveLabel}</button><button class="secondary wide" style="margin-top:8px" onclick="bvomCloudRestore()" ${bvomCloud.busy?'disabled':''}>${restoreLabel}</button><button class="secondary wide" style="margin-top:8px" onclick="bvomCloudSignOut()" ${bvomCloud.busy?'disabled':''}>${hlmTxt('SIGN OUT','サインアウト')}</button><p class="small" style="margin-top:10px">${hlmTxt('Completed workouts and saved changes back up automatically after a safe cloud baseline is confirmed. An unfinished workout stays on this device.','安全なクラウド基準データを確認した後、完了したワークアウトと保存済みの変更は自動的にバックアップされます。未完了のワークアウトはこの端末に残ります。')}</p></div>`
+  const programmeConflict=bvomBb2CloudRelevant()&&bvomBb2AccountStatus()==='conflict';
+  const cloudBusy=bvomCloud.busy||(bvomBb2CloudRelevant()&&bvomBb2AccountBinding?.syncing);
+  const saveLabel=bvomCloud.conflict?hlmTxt('KEEP THIS DEVICE','この端末のデータを使用'):hlmTxt('SYNC NOW','今すぐ同期'),restoreLabel=(bvomCloud.conflict||programmeConflict)?hlmTxt('USE CLOUD COPY','クラウドのデータを使用'):hlmTxt('RESTORE FROM CLOUD','クラウドから復元');
+  return `<div class="card" data-bvom-cloud><b>BVOM Cloud</b><p class="small" style="margin-bottom:8px">${hlmTxt('Optional cloud backup and cross-device restore. BVOM always saves on this device first.','任意のクラウドバックアップと端末間の復元機能です。BVOMは必ず最初にこの端末へ保存します。')}</p><p class="small" style="margin-bottom:4px">${hlmTxt('Signed in as','サインイン中')}</p><div style="font-weight:850;overflow-wrap:anywhere">${bvomCloudEscape(u.email||'BVOM user')}</div><div class="small" style="font-weight:750;margin:12px 0">${bvomCloudEscape(bvomCloudStatusText())}</div>${conflict}${bvomBb2CloudNotice()}${msg}<button class="primary wide" onclick="bvomCloudSaveNow()" ${cloudBusy?'disabled':''}>${bvomCloud.busy?hlmTxt('WORKING…','処理中…'):saveLabel}</button><button class="secondary wide" style="margin-top:8px" onclick="bvomCloudRestore()" ${cloudBusy?'disabled':''}>${restoreLabel}</button><button class="secondary wide" style="margin-top:8px" onclick="bvomCloudSignOut()" ${bvomCloud.busy?'disabled':''}>${hlmTxt('SIGN OUT','サインアウト')}</button><p class="small" style="margin-top:10px">${hlmTxt('Completed workouts and saved changes back up automatically after a safe cloud baseline is confirmed. An unfinished workout stays on this device.','安全なクラウド基準データを確認した後、完了したワークアウトと保存済みの変更は自動的にバックアップされます。未完了のワークアウトはこの端末に残ります。')}</p></div>`
  }
  if(bvomCloud.codeSent)return `<div class="card"><b>BVOM Cloud</b><p class="small">${hlmTxt('We sent a 6-digit sign-in code to','6桁のサインインコードを送信しました：')} <b>${bvomCloudEscape(bvomCloud.email)}</b></p>${msg}<label>${hlmTxt('6-digit code','6桁のコード')}<input id="bvomCloudCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456"></label><button class="primary wide" onclick="bvomCloudVerifyCode()" ${bvomCloud.busy?'disabled':''}>${bvomCloud.busy?hlmTxt('CHECKING…','確認中…'):hlmTxt('VERIFY CODE','コードを確認')}</button><button class="secondary wide" style="margin-top:8px" onclick="bvomCloudUseDifferentEmail()" ${bvomCloud.busy?'disabled':''}>${hlmTxt('USE DIFFERENT EMAIL','別のメールアドレスを使用')}</button></div>`;
  return `<div class="card"><b>BVOM Cloud</b><p class="small">${hlmTxt('Your BVOM account is used for access. Training data is still saved on this device first, with cloud backup and cross-device restore available when signed in.','BVOMアカウントはアクセス確認に使用します。トレーニングデータはまずこの端末に保存され、サインイン中はクラウドバックアップと端末間の復元も利用できます。')}</p>${msg}<label>${hlmTxt('Email address','メールアドレス')}<input id="bvomCloudEmail" type="text" inputmode="email" autocomplete="email" autocapitalize="none" placeholder="you@example.com" value="${bvomCloudEscape(bvomCloud.email)}"></label><button class="primary wide" onclick="bvomCloudSendCode()" ${bvomCloud.busy?'disabled':''}>${bvomCloud.busy?hlmTxt('SENDING…','送信中…'):hlmTxt('SEND SIGN-IN CODE','サインインコードを送信')}</button><p class="small" style="margin-top:10px">${hlmTxt('No password needed — BVOM emails you a 6-digit sign-in code.','パスワードは不要です。BVOMから6桁のサインインコードをメールで送信します。')}</p></div>`;
@@ -5449,8 +5455,8 @@ function bvomBb2CloudRestoreMessage(){
   'この端末のBVOMデータを保存済みのクラウドデータで置き換えます。復元前のデータは、この端末に1段階の復元用コピーとして保存されます。');
  const b=state.bb2;
  if(!b||!(b.setup||b.opening||b.events?.length||b.sealedBlocks?.length))return ordinary;
- return hlmTxt('Your local BB2 setup and workout history will be kept unchanged. BB2 sync is checked separately in Settings with revision conflict protection. ',
-  '端末のBB2設定と履歴は変更せず保持されます。BB2の同期はSettingsで別途確認され、更新の競合から保護されます。 ')+ordinary;
+ return hlmTxt('Your local BB2 setup and workout history will be kept unchanged. Bodybuilding 2 sync is managed by the same BVOM Cloud controls with revision conflict protection. ',
+  '端末のBB2設定と履歴は変更せず保持されます。ボディビルディング2の同期は同じBVOM Cloudの操作から管理され、更新の競合から保護されます。 ')+ordinary;
 }
 
 // Read-only mapping of the existing BVOM account/document guards for the
@@ -5590,9 +5596,7 @@ async function bvomBb2AccountSyncNow(binding=bvomBb2AccountBinding){
   const status=bvomBb2AccountStatus();
   if(status==='conflict'&&!binding.conflictNoticeShown){
    binding.conflictNoticeShown=true;
-   bvomBeeModal(hlmTxt('BB2 CLOUD SYNC PAUSED','BB2クラウド同期を停止しました'),
-    hlmTxt('This device and your other device have different BB2 changes. Both copies are preserved. Open Settings for a backup and a confirmed recovery option.',
-     'この端末と別の端末に異なるBB2の変更があります。両方のデータは保持されています。Settingsからバックアップと確認付き復元を利用してください。'));
+   bvomCloudConflictNotice();
   }
   if(status!=='conflict')binding.conflictNoticeShown=false;
  }catch(error){
@@ -5603,6 +5607,7 @@ async function bvomBb2AccountSyncNow(binding=bvomBb2AccountBinding){
   }
  }finally{
   binding.syncing=false;
+  bvomBb2AccountStatusRender();
   if(binding.resync&&binding===bvomBb2AccountBinding){
    binding.resync=false;bvomBb2AccountSyncSchedule();
   }
@@ -5640,10 +5645,10 @@ function bvomBb2AccountUseCloud(){
  const binding=bvomBb2AccountBinding;
  if(!binding||bvomBb2AccountStatus()!=='conflict'||
     !bvomBb2PreviewEnabled()||bvomAnyWorkoutActive())return;
- bvomChoiceModal(hlmTxt('REPLACE LOCAL BB2 WITH CLOUD?','端末のBB2をクラウドで置き換えますか？'),
+ bvomChoiceModal(hlmTxt('USE CLOUD COPY?','クラウドのデータを使用しますか？'),
   hlmTxt('Only BB2 setup and completed BB2 history will be replaced. Other BVOM programmes remain untouched. A complete one-step local recovery copy will be saved first. Export a BVOM backup too if you want a separate file.',
    'BB2の設定と完了済みのBB2履歴のみが置き換わります。他のBVOMプログラムは変更されません。まず端末に復元用コピーを保存します。別のファイルも必要な場合はBVOMバックアップを書き出してください。'),
-  hlmTxt('CANCEL','キャンセル'),hlmTxt('USE CLOUD BB2','クラウドのBB2を使用'),()=>{},async()=>{
+  hlmTxt('CANCEL','キャンセル'),hlmTxt('USE CLOUD COPY','クラウドのデータを使用'),()=>{},async()=>{
    if(binding!==bvomBb2AccountBinding||binding.syncing)return;
    binding.syncing=true;
    try{
@@ -5653,47 +5658,54 @@ function bvomBb2AccountUseCloud(){
     if(result.status==='downloaded'){
      binding.lastUpload=null;binding.conflictNoticeShown=false;
      bvomBb2InjectProgramChoice();renderAll();
-    }else if(result.status==='blocked')bvomBeeModal(hlmTxt('BB2 CLOUD RESTORE STOPPED','BB2のクラウド復元を停止しました'),
+    }else if(result.status==='blocked')bvomBeeModal(hlmTxt('CLOUD RESTORE STOPPED','クラウド復元を停止しました'),
      hlmTxt('Your BB2 data could not be backed up and safely replaced. Nothing was overwritten.',
       'BB2のデータを安全にバックアップして置き換えられませんでした。何も上書きされていません。'));
     bvomBb2AccountStatusRender();
-   }catch(error){console.warn('BB2 confirmed cloud recovery unavailable',error)}
-   finally{binding.syncing=false}
+   }catch(error){binding.lastDownload={status:'unavailable'};console.warn('BB2 confirmed cloud recovery unavailable',error)}
+   finally{binding.syncing=false;bvomBb2AccountStatusRender()}
   });
 }
-const bvomBb2BaseRenderSettings=renderSettings;
-renderSettings=function(...args){
- const result=bvomBb2BaseRenderSettings(...args);
- if(!bvomBb2AccountBinding)return result;
- const settings=document.querySelector('#settings');
- if(!settings)return result;
+// One account interface for every programme. BB2's revisioned transport stays
+// separate from the legacy replaceable payload; its controls do not.
+function bvomBb2CloudRelevant(){return !!state.bb2?.setup&&!!bvomBb2AccountBinding}
+function bvomBb2CloudStatusText(){
+ if(!bvomBb2CloudRelevant())return '';
  const status=bvomBb2AccountStatus();
+ if(status==='conflict')return hlmTxt('Sync paused — choose which copy to keep.','同期を一時停止中 — 使用するデータを選んでください。');
+ if(['unavailable','uncertain','incompatible'].includes(status))return hlmTxt(
+  'Cloud sync needs attention. Your local training is preserved.',
+  'クラウド同期を確認してください。端末の記録は保持されています。');
+ if(bvomAnyWorkoutActive())return hlmTxt('An unfinished workout stays on this device. Automatic sync resumes after it is saved.',
+  '進行中のワークアウトはこの端末に保持されます。保存後に自動同期を再開します。');
+ if(bvomBb2AccountBinding.syncing||status==='checking')return hlmTxt('Checking BVOM Cloud…','BVOM Cloudを確認しています…');
+ return '';
+}
+function bvomBb2CloudNotice(){
+ if(!bvomBb2CloudRelevant())return '';
  const message={
-  conflict:hlmTxt('This device and BVOM Cloud have different BB2 changes. Neither copy was overwritten. Export a backup and use the latest device until the conflict is resolved.',
-   'この端末とBVOMクラウドに異なるBB2の変更があります。どちらも上書きされていません。バックアップを書き出し、競合が解決するまで新しいデータの端末を使ってください。'),
-  uncertain:hlmTxt('BB2 cloud saving could not be confirmed. Keep this device\'s data and try again.',
-   'BB2のクラウド保存を確認できませんでした。この端末のデータを保持して再試行してください。'),
-  unavailable:hlmTxt('BB2 cloud is unavailable. Your local workouts are preserved; try again when connected.',
-   'BB2クラウドを利用できません。端末の記録は保持されています。接続後に再試行してください。'),
-  incompatible:hlmTxt('BB2 cloud data could not be safely validated. No data was replaced.',
-   'BB2クラウドのデータを安全に検証できませんでした。データは置き換えられていません。'),
-  current:hlmTxt('BB2 account data is up to date on this device.',
-   'この端末のBB2アカウントデータは最新です。'),
-  checking:hlmTxt('BB2 account check pending; local workouts remain on this device.',
-   'BB2アカウントの確認待ちです。記録はこの端末に保持されています。')
- }[status];
- const card=document.createElement('div');card.className='card';
- card.innerHTML='<b>'+hlmTxt('BB2 CLOUD','BB2クラウド')+'</b><p class="small">'+
-  message+'</p><button type="button" class="secondary wide" data-bb2-sync-retry>'+hlmTxt(
-   'CHECK BB2 CLOUD AGAIN','BB2クラウドを再確認')+'</button>'+
-  (status==='conflict'?'<button type="button" class="secondary wide" data-bb2-sync-backup>'+hlmTxt(
-   'EXPORT LOCAL BACKUP','端末のバックアップを書き出す')+'</button><button type="button" class="secondary wide" data-bb2-use-cloud>'+hlmTxt(
-   'USE CLOUD BB2 (CONFIRM)','クラウドのBB2を使用（確認）')+'</button>':'');
- card.querySelector('[data-bb2-sync-retry]').onclick=()=>void bvomBb2AccountSyncNow();
- const backup=card.querySelector('[data-bb2-sync-backup]');if(backup)backup.onclick=()=>exportBackup();
- const useCloud=card.querySelector('[data-bb2-use-cloud]');if(useCloud)useCloud.onclick=()=>bvomBb2AccountUseCloud();
- settings.appendChild(card);
- return result;
+  conflict:hlmTxt('Bodybuilding 2 has different changes on this device and in BVOM Cloud. Both copies are preserved. Export a backup using Backup / Restore below. Use Cloud Copy offers a confirmed replacement of Bodybuilding 2 only; Sync Now retries safely without overwriting the other journal.',
+   'この端末とBVOMクラウドに異なるボディビルディング2の変更があります。両方のデータは保持されています。下のバックアップ／復元からバックアップを書き出してください。「クラウドのデータを使用」はボディビルディング2のみの置き換えを確認します。「今すぐ同期」は別の記録を上書きせず安全に再試行します。'),
+  uncertain:hlmTxt('Bodybuilding 2 saving could not be confirmed. Keep this device’s data. BVOM will retry when connected.',
+   'ボディビルディング2の保存を確認できませんでした。この端末のデータを保持してください。接続後に再試行します。'),
+  unavailable:hlmTxt('Bodybuilding 2 could not sync. Local workouts are preserved and will retry when connected.',
+   'ボディビルディング2を同期できませんでした。端末の記録は保持され、接続後に再試行します。'),
+  incompatible:hlmTxt('Bodybuilding 2 cloud data could not be safely validated. No data was replaced. Keep your local backup.',
+   'ボディビルディング2のクラウドデータを安全に検証できませんでした。データは置き換えられていません。端末のバックアップを保持してください。')
+ }[bvomBb2AccountStatus()];
+ return message?'<div class="notice" data-cloud-programme-notice>'+bvomCloudEscape(message)+'</div>':'';
+}
+const bvomBb2BaseCloudSaveNow=bvomCloudSaveNow;
+bvomCloudSaveNow=async function(...args){
+ await bvomBb2AccountSyncNow();
+ return bvomBb2BaseCloudSaveNow(...args);
+};
+const bvomBb2BaseCloudRestore=bvomCloudRestore;
+bvomCloudRestore=async function(...args){
+ if(!bvomCloud.offlineLocalAccess&&!bvomCloud.accountSwitchDeferred&&bvomBb2CloudRelevant()&&bvomBb2AccountStatus()==='conflict'){
+  bvomBb2AccountUseCloud();return;
+ }
+ return bvomBb2BaseCloudRestore(...args);
 };
 const bvomBb2BaseShowApp=showApp;
 showApp=function(...args){
@@ -5915,7 +5927,7 @@ function bvomBb2StartForm(){
   '</p>'+(full?'<button type="button" class="primary wide" data-bb2-next-block onclick="bvomBb2NextBlock()">'+hlmTxt('REVIEW NEXT BLOCK SETUP','次のブロック設定を確認')+'</button>':'')+
   (projection.multiStallRecovery?'<p class="small">'+hlmTxt('Optional low-stress recovery is available after several stalls.','複数の停滞が続いた場合は、任意の軽めの回復ワークアウトを選べます。')+'</p>':'')+'</div>':'')+
   (projection?bvomBb2PendingChoices(projection)+bvomBb2StallActions(projection):'')+
-  '<div class="card"><b>'+hlmTxt('BB2 DEVELOPMENT START','BB2開発用スタート')+'</b><p class="small">'+hlmTxt('Enter real starting loads. Low-stress sessions are optional, use about half the sets and do not earn progression or credits.','実際に使用する開始重量を入力してください。軽めのワークアウトは任意で、セット数は約半分になり、重量の進行やクレジットは獲得しません。')+'</p>'+
+  '<div class="card"><b>'+hlmTxt('START WORKOUT','ワークアウトを開始')+'</b><p class="small">'+hlmTxt('Enter real starting loads. Low-stress sessions are optional, use about half the sets and do not earn progression or credits.','実際に使用する開始重量を入力してください。軽めのワークアウトは任意で、セット数は約半分になり、重量の進行やクレジットは獲得しません。')+'</p>'+
   '<div class="choiceRow">'+days+'</div><div class="choiceRow">'+kindsHtml+'</div>'+rows+
   '<button type="button" class="primary wide" data-bb2-start onclick="bvomBb2Begin()">'+hlmTxt('START WORKOUT','ワークアウトを開始')+'</button></div>';
 }
@@ -6473,7 +6485,7 @@ function bvomBb2OpenExtra(i){
 }
 function bvomBb2Workout(){
  const el=document.querySelector('#workout');if(!el)return;
- if(!bvomBb2PreviewEnabled()){el.innerHTML='<div class="card">'+hlmTxt('BB2 development mode not available.','BB2の開発モードは利用できません。')+'</div>';return}
+ if(!bvomBb2PreviewEnabled()){el.innerHTML='<div class="card">'+hlmTxt('Bodybuilding 2 is unavailable.','ボディビルディング2を利用できません。')+'</div>';return}
  const m=bvomBb2PreviewModule;
  if(!m){
   el.innerHTML='<div class="card">'+hlmTxt('Loading BB2 local workout…','BB2の端末内ワークアウトを読み込み中…')+'</div>';

@@ -1,5 +1,16 @@
 # Current integration — 2 November 2026
 
+Final UI correction: BB2 uses the existing **BVOM Cloud** card exclusively.
+There is no separate BB2 panel or programme-specific manual check. Its errors,
+uncertain writes and conflicts appear in the normal account status/notice;
+Sync Now safely retries both transports, and Use Cloud Copy routes a BB2 conflict
+through the existing confirmation and durable local recovery backup. Sign-out
+and all other-programme cloud behaviour remain unchanged. Account opening,
+post-commit saves, focus/visibility return and reconnect continue automatically.
+The UI audit also removes the remaining DEVELOPMENT START heading. Internal
+historical identifiers, test-build cache markers and domain storage stay intact.
+
+
 The owner's mandatory cloud requirement supersedes the historical local-only
 and closed-rollout decisions below. The candidate reuses **E**, the existing
 `bvom_cloud_state` owner/revision/protocol table and existing BVOM sign-in,

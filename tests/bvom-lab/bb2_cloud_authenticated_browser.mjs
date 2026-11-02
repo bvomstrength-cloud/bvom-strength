@@ -260,6 +260,16 @@ try {
     assert.equal(await accountTablet.evaluate(() => state.programMode), fixture.programMode);
   });
 
+  await check('BB2 uses the single normal cloud card without programme-specific sync controls', async () => {
+    await accountPhone.evaluate(()=>activateTab('settings'));
+    const card=accountPhone.locator('#settings [data-bvom-cloud]');
+    assert.equal(await card.count(),1);
+    assert.equal(await card.locator('button').count(),3,'existing Sync, Restore and Sign Out actions only');
+    assert.doesNotMatch(await accountPhone.locator('#settings').textContent(),/BB2 CLOUD|CHECK BB2 CLOUD|DEVELOPMENT START/);
+    assert.equal(await accountPhone.locator('[data-bb2-sync-retry],[data-bb2-use-cloud]').count(),0);
+    await accountPhone.evaluate(()=>activateTab('workout'));
+  });
+
   // A truly first-run account has BB2 sidecar history but no different legacy
   // BVOM document on the account. An unconfigured *existing* LP device is a
   // separate legacy-data conflict and must not be silently bypassed.
@@ -322,7 +332,8 @@ try {
     await accountPhone.locator('#workout [data-bb2-finish]').click();
     await accountPhone.waitForFunction(() =>
       bvomBb2AccountBinding?.lastUpload?.envelope?.revision === 2);
-    await accountTablet.evaluate(() => bvomBb2AccountSyncNow());
+    await accountTablet.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await accountTablet.waitForFunction(()=>state.bb2.cloudSync.baseline.revision===2);
     assert.equal(await accountTablet.evaluate(() => state.bb2.cloudSync.baseline.revision), 2,
       'the already-populated tablet fast-forwards instead of becoming stuck');
     assert.equal(await accountTablet.evaluate(() =>
@@ -333,7 +344,8 @@ try {
     await accountTablet.locator('#setup [data-bb2-back]').click();
     await accountTablet.waitForFunction(() =>
       bvomBb2AccountBinding?.lastUpload?.envelope?.revision === 3);
-    await accountPhone.evaluate(() => bvomBb2AccountSyncNow());
+    await accountPhone.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await accountPhone.waitForFunction(()=>state.bb2.cloudSync.baseline.revision===3);
     assert.equal(await accountPhone.evaluate(() => state.bb2.cloudSync.baseline.revision), 3,
       'phone accepts tablet updates without losing its finished workout');
     await accountTablet.evaluate(() => bvomCloudSignOut());
@@ -390,9 +402,11 @@ try {
     accountPhone.context().bb2Offline = false;
     await accountPhone.evaluate(()=>window.dispatchEvent(new Event('online')));
     await accountPhone.waitForFunction(()=>state.bb2.cloudSync.baseline.revision===4);
-    await accountPhone.evaluate(()=>bvomBb2AccountSyncNow());
+    await accountPhone.evaluate(()=>window.dispatchEvent(new Event('focus')));
+    await accountPhone.waitForFunction(()=>!bvomBb2AccountBinding.syncing);
     assert.equal(await accountPhone.evaluate(()=>state.bb2.cloudSync.baseline.revision),4);
-    await peer.evaluate(()=>bvomBb2AccountSyncNow());
+    await peer.evaluate(()=>window.dispatchEvent(new Event('focus')));
+    await peer.waitForFunction(()=>state.bb2.cloudSync.baseline.revision===4);
     assert.equal(await peer.evaluate(()=>state.bb2.events.filter(e=>e.type==='WORKOUT_FINISHED').length),2);
     assert.equal(await peer.evaluate(()=>state.bb2.events.filter(e=>e.type==='CREDIT_GRANTED').length),2);
     const weight=await peer.evaluate(async()=>{const core=await import('./bb2/browser-core.mjs');return core.foldBB2Block(state.bb2.opening,state.bb2.events).progress['lower_b|quad|front_squat']});
@@ -408,7 +422,8 @@ try {
       await page.waitForFunction(()=>bvomBb2AccountStatus()==='unavailable');
     }
     accountPhone.context().bb2Offline=false;peer.context().bb2Offline=false;
-    await Promise.all([accountPhone.evaluate(()=>bvomBb2AccountSyncNow()),peer.evaluate(()=>bvomBb2AccountSyncNow())]);
+    await Promise.all([accountPhone,peer].map(p=>p.evaluate(()=>window.dispatchEvent(new Event('online')))));
+    await Promise.all([accountPhone,peer].map(p=>p.waitForFunction(()=>['conflict','current'].includes(bvomBb2AccountStatus())&&!bvomBb2AccountBinding.syncing)));
     const statuses=await Promise.all([accountPhone,peer].map(p=>p.evaluate(()=>bvomBb2AccountStatus())));
     assert.deepEqual(statuses.sort(),['conflict','current']);
     for(const [page,exercise]of [[accountPhone,'dumbbell_flat_press'],[peer,'machine_chest_press']]){
@@ -445,6 +460,35 @@ try {
     assert.equal(remote.data.revision,5);
     assert.equal(remote.data.state.snapshot.events.filter(e=>e.type==='WORKOUT_FINISHED').length,2);
     assert.ok(await restoreDevice.evaluate(()=>localStorage.getItem('bvom_pre_restore')),'pre-restore recovery copy retained');
+  });
+
+  await check('shared cloud controls safely retry and confirm BB2 conflict recovery', async () => {
+    const loser=await accountPhone.evaluate(()=>bvomBb2AccountStatus()==='conflict')?accountPhone:peer;
+    const remoteBefore=await admin.from('bvom_cloud_state').select('revision,state').eq('user_id',accountId).single();
+    if(remoteBefore.error)throw remoteBefore.error;
+    await loser.locator('#bvomCloudConflictOverlay [data-settings]').click();
+    const card=loser.locator('#settings [data-bvom-cloud]');
+    assert.match(await card.textContent(),/Sync paused/);
+    assert.match(await card.locator('[data-cloud-programme-notice]').textContent(),/Both copies are preserved/);
+    assert.equal(await card.locator('button').count(),3);
+    const before=await loser.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
+    await card.locator('[onclick="bvomCloudRestore()"]').click();
+    await loser.locator('.bvomModalOverlay [data-l]').click();
+    assert.deepEqual(await loser.evaluate(()=>state.bb2),before.bb2,'Cancel keeps the divergent local journal');
+    await card.locator('[onclick="bvomCloudRestore()"]').click();
+    await loser.locator('.bvomModalOverlay [data-r]').click();
+    await loser.waitForFunction(()=>bvomBb2AccountStatus()==='current'&&!bvomBb2AccountBinding.syncing);
+    assert.deepEqual(await loser.evaluate(()=>JSON.parse(localStorage.getItem('bvom_pre_cloud_restore')).bb2),before.bb2);
+    assert.deepEqual(await loser.evaluate(()=>state.weights),before.weights,'recovery does not replace another programme');
+    // The existing Sync Now action retries both transports, never bypassing
+    // BB2's revision condition or appending duplicate completed workouts.
+    await card.locator('[onclick="bvomCloudSaveNow()"]').click();
+    await loser.waitForFunction(()=>bvomCloud.syncReady&&!bvomCloud.busy&&!bvomBb2AccountBinding.syncing);
+    const remoteAfter=await admin.from('bvom_cloud_state').select('revision,state').eq('user_id',accountId).single();
+    if(remoteAfter.error)throw remoteAfter.error;
+    assert.deepEqual(remoteAfter.data,remoteBefore.data,'shared controls leave the latest cloud journal unchanged');
+    assert.equal(await loser.evaluate(()=>state.bb2.events.filter(e=>e.type==='WORKOUT_FINISHED').length),2);
+    assert.doesNotMatch(await loser.locator('#settings').textContent(),/BB2 CLOUD|CHECK BB2 CLOUD/);
   });
 
   console.log(`BB2 real app authenticated Chromium: ${passed}/${passed} PASS`);

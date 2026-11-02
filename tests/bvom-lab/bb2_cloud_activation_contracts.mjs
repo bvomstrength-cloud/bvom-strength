@@ -45,7 +45,7 @@ const html=h.ctx.document.querySelector('#setup').innerHTML;
 assert.match(html,/42 core working sets/);assert.match(html,/32 credits/);
 assert.match(html,/sync through your BVOM account/);
 assert.match(html,/Single-Leg Calf Raise/);assert.doesNotMatch(html,/Log Push Press/);
-assert.doesNotMatch(html,/cloud.*disabled|not sent to BVOM Cloud|SETUP PREVIEW/);
+assert.doesNotMatch(html,/cloud.*disabled|not sent to BVOM Cloud|SETUP PREVIEW|DEVELOPMENT START/);
 assert.equal(h.ctx.bvomBb2SaveSetup(),true);
 assert.equal(h.S().bb2.setup.catalogueVersion,5);
 assert.equal(h.ctx.bvomCloudPayload().bb2,undefined,'legacy clients cannot overwrite BB2 storage');
@@ -69,3 +69,30 @@ h.ev('bvomBb2PreviewDraft=__core.createBB2Setup(state.bb2.setup)');
 assert.equal(h.ctx.bvomBb2Begin(),true,'a downloaded JSONB setup can start offline');
 assert.ok(h.S().bb2.activeSessionId);
 console.log('PASS BB2 v5: 42 sets, both calf choices, historical Log compatibility, normal entry, setup explanation and legacy transport isolation');
+
+// One cloud interface: programme issues must never hide behind a success line
+// or introduce a second card or manual programme-only controls.
+{
+ const ui=H.boot(H.loadBuild(root));H.configureLP(ui);ui.ctx.__setup=setup;
+ ui.ev("state.bb2={setup:__setup,events:[],sealedBlocks:[]};bvomCloud.user={id:'owner'};"+
+  "bvomCloud.syncReady=true;bvomCloud.cloudExists=true;bvomCloud.message='Synced.';"+
+  "bvomBb2AccountBinding={lastDownload:{status:'up_to_date'},lastUpload:null,syncing:false}");
+ for(const status of ['conflict','uncertain','unavailable','incompatible','up_to_date']){
+  ui.ctx.__status=status;ui.ev('bvomBb2AccountBinding.lastDownload={status:__status}');
+  const card=ui.ctx.bvomCloudCard();
+  assert.equal((card.match(/<b>BVOM Cloud<\/b>/g)||[]).length,1);
+  assert.doesNotMatch(card,/BB2 CLOUD|CHECK BB2 CLOUD|data-bb2-sync|data-bb2-use-cloud/);
+  assert.match(card,/onclick="bvomCloudSaveNow\(\)"/);
+  assert.match(card,/onclick="bvomCloudRestore\(\)"/);
+  if(status!=='up_to_date'){
+   assert.match(card,/data-cloud-programme-notice/);
+   assert.doesNotMatch(card,/Cloud and device match|Synced\./,'no misleading success alongside a programme hold');
+  }
+  if(status==='conflict')assert.match(card,/USE CLOUD COPY/);
+ }
+ ui.ev('state.bb2=undefined;bvomBb2AccountBinding.lastDownload={status:"unavailable"}');
+ assert.match(ui.ctx.bvomCloudStatusText(),/Cloud and device match/,'unused BB2 transport does not change other programme status');
+ ui.ev('bvomBb2AccountBinding=null');
+ assert.doesNotMatch(ui.ctx.bvomCloudCard(),/data-cloud-programme-notice/);
+}
+console.log('PASS unified BVOM Cloud card, errors, conflict actions and existing-program isolation');
