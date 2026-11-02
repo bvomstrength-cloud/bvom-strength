@@ -46,3 +46,13 @@ CREATE FUNCTION public.ensure_bvom_entitlement() RETURNS jsonb
 $$;
 REVOKE ALL ON FUNCTION public.ensure_bvom_entitlement() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.ensure_bvom_entitlement() TO authenticated;
+
+-- Starting Setup calls this existing production interface even for a
+-- complimentary user. Local-only fixture: do not stub the application handler.
+CREATE FUNCTION public.start_bvom_trial() RETURNS jsonb
+  LANGUAGE sql STABLE SECURITY INVOKER AS $$
+  SELECT jsonb_build_object('user_id', auth.uid(), 'status', 'complimentary')
+  WHERE auth.uid() IS NOT NULL;
+$$;
+REVOKE ALL ON FUNCTION public.start_bvom_trial() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.start_bvom_trial() TO authenticated;

@@ -8,11 +8,25 @@ const profiles=[
  {name:'Female',seed:730902,bodyweight:65,weights:{Squat:60,'Bench Press':35,'Prone Row':32.5,'Overhead Press':22.5,Deadlift:80,'Supine Row':27.5},increment:1.25,small:.5,bbLoad:25}
 ];
 const clone=x=>JSON.parse(JSON.stringify(x));
+function knownLoad(profile,id){
+ const f=profile.name==='Female',db=/dumbbell/.test(id);
+ if(/lateral|pec_deck|reverse_fly/.test(id))return f?4:8;
+ if(/calf/.test(id))return f?30:80;
+ if(/deadlift|romanian/.test(id))return f?55:120;
+ if(/squat|leg_press/.test(id))return f?55:125;
+ if(/bench|chest_press/.test(id))return db?(f?15:32.5):(f?35:90);
+ if(/overhead|shoulder_press/.test(id))return db?(f?10:22.5):(f?22.5:55);
+ if(/row/.test(id))return db?(f?12.5:30):(f?30:75);
+ if(/leg_curl|leg_extension/.test(id))return f?20:45;
+ if(/curl|pushdown|extension/.test(id))return f?10:25;
+ if(/abdominal|crunch/.test(id))return f?5:15;
+ return f?20:50;
+}
 async function stored(p){return p.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')))}
 async function tab(p,name){await p.locator('.tab[data-tab="'+name+'"]').click()}
 async function runJourney({page:p,profile,checkpoint,reconnect,output,smoke=false}){
- let seed=profile.seed;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296};
- const report={profile:profile.name,bodyweight:profile.bodyweight,seed:profile.seed,mode:smoke?'SMOKE':'FULL',verdict:'RUNNING',counts:{},sets:0,progression:{increases:0,reductions:0,holds:0,missedRepSets:0},transitions:[],checks:[],workouts:[],actions:[],defects:[]};
+ let accessoryId;let seed=profile.seed;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296};
+ const report={profile:profile.name,bodyweight:profile.bodyweight,seed:profile.seed,mode:smoke?'SMOKE':'FULL',verdict:'RUNNING',counts:{},sets:0,progression:{increases:0,reductions:0,holds:0,missedRepSets:0,failedAttempts:0},skippedOptionalSets:0,transitions:[],checks:[],workouts:[],actions:[],defects:[]};
  const file=path.join(output,profile.name.toLowerCase()+'.json');
  const write=()=>fs.writeFileSync(file,JSON.stringify(report,null,2));
  const action=label=>{report.actions.push(label);write()};
@@ -22,7 +36,8 @@ async function runJourney({page:p,profile,checkpoint,reconnect,output,smoke=fals
  async function rest(){assert.ok((await stored(p)).timerStart,'recording must start the shared rest timer');await p.evaluate(()=>{window.__monkeyRestMs=(window.__monkeyRestMs||0)+90000});}
  // Accelerate rest elapsed time only. Calendar timestamps remain real; no
  // programme counters, weights or decisions are injected or fast-forwarded.
- await p.evaluate(()=>{const realNow=Date.now.bind(Date);window.__monkeyRestMs=0;Date.now=()=>realNow()+(window.__monkeyRestMs||0)});
+ const installClock=()=>{const realNow=Date.now.bind(Date);window.__monkeyRestMs=0;Date.now=()=>realNow()+(window.__monkeyRestMs||0)};
+ await p.context().addInitScript(installClock);await p.evaluate(installClock);
  async function decisions(){
   for(let n=0;n<12;n++){
    const modal=p.locator('.bvomModalOverlay').last();if(!await modal.count())return;
@@ -74,16 +89,25 @@ async function runJourney({page:p,profile,checkpoint,reconnect,output,smoke=fals
  async function legacyWorkout(stage,n,{incomplete=false}={}){
   action(stage+' '+n+' begin');await decisions();await tab(p,'workout');
   const before=await stored(p);if(n===1||n%4===0)await warm(stage);
+  if(stage==='LP/RPT'&&n===6){await tab(p,'workout');await p.locator('#work-Squat .weight').click();await p.locator('.bvomModalOverlay [data-w]').fill(String(before.weights.Squat*.9));await p.locator('.bvomModalOverlay [data-s]').click();action('Manual 10% Squat deload after repeated failed targets');}
+
   const names=await p.evaluate(()=>program().map(x=>x[0]));
-  for(const name of names){for(let i=0;i<12;i++){
+  for(const name of names){
+   await tab(p,'workout');const skip=p.locator('#workout button[onclick="skipOptionalSingle(\''+name+'\')"]');
+   if(n%3===0&&await skip.isVisible()){await skip.click();report.skippedOptionalSets++;}
+   for(let i=0;i<12;i++){
    const plan=await p.evaluate(name=>getSetPlan(name),name);if(i>=plan.length)break;
    const fail=n>=3&&n<=5;const reps=fail?Math.max(0,plan[i].target-2):plan[i].target+(random()>.7&&plan[i].amrap?1:0);
    if(fail)report.progression.missedRepSets++;
    await coreSet(name,i,reps);if(incomplete)break;
   }if(incomplete)break;}
+  if(stage==='LP/RPT'&&!incomplete&&n%3!==0)await accessorySets(n);
   if(n===2){const saved=clone((await stored(p)).session);await p.reload();await p.waitForSelector('#app:not(.hidden)');await p.waitForFunction(()=>bvomWindowLockOwned===true);await reconnect(p);assert.deepEqual((await stored(p)).session,saved);pass(stage+' interrupted workout reload retains actual sets');}
   await finish(stage,n,{incomplete});const after=await stored(p);
-  for(const name of names){const a=before.weights[name],b=after.weights[name];report.progression[b>a?'increases':b<a?'reductions':'holds']++;}
+  for(const name of names){const a=before.hlm?.driver?.[name]&&stage!=='LP/RPT'?before.hlm.driver[name]:before.weights[name],b=after.hlm?.nextHeavy?.[name]&&stage!=='LP/RPT'?after.hlm.nextHeavy[name]:after.weights[name];report.progression[b>a?'increases':b<a?'reductions':'holds']++;
+   if((after.attempts?.[name]||0)>(before.attempts?.[name]||0)||(after.hlm?.failCount?.[name]||0)>(before.hlm?.failCount?.[name]||0))report.progression.failedAttempts++;
+  }
+
   if(!incomplete&&stage!=='4-Day Split'){
    const day=stage==='HLM'?['H','L','M'][n%3]:n%2?'B':'A';await tab(p,'workout');await p.locator('#workout button[onclick="switchDay(\''+day+'\')"]').click();
   }
@@ -94,6 +118,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,output,smoke=fals
   if(!initial)await openSetup();
   await p.locator('#setup button[onclick="chooseProgramMode(\''+mode+'\')"]').click();
   if(mode!=='lprpt')await p.locator('.bvomModalOverlay [data-r]').click();
+  if(initial){await p.locator('#setup button[onclick*="setupMode=\'guided\'"]').click();await p.locator('#setup button[onclick*="profileLabel=\''+profile.name+'\'"]').click();}
   const manual=p.locator('#setup button[onclick*="setupMode=\'manual\'"]');await manual.click();
   for(const input of await p.locator('#setup .startw').all()){const name=await input.getAttribute('data-name');await input.fill(String(initial?profile.weights[name]:before.weights[name]));}
   await p.locator('#setup button[onclick="completeSetup()"]').click();await p.waitForSelector('#app:not(.hidden)');await tab(p,'workout');
@@ -105,6 +130,19 @@ async function runJourney({page:p,profile,checkpoint,reconnect,output,smoke=fals
   for(const value of [.25,.5]){const b=p.locator('#settings button[onclick="togglePlate('+value+',\'enabledMicro\')"]');if(!await b.evaluate(e=>e.classList.contains('on')))await b.click();}
   for(const name of ['Bench Press','Overhead Press']){const id=name.replace(/\W/g,'');const details=p.locator('details').filter({has:p.locator('#inc'+id)});if(!await details.evaluate(e=>e.open))await details.locator('summary').click();await p.locator('#plateMode'+id).selectOption('micro');await p.locator('#mode'+id).selectOption('rpt');await p.locator('#inc'+id).fill(String(profile.small));await p.locator('button[onclick="saveLiftSettings(\''+name+'\')"]').click();await decisions();}
   pass('custom fractional increments accepted through Advanced Settings');
+ }
+ async function addAccessory(){
+  await tab(p,'workout');await p.locator('#workout button[onclick="openAccessoryBuilder()"]').click();
+  await p.locator('#accName').selectOption('Custom');await p.locator('#accCustom').fill('Monkey assisted chin-up');await p.locator('#accAssign').selectOption('Both');await p.locator('#accEquipment').selectOption('bodyweight');
+  await p.locator('#accSets').fill('2');await p.locator('#accReps').fill('8');await p.locator('#accWeight').fill('0');await p.locator('#accBwInc').fill(String(profile.small));await p.locator('#accBwEstimate').fill(String(profile.bodyweight));await p.locator('#accBwResistance').fill(profile.name==='Female'?'green band':'light band');await p.locator('#accSave').click();
+  accessoryId=(await stored(p)).accessoryList.find(a=>a.name==='Monkey assisted chin-up').id;pass('bodyweight and assistance configured through the normal builder');
+ }
+ async function accessorySets(n){
+  await tab(p,'workout');for(let i=0;i<(n===1?3:2);i++){
+   const selector=i===2?'#workout button[onclick="bvomBwAddExtraSet(\''+accessoryId+'\')"]':'#workout button[onclick="tapAccessory(\''+accessoryId+'\','+i+')"],#workout button[onclick="bvomBwAccessoryModal(\''+accessoryId+'\','+i+')"]';
+   await p.locator(selector).click();const m=p.locator('.bvomModalOverlay').last();await m.locator('[data-load]').fill(String(n===1?0:profile.small));await m.locator('[data-reps]').fill('8');await m.locator('[data-rpe]').fill('8');await m.locator('[data-save]').click();await m.waitFor({state:'detached'});report.sets++;await rest();
+   const saved=(await stored(p)).session['ACC:'+accessoryId][i];assert.equal(saved.approximateBodyweight,profile.bodyweight);assert.ok(saved.resistance.includes('band'));
+  }
  }
  async function backup(label){
   action('Backup/export and actual file restore '+label);await decisions();await tab(p,'settings');
@@ -132,7 +170,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,output,smoke=fals
   const slots=await p.evaluate(onramp=>{const ss=onramp?bvomBbOnRampSlots(bvomBbOnRampDay()):bvomBbSlotsForDay(bvomBbDay());return ss.map(slot=>{const id=state.bodybuilding.selections[slot];return {slot,id,numeric:bvomBbNumericExercise(id),equipment:BVOM_BB_EXERCISES[id].equipment,sets:onramp?Array.from({length:bvomBbOnRampSetCount(id)},()=>({maxReps:bvomBbOnRampTarget(id)[1]})):bvomBbPrescription(id).sets}})},onramp);
   for(const s of slots)for(let j=0;j<s.sets.length;j++){
    await tab(p,'workout');const fn=onramp?'bvomBbOnRampSetModal':'bvomBbSetModal';await p.locator('#workout button[onclick="'+fn+'(\''+s.id+'\','+j+')"]').click();const m=p.locator('.bvomModalOverlay').last();
-   if(onramp&&s.numeric){await m.locator('[data-load]').fill(String(s.equipment==='dumbbell'?profile.bbLoad/2:profile.bbLoad));await m.locator('[data-inc]').fill(String(profile.increment));}
+   if(onramp&&s.numeric){await m.locator('[data-load]').fill(String(knownLoad(profile,s.id)));await m.locator('[data-inc]').fill(String(profile.increment));}
    if(await m.locator('[data-res]').count())await m.locator('[data-res]').fill(profile.name==='Female'?'green band assistance':'bodyweight');
    if(await m.locator('[data-bw-estimate]').count())await m.locator('[data-bw-estimate]').fill(String(profile.bodyweight));
    const target=s.sets[j].maxReps??s.sets[j].target??8,reps=onramp?target:n%6===3?Math.max(1,target-3):target;
@@ -151,7 +189,8 @@ async function runJourney({page:p,profile,checkpoint,reconnect,output,smoke=fals
   action('BB2 '+day+' '+kind+' '+n+' begin');if(!await p.locator('#setup [data-bb2-start]').isVisible()){await tab(p,'workout');await p.locator('#workout [data-bb2-next-workout]').click();}
   for(let k=0;k<20;k++){const b=p.locator('#setup [data-bb2-choice-keep],#setup [data-bb2-choice-hold]').first();if(!await b.count())break;await b.click();}
   await p.locator('#setup [data-bb2-day="'+day+'"]').click();await p.locator('#setup [data-bb2-kind="'+kind+'"]').click();
-  for(const el of await p.locator('#setup [data-bb2-load]:not([disabled])').all())if(!(await el.inputValue()))await el.fill(String(profile.bbLoad));
+  const plan=await p.evaluate(()=>bvomBb2PreviewModule.getBB2TemplatePrescription(state.bb2.setup,bvomBb2Day).slots);
+  for(const el of await p.locator('#setup [data-bb2-load]:not([disabled])').all())if(!(await el.inputValue()))await el.fill(String(knownLoad(profile,plan[Number(await el.getAttribute('data-bb2-load'))].exerciseId)));
   for(const el of await p.locator('#setup [data-bb2-inc]').all())if(!(await el.inputValue()))await el.fill(String(profile.increment));
   for(const input of await p.locator('#setup [data-bb2-assist]').all())await input.fill(kind==='RECOVERY'?'strong band recovery':profile.name==='Female'?'green band':'none');
   if(kind==='RECOVERY')for(const input of await p.locator('#setup [data-bb2-bw-variation]').all())await input.fill('easier supported recovery');
@@ -176,7 +215,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,output,smoke=fals
  }
  try{
   assert.equal((await stored(p)).history.length,0,'no workout fixture injection');
-  await setup('lprpt',true);await increments();
+  await setup('lprpt',true);await increments();await addAccessory();
   for(let n=1;n<=(smoke?1:12);n++)await legacyWorkout('LP/RPT',n);
   if(smoke){report.verdict='WATCH';pass('SMOKE ONLY: not full-journey release evidence');return report}
   await legacyWorkout('LP/RPT incomplete',13,{incomplete:true});await backup('LP');
@@ -192,7 +231,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,output,smoke=fals
   }
   const projection=await p.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events));assert.deepEqual(Object.values(projection.quotas),[8,8,8,8]);assert.equal(report.counts.BB2,32);await backup('BB2');
   healthy();report.verdict='PASS';pass('complete five-programme journey and 32 BB2 credits');
- }catch(e){report.verdict='FAIL';report.defects.push({message:e.message,stack:e.stack,lastActions:report.actions.slice(-12)});console.error('MONKEY '+profile.name+' FAIL:',e.stack);await p.screenshot({path:path.join(output,profile.name.toLowerCase()+'-failure.png'),fullPage:true}).catch(()=>{});fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-failure.html'),await p.content().catch(()=>''));}
+ }catch(e){report.verdict='FAIL';report.defects.push({message:e.message,stack:e.stack,lastActions:report.actions.slice(-12)});console.error('MONKEY UI DIAGNOSTIC',await p.evaluate(()=>({configured:state.configured,program:state.programMode,day:state.day,entitlementError:bvomEntitlement.error,modal:document.querySelector('.bvomModalOverlay')?.textContent?.slice(0,700)})).catch(()=>({})));console.error('MONKEY '+profile.name+' FAIL:',e.stack);await p.screenshot({path:path.join(output,profile.name.toLowerCase()+'-failure.png'),fullPage:true}).catch(()=>{});fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-failure.html'),await p.content().catch(()=>''));}
  finally{write()}
  return report;
 }

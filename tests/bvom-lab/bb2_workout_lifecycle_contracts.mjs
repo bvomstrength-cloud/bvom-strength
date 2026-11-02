@@ -18,10 +18,14 @@ function boot(previous){
  return h;
 }
 function start(h){
+ h.ctx.bvomStartingSetupModal();h.lastOverlay().querySelector('[data-r]').onclick();
+ assert.equal(h.S().configured,false,'normal Starting Setup opens an unconfigured draft');
  h.ev('bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;'+
   'bvomBb2PreviewDraft=__core.createBB2Setup(state.bb2?.setup);bvomBb2PreviewSaved=!!state.bb2?.setup;bvomBb2RenderPreview()');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);h.ctx.activateTab('history');
  assert.equal(h.ctx.bvomBb2Begin(),true);
+ assert.equal(h.S().configured,true,'BB2 Start durably completes normal Starting Setup');
+ assert.equal(JSON.parse(h.ls.getItem('bvom_data')).configured,true);
  assert.equal(h.ctx.document.querySelector('#workout').classList.contains('hidden'),false,'Start opens Workout even when setup was entered from History');
  return h.S().bb2.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===h.S().bb2.activeSessionId);
 }

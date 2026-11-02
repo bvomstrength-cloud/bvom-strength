@@ -5753,10 +5753,12 @@ function bvomBb2OnLegacyProgramChoice(){
  if(!bvomWorkoutActionAllowed()||bvomStateWorkoutActive(state))return false;
  return bvomBb2Commit({...state.bb2,selectedProgram:false});
 }
-function bvomBb2Commit(next,{activity=false,passive=false}={}){
- const before=state.bb2;state.bb2=next;
+function bvomBb2Commit(next,{activity=false,passive=false,configure=false}={}){
+ const before=state.bb2,beforeConfigured=state.configured;state.bb2=next;
+ if(configure)state.configured=true;
  if(!save({durable:true,localOnly:true,activity,passive})){
   if(before===undefined)delete state.bb2;else state.bb2=before;
+  state.configured=beforeConfigured;
   return false;
  }
  if(!passive)bvomBb2AccountSyncSchedule();
@@ -6031,7 +6033,7 @@ function bvomBb2Begin(){
   const tx=recovery?m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(opening,events,[e],guard):
    m.BB2_BROWSER_MODULES.start.commitBB2Start(opening,events,old.setup,e,guard,{
     priorSealedBlock:old.sealedBlocks?.at(-1)});
-  if(!bvomBb2Commit({...old,opening,events:tx.events,activeSessionId:id,selectedProgram:true}))return false;
+  if(!bvomBb2Commit({...old,opening,events:tx.events,activeSessionId:id,selectedProgram:true},{configure:true}))return false;
   bvomBb2PreviewOpen=false;bvomBb2PreviewDraft=null;bvomBb2PreviewFromWorkout=false;
   document.querySelector('#setup').classList.add('hidden');
   document.querySelector('#app').classList.remove('hidden');
