@@ -46,6 +46,10 @@ for(const version of [2,3,4,5])for(const day of catalogue.TEMPLATE_ORDER)for(con
  for(const [n,slot]of start.slots.entries())for(let j=0;j<slot.sets;j++)assert.equal(h.ctx.bvomBb2Log(n,j),true);
  assert.equal(h.ctx.bvomBb2End('FINISH'),true);const saved=copy(h.S().bb2),p=core.foldBB2Block(saved.opening,saved.events);
  assert.ok(p.history[0].sets.filter(s=>s.exerciseId===option.id).every(s=>s.actualBodyweightKg===82.75));
+ const measured=saved.events.find(e=>e.type==='SET_RECORDED'&&e.variation);assert.ok(measured);
+ for(const value of [-1,0,'82.75',Infinity]){const invalid=copy(saved);invalid.events.find(e=>e.eventId===measured.eventId).actualBodyweightKg=value;assert.throws(()=>core.foldBB2Block(invalid.opening,invalid.events),/actual bodyweight/)}
+ const corrected=copy(saved),last=corrected.events.length;corrected.events.push({type:'SET_CORRECTED',eventId:'bodymass-correction',commitOrdinal:last+1,blockId:corrected.opening.blockId,sessionId:measured.sessionId,targetEventId:measured.eventId,reps:measured.reps,actualBodyweightKg:83});
+ assert.equal(core.foldBB2Block(corrected.opening,corrected.events).history[0].sets.find(x=>x.exerciseId===option.id&&x.setIndex===0).actualBodyweightKg,83);
  const stripped=copy(saved);for(const e of stripped.events){delete e.actualBodyweightKg;for(const s of e.slots||[])delete s.actualBodyweightKg}
  const old=core.foldBB2Block(stripped.opening,stripped.events);assert.deepEqual(p.progress,old.progress);assert.deepEqual(p.quotas,old.quotas);
  const restored=boot(h);assert.deepEqual(copy(restored.S().bb2),saved);names.add(option.id);count++;
