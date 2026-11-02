@@ -395,3 +395,12 @@ Starting Setup (with rollback if saving fails), and the shared saved dialog must
 show volume from BB2's actual working sets rather than null/another programme's
 approximation flag. Unestimated bodyweight volume is shown explicitly as unknown.
 `bb2_workout_lifecycle_contracts.mjs` covers both repairs in the full regression gate.
+
+The endurance run exposed redundant historical replay for slots sharing one
+DERIVED earning event. Start validation now memoises pure prefix projections
+within a single call only. Its contract proves one replay per unique prefix and
+refuses an edited journal on the next call; owner, catalogue, lineage, CAS and
+training rules are unchanged. A real 594-event UI export measured about 4.8 s
+before and 1.7 s after for portable validation locally (diagnostic timings, not
+a device performance guarantee). Cloud/History waits are bounded at 60 seconds;
+all actual stored-byte, revision, History and minimum-count assertions remain.

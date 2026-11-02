@@ -1,5 +1,5 @@
 /* GENERATED BB2 browser core — no direct edits. */
-/* Source fingerprint SHA-256: 0b77c7731a433b312a310f159aa5abaf88e14688f2a1e18dce735ca6f7457b20 */
+/* Source fingerprint SHA-256: dcdf4368c3301063cd9897ac0e085d75ea7bee4f231a6b3d57cc05526c1defdd */
 /* Regenerate: node scripts/build-bb2-browser.cjs */
 /* Import has no app, storage, network or clock side effects. */
 const factories = Object.create(null);
@@ -1815,7 +1815,15 @@ function validateBB2NewStart(opening, previousEvents, setup, startEvent,
       startEvent.commitOrdinal !== previousEvents.length + 1) {
     fail('Start block or head is stale');
   }
-  const projection = foldBB2Block(opening, previousEvents);
+  // Several slots can share one earning event. Reuse only this call's pure
+  // prefix projections; no cached result survives an edit, restore or account.
+  const prefixes = new Map();
+  const replay = head => {
+    if (!prefixes.has(head)) prefixes.set(head,
+      foldBB2Block(opening, previousEvents.slice(0, head)));
+    return prefixes.get(head);
+  };
+  const projection = replay(previousEvents.length);
   if (projection.sealed || projection.requiredConsent.length) {
     fail('Start blocked by seal or unresolved consent');
   }
@@ -1871,8 +1879,8 @@ function validateBB2NewStart(opening, previousEvents, setup, startEvent,
         else if (!['WORKOUT_FINISHED', 'CHOICE_RESOLVED'].includes(source.type)) {
           fail('DERIVED source is not an earning event');
         } else {
-          const before = foldBB2Block(opening, previousEvents.slice(0, source.commitOrdinal - 1));
-          const after = foldBB2Block(opening, previousEvents.slice(0, source.commitOrdinal));
+          const before = replay(source.commitOrdinal - 1);
+          const after = replay(source.commitOrdinal);
           const result = after.progress[key];
           if (!equal(result?.loadOrigin, previous.loadOrigin) ||
               result.loadG === (before.progress[key]?.loadG ?? null)) {
@@ -2149,7 +2157,7 @@ function load(id) {
   factories[id](module, module.exports, load);
   return module.exports;
 }
-export const BB2_BROWSER_SOURCE_SHA256 = "0b77c7731a433b312a310f159aa5abaf88e14688f2a1e18dce735ca6f7457b20";
+export const BB2_BROWSER_SOURCE_SHA256 = "dcdf4368c3301063cd9897ac0e085d75ea7bee4f231a6b3d57cc05526c1defdd";
 export const BB2_BROWSER_MODULES = Object.freeze({
   ledger: Object.freeze(load("./ledger.cjs")),
   catalogue: Object.freeze(load("./catalogue.cjs")),

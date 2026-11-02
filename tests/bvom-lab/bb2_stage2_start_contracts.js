@@ -143,6 +143,31 @@ check('in-block legitimately earned DERIVED progression is inherited with real F
     inventedSource, guard(historical)), /inherit/i);
 });
 
+check('shared earning prefixes replay once per validation and edited journals are revalidated', () => {
+  const fs=require('node:fs'),vm=require('node:vm'),ledger=require('../../bb2/ledger.cjs');
+  const calls=[],module={exports:{}};
+  vm.runInNewContext(fs.readFileSync(require.resolve('../../bb2/start.cjs'),'utf8'),{
+    module,exports:module.exports,require:name=>name==='./ledger.cjs'?{...ledger,
+      foldBB2Block:(o,events)=>{calls.push(events.length);return ledger.foldBB2Block(o,events)}}:
+      require('../../bb2/catalogue.cjs')});
+  const setup=createBB2Setup({catalogueVersion:1}),opening=makeOpening(),events=[];
+  const slots=normalSlots(setup,'upper_a').filter(s=>s.equipment==='loaded').slice(0,2).map(s=>({...s,sets:1}));
+  const add=(type,fields)=>events.push({type,eventId:'audit-'+(events.length+1),commitOrdinal:events.length+1,blockId,...fields});
+  for(const sessionId of ['audit-a','audit-b']){
+    add('WORKOUT_STARTED',{sessionId,templateId:'upper_a',kind:'NORMAL',slots});
+    for(const slot of slots)add('SET_RECORDED',{sessionId,roleSlotId:slot.roleSlotId,exerciseId:slot.exerciseId,
+      setIndex:0,reps:slot.ceiling,actualG:60000,actualOrigin:mass(60000),harderThanIntended:false,prescribed:true});
+    add('WORKOUT_FINISHED',{sessionId});add('CREDIT_GRANTED',{sessionId,creditId:'credit-'+sessionId});
+  }
+  const projection=foldBB2Block(opening,events),next=start(setup,'upper_a',events,'audit-next');
+  for(const slot of next.slots){const p=projection.progress['upper_a|'+slot.roleSlotId+'|'+slot.exerciseId];if(p){slot.plannedG=p.loadG;slot.plannedOrigin=p.loadOrigin;}}
+  assert.deepEqual(module.exports.validateBB2NewStart(opening,events,setup,next),projection);
+  assert.equal(calls.length,new Set(calls).size,'each identical immutable prefix needs only one replay');
+  const edited=deep(events);edited.find(e=>e.type==='SET_RECORDED').actualOrigin=mass(1);
+  assert.throws(()=>module.exports.validateBB2NewStart(opening,edited,setup,next),/origin|grams|mass/i);
+  assert.ok(calls.length>3,'a later validation must replay its own inputs');
+});
+
 check('carried DERIVED snapshot without verified sealed predecessor cannot Start', () => {
   const opening = makeOpening({ [key]: { loadG: 62500,
     loadOrigin: { kind: 'DERIVED', sourceEventId: 'nonexistent' },
@@ -214,4 +239,4 @@ check('guard and canonical new Start reject stale, foreign, overlapping and reco
     /another workout is active/i);
 });
 
-console.log('BB2 Stage (ii) Start checks: ' + passed + '/10 ' + (process.exitCode ? 'FAIL' : 'PASS'));
+console.log('BB2 Stage (ii) Start checks: ' + passed + '/11 ' + (process.exitCode ? 'FAIL' : 'PASS'));

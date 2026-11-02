@@ -54,7 +54,15 @@ function validateBB2NewStart(opening, previousEvents, setup, startEvent,
       startEvent.commitOrdinal !== previousEvents.length + 1) {
     fail('Start block or head is stale');
   }
-  const projection = foldBB2Block(opening, previousEvents);
+  // Several slots can share one earning event. Reuse only this call's pure
+  // prefix projections; no cached result survives an edit, restore or account.
+  const prefixes = new Map();
+  const replay = head => {
+    if (!prefixes.has(head)) prefixes.set(head,
+      foldBB2Block(opening, previousEvents.slice(0, head)));
+    return prefixes.get(head);
+  };
+  const projection = replay(previousEvents.length);
   if (projection.sealed || projection.requiredConsent.length) {
     fail('Start blocked by seal or unresolved consent');
   }
@@ -110,8 +118,8 @@ function validateBB2NewStart(opening, previousEvents, setup, startEvent,
         else if (!['WORKOUT_FINISHED', 'CHOICE_RESOLVED'].includes(source.type)) {
           fail('DERIVED source is not an earning event');
         } else {
-          const before = foldBB2Block(opening, previousEvents.slice(0, source.commitOrdinal - 1));
-          const after = foldBB2Block(opening, previousEvents.slice(0, source.commitOrdinal));
+          const before = replay(source.commitOrdinal - 1);
+          const after = replay(source.commitOrdinal);
           const result = after.progress[key];
           if (!equal(result?.loadOrigin, previous.loadOrigin) ||
               result.loadG === (before.progress[key]?.loadG ?? null)) {

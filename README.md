@@ -4,7 +4,7 @@ Production source repository for BVOM Strength.
 
 ## Unreleased candidate — v2.9.22 (draft PR #73)
 
-- Full male/female workout journeys exercise all five programmes through the real mobile UI and disposable authenticated cloud. See `TESTING.md` for seeds, reports and explicit PASS/WATCH/FAIL criteria. BB2 Start now completes normal Starting Setup durably; shared saved statistics use its recorded working sets.
+- Full male/female workout journeys exercise all five programmes through the real mobile UI and disposable authenticated cloud. See `TESTING.md` for seeds, reports and explicit PASS/WATCH/FAIL criteria. BB2 Start now completes normal Starting Setup durably; shared saved statistics use its recorded working sets. BB2 Start validation reuses identical prefix replays within one call, preserving every provenance check while reducing full-journal stalls.
 
 - BB2 lifecycle repair: shared fixed Finish and note/saved dialogs; atomic canonical Finish/credit/note, ordinary History, warm-up rest/navigation, and configured-weight progression without calibration controls. Historical journals retain their original replay semantics. No cloud transport or database changes.
 
