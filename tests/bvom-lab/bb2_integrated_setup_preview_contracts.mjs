@@ -599,7 +599,9 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  };
  assert.equal(h.ctx.bvomBb2Begin(),true);
  const sessionId=h.S().bb2.activeSessionId;
- assert.equal(h.ctx.bvomBb2OpenExtra(0),false,'no extra-set entry before any prescribed work');
+ assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-extra-add="0"/,'Add Set is visible from Start');
+ assert.equal(h.ctx.bvomBb2OpenExtra(0),true,'extra work may be recorded before prescribed sets');
+ h.lastOverlay().querySelector('[data-cancel]').onclick();
  assert.equal(h.ctx.bvomBb2Log(0,0),true);
  assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-extra-add="0"/);
  assert.equal(h.ctx.bvomBb2Log(0,3,true),false,'extra cannot bypass the Add button');

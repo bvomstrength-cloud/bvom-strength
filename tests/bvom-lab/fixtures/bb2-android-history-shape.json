@@ -1,0 +1,997 @@
+{
+  "app": "BVOM",
+  "version": "2.9.22",
+  "exportedAt": "2026-11-02T09:00:00Z",
+  "data": {
+    "configured": true,
+    "setupMode": "guided",
+    "profile": "male",
+    "balance": true,
+    "tolerance": 0.2,
+    "day": "A",
+    "weights": {
+      "Squat": 100,
+      "Bench Press": 70,
+      "Prone Row": 60,
+      "Overhead Press": 45,
+      "Deadlift": 120,
+      "Supine Row": 25
+    },
+    "bar": 20,
+    "enabledStandard": [
+      20,
+      10,
+      5,
+      2.5,
+      1.25
+    ],
+    "enabledMicro": [],
+    "attempts": {},
+    "history": [
+      {
+        "date": "2026-10-01T08:00:00.000Z",
+        "program": "lprpt",
+        "day": "A",
+        "unit": "kg",
+        "weights": {
+          "Squat": 60
+        },
+        "session": {
+          "Squat": {
+            "0": {
+              "reps": 5,
+              "load": 60
+            }
+          }
+        },
+        "note": "Synthetic legacy workout 1",
+        "duration": "20:00",
+        "volume": 300
+      },
+      {
+        "date": "2026-10-02T08:00:00.000Z",
+        "program": "hlm",
+        "day": "A",
+        "unit": "kg",
+        "weights": {
+          "Squat": 60
+        },
+        "session": {
+          "Squat": {
+            "0": {
+              "reps": 5,
+              "load": 60
+            }
+          }
+        },
+        "note": "Synthetic legacy workout 2",
+        "duration": "20:00",
+        "volume": 300
+      },
+      {
+        "date": "2026-10-03T08:00:00.000Z",
+        "program": "fourday",
+        "day": "A",
+        "unit": "kg",
+        "weights": {
+          "Squat": 60
+        },
+        "session": {
+          "Squat": {
+            "0": {
+              "reps": 5,
+              "load": 60
+            }
+          }
+        },
+        "note": "Synthetic legacy workout 3",
+        "duration": "20:00",
+        "volume": 300
+      },
+      {
+        "date": "2026-10-04T08:00:00.000Z",
+        "program": "bodybuilding",
+        "day": "A",
+        "unit": "kg",
+        "weights": {
+          "Squat": 60
+        },
+        "session": {
+          "Squat": {
+            "0": {
+              "reps": 5,
+              "load": 60
+            }
+          }
+        },
+        "note": "Synthetic legacy workout 4",
+        "duration": "20:00",
+        "volume": 300
+      },
+      {
+        "date": "2026-10-05T08:00:00.000Z",
+        "program": "lprpt",
+        "day": "A",
+        "unit": "kg",
+        "weights": {
+          "Squat": 60
+        },
+        "session": {
+          "Squat": {
+            "0": {
+              "reps": 5,
+              "load": 60
+            }
+          }
+        },
+        "note": "Synthetic legacy workout 5",
+        "duration": "20:00",
+        "volume": 300
+      },
+      {
+        "date": "2026-10-06T08:00:00.000Z",
+        "program": "hlm",
+        "day": "A",
+        "unit": "kg",
+        "weights": {
+          "Squat": 60
+        },
+        "session": {
+          "Squat": {
+            "0": {
+              "reps": 5,
+              "load": 60
+            }
+          }
+        },
+        "note": "Synthetic legacy workout 6",
+        "duration": "20:00",
+        "volume": 300
+      },
+      {
+        "date": "2026-10-07T08:00:00.000Z",
+        "program": "fourday",
+        "day": "A",
+        "unit": "kg",
+        "weights": {
+          "Squat": 60
+        },
+        "session": {
+          "Squat": {
+            "0": {
+              "reps": 5,
+              "load": 60
+            }
+          }
+        },
+        "note": "Synthetic legacy workout 7",
+        "duration": "20:00",
+        "volume": 300
+      },
+      {
+        "date": "2026-10-08T08:00:00.000Z",
+        "program": "bodybuilding",
+        "day": "A",
+        "unit": "kg",
+        "weights": {
+          "Squat": 60
+        },
+        "session": {
+          "Squat": {
+            "0": {
+              "reps": 5,
+              "load": 60
+            }
+          }
+        },
+        "note": "Synthetic legacy workout 8",
+        "duration": "20:00",
+        "volume": 300
+      },
+      {
+        "date": "2026-10-09T08:00:00.000Z",
+        "program": "lprpt",
+        "day": "A",
+        "unit": "kg",
+        "weights": {
+          "Squat": 60
+        },
+        "session": {
+          "Squat": {
+            "0": {
+              "reps": 5,
+              "load": 60
+            }
+          }
+        },
+        "note": "Synthetic legacy workout 9",
+        "duration": "20:00",
+        "volume": 300
+      },
+      {
+        "date": "2026-10-10T08:00:00.000Z",
+        "program": "hlm",
+        "day": "A",
+        "unit": "kg",
+        "weights": {
+          "Squat": 60
+        },
+        "session": {
+          "Squat": {
+            "0": {
+              "reps": 5,
+              "load": 60
+            }
+          }
+        },
+        "note": "Synthetic legacy workout 10",
+        "duration": "20:00",
+        "volume": 300
+      },
+      {
+        "date": "2026-10-11T08:00:00.000Z",
+        "program": "fourday",
+        "day": "A",
+        "unit": "kg",
+        "weights": {
+          "Squat": 60
+        },
+        "session": {
+          "Squat": {
+            "0": {
+              "reps": 5,
+              "load": 60
+            }
+          }
+        },
+        "note": "Synthetic legacy workout 11",
+        "duration": "20:00",
+        "volume": 300
+      },
+      {
+        "date": "2026-10-12T08:00:00.000Z",
+        "program": "bodybuilding",
+        "day": "A",
+        "unit": "kg",
+        "weights": {
+          "Squat": 60
+        },
+        "session": {
+          "Squat": {
+            "0": {
+              "reps": 5,
+              "load": 60
+            }
+          }
+        },
+        "note": "Synthetic legacy workout 12",
+        "duration": "20:00",
+        "volume": 300
+      },
+      {
+        "date": "2026-10-13T08:00:00.000Z",
+        "program": "lprpt",
+        "day": "A",
+        "unit": "kg",
+        "weights": {
+          "Squat": 60
+        },
+        "session": {
+          "Squat": {
+            "0": {
+              "reps": 5,
+              "load": 60
+            }
+          }
+        },
+        "note": "Synthetic legacy workout 13",
+        "duration": "20:00",
+        "volume": 300
+      },
+      {
+        "date": "2026-10-14T08:00:00.000Z",
+        "program": "hlm",
+        "day": "A",
+        "unit": "kg",
+        "weights": {
+          "Squat": 60
+        },
+        "session": {
+          "Squat": {
+            "0": {
+              "reps": 5,
+              "load": 60
+            }
+          }
+        },
+        "note": "Synthetic legacy workout 14",
+        "duration": "20:00",
+        "volume": 300
+      },
+      {
+        "date": "2026-10-15T08:00:00.000Z",
+        "program": "fourday",
+        "day": "A",
+        "unit": "kg",
+        "weights": {
+          "Squat": 60
+        },
+        "session": {
+          "Squat": {
+            "0": {
+              "reps": 5,
+              "load": 60
+            }
+          }
+        },
+        "note": "Synthetic legacy workout 15",
+        "duration": "20:00",
+        "volume": 300
+      },
+      {
+        "date": "2026-10-16T08:00:00.000Z",
+        "program": "bodybuilding",
+        "day": "A",
+        "unit": "kg",
+        "weights": {
+          "Squat": 60
+        },
+        "session": {
+          "Squat": {
+            "0": {
+              "reps": 5,
+              "load": 60
+            }
+          }
+        },
+        "note": "Synthetic legacy workout 16",
+        "duration": "20:00",
+        "volume": 300
+      }
+    ],
+    "session": {},
+    "timerStart": null,
+    "theme": "bee",
+    "unit": "kg",
+    "core": {
+      "Squat": {
+        "mode": "straight",
+        "increment": 2.5,
+        "drop": 10,
+        "rptLevel": 0
+      },
+      "Bench Press": {
+        "mode": "straight",
+        "increment": 2.5,
+        "drop": 5,
+        "rptLevel": 0
+      },
+      "Prone Row": {
+        "mode": "straight",
+        "increment": 2.5,
+        "drop": 5,
+        "rptLevel": 0
+      },
+      "Overhead Press": {
+        "mode": "straight",
+        "increment": 2.5,
+        "drop": 5,
+        "rptLevel": 0
+      },
+      "Deadlift": {
+        "mode": "straight",
+        "increment": 5,
+        "drop": 10,
+        "rptLevel": 0
+      },
+      "Supine Row": {
+        "mode": "straight",
+        "increment": 2.5,
+        "drop": 5,
+        "rptLevel": 0
+      }
+    },
+    "barByLift": {
+      "Squat": 20,
+      "Bench Press": 20,
+      "Prone Row": 20,
+      "Overhead Press": 20,
+      "Deadlift": 20,
+      "Supine Row": 20
+    },
+    "backupWorkoutCount": 0,
+    "warmupDone": {},
+    "warmupPlans": {},
+    "preRestoreBackup": null,
+    "accessories": {
+      "A": [],
+      "B": []
+    },
+    "accessoryProgress": {},
+    "accessoryList": [],
+    "gppList": [],
+    "gppSession": {},
+    "plateMode": {
+      "Squat": "standard",
+      "Bench Press": "standard",
+      "Prone Row": "standard",
+      "Supine Row": "standard",
+      "Overhead Press": "standard",
+      "Deadlift": "standard"
+    },
+    "programMode": "lprpt",
+    "hlm": {
+      "driverInitialized": false,
+      "lightPct": 20,
+      "squatMediumPct": 10,
+      "benchMediumPct": 5,
+      "singlePct": {
+        "Squat": 10,
+        "Bench Press": 5,
+        "Deadlift": 10
+      },
+      "optionalSingles": true,
+      "rep": {
+        "Squat": 5,
+        "Bench Press": 5
+      },
+      "failCount": {
+        "Squat": 0,
+        "Bench Press": 0
+      },
+      "driver": {
+        "Squat": 40,
+        "Bench Press": 30
+      },
+      "nextHeavy": {
+        "Squat": null,
+        "Bench Press": null
+      },
+      "skippedSingles": {}
+    },
+    "sessionOverrides": {},
+    "freeTraining": {
+      "selectedDay": 1,
+      "days": [
+        {
+          "id": "ft1",
+          "compounds": []
+        }
+      ],
+      "nextDayId": 2
+    },
+    "freeTrainingSession": {},
+    "bodybuilding": {
+      "schema": 2,
+      "status": "not_started",
+      "startedAt": null,
+      "completedSessions": 0,
+      "selections": {
+        "A1": "machine_chest_press",
+        "A2": "hack_squat",
+        "A3": "chest_supported_row",
+        "A4": "seated_leg_curl",
+        "A5": "cable_lateral_raise",
+        "A6": "cable_pushdown",
+        "B1": "lat_pulldown",
+        "B2": "romanian_deadlift",
+        "B3": "incline_dumbbell_press",
+        "B4": "leg_extension",
+        "B5": "reverse_pec_deck",
+        "B6": "cable_curl"
+      },
+      "progression": {},
+      "supplemental": {
+        "calves": {
+          "completed": 0
+        },
+        "trunk": {
+          "completed": 0
+        }
+      },
+      "performanceRefs": {}
+    },
+    "bb2": {
+      "setup": {
+        "catalogueVersion": 5,
+        "optionalUpperBCurls": false,
+        "optionalUpperACurls": false,
+        "selections": {
+          "upper_a|flat_press": "bench_press",
+          "upper_a|horizontal_row": "chest_supported_row",
+          "upper_a|shoulder_press": "dumbbell_shoulder_press",
+          "upper_a|triceps_extension": "lying_barbell_triceps_extension",
+          "upper_a|biceps_curl": "dumbbell_curl",
+          "lower_a|squat": "high_bar_squat",
+          "lower_a|unilateral_quad": "bulgarian_split_squat",
+          "lower_a|hamstring_curl": "nordic_curl",
+          "lower_a|calf_raise": "standing_calf_raise",
+          "upper_b|incline_press": "incline_dumbbell_press",
+          "upper_b|vertical_pull": "chinup",
+          "upper_b|horizontal_row": "chest_supported_row",
+          "upper_b|lateral_raise": "dumbbell_lateral_raise",
+          "upper_b|secondary_chest": "dumbbell_fly",
+          "upper_b|biceps_curl": "dumbbell_curl",
+          "lower_b|quad": "front_squat",
+          "lower_b|hip_hinge": "romanian_deadlift",
+          "lower_b|calf_raise": "standing_calf_raise",
+          "lower_b|abdominal": "weighted_crunch"
+        }
+      },
+      "opening": {
+        "schemaVersion": 1,
+        "foldRulesVersion": 1,
+        "openingSnapshotVersion": 1,
+        "ownerId": "synthetic-android-2026-11-02",
+        "blockId": "bb2-preview-1793602800000",
+        "sealRevision": 0,
+        "progress": {},
+        "pending": {},
+        "previousQuotas": null,
+        "previousCreditIds": [],
+        "sealed": false
+      },
+      "events": [
+        {
+          "type": "WORKOUT_STARTED",
+          "eventId": "start:bb2-preview-session-1793602800000-0",
+          "commitOrdinal": 1,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "templateId": "upper_a",
+          "kind": "NORMAL",
+          "slots": [
+            {
+              "roleSlotId": "flat_press",
+              "exerciseId": "bench_press",
+              "sets": 3,
+              "floor": 6,
+              "ceiling": 8,
+              "equipment": "loaded",
+              "plannedG": 60000,
+              "plannedOrigin": {
+                "value": "60",
+                "unit": "kg"
+              },
+              "incrementG": 2500,
+              "incrementOrigin": {
+                "value": "2.5",
+                "unit": "kg"
+              }
+            },
+            {
+              "roleSlotId": "horizontal_row",
+              "exerciseId": "chest_supported_row",
+              "sets": 3,
+              "floor": 8,
+              "ceiling": 12,
+              "equipment": "loaded",
+              "plannedG": 60000,
+              "plannedOrigin": {
+                "value": "60",
+                "unit": "kg"
+              },
+              "incrementG": 2500,
+              "incrementOrigin": {
+                "value": "2.5",
+                "unit": "kg"
+              }
+            },
+            {
+              "roleSlotId": "shoulder_press",
+              "exerciseId": "dumbbell_shoulder_press",
+              "sets": 2,
+              "floor": 8,
+              "ceiling": 12,
+              "equipment": "loaded",
+              "plannedG": 60000,
+              "plannedOrigin": {
+                "value": "60",
+                "unit": "kg"
+              },
+              "incrementG": 2500,
+              "incrementOrigin": {
+                "value": "2.5",
+                "unit": "kg"
+              }
+            },
+            {
+              "roleSlotId": "triceps_extension",
+              "exerciseId": "lying_barbell_triceps_extension",
+              "sets": 2,
+              "floor": 10,
+              "ceiling": 15,
+              "equipment": "loaded",
+              "plannedG": 60000,
+              "plannedOrigin": {
+                "value": "60",
+                "unit": "kg"
+              },
+              "incrementG": 2500,
+              "incrementOrigin": {
+                "value": "2.5",
+                "unit": "kg"
+              }
+            }
+          ],
+          "startedAt": 1793602800000
+        },
+        {
+          "type": "SET_RECORDED",
+          "eventId": "set:bb2-preview-session-1793602800000-0:0-0",
+          "commitOrdinal": 2,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "roleSlotId": "flat_press",
+          "exerciseId": "bench_press",
+          "setIndex": 0,
+          "reps": 8,
+          "prescribed": true,
+          "harderThanIntended": false,
+          "actualG": 60000,
+          "actualOrigin": {
+            "value": "60",
+            "unit": "kg"
+          }
+        },
+        {
+          "type": "SET_RECORDED",
+          "eventId": "set:bb2-preview-session-1793602800000-0:0-1",
+          "commitOrdinal": 3,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "roleSlotId": "flat_press",
+          "exerciseId": "bench_press",
+          "setIndex": 1,
+          "reps": 8,
+          "prescribed": true,
+          "harderThanIntended": false,
+          "actualG": 60000,
+          "actualOrigin": {
+            "value": "60",
+            "unit": "kg"
+          }
+        },
+        {
+          "type": "SET_RECORDED",
+          "eventId": "set:bb2-preview-session-1793602800000-0:0-2",
+          "commitOrdinal": 4,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "roleSlotId": "flat_press",
+          "exerciseId": "bench_press",
+          "setIndex": 2,
+          "reps": 8,
+          "prescribed": true,
+          "harderThanIntended": false,
+          "actualG": 60000,
+          "actualOrigin": {
+            "value": "60",
+            "unit": "kg"
+          }
+        },
+        {
+          "type": "SET_RECORDED",
+          "eventId": "set:bb2-preview-session-1793602800000-0:1-0",
+          "commitOrdinal": 5,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "roleSlotId": "horizontal_row",
+          "exerciseId": "chest_supported_row",
+          "setIndex": 0,
+          "reps": 12,
+          "prescribed": true,
+          "harderThanIntended": false,
+          "actualG": 60000,
+          "actualOrigin": {
+            "value": "60",
+            "unit": "kg"
+          }
+        },
+        {
+          "type": "SET_RECORDED",
+          "eventId": "set:bb2-preview-session-1793602800000-0:1-1",
+          "commitOrdinal": 6,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "roleSlotId": "horizontal_row",
+          "exerciseId": "chest_supported_row",
+          "setIndex": 1,
+          "reps": 12,
+          "prescribed": true,
+          "harderThanIntended": false,
+          "actualG": 60000,
+          "actualOrigin": {
+            "value": "60",
+            "unit": "kg"
+          }
+        },
+        {
+          "type": "SET_RECORDED",
+          "eventId": "set:bb2-preview-session-1793602800000-0:1-2",
+          "commitOrdinal": 7,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "roleSlotId": "horizontal_row",
+          "exerciseId": "chest_supported_row",
+          "setIndex": 2,
+          "reps": 12,
+          "prescribed": true,
+          "harderThanIntended": false,
+          "actualG": 60000,
+          "actualOrigin": {
+            "value": "60",
+            "unit": "kg"
+          }
+        },
+        {
+          "type": "SET_RECORDED",
+          "eventId": "set:bb2-preview-session-1793602800000-0:2-0",
+          "commitOrdinal": 8,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "roleSlotId": "shoulder_press",
+          "exerciseId": "dumbbell_shoulder_press",
+          "setIndex": 0,
+          "reps": 12,
+          "prescribed": true,
+          "harderThanIntended": false,
+          "actualG": 60000,
+          "actualOrigin": {
+            "value": "60",
+            "unit": "kg"
+          }
+        },
+        {
+          "type": "SET_RECORDED",
+          "eventId": "set:bb2-preview-session-1793602800000-0:2-1",
+          "commitOrdinal": 9,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "roleSlotId": "shoulder_press",
+          "exerciseId": "dumbbell_shoulder_press",
+          "setIndex": 1,
+          "reps": 12,
+          "prescribed": true,
+          "harderThanIntended": false,
+          "actualG": 60000,
+          "actualOrigin": {
+            "value": "60",
+            "unit": "kg"
+          }
+        },
+        {
+          "type": "SET_RECORDED",
+          "eventId": "set:bb2-preview-session-1793602800000-0:3-0",
+          "commitOrdinal": 10,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "roleSlotId": "triceps_extension",
+          "exerciseId": "lying_barbell_triceps_extension",
+          "setIndex": 0,
+          "reps": 15,
+          "prescribed": true,
+          "harderThanIntended": false,
+          "actualG": 60000,
+          "actualOrigin": {
+            "value": "60",
+            "unit": "kg"
+          }
+        },
+        {
+          "type": "SET_RECORDED",
+          "eventId": "set:bb2-preview-session-1793602800000-0:3-1",
+          "commitOrdinal": 11,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "roleSlotId": "triceps_extension",
+          "exerciseId": "lying_barbell_triceps_extension",
+          "setIndex": 1,
+          "reps": 15,
+          "prescribed": true,
+          "harderThanIntended": false,
+          "actualG": 60000,
+          "actualOrigin": {
+            "value": "60",
+            "unit": "kg"
+          }
+        },
+        {
+          "type": "WORKOUT_FINISHED",
+          "eventId": "finish:bb2-preview-session-1793602800000-0",
+          "commitOrdinal": 12,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "progressionMode": "KNOWN_WORKING_WEIGHTS",
+          "completedAt": 1793606400000
+        },
+        {
+          "type": "CREDIT_GRANTED",
+          "eventId": "grant:bb2-preview-session-1793602800000-0",
+          "commitOrdinal": 13,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "creditId": "credit:bb2-preview-session-1793602800000-0"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "note:bb2-preview-session-1793602800000-0:14",
+          "commitOrdinal": 14,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-15",
+          "commitOrdinal": 15,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-16",
+          "commitOrdinal": 16,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-17",
+          "commitOrdinal": 17,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-18",
+          "commitOrdinal": 18,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-19",
+          "commitOrdinal": 19,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-20",
+          "commitOrdinal": 20,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-21",
+          "commitOrdinal": 21,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-22",
+          "commitOrdinal": 22,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-23",
+          "commitOrdinal": 23,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-24",
+          "commitOrdinal": 24,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-25",
+          "commitOrdinal": 25,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-26",
+          "commitOrdinal": 26,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-27",
+          "commitOrdinal": 27,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-28",
+          "commitOrdinal": 28,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-29",
+          "commitOrdinal": 29,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-30",
+          "commitOrdinal": 30,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-31",
+          "commitOrdinal": 31,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-32",
+          "commitOrdinal": 32,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-33",
+          "commitOrdinal": 33,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-34",
+          "commitOrdinal": 34,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        },
+        {
+          "type": "NOTE_EDITED",
+          "eventId": "synthetic-note-35",
+          "commitOrdinal": 35,
+          "blockId": "bb2-preview-1793602800000",
+          "sessionId": "bb2-preview-session-1793602800000-0",
+          "text": "Synthetic BB2 Android-shape workout"
+        }
+      ],
+      "activeSessionId": null,
+      "selectedProgram": true
+    }
+  }
+}

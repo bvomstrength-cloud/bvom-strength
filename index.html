@@ -3150,7 +3150,7 @@ function bvomAddActivityNote(){if(!bvomWorkoutActionAllowed())return;bvomActivit
 function bvomEditActivityNote(i){if(!bvomWorkoutActionAllowed())return;const x=state.history?.[i];if(!x||x.type!=='activity')return;bvomActivityModal(x,v=>{state.history[i]={...x,...v};save();renderHistory()})}
 function bvomDeleteActivityNote(i){if(!bvomWorkoutActionAllowed())return;const x=state.history?.[i];if(!x||x.type!=='activity')return;const d=new Date(x.date),date=isNaN(d.getTime())?String(x.date||''):d.toLocaleDateString(bvomDateLocale(),{day:'numeric',month:'short',year:'numeric'});bvomChoiceModal(hlmTxt('DELETE ACTIVITY / NOTE?','アクティビティ / メモを削除しますか？'),hlmTxt(`Delete "${x.activityTitle||'Activity'}" from ${date}? This removes this History entry only.`,`「${x.activityTitle||'アクティビティ'}」（${date}）を削除しますか？ 履歴の記録だけが削除されます。`),hlmTxt('CANCEL','キャンセル'),hlmTxt('DELETE','削除'),()=>{},()=>{if(!bvomWorkoutActionAllowed())return;state.history.splice(i,1);bvomExpandedHistoryIndex=null;save();renderHistory()})}
 
-function renderHistory(){let names=isHLM()?['Squat','Bench Press','Prone Row','Supine Row','Overhead Press','Deadlift']:['Squat','Bench Press','Prone Row','Overhead Press','Deadlift'];let h=`<div class="toprow"><div><b>${bvomT('history.progress')}</b><div class="small">${bvomT('history.local')}</div></div></div><div class="historyGrid">`;names.forEach(n=>h+=`<div class="histCard"><div class="small">${liftLabel(n)}</div><b>${fmt(state.weights[n])} ${unitLabel()}</b></div>`);h+=`</div><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>${bvomT('history.title')}</b><button class="secondary" onclick="bvomAddActivityNote()">${hlmTxt('ADD ACTIVITY / NOTE','アクティビティ / メモを追加')}</button></div>`;let rows=[...(state.history||[])].map((x,i)=>({x,i})).reverse();if(!rows.length)h+=`<div class="histCard small">${bvomT('history.none')}</div>`;rows.forEach(({x,i})=>{if(x.type==='activity'){let d=new Date(x.date),date=isNaN(d.getTime())?String(x.date||''):d.toLocaleDateString(bvomDateLocale(),{day:'numeric',month:'short',year:'numeric'}),open=bvomExpandedHistoryIndex===i,title=String(x.activityTitle||hlmTxt('Activity / Note','アクティビティ / メモ')).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),note=String(x.note||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');h+=`<div class="histCard"><div class="histSummary" role="button" tabindex="0" aria-expanded="${open?'true':'false'}" onclick="toggleHistoryWorkout(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleHistoryWorkout(${i})}"><div class="histHead"><span>${date} · ${hlmTxt('Activity','アクティビティ')}</span><span>📝</span></div><div class="histSummaryMeta small"><span class="histNotePreview">${title}</span><span class="histToggle">${open?hlmTxt('HIDE DETAILS ▲','詳細を閉じる ▲'):hlmTxt('VIEW DETAILS ▼','詳細を見る ▼')}</span></div></div>`;if(open){h+=`<div class="histDetails"><div class="histLift"><b>${title}</b>${note?`<br>${note}`:''}</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="secondary" onclick="event.stopPropagation();bvomEditActivityNote(${i})">${hlmTxt('EDIT','編集')}</button><button class="secondary" onclick="event.stopPropagation();bvomDeleteActivityNote(${i})">${hlmTxt('DELETE','削除')}</button></div></div>`}h+=`</div>`;return}let u=x.unit||'kg',d=new Date(x.date),date=isNaN(d.getTime())?x.date:d.toLocaleDateString(bvomDateLocale(),{day:'numeric',month:'short',year:'numeric'}),prog=x.gppOnly?hlmTxt('GPP / Conditioning','GPP / コンディショニング'):x.program==='hlm'?'HLM RPT':x.program==='fourday'?'4-Day Split':x.program==='free'?hlmTxt('Custom Training','カスタムトレーニング'):x.program==='bodybuilding'?'Bodybuilding':'LP/RPT',day=x.gppOnly?'':x.program==='hlm'?({H:hlmTxt('Heavy','ヘビー'),L:hlmTxt('Light','ライト'),M:hlmTxt('Medium','ミディアム')}[x.day]||x.day):x.program==='free'?hlmTxt(`Day ${x.day}`,`${x.day}日目`):x.day,open=bvomExpandedHistoryIndex===i,note=String(x.note||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');h+=`<div class="histCard"><div class="histSummary" role="button" tabindex="0" aria-expanded="${open?'true':'false'}" onclick="toggleHistoryWorkout(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleHistoryWorkout(${i})}"><div class="histHead"><span>${date} · ${prog}${x.gppOnly?'':` — ${day||''}`}</span><span>${x.note?'📝 · ':''}${x.incomplete?bvomT('history.incomplete'):'✓'}</span></div><div class="histSummaryMeta small"><span class="histNotePreview">${x.note?`📝 ${note}`:(x.duration?`${bvomT('history.duration')}: ${x.duration}`:'')}</span><span class="histToggle">${open?hlmTxt('HIDE DETAILS ▲','詳細を閉じる ▲'):hlmTxt('VIEW DETAILS ▼','詳細を見る ▼')}</span></div></div>`;if(open){h+=`<div class="histDetails">`;if(x.duration||Number.isFinite(x.volume))h+=`<div class="small" style="margin:6px 0 8px">${x.duration?`${bvomT('history.duration')}: <b>${x.duration}</b>`:''}${x.duration&&Number.isFinite(x.volume)?' · ':''}${Number.isFinite(x.volume)?`${bvomT('history.volume')}: <b>${bvomVolumeText(x)} ${u}</b>`:''}</div>`;for(const [key,obj] of Object.entries(x.session||{})){let sets=Object.values(obj||{}).filter(v=>v&&v.reps!==undefined).map(v=>v.bodyweight===true?bvomEsc(bvomBwSetText(v,u)):`${v.reps}×${fmt(v.load||0)} ${u}${Number.isFinite(Number(v.rpe))?` · RPE ${Number(v.rpe)}`:''}`).join(' · ');if(sets)h+=`<div class="histLift"><b>${bvomEsc(x.exerciseMeta?.[key]?.name||x.accessoryNames?.[key.slice(4)]||historyName(key))}</b><br>${sets}</div>`}for(const r of (x.gpp||[])){const line=bvomGppHistoryLine(r);if(line)h+=`<div class="histLift"><b>GPP — ${bvomEsc(r.name||hlmTxt('Activity','アクティビティ'))}</b><br>${bvomEsc(line)}</div>`}if(x.note)h+=`<div class="histLift"><b>${bvomT('history.sessionNote')}</b><br>${note}</div>`;h+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="secondary" onclick="editHistoryNote(${i})">${x.note?bvomT('history.editNote'):bvomT('history.addNote')}</button><button class="secondary" onclick="shareHistoryWorkout(${i})">${bvomT('history.share')}</button><button class="secondary" onclick="deleteHistoryWorkout(${i})">${hlmTxt('DELETE WORKOUT','ワークアウトを削除')}</button></div></div>`}h+=`</div>`});document.querySelector('#history').innerHTML=h}
+function renderHistory(){let names=isHLM()?['Squat','Bench Press','Prone Row','Supine Row','Overhead Press','Deadlift']:['Squat','Bench Press','Prone Row','Overhead Press','Deadlift'];let h=`<div class="toprow"><div><b>${bvomT('history.progress')}</b><div class="small">${bvomT('history.local')}</div></div></div><div class="historyGrid">`;names.forEach(n=>h+=`<div class="histCard"><div class="small">${liftLabel(n)}</div><b>${fmt(state.weights[n])} ${unitLabel()}</b></div>`);h+=`</div><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>${bvomT('history.title')}</b><button class="secondary" onclick="bvomAddActivityNote()">${hlmTxt('ADD ACTIVITY / NOTE','アクティビティ / メモを追加')}</button></div>`;let rows=[...(state.history||[])].map((x,i)=>({x,i})).reverse();if(!rows.length)h+=`<div class="histCard small">${bvomT('history.none')}</div>`;rows.forEach(({x,i})=>{if(x.type==='activity'){let d=new Date(x.date),date=isNaN(d.getTime())?String(x.date||''):d.toLocaleDateString(bvomDateLocale(),{day:'numeric',month:'short',year:'numeric'}),open=bvomExpandedHistoryIndex===i,title=String(x.activityTitle||hlmTxt('Activity / Note','アクティビティ / メモ')).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),note=String(x.note||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');h+=`<div class="histCard" data-history-index="${i}" data-history-order="${i}" data-history-time="${Number.isFinite(d.getTime())?d.getTime():0}"><div class="histSummary" role="button" tabindex="0" aria-expanded="${open?'true':'false'}" onclick="toggleHistoryWorkout(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleHistoryWorkout(${i})}"><div class="histHead"><span>${date} · ${hlmTxt('Activity','アクティビティ')}</span><span>📝</span></div><div class="histSummaryMeta small"><span class="histNotePreview">${title}</span><span class="histToggle">${open?hlmTxt('HIDE DETAILS ▲','詳細を閉じる ▲'):hlmTxt('VIEW DETAILS ▼','詳細を見る ▼')}</span></div></div>`;if(open){h+=`<div class="histDetails"><div class="histLift"><b>${title}</b>${note?`<br>${note}`:''}</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="secondary" onclick="event.stopPropagation();bvomEditActivityNote(${i})">${hlmTxt('EDIT','編集')}</button><button class="secondary" onclick="event.stopPropagation();bvomDeleteActivityNote(${i})">${hlmTxt('DELETE','削除')}</button></div></div>`}h+=`</div>`;return}let u=x.unit||'kg',d=new Date(x.date),date=isNaN(d.getTime())?x.date:d.toLocaleDateString(bvomDateLocale(),{day:'numeric',month:'short',year:'numeric'}),prog=x.gppOnly?hlmTxt('GPP / Conditioning','GPP / コンディショニング'):x.program==='hlm'?'HLM RPT':x.program==='fourday'?'4-Day Split':x.program==='free'?hlmTxt('Custom Training','カスタムトレーニング'):x.program==='bodybuilding'?'Bodybuilding':'LP/RPT',day=x.gppOnly?'':x.program==='hlm'?({H:hlmTxt('Heavy','ヘビー'),L:hlmTxt('Light','ライト'),M:hlmTxt('Medium','ミディアム')}[x.day]||x.day):x.program==='free'?hlmTxt(`Day ${x.day}`,`${x.day}日目`):x.day,open=bvomExpandedHistoryIndex===i,note=String(x.note||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');h+=`<div class="histCard" data-history-index="${i}" data-history-order="${i}" data-history-time="${Number.isFinite(d.getTime())?d.getTime():0}"><div class="histSummary" role="button" tabindex="0" aria-expanded="${open?'true':'false'}" onclick="toggleHistoryWorkout(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleHistoryWorkout(${i})}"><div class="histHead"><span>${date} · ${prog}${x.gppOnly?'':` — ${day||''}`}</span><span>${x.note?'📝 · ':''}${x.incomplete?bvomT('history.incomplete'):'✓'}</span></div><div class="histSummaryMeta small"><span class="histNotePreview">${x.note?`📝 ${note}`:(x.duration?`${bvomT('history.duration')}: ${x.duration}`:'')}</span><span class="histToggle">${open?hlmTxt('HIDE DETAILS ▲','詳細を閉じる ▲'):hlmTxt('VIEW DETAILS ▼','詳細を見る ▼')}</span></div></div>`;if(open){h+=`<div class="histDetails">`;if(x.duration||Number.isFinite(x.volume))h+=`<div class="small" style="margin:6px 0 8px">${x.duration?`${bvomT('history.duration')}: <b>${x.duration}</b>`:''}${x.duration&&Number.isFinite(x.volume)?' · ':''}${Number.isFinite(x.volume)?`${bvomT('history.volume')}: <b>${bvomVolumeText(x)} ${u}</b>`:''}</div>`;for(const [key,obj] of Object.entries(x.session||{})){let sets=Object.values(obj||{}).filter(v=>v&&v.reps!==undefined).map(v=>v.bodyweight===true?bvomEsc(bvomBwSetText(v,u)):`${v.reps}×${fmt(v.load||0)} ${u}${Number.isFinite(Number(v.rpe))?` · RPE ${Number(v.rpe)}`:''}`).join(' · ');if(sets)h+=`<div class="histLift"><b>${bvomEsc(x.exerciseMeta?.[key]?.name||x.accessoryNames?.[key.slice(4)]||historyName(key))}</b><br>${sets}</div>`}for(const r of (x.gpp||[])){const line=bvomGppHistoryLine(r);if(line)h+=`<div class="histLift"><b>GPP — ${bvomEsc(r.name||hlmTxt('Activity','アクティビティ'))}</b><br>${bvomEsc(line)}</div>`}if(x.note)h+=`<div class="histLift"><b>${bvomT('history.sessionNote')}</b><br>${note}</div>`;h+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="secondary" onclick="editHistoryNote(${i})">${x.note?bvomT('history.editNote'):bvomT('history.addNote')}</button><button class="secondary" onclick="shareHistoryWorkout(${i})">${bvomT('history.share')}</button><button class="secondary" onclick="deleteHistoryWorkout(${i})">${hlmTxt('DELETE WORKOUT','ワークアウトを削除')}</button></div></div>`}h+=`</div>`});document.querySelector('#history').innerHTML=h}
 
 function renderInfo(){
  let base=bvomLang().infoHtml({unit:unitLabel(),smallInc:isLb()?5:2.5,dlInc:isLb()?10:5,exampleWork:isLb()?225:100,exampleDrop:isLb()?205:90});
@@ -6516,9 +6516,7 @@ function bvomBb2OpenExtra(i){
     !bvomBb2PreviewModule)return false;
  const b=state.bb2,start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId);
  const slot=start?.slots[i];
- if(!slot||bvomBb2NextExtraIndex(b.events,b.activeSessionId,slot)===null||
-    !b.events.some(e=>e.type==='SET_RECORDED'&&e.sessionId===b.activeSessionId&&
-     e.roleSlotId===slot.roleSlotId))return false;
+ if(!slot||bvomBb2NextExtraIndex(b.events,b.activeSessionId,slot)===null)return false;
  bvomBb2ExtraEntry={sessionId:b.activeSessionId,roleSlotId:slot.roleSlotId};
  if(!bvomBb2SetModal(i,bvomBb2NextExtraIndex(b.events,b.activeSessionId,slot),true)){
   bvomBb2ExtraEntry=null;return false;
@@ -6553,7 +6551,7 @@ function bvomBb2Workout(){
    signal?.kind==='NOTE'?hlmTxt('Three comparable exposures without a new rep best.','同条件の3回のセッションで回数の自己ベストを更新していません。'):
    hlmTxt('Progression is evaluated from completed prescribed sets after Finish.','終了後、完了した予定セットに基づいて進行を判定します。');
   const touched=bvomBb2WarmupTouched(b.activeSessionId,s)||
-   b.events.some(e=>e.sessionId===b.activeSessionId&&e.roleSlotId===s.roleSlotId&&e.type==='SET_RECORDED');
+   b.events.some(e=>e.sessionId===b.activeSessionId&&e.roleSlotId===s.roleSlotId&&['SET_RECORDED','EXTRA_SET_RECORDED'].includes(e.type));
   const rows=Array.from({length:s.sets},(_,j)=>{
    const id=i+'|'+j,done=b.events.find(e=>e.type==='SET_RECORDED'&&e.sessionId===b.activeSessionId&&e.roleSlotId===s.roleSlotId&&e.setIndex===j);
    const load=done?.actualG!==undefined?bvomBb2DisplayLoad(done.actualG):
@@ -6575,11 +6573,9 @@ function bvomBb2Workout(){
    '<div class="setload">'+(s.equipment==='bodyweight'?bvomEsc(e.variation)+' · '+bvomEsc(e.assistance):
     bvomEsc(bvomBb2DisplayLoad(e.actualG))+' '+unitLabel())+
    '<div class="extraLabel">'+hlmTxt('EXTRA','追加')+'</div></div></div>').join('');
-  const hasPrescribed=b.events.some(e=>e.type==='SET_RECORDED'&&
-   e.sessionId===b.activeSessionId&&e.roleSlotId===s.roleSlotId);
-  const extraInput=nextExtra!==null&&hasPrescribed?
+  const extraInput=nextExtra!==null?
    '<button type="button" class="secondary" data-bb2-extra-add="'+i+'" onclick="bvomBb2OpenExtra('+i+')">+ '+
-    hlmTxt('ADD EXTRA SET','追加セットを記録')+'</button>':'';
+    hlmTxt('ADD SET','セットを追加')+'</button>':'';
   return '<div class="exercise"><div class="exhead"><div class="exname">'+bvomEsc(bvomBb2PreviewLabel(s.exerciseId))+'</div></div>'+
    '<div class="small">'+s.sets+' × '+s.floor+'–'+s.ceiling+' '+hlmTxt('reps','回')+' · '+
    (s.plannedG===undefined?bvomEsc(s.assistance):bvomEsc(bvomBb2DisplayLoad(s.plannedG))+' '+unitLabel())+'</div>'+
@@ -6612,9 +6608,7 @@ function bvomBb2Log(i,j,extra=false,entryRoot=null){
  if(!slot||!Number.isSafeInteger(j)||j<0||
    (extra?j!==bvomBb2NextExtraIndex(b.events,b.activeSessionId,slot)||
     bvomBb2ExtraEntry?.sessionId!==b.activeSessionId||
-    bvomBb2ExtraEntry.roleSlotId!==slot.roleSlotId||
-    !b.events.some(e=>e.type==='SET_RECORDED'&&e.sessionId===b.activeSessionId&&
-      e.roleSlotId===slot.roleSlotId):j>=slot.sets)||
+    bvomBb2ExtraEntry.roleSlotId!==slot.roleSlotId:j>=slot.sets)||
    b.events.some(e=>['SET_RECORDED','EXTRA_SET_RECORDED'].includes(e.type)&&
     e.sessionId===b.activeSessionId&&e.roleSlotId===slot.roleSlotId&&e.setIndex===j))return false;
  const key=i+'|'+j,field=name=>entryRoot?
@@ -6770,7 +6764,7 @@ function bvomBb2RecoveryCheck(){
   const hold=bvomRecoveryHold();
   if(hold){bvomRecoveryStatus(hlmTxt('BB2 workout kept: resolve the open choice or timer before automatic recovery.',
     'BB2のワークアウトは保留中です。自動復旧の前に開いている選択やタイマーを完了してください。'));return false}
-  if(!b.events?.some(e=>e.type==='SET_RECORDED'&&e.sessionId===b.activeSessionId)){
+  if(!b.events?.some(e=>['SET_RECORDED','EXTRA_SET_RECORDED'].includes(e.type)&&e.sessionId===b.activeSessionId)){
    bvomRecoveryStatus(hlmTxt('BB2 workout kept: there are no recorded working sets to archive.',
     'BB2のワークアウトは保留中です。履歴に保存するワーキングセットはありません。'));return false;
   }
@@ -7034,30 +7028,72 @@ function bvomBb2VoidSession(historyIndex){
   });
  }catch(error){console.error('BB2 History workout void rejected',error);return false}
 }
+let bvomBb2HistoryCache=null,bvomBb2HistoryLoading=false;
+function bvomBb2HistoryProjection(){
+ const b=state.bb2,m=bvomBb2PreviewModule;if(!m||!b?.opening||!Array.isArray(b.events))return null;
+ const key=JSON.stringify([b.opening,b.events,b.sealedBlocks||[]]);
+ if(bvomBb2HistoryCache?.key===key&&bvomBb2HistoryCache.module===m)return bvomBb2HistoryCache.value;
+ const projection=m.foldBB2Block(b.opening,b.events),archived=[],seen=new Set([projection.blockId]);
+ for(const block of b.sealedBlocks||[]){
+  const old=m.foldBB2Block(block.opening,block.events);
+  if(!old.sealed||old.ownerId!==projection.ownerId||seen.has(old.blockId))throw Error('Invalid BB2 History archive');
+  seen.add(old.blockId);archived.push(...old.history.filter(x=>!x.hidden&&x.status!=='VOID'));
+ }
+ const value={projection,rows:projection.history.filter(x=>!x.hidden&&x.status!=='VOID'),archived};
+ bvomBb2HistoryCache={key,module:m,value};return value;
+}
+function bvomBb2WorkingVolume(sets){
+ if(sets.some(s=>!Number.isSafeInteger(s.actualG)||s.variation))return null;
+ return sets.reduce((n,s)=>n+s.actualG/(state.unit==='lb'?453.59237:1000)*s.reps,0);
+}
+function bvomBb2HistoryTime(h){const t=new Date(h.completedAt||h.startedAt||0).getTime();return Number.isFinite(t)?t:0}
+const bvomBb2LegacyLastCompletedWorkoutTime=lastCompletedWorkoutTime;
+lastCompletedWorkoutTime=function(){
+ const legacy=bvomBb2LegacyLastCompletedWorkoutTime(),b=state.bb2;
+ if(!b||!((Array.isArray(b.events)?b.events:[]).some(e=>['WORKOUT_FINISHED','WORKOUT_INCOMPLETE'].includes(e.type))||b.sealedBlocks?.length))return legacy;
+ // Do not infer a layoff from stale legacy data while recent BB2 records load.
+ try{const p=bvomBb2HistoryProjection();if(!p)return null;
+  return Math.max(legacy||0,...p.rows.map(bvomBb2HistoryTime),...p.archived.map(bvomBb2HistoryTime))||null;
+ }catch(e){return null}
+};
+function bvomBb2HistoryNotice(message,error=false){
+ const el=document.querySelector('#history');if(!el)return;
+ el.querySelectorAll('[data-bb2-history-notice]').forEach(x=>x.remove());
+ const notice=document.createElement('div');notice.className='notice';notice.setAttribute('data-bb2-history-notice',error?'error':'loading');notice.textContent=message;
+ if(error){const reload=document.createElement('button');reload.className='secondary';reload.textContent=hlmTxt('RELOAD','再読み込み');reload.onclick=()=>location.reload();notice.appendChild(reload)}
+ el.appendChild(notice);
+}
 function bvomBb2RenderHistory(){
- if(!bvomBb2PreviewEnabled()||!state.bb2?.opening||!Array.isArray(state.bb2.events))return;
- const m=bvomBb2PreviewModule;
- if(!m){
-  import('./bb2/browser-core.mjs').then(x=>{
-   if(!bvomBb2PreviewEnabled())return;
-   bvomBb2PreviewModule=x;bvomBb2RenderHistory();
-  }).catch(e=>console.error('BB2 History load rejected',e));
+ if(!bvomBb2PreviewEnabled()||!state.bb2)return;
+ const el=document.querySelector('#history');if(!el)return;
+ if(!state.bb2.opening||!Array.isArray(state.bb2.events)){
+  if(state.bb2.opening||state.bb2.events?.length||state.bb2.sealedBlocks?.length)bvomBb2HistoryNotice(hlmTxt('Saved BB2 records could not be verified. Export a backup before making changes.','BB2の保存記録を確認できませんでした。変更する前にバックアップを書き出してください。'),true);
   return;
  }
- const el=document.querySelector('#history');if(!el)return;
- let projection;
- try{projection=m.foldBB2Block(state.bb2.opening,state.bb2.events)}
- catch(e){console.error('BB2 History replay rejected',e);return}
- const rows=projection.history.filter(x=>!x.hidden&&x.status!=='VOID');
- const archived=[];
- try{
-  for(const block of state.bb2.sealedBlocks||[]){
-   const old=m.foldBB2Block(block.opening,block.events);
-   if(!old.sealed||old.ownerId!==projection.ownerId)return;
-   archived.push(...old.history.filter(x=>!x.hidden&&x.status!=='VOID'));
+ if(el.querySelectorAll('[data-bb2-history-section]').length)bvomBb2OldRenderHistory();
+ const m=bvomBb2PreviewModule;
+ if(!m){
+  el.innerHTML=el.innerHTML.replace('<div class="histCard small">'+bvomT('history.none')+'</div>','');
+  bvomBb2HistoryNotice(hlmTxt('Loading saved workout history…','保存済みの履歴を読み込み中…'));
+  if(!bvomBb2HistoryLoading){bvomBb2HistoryLoading=true;
+   import('./bb2/browser-core.mjs').then(x=>{
+    bvomBb2HistoryLoading=false;if(!bvomBb2PreviewEnabled())return;
+    bvomBb2PreviewModule=x;renderHistory();
+    if(!document.querySelector('#app').classList.contains('hidden'))maybeShowLayoffCoach();
+   }).catch(e=>{bvomBb2HistoryLoading=false;console.error('BB2 History load rejected',e);
+    bvomBb2HistoryNotice(hlmTxt('Some workout details could not be loaded. Your saved records are unchanged. Reload to try again.',
+     '一部のワークアウトを読み込めませんでした。保存記録は変更されていません。再読み込みしてください。'),true)});
   }
- }catch(e){console.error('BB2 sealed History replay rejected',e);return}
+  return;
+ }
+ el.querySelectorAll('[data-bb2-history-notice]').forEach(x=>x.remove());
+ let data;try{data=bvomBb2HistoryProjection()}catch(e){console.error('BB2 History replay rejected',e);
+  bvomBb2HistoryNotice(hlmTxt('Saved BB2 records could not be verified. Export a backup before making changes.',
+   'BB2の保存記録を確認できませんでした。変更する前にバックアップを書き出してください。'),true);return}
+ if(!data)return;const {projection,rows,archived}=data;
  if(!rows.length&&!archived.length)return;
+ const latestRecorded=Math.max(...rows.map(bvomBb2HistoryTime),...archived.map(bvomBb2HistoryTime));
+ if(latestRecorded>0&&Date.now()-latestRecorded<7*86400000)document.querySelector('#beeCoachOverlay')?.remove();
  const statusLabel=status=>hlmTxt(status,({
   FINISHED:'完了',INCOMPLETE:'未完了',INCOMPLETE_CORRECTED:'未完了（修正済み）',
   LOW_STRESS_RECOVERY:'軽めの回復ワークアウト',EXTRA_NORMAL:'追加ワークアウト'
@@ -7067,6 +7103,7 @@ function bvomBb2RenderHistory(){
  const canCorrect=!projection.sealed&&!bvomBb2Active()&&!bvomStateWorkoutActive(state);
  const cards=[...rows.slice().reverse().map((h,historyIndex)=>({h,historyIndex,archived:false})),
   ...archived.slice().reverse().map(h=>({h,historyIndex:-1,archived:true}))].map(({h,historyIndex,archived})=>{
+  const volume=bvomBb2WorkingVolume(h.sets);
   const sets=h.sets.map((s,setIndex)=>'<div class="histLift"><b>'+
    bvomEsc(bvomBb2PreviewLabel(s.exerciseId))+'</b> · '+
    s.reps+' '+hlmTxt('reps','回')+(!s.prescribed?' · '+hlmTxt('EXTRA SET','追加セット'):'')+
@@ -7088,13 +7125,14 @@ function bvomBb2RenderHistory(){
     '<button type="button" class="secondary" data-bb2-void-save="'+historyIndex+'|'+setIndex+'" '+
      'onclick="bvomBb2VoidSet('+historyIndex+','+setIndex+')">'+hlmTxt('REMOVE SET','セットを削除')+'</button></div></div>':'')+
    '</div>').join('');
-  return '<div class="histCard" data-bb2-history="'+bvomEsc(h.sessionId)+'"'+
+  return '<div class="histCard" data-history-time="'+bvomBb2HistoryTime(h)+'" data-history-order="'+h.finishOrdinal+'" data-bb2-history="'+bvomEsc(h.sessionId)+'" data-bb2-history-block="'+bvomEsc(h.blockId)+'"'+
    (archived?' data-bb2-archived="1"':'')+'>'+
-   '<div class="histHead"><b>'+bvomEsc(bvomBb2PreviewLabel(h.templateId))+
+   '<div class="histHead"><b>Bodybuilding 2 — '+bvomEsc(bvomBb2PreviewLabel(h.templateId))+
    '</b><span>'+bvomEsc(statusLabel(h.status))+(archived?' · '+hlmTxt('SEALED BLOCK','確定済みブロック'):'')+'</span></div>'+
    '<div class="small">'+h.validCount+'/'+h.prescribedCount+' '+hlmTxt('prescribed sets','予定セット')+
    (h.creditId?' · '+hlmTxt('Credit awarded','クレジット獲得'):' · '+hlmTxt('No credit','クレジットなし'))+'</div>'+
    (h.completedAt?'<div class="small">'+bvomEsc(new Date(h.completedAt).toLocaleString(bvomDateLocale()))+'</div>':'')+
+   '<div class="small" data-bb2-history-volume>'+bvomT('history.volume')+': <b>'+(volume===null?'—':fmt(volume))+' '+bvomEsc(unitLabel())+'</b></div>'+
    (h.note?'<div class="histLift"><b>'+bvomT('history.sessionNote')+'</b><br>'+bvomEsc(h.note)+'</div>':'')+
    sets+(canCorrect&&!archived?'<button type="button" class="secondary" data-bb2-void-session="'+historyIndex+'" '+
     'onclick="bvomBb2VoidSession('+historyIndex+')">'+hlmTxt('REMOVE WORKOUT','ワークアウトを削除')+'</button>':'')+'</div>';
@@ -7114,12 +7152,18 @@ function bvomBb2RenderHistory(){
    bvomEsc(load)+' · '+bvomEsc(status)+'</div>';
  }).join('');
  // Rerenders are idempotent. BVOM legacy history is never amended or duplicated.
- if(el.innerHTML.includes('data-bb2-history-section'))return;
  el.innerHTML=el.innerHTML.replace('<div class="histCard small">'+bvomT('history.none')+'</div>','');
- el.innerHTML+='<section data-bb2-history-section><div class="card">'+
-  '<b>BODYBUILDING 2</b><p class="small">'+counts+'</p></div>'+cards+
+ el.innerHTML+=cards+'<section data-bb2-history-section><div class="card">'+
+  '<b>BODYBUILDING 2</b><p class="small">'+counts+'</p></div>'+
   '<div class="card" data-bb2-current-plans><b>'+hlmTxt('CURRENT BB2 WORKING PLANS','BB2の現在の使用重量と設定')+'</b>'+currentPlans+
   '<p class="small">'+hlmTxt('Saved working weights for your next workout.','次のワークアウトで使用する保存済み重量です。')+'</p></div></section>';
+ const entries=[...el.querySelectorAll(':scope > .histCard[data-history-time]')];
+ if(entries.length){
+  const anchor=document.createElement('span');anchor.hidden=true;el.insertBefore(anchor,entries[0]);
+  entries.sort((a,b)=>Number(b.dataset.historyTime)-Number(a.dataset.historyTime)||Number(b.dataset.historyOrder)-Number(a.dataset.historyOrder));
+  for(const entry of entries)el.insertBefore(entry,anchor);anchor.remove();
+ }
+
 }
 const bvomBb2OldRenderHistory=renderHistory;
 renderHistory=function(...args){
@@ -7288,7 +7332,7 @@ function bvomBb2FinishFromControls(){
  const start=b.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===sessionId);
  const count=new Set(b.events.filter(e=>e.type==='SET_RECORDED'&&e.sessionId===sessionId&&
   start.slots.some(s=>s.roleSlotId===e.roleSlotId&&e.setIndex<s.sets)).map(e=>e.roleSlotId+'|'+e.setIndex)).size;
- if(!count)return false;
+ if(!b.events.some(e=>['SET_RECORDED','EXTRA_SET_RECORDED'].includes(e.type)&&e.sessionId===sessionId))return false;
  const required=start.kind==='RECOVERY'?1:Math.ceil(.70*start.slots.reduce((n,s)=>n+s.sets,0));
  window.__bvomFinishBusy=true;bvomSyncWorkoutControls();
  const release=()=>{window.__bvomFinishBusy=false;bvomSyncWorkoutControls()};
@@ -7302,8 +7346,7 @@ function bvomBb2FinishFromControls(){
      'ワークアウトを保存できませんでした。記録済みセットはこの端末に保持されています。もう一度FINISHを試してください。'));return;
    }
    const working=b.events.filter(e=>e.sessionId===sessionId&&['SET_RECORDED','EXTRA_SET_RECORDED'].includes(e.type));
-   const known=working.every(e=>Number.isSafeInteger(e.actualG)&&!e.variation);
-   const volume=known?working.reduce((n,e)=>n+e.actualG/(state.unit==='lb'?453.59237:1000)*e.reps,0):null;
+   const volume=bvomBb2WorkingVolume(working),known=volume!==null;
    const extra=known?'':'<p class="small">'+hlmTxt('Volume is not estimated for bodyweight or assisted exercises.',
     '自重・補助種目を含むため、ボリュームは推定しません。')+'</p>';
    bvomSavedModal(duration,start.slots.length,volume,unitLabel(),extra,{volumeText:known?fmt(volume):'—'});
@@ -7317,7 +7360,7 @@ function bvomBb2FinishFromControls(){
 }
 const bvomBb2BaseHasActivity=bvomSessionHasActivity;
 bvomSessionHasActivity=function(){
- if(bvomBb2Active())return !!state.bb2.events?.some(e=>e.type==='SET_RECORDED'&&e.sessionId===state.bb2.activeSessionId);
+ if(bvomBb2Active())return !!state.bb2.events?.some(e=>['SET_RECORDED','EXTRA_SET_RECORDED'].includes(e.type)&&e.sessionId===state.bb2.activeSessionId);
  return bvomBb2Selected()?false:bvomBb2BaseHasActivity();
 };
 finishWorkout=function(...args){

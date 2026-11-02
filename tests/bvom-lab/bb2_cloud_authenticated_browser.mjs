@@ -53,7 +53,7 @@ const contexts = [];
 let passed = 0;
 async function check(label, body) { await body(); passed++; console.log('PASS:', label); }
 async function makeDevice(label, { userId = ownerId, login = credentials,
-  accountFlow = false, configured = true } = {}) {
+  accountFlow = false, configured = true, appData = fixture } = {}) {
   const context = await browser.newContext({ serviceWorkers: 'block',
     viewport: { width: 390, height: 844 }, deviceScaleFactor: 2,
     isMobile: true, hasTouch: true });
@@ -76,7 +76,7 @@ async function makeDevice(label, { userId = ownerId, login = credentials,
       userId: id, verifiedAt: new Date().toISOString(),
       record: { user_id: id, status: 'complimentary' }
     }));
-  }, { data: { ...fixture, configured }, id: userId });
+  }, { data: { ...appData, configured }, id: userId });
   await page.goto(origin + '/index.html?bb2Preview=1');
   await page.waitForSelector(configured?'#app:not(.hidden)':'#setup:not(.hidden)');
   await page.waitForFunction(() => bvomWindowLockOwned === true);
@@ -591,6 +591,40 @@ try {
     assert.equal(await b.evaluate(()=>state.bb2.events.filter(e=>e.type==='WORKOUT_INCOMPLETE').length),1);
     await b.locator('.tab[data-tab="history"]').click();
     assert.match(await b.locator('#history').textContent(),/Recovered incomplete session/);
+  });
+
+  await check('Android-shape ledger History and first-use Add Set remain canonical across two authenticated devices',async()=>{
+    const login={email:'android-shape-owner@example.invalid',password:'Disposable-Android-Shape-2026!'};
+    const user=await admin.auth.admin.createUser({...login,email_confirm:true});if(user.error)throw user.error;
+    const id=user.data.user.id,data=JSON.parse(fs.readFileSync(path.join(root,'tests/bvom-lab/fixtures/bb2-android-history-shape.json'))).data;
+    data.bb2.opening.ownerId=id;
+    // Keep the reported structure, with a recent relative date for CI on any day.
+    for(const event of data.bb2.events){if(event.startedAt)event.startedAt=Date.now()-2000;if(event.completedAt)event.completedAt=Date.now()-1000;}
+    const a=await makeDevice('Android-shape A',{userId:id,login,accountFlow:true,appData:data});
+    await a.locator('.tab[data-tab="history"]').click();await a.waitForSelector('#history > [data-bb2-history]');
+    assert.equal(await a.locator('#history > .histCard').count(),17);
+    assert.ok(await a.locator('#history > .histCard').first().getAttribute('data-bb2-history'));
+    assert.equal(await a.evaluate(()=>state.history.length),16);
+    await a.waitForFunction(()=>state.bb2?.cloudSync?.baseline?.revision>=1);
+    const second=JSON.parse(JSON.stringify(data));delete second.bb2;
+    const b=await makeDevice('Android-shape B',{userId:id,login,accountFlow:true,appData:second});
+    await b.waitForFunction(()=>state.bb2?.events?.length===35);
+    await b.locator('.tab[data-tab="history"]').click();await b.waitForSelector('#history > [data-bb2-history]');assert.equal(await b.locator('#history > .histCard').count(),17);
+    await a.locator('.tab[data-tab="workout"]').click();await a.locator('[data-bb2-next-workout]').click();await a.locator('[data-bb2-day="upper_a"]').click();await a.locator('[data-bb2-start]').click();await a.waitForSelector('[data-bb2-extra-add="0"]');
+    assert.equal(await a.locator('[data-bb2-set].done').count(),0);
+    await a.locator('[data-bb2-extra-add="0"]').click();await a.locator('.bvomModalOverlay [data-bb2-reps]').fill('1');await a.locator('.bvomModalOverlay [data-bb2-actual]').fill('55');await a.locator('.bvomModalOverlay [data-save]').click();
+    const slots=await a.evaluate(()=>state.bb2.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===state.bb2.activeSessionId).slots);
+    for(const[i,slot]of slots.entries())for(let j=0;j<slot.sets;j++)await recordSet(a,i+'|'+j);
+    await a.locator('#timerbar .finish').click();await a.locator('.bvomModalOverlay [data-note]').fill('Android-shape extra set cloud proof');await a.locator('.bvomModalOverlay [data-save]').click();await a.locator('.bvomModalOverlay [data-ok]').click();
+    await a.locator('.tab[data-tab="history"]').click();assert.equal(await a.locator('#history > .histCard').count(),18);assert.match(await a.locator('#history > .histCard').first().textContent(),/Android-shape extra set cloud proof/);
+    const journal=await a.evaluate(()=>state.bb2.events);
+    let row;for(let i=0;i<100;i++){const q=await admin.from('bvom_cloud_state').select('state').eq('user_id',id).single();if(q.error)throw q.error;row=q.data;if(row.state.snapshot.events.length===journal.length)break;await new Promise(r=>setTimeout(r,100));}
+    assert.deepEqual(row.state.snapshot.events,journal,'actual stored canonical events include the extra set');
+    await b.evaluate(()=>window.dispatchEvent(new Event('focus')));await b.waitForFunction(n=>state.bb2.events.length===n,journal.length);
+    assert.deepEqual(await b.evaluate(()=>state.bb2.events),journal);await b.waitForFunction(()=>document.querySelectorAll('#history > .histCard').length===18&&document.querySelector('#history > .histCard').textContent.includes('Android-shape extra set cloud proof'));assert.equal(await b.locator('#history > .histCard').count(),18);assert.match(await b.locator('#history > .histCard').first().textContent(),/Android-shape extra set cloud proof/);
+    assert.equal(journal.filter(e=>e.type==='CREDIT_GRANTED').length,2);assert.equal(journal.filter(e=>e.type==='EXTRA_SET_RECORDED').length,1);assert.equal(await b.evaluate(()=>state.history.length),16);
+    const projection=await a.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events));assert.equal(projection.history.at(-1).sets.filter(s=>!s.prescribed).length,1);
+    await a.context().close();await b.context().close();
   });
 
   console.log(`BB2 real app authenticated Chromium: ${passed}/${passed} PASS`);

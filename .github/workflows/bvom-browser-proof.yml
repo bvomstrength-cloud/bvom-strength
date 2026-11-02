@@ -149,6 +149,18 @@ jobs:
       - name: Check developer-only BB2 setup preview in the real BVOM program chooser
         run: node tests/bvom-lab/bb2_integrated_setup_preview_browser.cjs
 
+      - name: Verify Android backup History, Add Set and persistent browser reopen
+        env:
+          BB2_ANDROID_OUTPUT: ${{ runner.temp }}/bb2-android-acceptance
+        run: node tests/bvom-lab/bb2_android_acceptance_browser.cjs
+      - name: Preserve Android acceptance screenshots and exported fixture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BB2-Android-History-Add-Set
+          path: ${{ runner.temp }}/bb2-android-acceptance
+          if-no-files-found: ignore
+
       - name: Verify packaged BB2 test-site entry and both optional curl days
         run: node tests/bvom-lab/bb2_test_package_browser.cjs
       - name: Preserve mobile BB1/BB2 Edit Weight comparison screenshots
