@@ -47,5 +47,28 @@ async function check(label,fn){await fn();passed++;console.log('PASS LEGACY GUAR
    }
   });
  }
- console.log('Legacy cloud guard audit: '+passed+'/'+(builds.length*7)+' PASS');
+ const build=H.loadBuild(builds[0][1]);
+ function active(){const f=setup(build),h=f.h;h.ls.setItem('bvom_data_owner','guard-audit');h.ev("window.__bvomAuthUserId='guard-audit';state.workoutStartedAt=Date.now();save({localOnly:true});bvomCloud.workoutBaselineFingerprint=null");return f}
+ await check('candidate verified owner can remember an exactly matching active baseline without writing',async()=>{
+  const {h,remote}=active(),raw=h.ls.getItem('bvom_data');assert.equal(typeof h.ctx.bvomCloudRememberMatchingActiveBaseline,'function');
+  assert.equal(h.ctx.bvomCloudRememberMatchingActiveBaseline('guard-audit',remote.data),true);assert.equal(h.ls.getItem('bvom_data'),raw);assert.equal(remote.writes,0);assert.equal(h.ev('bvomCloud.syncReady'),false);
+  h.S().workoutStartedAt=null;h.S().history.push({note:'normal Finish'});await h.ctx.bvomCloudAssessSync();assert.equal(h.ev('bvomCloud.syncReady'),true);await h.ctx.bvomCloudAutoSave();assert.equal(remote.writes,1);
+ });
+ await check('candidate remembered baseline still rejects a later cloud edit',async()=>{
+  const {h,remote}=active();assert.equal(h.ctx.bvomCloudRememberMatchingActiveBaseline('guard-audit',remote.data),true);remote.data.weights.Squat+=5;h.S().workoutStartedAt=null;h.S().history.push({note:'finished'});await h.ctx.bvomCloudAssessSync();await h.ctx.bvomCloudAutoSave();assert.equal(h.ev('bvomCloud.conflict'),true);assert.equal(remote.writes,0);
+ });
+ for(const [name,change]of Object.entries({
+  'already progressed local weights':(h)=>h.S().weights.Squat+=2.5,
+  'newer cloud increment':(h,r)=>r.data.core.Squat.increment=.5,
+  'older restored History':(h,r)=>r.data.history.push({note:'newer remote workout'}),
+  'other signed-in owner':h=>h.ev("bvomCloud.user={id:'other-user'}"),
+  'account switch':h=>h.ev('bvomCloud.accountSwitchDeferred=true'),
+  'offline or unverified startup':h=>h.ev("bvomCloud.startupState='VERIFYING'"),
+  'another document owner':h=>h.ev('bvomWindowLockOwned=false'),
+  'raw document changed':h=>h.ls.setItem('bvom_data','{}'),
+  'BB2 active journal':h=>{h.S().bb2={activeSessionId:'isolated-fixture'};}
+ }))await check('candidate refuses active baseline with '+name,async()=>{
+  const {h,remote}=active();change(h,remote);assert.equal(h.ctx.bvomCloudRememberMatchingActiveBaseline('guard-audit',remote.data),false);assert.equal(h.ev('bvomCloud.workoutBaselineFingerprint'),null);assert.equal(remote.writes,0);
+ });
+ console.log('Legacy cloud guard audit: '+passed+'/'+(builds.length*7+11)+' PASS');
 })().catch(e=>{console.error(e);process.exitCode=1});

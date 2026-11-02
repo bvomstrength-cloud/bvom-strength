@@ -2790,6 +2790,7 @@ async function bvomPublicContinueAfterSignIn(mode){
   }
   bvomSetLocalOwnerId(userId);
  }
+ bvomCloudRememberMatchingActiveBaseline(userId,cloudData);
  if(bvomReadyForSavedOnRamp())showApp();else showSetup();
  if(!latest?.error)setTimeout(()=>bvomCloudAssessSync(),0);
  // Register the dormant BB2 adapter only after BVOM has resolved the actual
@@ -2936,6 +2937,25 @@ function bvomCloudWorkoutActive(){return bvomStateWorkoutActive(state)}
 function bvomStoredWorkoutActive(){try{const raw=localStorage.getItem(BVOM_DATA_KEY);return raw?bvomStateWorkoutActive(JSON.parse(raw)):false}catch(e){return bvomCloudWorkoutActive()}}
 function bvomAnyWorkoutActive(){return bvomCloudWorkoutActive()||bvomStoredWorkoutActive()}
 function bvomCloudPayload(){const d=JSON.parse(JSON.stringify(state));d.session={};d.gppSession={};d.sessionOverrides={};d.processed={};d.processedSnapshots={};d.warmupDone={};d.warmupPlans={};d.timerStart=null;d.workoutStartedAt=null;delete d.workoutLastActivityAt;delete d.workoutOwnershipVersion;delete d.setupAfterFinish;d.hlmActiveWorkoutSettings=null;if(d.hlm)d.hlm.skippedSingles={};return d}
+// Re-authentication can recover a cold page's lost in-memory baseline only
+// when the entire legacy payload still equals the freshly read owner cloud copy.
+// Remember proof, not permission to upload: active workouts and final rechecks
+// remain governed by the existing cloud guards. Never apply this to BB2 journals.
+function bvomCloudRememberMatchingActiveBaseline(userId,cloudData){
+ if(!userId||bvomCloud.user?.id!==userId||window.__bvomAuthUserId!==userId||
+    bvomLocalOwnerId()!==userId||bvomCloud.startupState!=='VERIFIED'||
+    bvomCloud.offlineLocalAccess||bvomCloud.accountSwitchDeferred||
+    !bvomWindowLockOwned||bvomRecoveryLegacyBlocked||bvomLocalPersistenceFailureActive||
+    bvomLocalWriteConflictActive||state.bb2?.activeSessionId||!bvomCloudWorkoutActive()||
+    bvomCloud.workoutBaselineFingerprint||!bvomCloudValidData(cloudData))return false;
+ try{
+  if(localStorage.getItem(BVOM_DATA_KEY)!==bvomLastPersistedRaw||
+     !bvomWorkoutActionAllowed())return false;
+  const fingerprint=bvomCloudComparableFingerprint(bvomCloudPayload());
+  if(!fingerprint||fingerprint!==bvomCloudComparableFingerprint(cloudData))return false;
+  bvomCloud.workoutBaselineFingerprint=fingerprint;return true;
+ }catch(e){return false}
+}
 function bvomCloudMaybeScheduleFromSave(){if(bvomCloudWorkoutActive()){if(!bvomCloud.workoutBaselineFingerprint)bvomCloud.workoutBaselineFingerprint=bvomCloudComparableFingerprint(bvomCloudPayload());return}if(bvomCloud.deferWorkoutCommit)return;bvomCloudScheduleAutoSave()}
 function bvomCloudValidData(d){return !!(d&&typeof d==='object'&&d.weights&&Array.isArray(d.history))}
 async function bvomCloudLatest(){

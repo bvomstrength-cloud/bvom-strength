@@ -16,6 +16,7 @@ const require = createRequire(import.meta.url);
 const H = require('./lib/bvom_harness');
 const root = path.resolve(process.env.MONKEY_APP_ROOT||path.resolve(import.meta.dirname, '../..'));
 const legacyAudit=process.env.LEGACY_CLOUD_AUDIT==='production-v2.9.21';
+const legacyProbe=process.env.LEGACY_PERSISTENT_PROBE==='1';
 const h = H.boot(H.loadBuild(root)); H.configureLP(h);
 const fixture = JSON.parse(h.ls.getItem('bvom_data'));
 const localStatus = JSON.parse(execFileSync('supabase', ['status', '-o', 'json'],
@@ -65,6 +66,12 @@ async function makeDevice(label, { userId = ownerId, login = credentials,
     return target === origin || target === apiUrl.replace(/\/$/, '') ?
       route.continue() : route.abort();
   });
+  if(legacyProbe)await context.addInitScript(({url,key})=>{
+   let library;Object.defineProperty(window,'supabase',{configurable:true,get:()=>library,set(value){
+    library=value;let create=value.createClient;
+    Object.defineProperty(value,'createClient',{configurable:true,get:()=>((_url,_key,options)=>create(url,key,options)),set:fn=>{create=fn}});
+   }});
+  },{url:apiUrl,key:anonKey});
   await context.addInitScript(() => Object.defineProperty(navigator, 'onLine',
     { get: () => false }));
   const page = await context.newPage();
@@ -84,14 +91,13 @@ async function makeDevice(label, { userId = ownerId, login = credentials,
     // Only the Supabase client is supplied by the isolated test. Let BVOM's
     // real Auth state listener, entitlement check, account opening and BB2
     // coordinator binding derive identity from the signed-in session.
-    await page.evaluate(async ({ url, key, email, password }) => {
-      const client = window.supabase.createClient(url, key, { auth: {
+    await page.evaluate(async ({ url, key, email, password, legacyProbe }) => {
+      const client = legacyProbe?bvomCloudClient():window.supabase.createClient(url, key, { auth: {
         persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
-      bvomCloud.client = client;
-      await bvomCloudInit();
+      if(!legacyProbe){bvomCloud.client = client;await bvomCloudInit();}
       const signed = await client.auth.signInWithPassword({ email, password });
       if (signed.error) throw signed.error;
-    }, { url: apiUrl, key: anonKey, ...login });
+    }, { url: apiUrl, key: anonKey, legacyProbe, ...login });
     try {
       await page.waitForFunction(id => (typeof bvomBb2AccountBinding==='undefined'||bvomBb2AccountBinding?.ownerId === id) &&
         bvomCloud.user?.id === id && window.__bvomAuthUserId === id &&
@@ -148,11 +154,11 @@ async function signIn(page,login){
 try{
  browser=await chromium.launch({headless:true,args:['--no-sandbox']});
  await Promise.all(profiles.map(async profile=>{
-  const login={email:(legacyAudit?'audit-production-':'journey-')+profile.name.toLowerCase()+'@example.invalid',password:'Disposable-Journey-2026!'};
+  const login={email:(legacyProbe?'audit-persistent-':legacyAudit?'audit-production-':'journey-')+profile.name.toLowerCase()+'@example.invalid',password:'Disposable-Journey-2026!'};
   const user=await admin.auth.admin.createUser({...login,email_confirm:true});if(user.error)throw user.error;
   const userId=user.data.user.id;
   const page=await makeDevice(profile.name,{userId,login,accountFlow:true,configured:false});
-  const reconnect=p=>signIn(p,login);
+  const reconnect=async p=>{if(legacyProbe){await p.waitForFunction(id=>bvomCloud.user?.id===id&&window.__bvomAuthUserId===id&&!bvomCloud.offlineLocalAccess,userId);assert.equal(await p.evaluate(()=>Object.keys(localStorage).some(k=>k.startsWith('sb-')&&k.endsWith('-auth-token'))),true,'normal Auth session survives reload');return}await signIn(p,login)};
 
   const traces=[];
   function differences(a,b,prefix=''){
@@ -167,11 +173,11 @@ try{
     return {local:parse(bvomCloudComparableFingerprint(bvomCloudPayload())),remote:parse(bvomCloudComparableFingerprint(remote)),
      baseline:parse(bvomCloud.workoutBaselineFingerprint),remoteFingerprint:parse(bvomCloud.remoteFingerprint),
      active:bvomStateWorkoutActive(state),syncReady:bvomCloud.syncReady,conflict:bvomCloud.conflict,
-     message:bvomCloud.message,configured:state.configured};
+     message:bvomCloud.message,configured:state.configured,persistedAuth:Object.keys(localStorage).some(k=>k.startsWith('sb-')&&k.endsWith('-auth-token'))};
    },q.data.data);
    trace.stage=stage;trace.event=event;trace.baselineMatchesRemote=JSON.stringify(trace.baseline)===JSON.stringify(trace.remote);
    trace.localRemoteDifferences=differences(trace.local,trace.remote);trace.baselineRemoteDifferences=differences(trace.baseline,trace.remote);
-   traces.push(trace);fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-legacy-baseline-trace.json'),JSON.stringify({source:process.env.MONKEY_SOURCE,legacyAudit,traces},null,2));
+   traces.push(trace);fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-legacy-baseline-trace.json'),JSON.stringify({source:process.env.MONKEY_SOURCE,legacyAudit,legacyProbe,traces},null,2));
    console.log('LEGACY TRACE '+profile.name+' '+stage+' '+event+' '+JSON.stringify({baselinePresent:!!trace.baseline,baselineMatchesRemote:trace.baselineMatchesRemote,localRemoteDifferences:trace.localRemoteDifferences,baselineRemoteDifferences:trace.baselineRemoteDifferences}));
   }
   async function handleConflict(p,report){
@@ -274,7 +280,7 @@ try{
    if(label==='BB2-mid')await concurrentCorrections(p,second,report);
    await second.context().close();
   }
-  const report=await runJourney({page,profile,checkpoint,reconnect,offlineBB2,handleConflict,output,smoke,legacyAudit,auditEvent});summaries.push(report);
+  const report=await runJourney({page,profile,checkpoint,reconnect,offlineBB2,handleConflict,output,smoke,legacyAudit,legacyProbe,auditEvent});summaries.push(report);
  }));
  fs.writeFileSync(path.join(output,'summary.json'),JSON.stringify({source:process.env.MONKEY_SOURCE||'local',smoke,legacyAudit,profiles:summaries},null,2));
  for(const r of summaries)console.log('MONKEY RESULT '+r.profile+' '+r.verdict+' '+JSON.stringify({counts:r.counts,sets:r.sets,setsByProgramme:r.setsByProgramme,progression:r.progression,skippedOptionalSets:r.skippedOptionalSets,restSecondsSimulated:r.restSecondsSimulated,sealedBlocks:r.sealedBlocks,transitions:r.transitions,checks:r.checks.length,watches:r.watches||[],defects:r.defects}));

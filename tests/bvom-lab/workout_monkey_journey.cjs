@@ -26,9 +26,9 @@ function knownLoad(profile,id){
 }
 async function stored(p){return p.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')))}
 async function tab(p,name){await p.locator('.tab[data-tab="'+name+'"]').click()}
-async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handleConflict,output,smoke=false,uiOnly=false,legacyAudit=false,auditEvent=null}){
+async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handleConflict,output,smoke=false,uiOnly=false,legacyAudit=false,legacyProbe=false,auditEvent=null}){
  let lastFinishedSets=0,allowSeal=false,accessoryId;let seed=profile.seed;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296};
- const report={profile:profile.name,bodyweight:profile.bodyweight,seed:profile.seed,mode:legacyAudit?'LEGACY-AUDIT':uiOnly?'UI-ONLY':smoke?'SMOKE':'FULL',verdict:'RUNNING',counts:{},sets:0,setsByProgramme:{},progression:{increases:0,reductions:0,holds:0,missedRepSets:0,failedAttempts:0,difficultyAccepts:0,difficultyHolds:0},skippedOptionalSets:0,transitions:[],checks:[],workouts:[],actions:[],defects:[]};
+ const report={profile:profile.name,bodyweight:profile.bodyweight,seed:profile.seed,mode:legacyProbe?'LEGACY-PERSISTENT-AUDIT':legacyAudit?'LEGACY-AUDIT':uiOnly?'UI-ONLY':smoke?'SMOKE':'FULL',verdict:'RUNNING',counts:{},sets:0,setsByProgramme:{},progression:{increases:0,reductions:0,holds:0,missedRepSets:0,failedAttempts:0,difficultyAccepts:0,difficultyHolds:0},skippedOptionalSets:0,transitions:[],checks:[],workouts:[],actions:[],defects:[]};
  const file=path.join(output,profile.name.toLowerCase()+'.json');
  const write=()=>fs.writeFileSync(file,JSON.stringify(report,null,2));
  const action=label=>{report.actions.push(label);write()};
@@ -276,14 +276,15 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
  try{
   assert.equal((await stored(p)).history.length,0,'no workout fixture injection');
   await setup('lprpt',true);await increments();await addAccessory();
-  for(let n=1;n<=(smoke?1:12);n++)await legacyWorkout('LP/RPT',n);
+  for(let n=1;n<=(smoke?1:legacyProbe?2:12);n++)await legacyWorkout('LP/RPT',n);
+  if(legacyProbe){assert.equal(report.watches?.length,1,'normal persisted-session reload reproduces one LP pause');report.verdict='WATCH';pass('PERSISTENT AUTH AUDIT ONLY: real cached session reload; not full-journey evidence');return report}
   if(smoke){report.verdict='WATCH';pass('SMOKE ONLY: not full-journey release evidence');return report}
   await legacyWorkout('LP/RPT incomplete',13,{incomplete:true});await backup('LP');
   await setup('hlm');for(let n=1;n<=12;n++)await legacyWorkout('HLM',n);await backup('HLM');
   await setup('fourday');for(let n=1;n<=16;n++)await legacyWorkout('4-Day Split',n);await backup('FourDay');
   await bbSetup();for(let n=1;n<=6&&await p.evaluate(()=>bvomBbOnRampActive());n++)await bbWorkout(n,true);
   assert.equal(await p.evaluate(()=>bvomBbOnRampActive()),false,'actual On-Ramp hands off');
-  for(let n=1;n<=(legacyAudit?2:24);n++)await bbWorkout(n);if(legacyAudit){await backup('BB1-audit');assert.equal(report.watches?.length,5,'all five historical pause boundaries reproduced');report.verdict='WATCH';pass('LEGACY AUDIT ONLY: all five pauses reproduced; not full-journey release evidence');return report}assert.equal((await stored(p)).bodybuilding.completedSessions,24);await backup('BB1');
+  for(let n=1;n<=(legacyAudit?2:24);n++)await bbWorkout(n);if(legacyAudit){await backup('BB1-audit');for(const count of [2,15,27,43,47])assert.ok(report.watches?.some(w=>w.localHistory===count),'historical pause boundary reproduced at '+count);report.verdict='WATCH';pass('LEGACY AUDIT ONLY: all five pauses reproduced; not full-journey release evidence');return report}assert.equal((await stored(p)).bodybuilding.completedSessions,24);await backup('BB1');
   await bb2Setup();await bb2Workout('upper_a',0,{incomplete:true});
   for(let week=1;week<=8;week++){
    for(const day of ['upper_a','lower_a','upper_b','lower_b']){const offline=week===3&&day==='lower_a';if(offline&&!uiOnly)await offlineBB2('before',p,report);await bb2Workout(day,week,{threshold:week===2&&day==='upper_a'});if(offline&&!uiOnly)await offlineBB2('after',p,report);}
@@ -291,6 +292,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
    if(week===2||week===6)for(const day of ['upper_a','lower_a','upper_b','lower_b'])await bb2Workout(day,week,{kind:'RECOVERY'});
   }
   const projection=await p.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events));assert.deepEqual(Object.values(projection.quotas),[8,8,8,8]);assert.equal(report.counts.BB2,32);for(const[stage,min]of Object.entries({'LP/RPT':12,HLM:12,'4-Day Split':16,BB1:24,BB2:32}))assert.ok(report.counts[stage]>=min,'minimum actual completed workouts '+stage);await backup('BB2');await sealBB2();
+  if(!uiOnly&&!smoke){assert.ok(!report.watches?.some(w=>w.localHistory===47),'BB1 matching baseline must recover automatically');pass('BB1 interrupted reload automatically recovers only its verified matching baseline');}
   healthy();report.verdict=uiOnly||report.watches?.length?'WATCH':'PASS';pass('complete five-programme UI journey and 32 BB2 credits'+(uiOnly?' — authenticated cloud NOT TESTED':''));
  }catch(e){report.verdict='FAIL';fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-error.txt'),e.stack||String(e));fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-failure-state.json'),JSON.stringify(await stored(p),null,2));report.defects.push({message:e.message.slice(0,1800),stack:e.stack?.slice(-2200),lastActions:report.actions.slice(-12)});console.error('MONKEY UI DIAGNOSTIC',await p.evaluate(()=>({configured:state.configured,program:state.programMode,day:state.day,entitlementError:bvomEntitlement.error,bb2Cloud:typeof bvomBb2AccountStatus==='function'?bvomBb2AccountStatus():null,bb2Upload:bvomBb2AccountBinding?.lastUpload?.status,bb2UploadError:bvomBb2AccountBinding?.lastUpload?.error?.message,modal:document.querySelector('.bvomModalOverlay')?.textContent?.slice(0,700)})).catch(()=>({})));console.error('MONKEY '+profile.name+' FAIL:',e.message.slice(0,1200),e.stack?.split('\n').filter(l=>/^\s+at /.test(l)).join('\n'));await p.screenshot({path:path.join(output,profile.name.toLowerCase()+'-failure.png'),fullPage:true}).catch(()=>{});fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-failure.html'),await p.content().catch(()=>''));}
  finally{write()}

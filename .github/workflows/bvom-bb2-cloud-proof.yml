@@ -63,6 +63,14 @@ jobs:
       - name: Verify candidate and production guard counterfactuals
         run: node tests/bvom-lab/legacy_cloud_pause_contracts.cjs .bvom-production-v2.9.21
 
+      - name: Verify normal persisted Auth reload on production code
+        env:
+          MONKEY_APP_ROOT: .bvom-production-v2.9.21
+          LEGACY_PERSISTENT_PROBE: "1"
+          MONKEY_OUTPUT: ${{ runner.temp }}/bvom-legacy-production-audit/persistent-session
+          MONKEY_SOURCE: c22e79e101610c3002929fd1b73fe3530cec0c20
+        run: node tests/bvom-lab/workout_monkey_authenticated_browser.mjs
+
       - name: Reproduce five legacy pauses against production code with disposable Auth
         env:
           MONKEY_APP_ROOT: .bvom-production-v2.9.21

@@ -15,8 +15,8 @@ A missing or nonmatching baseline is not evidence that the cloud is older.
 
 The workout baseline is an in-memory field, initially null on a new page. On an
 active save, `bvomCloudMaybeScheduleFromSave` captures the current cloud payload;
-it does not use the `persisted` argument supplied by `save`. Reload can therefore
-lose the original baseline and recapture a state containing already-earned
+it does not use the `persisted` argument supplied by `save`. Reload loses the original baseline. The captured traces show it is null after
+reload in all five original cases; a later active save can recapture already-earned
 progression, changed On-Ramp confirmations or other saved changes. Finish then
 appends History. The resulting copy differs from cloud, and the guard refuses to
 infer that it is the authoritative continuation.
@@ -39,9 +39,9 @@ changed the cloud in these controlled cases.
 | HLM workout 2 | 15 / 14 | Heavy driver/queued progression, day/prescription and History |
 | 4-Day Split workout 2 | 27 / 26 | Heavy progression, day/prescription and History |
 | BB1 On-Ramp workout 2 | 43 / 42 | Provisional/confirmed exercise states and History |
-| BB1 main-block workout 2 | 47 / 46 | Per-exercise progression, block count and History |
+| BB1 main-block workout 2 | 47 / 46 | Payload still matches before Finish; Finish adds progression, block count and History |
 
-These are expected conservative conflict decisions when proof is absent. They
+The original five decisions are expected conservative conflict decisions when proof is absent. They
 are not network, authentication, RLS, duplicate-workout or lost-History failures.
 Losing a useful baseline is an existing continuity/availability limitation; it
 must not be represented as a real competing device edit in the test report.
@@ -57,11 +57,31 @@ device would weaken conflict protection.
 Automatic catch-up would be safe only with verifiable ownership and a trusted
 full-payload starting baseline that still matches the latest cloud state, no
 active workout/account switch/restore ambiguity, and the existing final write
-protections intact. The five paused states do not supply that proof. Merely
+protections intact. Four of the five paused reload states do not supply that proof. BB1 main-block
+workout 2 does: its entire normalised active payload still matches the freshly
+read cloud copy before Finish. Merely
 persisting a fingerprint without accounting for backup restore, account changes,
 stale devices and concurrent writes is not a justified narrow repair.
 Legacy whole-row writes also do not acquire BB2's atomic revision protocol by
-adding such a fingerprint. This audit leaves all transport and guards unchanged.
+adding such a fingerprint. The transport and final comparison/conflict guards remain unchanged.
+
+### Narrow repair for the proven matching case
+
+After successful authenticated account/entitlement/local-owner resolution,
+`bvomCloudRememberMatchingActiveBaseline` may remember the matching full-payload
+fingerprint in memory. It requires VERIFIED startup, the same Auth and local
+owner, an owned unchanged document, no account switch or write/recovery block,
+an active legacy workout and exact full-payload equality. BB2 active journals
+are excluded. It neither changes local workout records nor writes cloud data,
+sets syncReady or permits an active upload.
+
+Normal Finish then uses the existing baseline comparison and final remote
+recheck. Any intervening remote edit still pauses upload. Older backups,
+progressed local weights, different cloud increments, foreign ownership and
+stale document windows cannot establish this baseline. The focused test was
+RED before the helper and is now GREEN with those negative cases. This is an
+availability repair for a pre-existing production case, not a new conflict bypass.
+The other four original pauses remain expected WATCH decisions.
 
 ## Expected user behaviour
 
@@ -80,7 +100,9 @@ and resolve the differences before selecting a copy.
 
 WATCH is acceptable as disclosure of an existing explicit-recovery requirement
 with preserved records, not as proof of uninterrupted automatic cloud backup.
-PR #73 remains HOLD until the owner accepts this limitation and the final test
+The BB1 matching case is expected to recover automatically in the candidate;
+the remaining unproven cases retain explicit recovery. PR #73 remains HOLD until
+the owner accepts this limitation and the final test
 and physical acceptance evidence. No new production behaviour is enabled here.
 
 ## Reproduction and evidence
@@ -90,6 +112,13 @@ runs the same Male/Female UI journey through all five boundaries against local
 Supabase Auth/RLS only. This audit is explicitly labelled `LEGACY-AUDIT`, never a
 full five-programme PASS. The candidate still runs the complete journey.
 
+The first production replay reproduced all five original boundaries plus three
+additional first-workout pauses after HLM, Split and On-Ramp setup (14/13, 26/25
+and 42/41 History respectively). Their unconfirmed changed programme setup also
+differed from cloud. The audit must retain these extra warnings, rather than
+require an artificial total of exactly five. The first audit run failed that
+incorrect count assumption; no workout or conflict assertion was bypassed.
+
 Both runs save `*-legacy-baseline-trace.json`: full normalised local/remote
 payloads and the in-memory baseline immediately before/after each reload and at
 pause, with exact changed field paths. The reports distinguish a lost baseline
@@ -97,3 +126,9 @@ from a recaptured nonmatching one. Production code is served from the checked-ou
 static files; no production account, endpoint, credentials or records are used.
 CI execution links and final classification belong in PR #73's verification
 section alongside the uploaded traces.
+
+A separate short production-source probe preserves the application's actual
+`persistSession`/`autoRefreshToken` options, redirects only the client endpoint to
+local Supabase, and reloads a genuinely stored Auth session without injecting a
+replacement sign-in. It runs two LP workouts per trainee and labels its output
+`LEGACY-PERSISTENT-AUDIT`; this rules out explicit test re-login as the sole cause.
