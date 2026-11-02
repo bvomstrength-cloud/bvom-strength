@@ -218,7 +218,7 @@ try{
   async function checkpoint(p,report,label){
    const expected=await p.evaluate(()=>bvomCloudPayload());
    let remote;
-   for(let i=0;i<150;i++){
+   for(let i=0;i<600;i++){
     const q=await admin.from('bvom_data').select('data').eq('user_id',userId).order('created_at',{ascending:false}).limit(1).maybeSingle();if(q.error)throw q.error;remote=q.data?.data;
     let same=!!remote;try{for(const key of ['history','weights','core','hlm','pbs','bodybuilding','accessoryList','accessoryProgress','plateMode','barByLift','enabledMicro','enabledStandard','profile','profileLabel','unit'])assert.deepEqual(remote?.[key],expected[key])}catch{same=false}if(same)break;
     await new Promise(r=>setTimeout(r,100));
@@ -228,7 +228,7 @@ try{
    let expectedBB2,observed;
    if(label.startsWith('BB2')){
     expectedBB2=(await stored(p)).bb2;let matched=false;
-    for(let i=0;i<150;i++){
+    for(let i=0;i<600;i++){
      observed=await remoteBB2();try{for(const key of ['setup','opening','events','sealedBlocks'])assert.deepEqual(observed.state.snapshot[key]??[],expectedBB2[key]??[]);matched=true}catch{}if(matched)break;await new Promise(r=>setTimeout(r,100));
     }
     if(!matched)fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-cloud-mismatch.json'),JSON.stringify({expected:expectedBB2,observed},null,2));

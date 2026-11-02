@@ -41,7 +41,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   await p.evaluate(seconds=>{window.__monkeyRestMs=(window.__monkeyRestMs||0)+seconds*1000;sessionStorage.setItem('monkey-rest-ms',String(window.__monkeyRestMs))},seconds);
   if(report.sets===1)await p.waitForFunction(seconds=>{const text=document.querySelector('#clock').textContent.split(':').map(Number),elapsed=text[0]*60+text[1];return elapsed>=seconds&&elapsed<=seconds+3},seconds);
  }
- // Accelerate rest elapsed time only. Calendar timestamps remain real; no
+ // Accelerate a coherent wall clock for rest, timestamps and durations. No
  // programme counters, weights or decisions are injected or fast-forwarded.
  const installClock=()=>{
   const RealDate=Date;window.__monkeyRestMs=Number(sessionStorage.getItem('monkey-rest-ms'))||0;
