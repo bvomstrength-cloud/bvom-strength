@@ -610,7 +610,11 @@ try {
     const b=await makeDevice('Android-shape B',{userId:id,login,accountFlow:true,appData:second});
     await b.waitForFunction(()=>state.bb2?.events?.length===35);
     await b.locator('.tab[data-tab="history"]').click();await b.waitForSelector('#history > [data-bb2-history]');assert.equal(await b.locator('#history > .histCard').count(),17);
-    await a.locator('.tab[data-tab="workout"]').click();await a.locator('[data-bb2-next-workout]').click();await a.locator('[data-bb2-day="upper_a"]').click();await a.locator('[data-bb2-start]').click();await a.waitForSelector('[data-bb2-extra-add="0"]');
+    await a.locator('.tab[data-tab="workout"]').click();await a.locator('[data-bb2-next-workout]').click();await a.locator('[data-bb2-day="upper_b"]').click();
+    for(const field of await a.locator('#setup [data-bb2-load]:not([disabled])').all())if(!(await field.inputValue()))await field.fill('60');
+    for(const field of await a.locator('#setup [data-bb2-inc]').all())if(!(await field.inputValue()))await field.fill('2.5');
+    await a.locator('#setup [data-actual-bodyweight-kg]').fill('84.25');
+    await a.locator('[data-bb2-start]').click();await a.waitForSelector('[data-bb2-extra-add="0"]');
     assert.equal(await a.locator('[data-bb2-set].done').count(),0);
     await a.locator('[data-bb2-extra-add="0"]').click();await a.locator('.bvomModalOverlay [data-bb2-reps]').fill('1');await a.locator('.bvomModalOverlay [data-bb2-actual]').fill('55');await a.locator('.bvomModalOverlay [data-save]').click();
     const slots=await a.evaluate(()=>state.bb2.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===state.bb2.activeSessionId).slots);
@@ -620,8 +624,10 @@ try {
     const journal=await a.evaluate(()=>state.bb2.events);
     let row;for(let i=0;i<100;i++){const q=await admin.from('bvom_cloud_state').select('state').eq('user_id',id).single();if(q.error)throw q.error;row=q.data;if(row.state.snapshot.events.length===journal.length)break;await new Promise(r=>setTimeout(r,100));}
     assert.deepEqual(row.state.snapshot.events,journal,'actual stored canonical events include the extra set');
+    const bodyweightSets=journal.filter(e=>e.type==='SET_RECORDED'&&e.variation);assert.ok(bodyweightSets.length);assert.ok(bodyweightSets.every(e=>e.actualBodyweightKg===84.25),'body mass survives the revisioned authenticated write');
     await b.evaluate(()=>window.dispatchEvent(new Event('focus')));await b.waitForFunction(n=>state.bb2.events.length===n,journal.length);
-    assert.deepEqual(await b.evaluate(()=>state.bb2.events),journal);await b.waitForFunction(()=>document.querySelectorAll('#history > .histCard').length===18&&document.querySelector('#history > .histCard').textContent.includes('Android-shape extra set cloud proof'));assert.equal(await b.locator('#history > .histCard').count(),18);assert.match(await b.locator('#history > .histCard').first().textContent(),/Android-shape extra set cloud proof/);
+    assert.deepEqual(await b.evaluate(()=>state.bb2.events),journal);
+    await b.locator('#history > [data-bb2-history]').first().locator('summary').click();assert.match(await b.locator('#history > [data-bb2-history]').first().textContent(),/Actual bodyweight.*84.25 kg/);await b.waitForFunction(()=>document.querySelectorAll('#history > .histCard').length===18&&document.querySelector('#history > .histCard').textContent.includes('Android-shape extra set cloud proof'));assert.equal(await b.locator('#history > .histCard').count(),18);assert.match(await b.locator('#history > .histCard').first().textContent(),/Android-shape extra set cloud proof/);
     assert.equal(journal.filter(e=>e.type==='CREDIT_GRANTED').length,2);assert.equal(journal.filter(e=>e.type==='EXTRA_SET_RECORDED').length,1);assert.equal(await b.evaluate(()=>state.history.length),16);
     const projection=await a.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events));assert.equal(projection.history.at(-1).sets.filter(s=>!s.prescribed).length,1);
     await a.context().close();await b.context().close();

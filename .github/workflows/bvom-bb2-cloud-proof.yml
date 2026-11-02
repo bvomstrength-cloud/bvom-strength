@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      run_endurance:
+        description: Run the separately authorised full seeded endurance journeys
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -88,13 +93,14 @@ jobs:
           if-no-files-found: warn
 
       - name: Run both seeded five-programme workout journeys
+        if: github.event_name == 'workflow_dispatch' && inputs.run_endurance
         env:
           MONKEY_OUTPUT: ${{ runner.temp }}/bvom-workout-monkeys
           MONKEY_SOURCE: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node tests/bvom-lab/workout_monkey_authenticated_browser.mjs
 
       - name: Preserve monkey reports, exports and failure evidence
-        if: always()
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.run_endurance
         uses: actions/upload-artifact@v4
         with:
           name: BVOM-Full-Workout-Monkeys

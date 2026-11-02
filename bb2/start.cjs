@@ -78,7 +78,7 @@ function validateBB2NewStart(opening, previousEvents, setup, startEvent,
       fail('Start slot/order/range differs from versioned catalogue at index ' + i);
     }
     const allowed = ['roleSlotId', 'exerciseId', 'sets', 'floor', 'ceiling', 'equipment',
-      'plannedG', 'plannedOrigin', 'incrementG', 'incrementOrigin', 'variation', 'assistance'];
+      'plannedG', 'plannedOrigin', 'incrementG', 'incrementOrigin', 'variation', 'assistance', 'actualBodyweightKg'];
     if (Object.keys(recorded).some(k => !allowed.includes(k))) {
       fail('Start slot contains a non-catalogue field');
     }

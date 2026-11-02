@@ -26,7 +26,9 @@ async function recordBB2Set(page,key,reps,{opened=false,actual}={}){
  await page.locator('.bvomModalOverlay [data-save]').click();
  await page.locator('.bvomModalOverlay').waitFor({state:'detached'});
 }
+async function expandHistory(page){const summary=page.locator('#history .bb2HistoryDetails:not([open]) > summary').first();if(await summary.count())await summary.click()}
 async function assertMobileCorrectionLayout(page,language){
+ await expandHistory(page);
  const bounds=await page.locator('#history .bb2HistoryCorrection').first().evaluate(row=>{
   const rect=el=>{const r=el.getBoundingClientRect();return {
    left:r.left,right:r.right,top:r.top,width:r.width,height:r.height};};
@@ -61,7 +63,7 @@ const server=http.createServer((req,res)=>{
  const origin='http://127.0.0.1:'+server.address().port;
  let browser;
  try{
-  browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+  browser=await chromium.launch({headless:true,executablePath:process.env.BVOM_CHROMIUM_PATH||undefined,args:['--no-sandbox']});
   const context=await browser.newContext(mobile);
   context.setDefaultTimeout(8000);
   await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
@@ -357,6 +359,7 @@ const server=http.createServer((req,res)=>{
   });
   assert.ok(bodyweightIndex>=0,'real Upper A has a bodyweight slot');
   const bwKey=bodyweightIndex+'|0';
+  await page.locator('#workout .bb2BodyweightPlan').first().locator('summary').click();
   await page.locator('#workout [data-bb2-plan-variation="'+bodyweightIndex+'"]').fill('assisted pullup');
   await page.locator('#workout [data-bb2-plan-assist="'+bodyweightIndex+'"]').fill('light band');
   await page.locator('#workout [data-bb2-plan-added="'+bodyweightIndex+'"]').fill('2.5');
@@ -504,6 +507,7 @@ const server=http.createServer((req,res)=>{
   assert.match(await page.locator('#history').textContent(),/CURRENT BB2 WORKING PLANS/);
   assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
   await page.evaluate(()=>activateTab('history'));
+  await expandHistory(page);
   page.once('dialog',dialog=>dialog.accept());
   await page.locator('#history [data-bb2-void-save="0|8"]').click();
   assert.equal(await page.evaluate(async()=>{
@@ -522,6 +526,7 @@ const server=http.createServer((req,res)=>{
   assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/No credit/,
    'void and revocation survive full app reload');
   await page.evaluate(()=>activateTab('history'));
+  await expandHistory(page);
   page.once('dialog',dialog=>dialog.accept());
   await page.locator('#history [data-bb2-void-session="0"]').click();
   assert.equal(await page.evaluate(async()=>{

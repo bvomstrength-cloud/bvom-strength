@@ -33,11 +33,11 @@ const EVENT_FIELDS = Object.freeze({
   CALIBRATION_PLAN_REVISED: ['sessionId', 'roleSlotId', 'exerciseId', 'plannedG', 'plannedOrigin'],
   CALIBRATION_ACCEPTED: ['sessionId', 'roleSlotId', 'exerciseId', 'loadG', 'loadOrigin'],
   SET_RECORDED: ['sessionId', 'roleSlotId', 'exerciseId', 'setIndex', 'reps', 'prescribed',
-    'actualG', 'actualOrigin', 'variation', 'assistance', 'harderThanIntended'],
+    'actualG', 'actualOrigin', 'variation', 'assistance', 'harderThanIntended', 'actualBodyweightKg'],
   EXTRA_SET_RECORDED: ['sessionId', 'roleSlotId', 'exerciseId', 'setIndex', 'reps', 'prescribed',
-    'actualG', 'actualOrigin', 'variation', 'assistance', 'harderThanIntended'],
+    'actualG', 'actualOrigin', 'variation', 'assistance', 'harderThanIntended', 'actualBodyweightKg'],
   SET_CORRECTED: ['sessionId', 'targetEventId', 'roleSlotId', 'exerciseId', 'setIndex',
-    'reps', 'actualG', 'actualOrigin', 'variation', 'assistance', 'harderThanIntended'],
+    'reps', 'actualG', 'actualOrigin', 'variation', 'assistance', 'harderThanIntended', 'actualBodyweightKg'],
   SET_VOIDED: ['sessionId', 'targetEventId', 'roleSlotId', 'exerciseId', 'setIndex'],
   WORKOUT_FINISHED: ['sessionId', 'progressionMode', 'completedAt'],
   WORKOUT_INCOMPLETE: ['sessionId', 'completedAt'],
@@ -283,6 +283,7 @@ function validateEventPayload(e) {
     case 'SET_RECORDED':
     case 'EXTRA_SET_RECORDED':
     case 'SET_CORRECTED':
+      validateActualBodyweight(e.actualBodyweightKg);
       if (e.actualG !== undefined) mass('actual', 'actualG', 'actualOrigin', true);
       else if (e.actualOrigin !== undefined) fail('actual origin requires numeric load');
       break;
@@ -449,10 +450,16 @@ function initialProgress(v = {}, plan = {}) {
   if (p.bestReps === null && p.stallCount !== 0) fail('stall without baseline');
   return p;
 }
+// Recording metadata only: never used in progression or effective-load volume.
+function validateActualBodyweight(value) {
+  if (value !== undefined && value !== null &&
+      (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)) fail('invalid actual bodyweight');
+}
 function validateSlot(s) {
   onlyFields(s, ['roleSlotId', 'exerciseId', 'sets', 'floor', 'ceiling', 'equipment',
     'plannedG', 'plannedOrigin', 'incrementG', 'incrementOrigin',
-    'variation', 'assistance'], 'workout slot');
+    'variation', 'assistance', 'actualBodyweightKg'], 'workout slot');
+  validateActualBodyweight(s.actualBodyweightKg);
   positiveId(s.roleSlotId, 'slot'); positiveId(s.exerciseId, 'exercise');
   integer(s.sets, 'prescribed set count', 1); integer(s.ceiling, 'rep ceiling', 1);
   // Historical plans must retain both ends of an explicitly selected rep
@@ -553,6 +560,7 @@ function effectiveRevisions(events) {
       }
       records.set(key, e.type === 'SET_VOIDED' ? null : { ...prior,
         reps: e.reps,
+        actualBodyweightKg: own(e, 'actualBodyweightKg') ? e.actualBodyweightKg : prior.actualBodyweightKg,
         actualG: own(e, 'actualG') ? e.actualG : prior.actualG,
         actualOrigin: own(e, 'actualG') ? clone(e.actualOrigin) : prior.actualOrigin,
         harderThanIntended: own(e, 'harderThanIntended') ? e.harderThanIntended : prior.harderThanIntended,
@@ -1275,6 +1283,7 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
       roleSlotId: slot.roleSlotId, exerciseId: slot.exerciseId, setIndex: record.setIndex,
       prescribed: record.setIndex < slot.sets, reps: record.reps, actualG: record.actualG,
       actualOrigin: record.actualOrigin,
+      actualBodyweightKg: record.actualBodyweightKg,
       variation: record.variation, assistance: record.assistance,
       harderThanIntended: !!record.harderThanIntended
     })).sort((a, b) => a.setIndex - b.setIndex))

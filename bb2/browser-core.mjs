@@ -1,5 +1,5 @@
 /* GENERATED BB2 browser core — no direct edits. */
-/* Source fingerprint SHA-256: dcdf4368c3301063cd9897ac0e085d75ea7bee4f231a6b3d57cc05526c1defdd */
+/* Source fingerprint SHA-256: ba7cbc31d5760d7244a97ba9e893225698f1aa0a6db985a492076c1e0dfdecc8 */
 /* Regenerate: node scripts/build-bb2-browser.cjs */
 /* Import has no app, storage, network or clock side effects. */
 const factories = Object.create(null);
@@ -39,11 +39,11 @@ const EVENT_FIELDS = Object.freeze({
   CALIBRATION_PLAN_REVISED: ['sessionId', 'roleSlotId', 'exerciseId', 'plannedG', 'plannedOrigin'],
   CALIBRATION_ACCEPTED: ['sessionId', 'roleSlotId', 'exerciseId', 'loadG', 'loadOrigin'],
   SET_RECORDED: ['sessionId', 'roleSlotId', 'exerciseId', 'setIndex', 'reps', 'prescribed',
-    'actualG', 'actualOrigin', 'variation', 'assistance', 'harderThanIntended'],
+    'actualG', 'actualOrigin', 'variation', 'assistance', 'harderThanIntended', 'actualBodyweightKg'],
   EXTRA_SET_RECORDED: ['sessionId', 'roleSlotId', 'exerciseId', 'setIndex', 'reps', 'prescribed',
-    'actualG', 'actualOrigin', 'variation', 'assistance', 'harderThanIntended'],
+    'actualG', 'actualOrigin', 'variation', 'assistance', 'harderThanIntended', 'actualBodyweightKg'],
   SET_CORRECTED: ['sessionId', 'targetEventId', 'roleSlotId', 'exerciseId', 'setIndex',
-    'reps', 'actualG', 'actualOrigin', 'variation', 'assistance', 'harderThanIntended'],
+    'reps', 'actualG', 'actualOrigin', 'variation', 'assistance', 'harderThanIntended', 'actualBodyweightKg'],
   SET_VOIDED: ['sessionId', 'targetEventId', 'roleSlotId', 'exerciseId', 'setIndex'],
   WORKOUT_FINISHED: ['sessionId', 'progressionMode', 'completedAt'],
   WORKOUT_INCOMPLETE: ['sessionId', 'completedAt'],
@@ -289,6 +289,7 @@ function validateEventPayload(e) {
     case 'SET_RECORDED':
     case 'EXTRA_SET_RECORDED':
     case 'SET_CORRECTED':
+      validateActualBodyweight(e.actualBodyweightKg);
       if (e.actualG !== undefined) mass('actual', 'actualG', 'actualOrigin', true);
       else if (e.actualOrigin !== undefined) fail('actual origin requires numeric load');
       break;
@@ -455,10 +456,16 @@ function initialProgress(v = {}, plan = {}) {
   if (p.bestReps === null && p.stallCount !== 0) fail('stall without baseline');
   return p;
 }
+// Recording metadata only: never used in progression or effective-load volume.
+function validateActualBodyweight(value) {
+  if (value !== undefined && value !== null &&
+      (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)) fail('invalid actual bodyweight');
+}
 function validateSlot(s) {
   onlyFields(s, ['roleSlotId', 'exerciseId', 'sets', 'floor', 'ceiling', 'equipment',
     'plannedG', 'plannedOrigin', 'incrementG', 'incrementOrigin',
-    'variation', 'assistance'], 'workout slot');
+    'variation', 'assistance', 'actualBodyweightKg'], 'workout slot');
+  validateActualBodyweight(s.actualBodyweightKg);
   positiveId(s.roleSlotId, 'slot'); positiveId(s.exerciseId, 'exercise');
   integer(s.sets, 'prescribed set count', 1); integer(s.ceiling, 'rep ceiling', 1);
   // Historical plans must retain both ends of an explicitly selected rep
@@ -559,6 +566,7 @@ function effectiveRevisions(events) {
       }
       records.set(key, e.type === 'SET_VOIDED' ? null : { ...prior,
         reps: e.reps,
+        actualBodyweightKg: own(e, 'actualBodyweightKg') ? e.actualBodyweightKg : prior.actualBodyweightKg,
         actualG: own(e, 'actualG') ? e.actualG : prior.actualG,
         actualOrigin: own(e, 'actualG') ? clone(e.actualOrigin) : prior.actualOrigin,
         harderThanIntended: own(e, 'harderThanIntended') ? e.harderThanIntended : prior.harderThanIntended,
@@ -1281,6 +1289,7 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
       roleSlotId: slot.roleSlotId, exerciseId: slot.exerciseId, setIndex: record.setIndex,
       prescribed: record.setIndex < slot.sets, reps: record.reps, actualG: record.actualG,
       actualOrigin: record.actualOrigin,
+      actualBodyweightKg: record.actualBodyweightKg,
       variation: record.variation, assistance: record.assistance,
       harderThanIntended: !!record.harderThanIntended
     })).sort((a, b) => a.setIndex - b.setIndex))
@@ -1839,7 +1848,7 @@ function validateBB2NewStart(opening, previousEvents, setup, startEvent,
       fail('Start slot/order/range differs from versioned catalogue at index ' + i);
     }
     const allowed = ['roleSlotId', 'exerciseId', 'sets', 'floor', 'ceiling', 'equipment',
-      'plannedG', 'plannedOrigin', 'incrementG', 'incrementOrigin', 'variation', 'assistance'];
+      'plannedG', 'plannedOrigin', 'incrementG', 'incrementOrigin', 'variation', 'assistance', 'actualBodyweightKg'];
     if (Object.keys(recorded).some(k => !allowed.includes(k))) {
       fail('Start slot contains a non-catalogue field');
     }
@@ -2157,7 +2166,7 @@ function load(id) {
   factories[id](module, module.exports, load);
   return module.exports;
 }
-export const BB2_BROWSER_SOURCE_SHA256 = "dcdf4368c3301063cd9897ac0e085d75ea7bee4f231a6b3d57cc05526c1defdd";
+export const BB2_BROWSER_SOURCE_SHA256 = "ba7cbc31d5760d7244a97ba9e893225698f1aa0a6db985a492076c1e0dfdecc8";
 export const BB2_BROWSER_MODULES = Object.freeze({
   ledger: Object.freeze(load("./ledger.cjs")),
   catalogue: Object.freeze(load("./catalogue.cjs")),

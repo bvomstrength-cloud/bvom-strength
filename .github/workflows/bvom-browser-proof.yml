@@ -153,6 +153,12 @@ jobs:
         env:
           BB2_ANDROID_OUTPUT: ${{ runner.temp }}/bb2-android-acceptance
         run: node tests/bvom-lab/bb2_android_acceptance_browser.cjs
+      - name: Verify BB2 UI repairs at 360px and 390px for Chin-Up and Assisted Nordic Curl
+        env:
+          BB2_ANDROID_OUTPUT: ${{ runner.temp }}/bb2-android-acceptance
+        run: |
+          node tests/bvom-lab/bb2_mobile_repairs_browser.cjs
+          node tests/bvom-lab/bb2_mobile_repairs_browser.cjs --nordic
       - name: Preserve Android acceptance screenshots and exported fixture
         if: always()
         uses: actions/upload-artifact@v4
