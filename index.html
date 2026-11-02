@@ -7140,9 +7140,9 @@ function bvomBb2HistoryView(h){
   const record=bvomBb2SetView(set,unit);
   (session[key]||(session[key]={}))[set.setIndex]=record;
  }
- return {program:'bb2',day:bvomBb2PreviewLabel(h.templateId)+(h.status==='LOW_STRESS_RECOVERY'?' · '+hlmTxt('RECOVERY','回復ワークアウト'):h.status.includes('EXTRA')?' · '+hlmTxt('EXTRA WORKOUT','追加ワークアウト'):''),date:new Date(bvomBb2HistoryTime(h)).toISOString(),unit,
+ return {program:'bb2',day:bvomBb2PreviewLabel(h.templateId)+(h.status==='LOW_STRESS_RECOVERY'?' · '+hlmTxt('RECOVERY','回復ワークアウト'):h.status.includes('EXTRA')?' · '+hlmTxt('EXTRA WORKOUT','追加ワークアウト'):''),date:bvomBb2HistoryTime(h)?new Date(bvomBb2HistoryTime(h)).toISOString():hlmTxt('Date unavailable','日付不明'),unit,
   incomplete:h.status.startsWith('INCOMPLETE'),session,exerciseMeta,note:h.note||'',volume:bvomBb2WorkingVolume(h.sets),
-  duration:h.completedAt&&h.startedAt?Math.floor((h.completedAt-h.startedAt)/60000)+':'+String(Math.floor((h.completedAt-h.startedAt)/1000)%60).padStart(2,'0'):''};
+  duration:h.completedAt&&h.startedAt&&h.completedAt>=h.startedAt?Math.floor((h.completedAt-h.startedAt)/60000)+':'+String(Math.floor((h.completedAt-h.startedAt)/1000)%60).padStart(2,'0'):''};
 }
 function bvomBb2HistoryRecord(ref){
  if(!bvomBb2PreviewEnabled())return null;const data=bvomBb2HistoryProjection();if(!data)return null;
