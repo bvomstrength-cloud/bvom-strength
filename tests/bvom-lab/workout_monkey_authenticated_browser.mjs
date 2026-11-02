@@ -152,36 +152,86 @@ try{
   const userId=user.data.user.id;
   const page=await makeDevice(profile.name,{userId,login,accountFlow:true,configured:false});
   const reconnect=p=>signIn(p,login);
+
+  let beforeOffline;
+  const remoteBB2=async()=>{const q=await admin.from('bvom_cloud_state').select('revision,state').eq('user_id',userId).single();if(q.error)throw q.error;return q.data};
+  async function offlineBB2(phase,p,report){
+   if(phase==='before'){
+    await p.waitForFunction(()=>bvomBb2AccountStatus()==='current'&&!bvomBb2AccountBinding.syncing);
+    beforeOffline=await remoteBB2();p.context().bb2Offline=true;return;
+   }
+   assert.deepEqual(await remoteBB2(),beforeOffline,'offline workout cannot have reached cloud');
+   const local=(await stored(p)).bb2.events;p.context().bb2Offline=false;await p.evaluate(()=>window.dispatchEvent(new Event('online')));
+   await p.waitForFunction(()=>bvomBb2AccountStatus()==='current'&&!bvomBb2AccountBinding.syncing);
+   const after=await remoteBB2();assert.ok(after.revision>beforeOffline.revision);assert.deepEqual(after.state.snapshot.events,local,'reconnect uploads every actual set/note/completion exactly');
+   await p.evaluate(()=>window.dispatchEvent(new Event('focus')));await p.waitForTimeout(350);assert.deepEqual((await remoteBB2()).state.snapshot.events,local,'focus retry cannot duplicate offline workout');
+   report.checks.push('offline actual workout, reconnect and duplicate retry verified against stored canonical data');
+  }
+  async function concurrentCorrections(a,b,report){
+   const before=await remoteBB2(),originalEvents=(await stored(a)).bb2.events;
+   for(const [device,delta]of [[a,1],[b,2]]){
+    device.context().bb2Offline=true;await device.locator('.tab[data-tab="history"]').click();
+    const row=device.locator('#history .histLift').filter({hasText:'EXTRA SET'}).first();const input=row.locator('[data-bb2-correct-reps]');const reps=Number(await input.inputValue());await input.fill(String(reps+delta));await row.locator('[data-bb2-correct-save]').click();
+   }
+   const copies=await Promise.all([a,b].map(async d=>(await stored(d)).bb2.events));
+   assert.equal(copies[0].length,originalEvents.length+1);assert.equal(copies[1].length,originalEvents.length+1);assert.notDeepEqual(copies[0],copies[1]);
+   for(const d of [a,b])d.context().bb2Offline=false;
+   await Promise.all([a,b].map(d=>d.evaluate(()=>window.dispatchEvent(new Event('online')))));
+   let latest;for(let i=0;i<100;i++){latest=await remoteBB2();if(latest.revision>before.revision)break;await new Promise(r=>setTimeout(r,100))}
+   assert.equal(latest.revision,before.revision+1,'only one concurrent correction commits');
+   assert.ok(copies.some(events=>{try{assert.deepEqual(events,latest.state.snapshot.events);return true}catch{return false}}),'no journal combination');
+   let loser;for(let i=0;i<100;i++){for(const d of [a,b])if(await d.evaluate(()=>bvomBb2AccountStatus()==='conflict'))loser=d;if(loser)break;await new Promise(r=>setTimeout(r,100))}
+   assert.ok(loser,'stale losing device visibly pauses');const preserved=(await stored(loser)).bb2.events;
+   const notice=loser.locator('#bvomCloudConflictOverlay [data-settings]');if(await notice.isVisible())await notice.click();else await loser.locator('.tab[data-tab="settings"]').click();
+   await loser.locator('#settings button[onclick="bvomCloudRestore()"]').click();await loser.locator('.bvomModalOverlay [data-r]').click();
+   await loser.waitForFunction(()=>bvomBb2AccountStatus()==='current'&&!bvomBb2AccountBinding.syncing);
+   assert.deepEqual(await loser.evaluate(()=>JSON.parse(localStorage.getItem('bvom_pre_cloud_restore')).bb2.events),preserved,'losing journal retained in recovery copy');
+   assert.deepEqual((await stored(loser)).bb2.events,latest.state.snapshot.events,'confirmed recovery adopts the exact winning journal');
+   assert.deepEqual(await remoteBB2(),latest,'recovery cannot rewrite the winning cloud record');
+   await a.evaluate(()=>window.dispatchEvent(new Event('focus')));await a.waitForFunction(()=>bvomBb2AccountStatus()==='current'&&!bvomBb2AccountBinding.syncing);
+   report.checks.push('simultaneous real History corrections: one CAS winner, stale-device pause, both journals retained, explicit recovery and no merged/duplicate workouts');
+   const legacyBefore=await admin.from('bvom_data').select('data').eq('user_id',userId).order('created_at',{ascending:false}).limit(1).single();if(legacyBefore.error)throw legacyBefore.error;
+   const old=await makeDevice(profile.name+' obsolete backup device',{userId,login,accountFlow:true});await old.waitForTimeout(100);
+   const oldNotice=old.locator('#bvomCloudConflictOverlay [data-settings]');if(await oldNotice.isVisible())await oldNotice.click();else await old.locator('.tab[data-tab="settings"]').click();
+   const bytes=fs.readFileSync(path.join(output,profile.name.toLowerCase()+'-LP-backup.json'));
+   await old.locator('#settings input[type="file"]').setInputFiles({name:'old-LP-backup.json',mimeType:'application/json',buffer:bytes});
+   const reload=old.waitForEvent('domcontentloaded');await old.locator('.bvomModalOverlay [data-r]').click();await reload;await old.waitForSelector('#app:not(.hidden)');await reconnect(old);await old.waitForTimeout(1600);
+   assert.deepEqual(await remoteBB2(),latest,'pre-BB2 backup cannot overwrite the newer revisioned journal');
+   const legacyAfter=await admin.from('bvom_data').select('data').eq('user_id',userId).order('created_at',{ascending:false}).limit(1).single();if(legacyAfter.error)throw legacyAfter.error;
+   assert.deepEqual(legacyAfter.data,legacyBefore.data,'old LP backup cannot silently overwrite newer programme History');
+   report.checks.push('restoring the actual older LP export cannot overwrite newer cloud History or the BB2 journal');await old.context().close();
+
+  }
+
   async function checkpoint(p,report,label){
    const expected=await p.evaluate(()=>bvomCloudPayload());
-   await p.locator('.tab[data-tab="settings"]').click();
-   await p.locator('#settings button[onclick="bvomCloudSaveNow()"]').click();
-   const confirm=p.locator('.bvomModalOverlay [data-r]');if(await confirm.isVisible())await confirm.click();
    let remote;
-   for(let i=0;i<80;i++){
+   for(let i=0;i<150;i++){
     const q=await admin.from('bvom_data').select('data').eq('user_id',userId).order('created_at',{ascending:false}).limit(1).maybeSingle();if(q.error)throw q.error;remote=q.data?.data;
-    if(remote?.history?.length===expected.history.length)break;
+    let same=!!remote;try{for(const key of ['history','weights','core','hlm','pbs','bodybuilding'])assert.deepEqual(remote?.[key],expected[key])}catch{same=false}if(same)break;
     await new Promise(r=>setTimeout(r,100));
    }
    assert.ok(remote,'actual legacy cloud row exists');
    for(const key of ['history','weights','core','hlm','pbs','bodybuilding'])assert.deepEqual(remote[key],expected[key],'stored cloud '+key);
    const second=await makeDevice(profile.name+' receiving device '+label,{userId,login,accountFlow:true});
-   await second.locator('.tab[data-tab="settings"]').click();
+   await second.waitForTimeout(100);const notice=second.locator('#bvomCloudConflictOverlay [data-settings]');if(await notice.isVisible())await notice.click();else await second.locator('.tab[data-tab="settings"]').click();
    await second.locator('#settings button[onclick="bvomCloudRestore()"]').click();
    const reload=second.waitForEvent('domcontentloaded');await second.locator('.bvomModalOverlay [data-r]').click();await reload;await second.waitForSelector('#app:not(.hidden)');await reconnect(second);
    const downloaded=await stored(second);for(const key of ['history','weights','core','hlm','pbs','bodybuilding'])assert.deepEqual(downloaded[key],expected[key],'second-device '+key);
-   if(label==='BB2'){
-    await second.waitForFunction(()=>state.bb2?.events?.filter(e=>e.type==='CREDIT_GRANTED').length===32);
+   if(label.startsWith('BB2')){
+    const credits=label==='BB2'?32:16;
+    await second.waitForFunction(credits=>state.bb2?.events?.filter(e=>e.type==='CREDIT_GRANTED').length===credits,credits);
     const local=(await stored(p)).bb2,actual=(await stored(second)).bb2;
     assert.deepEqual(actual.events,local.events);assert.deepEqual(actual.setup,local.setup);
     const q=await admin.from('bvom_cloud_state').select('revision,state').eq('user_id',userId).single();if(q.error)throw q.error;
     assert.deepEqual(q.data.state.snapshot.events,local.events,'real revisioned cloud journal');
     report.cloudRevision=q.data.revision;
    }
-   report.checks.push(label+' stored cloud bytes, receiving device and previous programme journals match');
+   report.checks.push(label+' automatic upload, stored cloud bytes, receiving device and previous programme journals match');
+   if(label==='BB2-mid')await concurrentCorrections(p,second,report);
    await second.context().close();
   }
-  const report=await runJourney({page,profile,checkpoint,reconnect,output,smoke});summaries.push(report);
+  const report=await runJourney({page,profile,checkpoint,reconnect,offlineBB2,output,smoke});summaries.push(report);
  }));
  fs.writeFileSync(path.join(output,'summary.json'),JSON.stringify({source:process.env.MONKEY_SOURCE||'local',smoke,profiles:summaries},null,2));
  for(const r of summaries)console.log('MONKEY RESULT '+r.profile+' '+r.verdict+' '+JSON.stringify({counts:r.counts,sets:r.sets,progression:r.progression,defects:r.defects}));

@@ -4,7 +4,7 @@
 // use shipped controls. Read-only prescriptions/projections provide assertions.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const profiles=[
- {name:'Male',seed:730901,bodyweight:90,weights:{Squat:140,'Bench Press':100,'Prone Row':85,'Overhead Press':60,Deadlift:180,'Supine Row':70},increment:2.5,small:1.25,bbLoad:70},
+ {name:'Male',seed:730901,bodyweight:90,weights:{Squat:140,'Bench Press':100,'Prone Row':85,'Overhead Press':60,Deadlift:180,'Supine Row':70},increment:2.5,small:1.5,bbLoad:70},
  {name:'Female',seed:730902,bodyweight:65,weights:{Squat:60,'Bench Press':35,'Prone Row':32.5,'Overhead Press':22.5,Deadlift:80,'Supine Row':27.5},increment:1.25,small:.5,bbLoad:25}
 ];
 const clone=x=>JSON.parse(JSON.stringify(x));
@@ -24,7 +24,7 @@ function knownLoad(profile,id){
 }
 async function stored(p){return p.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')))}
 async function tab(p,name){await p.locator('.tab[data-tab="'+name+'"]').click()}
-async function runJourney({page:p,profile,checkpoint,reconnect,output,smoke=false}){
+async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,output,smoke=false}){
  let accessoryId;let seed=profile.seed;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296};
  const report={profile:profile.name,bodyweight:profile.bodyweight,seed:profile.seed,mode:smoke?'SMOKE':'FULL',verdict:'RUNNING',counts:{},sets:0,progression:{increases:0,reductions:0,holds:0,missedRepSets:0,failedAttempts:0},skippedOptionalSets:0,transitions:[],checks:[],workouts:[],actions:[],defects:[]};
  const file=path.join(output,profile.name.toLowerCase()+'.json');
@@ -128,7 +128,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,output,smoke=fals
  async function increments(){
   await tab(p,'settings');
   for(const value of [.25,.5]){const b=p.locator('#settings button[onclick="togglePlate('+value+',\'enabledMicro\')"]');if(!await b.evaluate(e=>e.classList.contains('on')))await b.click();}
-  for(const name of ['Bench Press','Overhead Press']){const id=name.replace(/\W/g,'');const details=p.locator('details').filter({has:p.locator('#inc'+id)});if(!await details.evaluate(e=>e.open))await details.locator('summary').click();await p.locator('#plateMode'+id).selectOption('micro');await p.locator('#mode'+id).selectOption('rpt');await p.locator('#inc'+id).fill(String(profile.small));await p.locator('button[onclick="saveLiftSettings(\''+name+'\')"]').click();await decisions();}
+  for(const name of ['Bench Press','Overhead Press']){const id=name.replace(/\W/g,'');const details=p.locator('details').filter({has:p.locator('#inc'+id)});if(!await details.evaluate(e=>e.open))await details.locator('summary').click();await p.locator('#plateMode'+id).selectOption('micro');await p.locator('#mode'+id).selectOption('rpt');await p.locator('#inc'+id).selectOption(String(profile.small));await p.locator('button[onclick="saveLiftSettings(\''+name+'\')"]').click();await decisions();}
   pass('custom fractional increments accepted through Advanced Settings');
  }
  async function addAccessory(){
@@ -145,7 +145,8 @@ async function runJourney({page:p,profile,checkpoint,reconnect,output,smoke=fals
   }
  }
  async function backup(label){
-  action('Backup/export and actual file restore '+label);await decisions();await tab(p,'settings');
+  action('Verify automatic cloud before backup '+label);await decisions();await checkpoint(p,report,label);
+  action('Backup/export and actual file restore '+label);await tab(p,'settings');
   const downloadEvent=p.waitForEvent('download');await p.locator('#settings button[onclick="exportBackup()"]').click();const dl=await downloadEvent;
   const bytes=fs.readFileSync(await dl.path()),data=JSON.parse(bytes);const before=await stored(p);assert.deepEqual(data.data.history,before.history);
   fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-'+label.replace(/\W/g,'_')+'-backup.json'),bytes);
@@ -226,7 +227,8 @@ async function runJourney({page:p,profile,checkpoint,reconnect,output,smoke=fals
   for(let n=1;n<=24;n++)await bbWorkout(n);assert.equal((await stored(p)).bodybuilding.completedSessions,24);await backup('BB1');
   await bb2Setup();await bb2Workout('upper_a',0,{incomplete:true});
   for(let week=1;week<=8;week++){
-   for(const day of ['upper_a','lower_a','upper_b','lower_b'])await bb2Workout(day,week,{threshold:week===2&&day==='upper_a'});
+   for(const day of ['upper_a','lower_a','upper_b','lower_b']){const offline=week===3&&day==='lower_a';if(offline)await offlineBB2('before',p,report);await bb2Workout(day,week,{threshold:week===2&&day==='upper_a'});if(offline)await offlineBB2('after',p,report);}
+   if(week===4)await checkpoint(p,report,'BB2-mid');
    if(week===2||week===6)for(const day of ['upper_a','lower_a','upper_b','lower_b'])await bb2Workout(day,week,{kind:'RECOVERY'});
   }
   const projection=await p.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events));assert.deepEqual(Object.values(projection.quotas),[8,8,8,8]);assert.equal(report.counts.BB2,32);await backup('BB2');
