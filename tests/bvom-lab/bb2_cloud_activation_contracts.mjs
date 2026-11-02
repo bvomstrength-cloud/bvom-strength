@@ -90,6 +90,17 @@ console.log('PASS BB2 v5: 42 sets, both calf choices, historical Log compatibili
   }
   if(status==='conflict')assert.match(card,/USE CLOUD COPY/);
  }
+ ui.ctx.document.querySelector('#settings').classList.add('hidden');
+ const originalQuery=ui.ctx.document.querySelector;
+ ui.ctx.document.querySelector=selector=>selector==='#settings:not(.hidden)'?null:originalQuery(selector);
+ ui.ev('bvomBb2AccountBinding.lastDownload={status:"unavailable"}');
+ ui.ctx.bvomBb2AccountStatusRender();
+ assert.match(ui.ctx.document.querySelector('#settings').innerHTML,/Bodybuilding 2 could not sync/);
+ ui.ev('bvomBb2AccountBinding.lastDownload={status:"conflict"}');
+ ui.ctx.bvomBb2AccountStatusRender();
+ assert.match(ui.ctx.document.querySelector('#settings').innerHTML,/Sync paused/,
+  'a background status change must be current when the normal Settings tab opens');
+ assert.doesNotMatch(ui.ctx.document.querySelector('#settings').innerHTML,/Bodybuilding 2 could not sync/);
  ui.ev('state.bb2=undefined;bvomBb2AccountBinding.lastDownload={status:"unavailable"}');
  assert.match(ui.ctx.bvomCloudStatusText(),/Cloud and device match/,'unused BB2 transport does not change other programme status');
  ui.ev('bvomBb2AccountBinding=null');

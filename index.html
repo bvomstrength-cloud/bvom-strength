@@ -5566,7 +5566,9 @@ function bvomBb2AccountStatus(){
   'checking';
 }
 function bvomBb2AccountStatusRender(){
- if(document.querySelector('#settings:not(.hidden)'))renderSettings();
+ // Like the normal account cloud flow, refresh the hidden Settings markup
+ // too: tab navigation only reveals it and must never expose an old status.
+ if(document.querySelector('#settings'))renderSettings();
 }
 async function bvomBb2AccountSyncNow(binding=bvomBb2AccountBinding){
  if(!binding||binding!==bvomBb2AccountBinding||
