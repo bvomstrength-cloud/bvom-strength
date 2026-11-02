@@ -257,13 +257,14 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   const required=Math.ceil(.7*slots.reduce((sum,s)=>sum+s.sets,0)),all=slots.flatMap((s,i)=>Array.from({length:s.sets},(_,j)=>({s,i,j})));
   if(kind==='RECOVERY')assert.ok(slots.every(s=>s.sets<=2),'recovery reduces per-slot working volume');
   const selected=incomplete?all.slice(0,required-1):threshold?all.slice(0,required):all;
+  if(!incomplete&&kind==='NORMAL'&&n===1&&day==='upper_a'){await tab(p,'workout');assert.equal(await p.locator('[data-bb2-set].done').count(),0,'first BB2 workout exposes Add Set before any prescribed work');await p.locator('[data-bb2-extra-add="0"]').click();const m=p.locator('.bvomModalOverlay').last();await m.locator('[data-bb2-reps]').fill(String(slots[0].floor));await m.locator('[data-save]').click();await m.waitFor({state:'detached'});report.sets++;await rest();pass('additional BB2 set recorded separately from prescribed count');}
   for(const {s,i,j}of selected){await tab(p,'workout');const key=i+'|'+j;await p.locator('[data-bb2-set="'+key+'"]').click();const m=p.locator('.bvomModalOverlay').last();
    const reps=kind==='RECOVERY'?s.floor:n%5===3?s.floor-1:n%5===4?s.floor:s.ceiling;
    await m.locator('[data-bb2-reps="'+key+'"]').fill(String(reps));
    await m.locator('[data-save]').click();await m.waitFor({state:'detached'});report.sets++;if(reps<s.floor)report.progression.missedRepSets++;await rest(kind==='RECOVERY'?60:s.plannedG>=100000?180:s.sets>=3?120:90);
   }
   if(incomplete){const live=clone((await stored(p)).bb2);await p.reload();await p.waitForSelector('#app:not(.hidden)');await p.waitForSelector('#workout [data-bb2-set].done');await p.waitForFunction(()=>bvomWindowLockOwned);await reconnect(p);assert.deepEqual((await stored(p)).bb2.events,live.events);assert.equal((await stored(p)).bb2.activeSessionId,live.activeSessionId);pass('BB2 normal Starting Setup and interrupted reload retain the active journal');}
-  if(!incomplete&&kind==='NORMAL'&&n===1&&day==='upper_a'){await tab(p,'workout');await p.locator('[data-bb2-extra-add="0"]').click();const m=p.locator('.bvomModalOverlay').last();await m.locator('[data-bb2-reps]').fill(String(slots[0].floor));await m.locator('[data-save]').click();await m.waitFor({state:'detached'});report.sets++;await rest();pass('additional BB2 set recorded separately from prescribed count');}
+
   await finish(incomplete?'BB2 incomplete':kind==='RECOVERY'?'BB2 recovery':'BB2',n,{incomplete});
   const after=await p.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events));
   const quota=x=>Object.values(x.quotas).reduce((a,b)=>a+b,0);assert.equal(quota(after),quota(before)+(kind==='NORMAL'&&!incomplete?1:0));
