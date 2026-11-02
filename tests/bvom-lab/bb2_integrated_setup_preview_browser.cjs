@@ -681,7 +681,8 @@ const server=http.createServer((req,res)=>{
   await page.waitForSelector('#app:not(.hidden)');
   await page.evaluate(()=>activateTab('history'));
   await page.waitForSelector('#history [data-bb2-history]');
-  assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/LOW_STRESS_RECOVERY/);
+  assert.equal(await page.locator('#history [data-bb2-history]').first().getAttribute('data-bb2-history-status'),'LOW_STRESS_RECOVERY');
+  assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/RECOVERY/);
   // A genuine browser reload must reacquire the existing BVOM document owner
   // and load the BB2 module before converting a stale session to INCOMPLETE.
   await page.evaluate(()=>activateTab('workout'));

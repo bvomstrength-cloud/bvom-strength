@@ -7094,10 +7094,15 @@ function bvomBb2RenderHistory(){
  if(!rows.length&&!archived.length)return;
  const latestRecorded=Math.max(...rows.map(bvomBb2HistoryTime),...archived.map(bvomBb2HistoryTime));
  if(latestRecorded>0&&Date.now()-latestRecorded<7*86400000)document.querySelector('#beeCoachOverlay')?.remove();
- const statusLabel=status=>hlmTxt(status,({
-  FINISHED:'完了',INCOMPLETE:'未完了',INCOMPLETE_CORRECTED:'未完了（修正済み）',
-  LOW_STRESS_RECOVERY:'軽めの回復ワークアウト',EXTRA_NORMAL:'追加ワークアウト'
- })[status]||status);
+ const statusLabel=status=>({
+  FINISHED:hlmTxt('COMPLETED','完了'),COMPLETED_NORMAL:hlmTxt('COMPLETED','完了'),
+  COMPLETED_NORMAL_NONCREDIT:hlmTxt('COMPLETED','完了'),
+  COMPLETED_EXTRA_NORMAL:hlmTxt('EXTRA WORKOUT','追加ワークアウト'),
+  EXTRA_NORMAL:hlmTxt('EXTRA WORKOUT','追加ワークアウト'),
+  INCOMPLETE:bvomT('history.incomplete'),
+  INCOMPLETE_CORRECTED:hlmTxt('INCOMPLETE (CORRECTED)','未完了（修正済み）'),
+  LOW_STRESS_RECOVERY:hlmTxt('RECOVERY','回復ワークアウト')
+ })[status]||hlmTxt('SAVED','保存済み');
  const counts=m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.map(
   day=>bvomEsc(bvomBb2PreviewLabel(day))+': '+projection.quotas[day]+'/8').join(' · ');
  const canCorrect=!projection.sealed&&!bvomBb2Active()&&!bvomStateWorkoutActive(state);
@@ -7125,7 +7130,7 @@ function bvomBb2RenderHistory(){
     '<button type="button" class="secondary" data-bb2-void-save="'+historyIndex+'|'+setIndex+'" '+
      'onclick="bvomBb2VoidSet('+historyIndex+','+setIndex+')">'+hlmTxt('REMOVE SET','セットを削除')+'</button></div></div>':'')+
    '</div>').join('');
-  return '<div class="histCard" data-history-time="'+bvomBb2HistoryTime(h)+'" data-history-order="'+h.finishOrdinal+'" data-bb2-history="'+bvomEsc(h.sessionId)+'" data-bb2-history-block="'+bvomEsc(h.blockId)+'"'+
+  return '<div class="histCard" data-history-time="'+bvomBb2HistoryTime(h)+'" data-history-order="'+h.finishOrdinal+'" data-bb2-history="'+bvomEsc(h.sessionId)+'" data-bb2-history-block="'+bvomEsc(h.blockId)+'" data-bb2-history-status="'+bvomEsc(h.status)+'"'+
    (archived?' data-bb2-archived="1"':'')+'>'+
    '<div class="histHead"><b>Bodybuilding 2 — '+bvomEsc(bvomBb2PreviewLabel(h.templateId))+
    '</b><span>'+bvomEsc(statusLabel(h.status))+(archived?' · '+hlmTxt('SEALED BLOCK','確定済みブロック'):'')+'</span></div>'+
