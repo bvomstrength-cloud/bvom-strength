@@ -496,6 +496,7 @@ try {
     assert.doesNotMatch(await loser.locator('#settings').textContent(),/BB2 CLOUD|CHECK BB2 CLOUD/);
   });
 
+  let lifecycleTablet;
   await check('normal mobile Finish, warm-up, note, History, restart and authenticated second device', async () => {
     const login={email:'bb2-shared-lifecycle@example.invalid',password:'Local-Only-Lifecycle-2026!'};
     const made=await admin.auth.admin.createUser({...login,email_confirm:true});if(made.error)throw made.error;
@@ -559,9 +560,15 @@ try {
     assert.deepEqual(await b.evaluate(()=>state.bb2.events),JSON.parse(raw),'second authenticated device receives the same canonical journal');
     await b.evaluate(()=>window.dispatchEvent(new Event('focus')));
     assert.equal(await b.evaluate(()=>state.bb2.events.filter(e=>e.type==='WORKOUT_FINISHED').length),1);
-    // Test interrupted/incomplete recovery separately from the qualifying Finish.
-    await b.evaluate(()=>activateTab('workout'));
-    await b.locator('#workout [data-bb2-next-workout]').click();
+    lifecycleTablet=b;
+  });
+
+  await check('interrupted mobile workout reload and shared incomplete confirmation preserve sets without credit', async()=>{
+    const b=lifecycleTablet;
+    // The tablet retains its existing LP selection when cloud data arrives.
+    // Choose BB2 through the normal programme controls before training.
+    await b.evaluate(()=>showSetup());
+    await b.locator('#setup [data-bb2-preview]').click();
     await b.locator('#setup [data-bb2-day="lower_a"]').click();
     for(const el of await b.locator('#setup [data-bb2-load]:not([disabled])').all())await el.fill('60');
     for(const el of await b.locator('#setup [data-bb2-inc]').all())await el.fill('2.5');
