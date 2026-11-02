@@ -1,3 +1,34 @@
+# Current integration — 2 November 2026
+
+The owner's mandatory cloud requirement supersedes the historical local-only
+and closed-rollout decisions below. The candidate reuses **E**, the existing
+`bvom_cloud_state` owner/revision/protocol table and existing BVOM sign-in,
+entitlement, local document ownership, account switching and recovery flows.
+No schema/policy change or production database write is part of this work.
+
+Normal programme navigation exposes BB2; the signed-in account coordinator now
+checks and syncs on account opening, durable setup/Finish/correction commits,
+focus, visibility return and reconnect. New catalogue v5 removes Log Push Press
+and adds loaded Single-Leg Calf Raise on both Lower days. All v1–v4 snapshots
+remain version-pinned, with no automatic rewriting of historical journals.
+
+BB2 remains excluded from the old clients' replaceable `bvom_data` payload.
+First INSERT uses the unique owner key; updates atomically match owner,
+protocol and previous revision. Durable request receipts prevent repeat uploads;
+ancestry validation rejects divergent or older histories rather than merging.
+An active workout blocks ingress and egress; it stays durably saved locally.
+Conflicts preserve both devices and offer explicit cloud recovery only after
+saving a recovery copy. Importing an older backup retains its old baseline,
+so it cannot silently overwrite newer cloud data. Unknown protocols fail closed.
+
+Verification uses the existing disposable Supabase Auth/RLS CI workflow,
+including two authenticated application devices, offline/reconnect, competing
+edits, old-backup rejection and the unchanged whole-application regression gate.
+No local Docker or production credentials are required. A release remains
+blocked until the candidate's CI and device acceptance evidence passes.
+
+---
+
 # BB2 cloud compatibility — decision required before live writer enablement
 
 Status: **PROPOSED / NOT APPROVED / NO DATABASE CHANGE** (29 October 2026)

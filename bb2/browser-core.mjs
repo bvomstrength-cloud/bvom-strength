@@ -1,5 +1,5 @@
 /* GENERATED BB2 browser core — no direct edits. */
-/* Source fingerprint SHA-256: 0f447a6631dff2a7a050b8540f398c1fd632d9017b484711521a1b7f7c247abd */
+/* Source fingerprint SHA-256: ae1f7767b025c17becc352e9c5ae352319d1510d618ca3f61bf441680ea9dd12 */
 /* Regenerate: node scripts/build-bb2-browser.cjs */
 /* Import has no app, storage, network or clock side effects. */
 const factories = Object.create(null);
@@ -1526,7 +1526,7 @@ factories["./catalogue.cjs"] = function (module, exports, require) {
  */
 'use strict';
 
-const CATALOGUE_VERSION = 4;
+const CATALOGUE_VERSION = 5;
 const TEMPLATE_ORDER = Object.freeze(['upper_a', 'lower_a', 'upper_b', 'lower_b']);
 const WARMUP_ORDER = Object.freeze(['FULL', 'FEEDER', 'QUALITATIVE', 'NONE']);
 const fail = message => { throw Error('BB2 catalogue: ' + message); };
@@ -1637,11 +1637,25 @@ const CATALOGUE_V4 = Object.freeze(Object.fromEntries(TEMPLATE_ORDER.map(day => 
     return role;
   }))
 ])));
+// v5 changes future choices only. Saved v1–v4 programmes and Starts keep
+// their exact exercise identities and prescriptions, including Log Push Press.
+const CATALOGUE_V5 = Object.freeze(Object.fromEntries(TEMPLATE_ORDER.map(day => [
+  day, Object.freeze(CATALOGUE_V4[day].map(role => {
+    const options = role.roleSlotId === 'shoulder_press'
+      ? role.options.filter(option => option.id !== 'log_push_press')
+      : role.roleSlotId === 'calf_raise'
+        ? [...role.options, E('single_leg_calf_raise')]
+        : role.options;
+    return R(role.roleSlotId, role.sets, role.floor, role.ceiling,
+      role.warmup, options, role.optional);
+  }))
+])));
 function getBB2Catalogue(version = CATALOGUE_VERSION) {
   if (version === 1) return LEGACY_CATALOGUE;
   if (version === 2) return V2_CATALOGUE;
   if (version === 3) return CATALOGUE;
   if (version === 4) return CATALOGUE_V4;
+  if (version === 5) return CATALOGUE_V5;
   fail('unsupported catalogue version');
 }
 
@@ -1652,10 +1666,10 @@ const selectionsDefault = version => Object.fromEntries(allRoles(version).map(ro
   [selectionKey(role.templateId, role.roleSlotId), role.defaultExerciseId]));
 
 function validateBB2Setup(setup) {
-  if (setup && ![1,2,3,4].includes(setup.catalogueVersion)) fail('unsupported catalogue version');
+  if (setup && ![1,2,3,4,5].includes(setup.catalogueVersion)) fail('unsupported catalogue version');
   only(setup, ['catalogueVersion', 'optionalUpperBCurls', 'selections',
     ...(setup?.catalogueVersion >= 3 ? ['optionalUpperACurls'] : [])], 'setup');
-  if (![1, 2, 3, 4].includes(setup.catalogueVersion)) fail('unsupported catalogue version');
+  if (![1, 2, 3, 4, 5].includes(setup.catalogueVersion)) fail('unsupported catalogue version');
   if (typeof setup.optionalUpperBCurls !== 'boolean') fail('invalid optional curls selection');
   if (setup.catalogueVersion >= 3 && typeof setup.optionalUpperACurls !== 'boolean') fail('invalid optional Upper A curls selection');
   const expected = selectionsDefault(setup.catalogueVersion);
@@ -2117,7 +2131,7 @@ function load(id) {
   factories[id](module, module.exports, load);
   return module.exports;
 }
-export const BB2_BROWSER_SOURCE_SHA256 = "0f447a6631dff2a7a050b8540f398c1fd632d9017b484711521a1b7f7c247abd";
+export const BB2_BROWSER_SOURCE_SHA256 = "ae1f7767b025c17becc352e9c5ae352319d1510d618ca3f61bf441680ea9dd12";
 export const BB2_BROWSER_MODULES = Object.freeze({
   ledger: Object.freeze(load("./ledger.cjs")),
   catalogue: Object.freeze(load("./catalogue.cjs")),

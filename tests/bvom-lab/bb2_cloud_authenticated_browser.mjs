@@ -61,6 +61,7 @@ async function makeDevice(label, { userId = ownerId, login = credentials,
   context.setDefaultTimeout(15000);
   await context.route('**/*', route => {
     const target = new URL(route.request().url()).origin;
+    if(context.bb2Offline&&target===apiUrl.replace(/\/$/, ''))return route.abort();
     return target === origin || target === apiUrl.replace(/\/$/, '') ?
       route.continue() : route.abort();
   });
@@ -229,13 +230,13 @@ try {
       verifiedId: bvomCloud.user?.id,
       authId: window.__bvomAuthUserId,
       isolated: bvomBb2AccountBinding?.isolated,
-      defaultWriterOff: bvomBb2DormantAccountSnapshot().bb2WriterEnabled === false
+      writerEnabled: bvomBb2DormantAccountSnapshot().bb2WriterEnabled === true
     }));
     assert.equal(binding.ownerId, accountId);
     assert.equal(binding.verifiedId, accountId);
     assert.equal(binding.authId, accountId);
     assert.equal(binding.isolated, true);
-    assert.equal(binding.defaultWriterOff, true);
+    assert.equal(binding.writerEnabled, true);
   });
 
   await check('a BVOM Setup save automatically uploads only through the isolated account binding', async () => {
@@ -344,6 +345,89 @@ try {
     const history = await third.evaluate(() => state.bb2.events);
     assert.equal(history.filter(e => e.type === 'SET_RECORDED').length, 9);
     assert.equal(history.filter(e => e.type === 'CREDIT_GRANTED').length, 1);
+  });
+
+  const peer = await makeDevice('reconnect peer', {
+    userId: accountId, login: accountCredentials, accountFlow: true });
+  await peer.waitForFunction(() => state.bb2?.cloudSync?.baseline?.revision === 3);
+  const oldBackup = await accountPhone.evaluate(() => ({app:'BVOM',version:BVOM_BUILD,
+    exportedAt:new Date().toISOString(),data:JSON.parse(localStorage.getItem('bvom_data'))}));
+  await check('offline real workout preserves local sets and reconnect uploads exactly once', async () => {
+    accountPhone.context().bb2Offline = true;
+    await accountPhone.evaluate(() => bvomBb2OpenPreview());
+    await accountPhone.locator('#setup [data-bb2-day="lower_b"]').click();
+    for(const field of await accountPhone.locator('#setup [data-bb2-load]:not([disabled])').all())await field.fill('60');
+    for(const field of await accountPhone.locator('#setup [data-bb2-inc]').all())await field.fill('2.5');
+    await accountPhone.locator('#setup [data-bb2-start]').click();
+    await accountPhone.waitForSelector('#workout [data-bb2-set="0|0"]');
+    await accountPhone.locator('#workout [data-bb2-edit-save="0"]').click();
+    await accountPhone.locator('.bvomModalOverlay [data-bb-weight]').fill('65');
+    await accountPhone.locator('.bvomModalOverlay [data-bb-increment]').fill('1');
+    await accountPhone.locator('.bvomModalOverlay [data-save]').click();
+    const slots=await accountPhone.evaluate(()=>state.bb2.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===state.bb2.activeSessionId).slots);
+    for(const [i,slot]of slots.entries())for(let j=0;j<slot.sets;j++){
+      const key=i+'|'+j;
+      await accountPhone.locator('#workout [data-bb2-set="'+key+'"]').click();
+      await accountPhone.locator('.bvomModalOverlay [data-bb2-reps="'+key+'"]').fill(String(slot.ceiling));
+      await accountPhone.locator('.bvomModalOverlay [data-save]').click();
+      await accountPhone.locator('.bvomModalOverlay').waitFor({state:'detached'});
+    }
+    await accountPhone.locator('#workout [data-bb2-finish]').click();
+    await accountPhone.waitForFunction(()=>bvomBb2AccountStatus()==='unavailable');
+    const durable=await accountPhone.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2);
+    assert.equal(durable.events.filter(e=>e.type==='WORKOUT_FINISHED').length,2);
+    assert.equal(durable.cloudSync.baseline.revision,3);
+    accountPhone.context().bb2Offline = false;
+    await accountPhone.evaluate(()=>window.dispatchEvent(new Event('online')));
+    await accountPhone.waitForFunction(()=>state.bb2.cloudSync.baseline.revision===4);
+    await accountPhone.evaluate(()=>bvomBb2AccountSyncNow());
+    assert.equal(await accountPhone.evaluate(()=>state.bb2.cloudSync.baseline.revision),4);
+    await peer.evaluate(()=>bvomBb2AccountSyncNow());
+    assert.equal(await peer.evaluate(()=>state.bb2.events.filter(e=>e.type==='WORKOUT_FINISHED').length),2);
+    assert.equal(await peer.evaluate(()=>state.bb2.events.filter(e=>e.type==='CREDIT_GRANTED').length),2);
+    const weight=await peer.evaluate(async()=>{const core=await import('./bb2/browser-core.mjs');return core.foldBB2Block(state.bb2.opening,state.bb2.events).progress['lower_b|quad|front_squat']});
+    assert.equal(weight.loadG,65000);assert.equal(weight.incrementG,1000);
+  });
+  await check('concurrent authenticated app edits preserve both journals and pause the loser', async () => {
+    for(const [page,exercise]of [[accountPhone,'dumbbell_flat_press'],[peer,'machine_chest_press']]){
+      page.context().bb2Offline=true;
+      await page.evaluate(()=>bvomBb2OpenPreview());
+      await page.locator('#setup [data-bb2-role="upper_a|flat_press"]').selectOption(exercise);
+      await page.locator('#setup [data-bb2-save]').click();
+      await page.locator('#setup [data-bb2-back]').click();
+      await page.waitForFunction(()=>bvomBb2AccountStatus()==='unavailable');
+    }
+    accountPhone.context().bb2Offline=false;peer.context().bb2Offline=false;
+    await Promise.all([accountPhone.evaluate(()=>bvomBb2AccountSyncNow()),peer.evaluate(()=>bvomBb2AccountSyncNow())]);
+    const statuses=await Promise.all([accountPhone,peer].map(p=>p.evaluate(()=>bvomBb2AccountStatus())));
+    assert.deepEqual(statuses.sort(),['conflict','current']);
+    for(const [page,exercise]of [[accountPhone,'dumbbell_flat_press'],[peer,'machine_chest_press']]){
+      assert.equal(await page.evaluate(()=>state.bb2.setup.selections['upper_a|flat_press']),exercise);
+      assert.equal(await page.evaluate(()=>state.bb2.events.filter(e=>e.type==='WORKOUT_FINISHED').length),2);
+    }
+  });
+  await check('restoring an older real backup cannot overwrite the newer cloud journal', async () => {
+    const restoreDevice=await makeDevice('older-backup device',{
+      userId:accountId,login:accountCredentials,accountFlow:true});
+    await restoreDevice.waitForFunction(()=>state.bb2?.cloudSync?.baseline?.revision===5);
+    await restoreDevice.evaluate(()=>activateTab('settings'));
+    await restoreDevice.locator('#settings input[type="file"]').setInputFiles({
+      name:'older-bb2-backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(oldBackup))});
+    const reload=restoreDevice.waitForEvent('domcontentloaded');
+    await restoreDevice.locator('.bvomModalOverlay [data-r]').click();await reload;
+    await restoreDevice.waitForSelector('#app:not(.hidden)');
+    assert.equal(await restoreDevice.evaluate(()=>state.bb2.cloudSync.baseline.revision),3);
+    await restoreDevice.evaluate(async({url,key,login})=>{
+      const client=window.supabase.createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+      bvomCloud.client=client;await bvomCloudInit();
+      const result=await client.auth.signInWithPassword(login);if(result.error)throw result.error;
+    },{url:apiUrl,key:anonKey,login:accountCredentials});
+    await restoreDevice.waitForFunction(()=>bvomBb2AccountStatus()==='conflict');
+    const remote=await admin.from('bvom_cloud_state').select('revision,state').eq('user_id',accountId).single();
+    if(remote.error)throw remote.error;
+    assert.equal(remote.data.revision,5);
+    assert.equal(remote.data.state.snapshot.events.filter(e=>e.type==='WORKOUT_FINISHED').length,2);
+    assert.ok(await restoreDevice.evaluate(()=>localStorage.getItem('bvom_pre_restore')),'pre-restore recovery copy retained');
   });
 
   console.log(`BB2 real app authenticated Chromium: ${passed}/${passed} PASS`);

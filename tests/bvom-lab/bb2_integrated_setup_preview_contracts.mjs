@@ -66,11 +66,11 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.doesNotMatch(h.ctx.bvomBb2CloudRestoreMessage(),/WARNING: BB2/,
   'ordinary cloud-restore warning is unchanged without BB2 local data');
  h.ctx.bvomBb2InjectProgramChoice();
- assert.equal(row.children.length,0,'ordinary BVOM does not expose the dev preview');
+ assert.equal(row.children.length,1,'BB2 is offered beside the ordinary programmes');
  h.ctx.location.origin='https://bvomstrength.com';
  h.ctx.location.search='?bb2Preview=1';
  h.ctx.bvomBb2InjectProgramChoice();
- assert.equal(row.children.length,0,'even a URL flag cannot expose BB2 on production');
+ assert.equal(row.children.length,1,'normal programme entry is available without a preview host');
  h.ev("state.bb2={activeSessionId:'imported-developer-session'}");
  h.ctx.renderWarm();h.ctx.renderWorkout();
  assert.doesNotMatch(h.ctx.document.querySelector('#warmup').innerHTML,/BODYBUILDING 2/,
@@ -95,7 +95,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;bvomBb2RenderPreview()');
  const html=()=>h.ctx.document.querySelector('#setup').innerHTML;
- assert.match(html(),/BODYBUILDING 2 · SETUP PREVIEW/);
+ assert.match(html(),/BODYBUILDING 2 · SETUP/);
  const jaLabels=h.ctx.BVOM_LOCALES.ja.bb2.labels;
  const ids=new Set(catalogue.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER);
  for(const template of catalogue.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER)
@@ -174,7 +174,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   'restoring identical BB2 data does not warn of a replacement');
  assert.match(h.ctx.bvomBb2BackupRestoreWarning(h.S(),oldBackup),/REPLACED or REMOVED/);
  assert.match(h.ctx.bvomBb2BackupRestoreWarning(h.S(),{bb2:{...bb2,events:[{type:'test'}]}}),
-  /not yet saved in BVOM Cloud/,'different BB2 archive also warns');
+  /cloud baseline/,'different BB2 archive also warns');
  h.ev("state.language='ja'");
  assert.match(h.ctx.bvomBb2BackupRestoreWarning(h.S(),oldBackup),/ボディビルディング2/,
   'the same warning is available in Japanese');
@@ -2236,7 +2236,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.match(restarted.h.ctx.document.querySelector('#warmup').innerHTML,/BODYBUILDING 2/);
  restarted.h.ctx.showApp();
  await restarted.h.ctx.bvomBb2OpenPreview();
- assert.match(restarted.h.ctx.document.querySelector('#setup').innerHTML,/BODYBUILDING 2 · SETUP PREVIEW/,
+ assert.match(restarted.h.ctx.document.querySelector('#setup').innerHTML,/BODYBUILDING 2 · SETUP/,
   'BB2 next-workout button opens the existing setup and Start UI');
  restarted.h.ctx.bvomBb2ClosePreview();
  assert.equal(restarted.h.ctx.document.querySelector('#app').classList.contains('hidden'),false,
@@ -2382,7 +2382,7 @@ H.withClock(c=>{
 {
  const {h}=fixture();h.ctx.location.origin='http://localhost:8000';h.ctx.location.search='?bb2Preview=1';
  h.ctx.__core=catalogue;
- h.ev('bvomBb2PreviewModule=__core;bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;bvomBb2PreviewDraft=__core.createBB2Setup()');
+ h.ev('bvomBb2PreviewModule=__core;bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;bvomBb2PreviewDraft=__core.createBB2Setup({catalogueVersion:4})');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);
  const query=h.ctx.document.querySelector;
  h.ctx.document.querySelector=selector=>{

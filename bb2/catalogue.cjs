@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const CATALOGUE_VERSION = 4;
+const CATALOGUE_VERSION = 5;
 const TEMPLATE_ORDER = Object.freeze(['upper_a', 'lower_a', 'upper_b', 'lower_b']);
 const WARMUP_ORDER = Object.freeze(['FULL', 'FEEDER', 'QUALITATIVE', 'NONE']);
 const fail = message => { throw Error('BB2 catalogue: ' + message); };
@@ -115,11 +115,25 @@ const CATALOGUE_V4 = Object.freeze(Object.fromEntries(TEMPLATE_ORDER.map(day => 
     return role;
   }))
 ])));
+// v5 changes future choices only. Saved v1–v4 programmes and Starts keep
+// their exact exercise identities and prescriptions, including Log Push Press.
+const CATALOGUE_V5 = Object.freeze(Object.fromEntries(TEMPLATE_ORDER.map(day => [
+  day, Object.freeze(CATALOGUE_V4[day].map(role => {
+    const options = role.roleSlotId === 'shoulder_press'
+      ? role.options.filter(option => option.id !== 'log_push_press')
+      : role.roleSlotId === 'calf_raise'
+        ? [...role.options, E('single_leg_calf_raise')]
+        : role.options;
+    return R(role.roleSlotId, role.sets, role.floor, role.ceiling,
+      role.warmup, options, role.optional);
+  }))
+])));
 function getBB2Catalogue(version = CATALOGUE_VERSION) {
   if (version === 1) return LEGACY_CATALOGUE;
   if (version === 2) return V2_CATALOGUE;
   if (version === 3) return CATALOGUE;
   if (version === 4) return CATALOGUE_V4;
+  if (version === 5) return CATALOGUE_V5;
   fail('unsupported catalogue version');
 }
 
@@ -130,10 +144,10 @@ const selectionsDefault = version => Object.fromEntries(allRoles(version).map(ro
   [selectionKey(role.templateId, role.roleSlotId), role.defaultExerciseId]));
 
 function validateBB2Setup(setup) {
-  if (setup && ![1,2,3,4].includes(setup.catalogueVersion)) fail('unsupported catalogue version');
+  if (setup && ![1,2,3,4,5].includes(setup.catalogueVersion)) fail('unsupported catalogue version');
   only(setup, ['catalogueVersion', 'optionalUpperBCurls', 'selections',
     ...(setup?.catalogueVersion >= 3 ? ['optionalUpperACurls'] : [])], 'setup');
-  if (![1, 2, 3, 4].includes(setup.catalogueVersion)) fail('unsupported catalogue version');
+  if (![1, 2, 3, 4, 5].includes(setup.catalogueVersion)) fail('unsupported catalogue version');
   if (typeof setup.optionalUpperBCurls !== 'boolean') fail('invalid optional curls selection');
   if (setup.catalogueVersion >= 3 && typeof setup.optionalUpperACurls !== 'boolean') fail('invalid optional Upper A curls selection');
   const expected = selectionsDefault(setup.catalogueVersion);

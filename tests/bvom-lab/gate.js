@@ -13,6 +13,8 @@ steps.splice(-1,0,['BB2 TEST PACKAGE','bb2_test_package_contracts.cjs',[]]);
 steps.splice(-1,0,['BB2 CATALOGUE V4 SCREENS','bb2_catalogue_v3_screen_contracts.mjs',[]]);
 steps.splice(-1,0,['BB2 CATALOGUE V3 SCREENS','bb2_catalogue_v3_screen_contracts.mjs',['--legacy-v3']]);
 steps.splice(-1,0,['BB2 CATALOGUE V4 PRESERVATION','bb2_catalogue_v4_preservation_contracts.mjs',[]]);
+steps.splice(-1,0,['BB2 CATALOGUE V4 HISTORICAL SCREENS','bb2_catalogue_v3_screen_contracts.mjs',['--legacy-v4']]);
+steps.splice(-1,0,['BB2 V5 CLOUD ACTIVATION','bb2_cloud_activation_contracts.mjs',[]]);
 const out=[];for(const [name,file,args] of steps){console.log(`\n######## ${name} ########`);const r=spawnSync(process.execPath,[path.join(__dirname,file),...args],{stdio:'inherit'});out.push([name,r.status===0])}
 console.log('\n######## GATE SUMMARY ########');for(const [n,ok] of out)console.log(`${ok?'PASS':'FAIL'}  ${n}`);
 const go=out.every(x=>x[1]);console.log(`\nVERDICT: ${go?'GO':'NO-GO'}`);process.exit(go?0:1);

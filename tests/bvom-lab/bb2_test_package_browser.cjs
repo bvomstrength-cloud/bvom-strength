@@ -48,7 +48,7 @@ async function proveV3TrainingAndRestore(page){
  await page.locator('.tab[data-tab="settings"]').click();
  const downloadEvent=page.waitForEvent('download');await page.locator('#settings button[onclick="exportBackup()"]').click();
  const download=await downloadEvent,bytes=fs.readFileSync(await download.path()),backup=JSON.parse(bytes);
- assert.equal(backup.data.bb2.setup.catalogueVersion,4);
+ assert.equal(backup.data.bb2.setup.catalogueVersion,5);
  const before=JSON.stringify(backup.data.bb2);
  await page.evaluate(()=>{state.weights.Squat+=1;save({durable:true,localOnly:true});renderSettings()});
  const reload=page.waitForEvent('domcontentloaded');
@@ -94,7 +94,7 @@ async function proveV3TrainingAndRestore(page){
    await page.goto(origin+'/index.html');await page.waitForSelector('#app:not(.hidden)');
    await page.evaluate(()=>showSetup());
    if(host==='app.bvomstrength.com'){
-    assert.equal(await page.locator('#setup [data-bb2-preview]').count(),0,'even a marked package stays disabled on production host');continue;
+    assert.equal(await page.locator('#setup [data-bb2-preview]').count(),1,'normal BB2 entry is available without the test URL flag');continue;
    }
    assert.match(page.url(),/bb2Preview=1/,'package opens BB2 without a hand-edited URL');
    await page.locator('#setup [data-bb2-preview]').click();await page.waitForSelector('#setup [data-bb2-template]');
@@ -112,6 +112,6 @@ async function proveV3TrainingAndRestore(page){
    await proveV3TrainingAndRestore(page);
   }
   assert.deepEqual(errors,[]);
-  console.log('PASS actual BB2 packaged mobile browser: 42-set plan, independent curls, offline reload, cloud exclusion and production-host refusal');
+  console.log('PASS actual BB2 packaged mobile browser: 42-set plan, independent curls, offline reload, cloud exclusion and ordinary programme entry');
  }finally{if(browser)await browser.close();fs.rmSync(temp,{recursive:true,force:true})}
 })().catch(e=>{console.error(e.stack||e);process.exitCode=1});

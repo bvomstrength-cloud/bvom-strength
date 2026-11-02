@@ -79,7 +79,7 @@ const server=http.createServer((req,res)=>{
   await page.goto(origin+'/index.html');
   await page.waitForSelector('#app:not(.hidden)');
   await page.evaluate(()=>showSetup());
-  assert.equal(await page.locator('#setup [data-bb2-preview]').count(),0,'ordinary BVOM has no BB2 development control');
+  assert.equal(await page.locator('#setup [data-bb2-preview]').count(),1,'ordinary BVOM offers BB2');
 
   await page.goto(origin+'/index.html?bb2Preview=1');
   await page.waitForSelector('#app:not(.hidden)');
@@ -107,10 +107,10 @@ const server=http.createServer((req,res)=>{
   await page.locator('#setup [data-bb2-curls]').click();
   assert.match(await page.locator('#setup [data-bb2-template="upper_b"]').textContent(),/15 working sets/);
   await page.locator('#setup [data-bb2-save]').click();
-  assert.equal(await page.evaluate(()=>state.bb2.setup.catalogueVersion),4);
+  assert.equal(await page.evaluate(()=>state.bb2.setup.catalogueVersion),5);
   await page.locator('#setup [data-bb2-back]').click();
   await page.reload();await page.waitForSelector('#app:not(.hidden)');
-  assert.equal(await page.evaluate(()=>state.bb2.setup.catalogueVersion),4,'v4 persists across actual browser reload');
+  assert.equal(await page.evaluate(()=>state.bb2.setup.catalogueVersion),5,'v4 persists across actual browser reload');
   await page.evaluate(()=>showSetup());
   await page.locator('#setup [data-bb2-preview]').click();
   await page.waitForSelector('#setup [data-bb2-start]');
@@ -154,7 +154,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('#setup [data-bb2-template]').count(),4,'four BB2 training days');
   assert.equal(await page.locator('#setup [data-bb2-role]').count(),20,'optional curl omitted initially');
   assert.equal(await page.locator('#setup button:has-text("START BODYBUILDING 2")').count(),0,'no active Start button');
-  assert.match(await page.locator('#setup').textContent(),/setup and workouts are saved on this device/i);
+  assert.match(await page.locator('#setup').textContent(),/42 core working sets/i);
 
   await page.locator('#setup [data-bb2-role="upper_a|shoulder_press"]').selectOption('log_push_press');
   assert.match(await page.locator('#setup [data-bb2-template="upper_a"]').textContent(),/2 × 4–6 reps/);
@@ -728,7 +728,7 @@ const server=http.createServer((req,res)=>{
   await page.goto(origin+'/index.html');
   await page.waitForSelector('#app:not(.hidden)');
   await page.evaluate(()=>showSetup());
-  assert.equal(await page.locator('#setup [data-bb2-preview]').count(),0,'stored preview does not expose BB2 in normal app');
+  assert.equal(await page.locator('#setup [data-bb2-preview]').count(),1,'BB2 remains available after ordinary navigation');
   assert.deepEqual(errors,[],'no application JavaScript errors');
   console.log('PASS BB2 integrated setup preview: dev-only chooser, shared save, reload, cloud exclusion, Start/Record/Discard/Finish, History, warm-up, pre-lock edit and first-exposure calibration trial');
   await context.close();

@@ -2794,7 +2794,7 @@ async function bvomPublicContinueAfterSignIn(mode){
  if(!latest?.error)setTimeout(()=>bvomCloudAssessSync(),0);
  // Register the dormant BB2 adapter only after BVOM has resolved the actual
  // signed-in account, entitlement, and local-document ownership. Registration
- // itself never reads or writes the BB2 cloud record in production.
+ // checks BB2 through its separately revisioned existing cloud record.
  void bvomBb2ConnectSignedInAccount();
 }
 
@@ -3319,7 +3319,7 @@ function bvomBb2BackupRestoreWarning(current,incoming){
  if(!local||typeof local!=='object'||
    !(local.setup||local.opening||local.events?.length||local.sealedBlocks?.length)||
    JSON.stringify(local)===JSON.stringify(incoming?.bb2))return '';
- return hlmTxt('WARNING: This device contains Bodybuilding 2 setup or workouts that will be REPLACED or REMOVED by this restore. BB2 is not yet saved in BVOM Cloud. Export a current BVOM backup before continuing.',
+ return hlmTxt('WARNING: This device contains Bodybuilding 2 setup or workouts that will be REPLACED or REMOVED by this restore. Restored BB2 data must match the cloud baseline before it can sync. Export a current BVOM backup before continuing.',
   '警告：この端末のボディビルディング2の設定やトレーニング記録は、この復元によって上書きまたは削除されます。BB2はまだBVOMクラウドに保存されません。続行する前に現在のBVOMバックアップを書き出してください。');
 }
 function importBackupFile(input){if(!bvomWorkoutActionAllowed())return;
@@ -5127,21 +5127,21 @@ const bvomOrderBaseWarm=renderWarm;
 renderWarm=function(...args){const out=bvomOrderBaseWarm(...args);bvomOrderApply('warmup');return out};
 /* ===== END EXERCISE DISPLAY ORDER ===== */
 
-/* ===== BB2: developer-only setup inside the existing BVOM program chooser =====
+/* ===== BB2: normal setup inside the existing BVOM program chooser =====
  * The frozen engine/catalogue is reused. Setup, workouts and History live in
- * BVOM's normal local document; no sidecar key or BB2 cloud upload.
+ * BVOM's normal local document; no separate local storage key. BB2 uses the revisioned cloud coordinator.
  */
 let bvomBb2PreviewModule=null,bvomBb2PreviewDraft=null,bvomBb2PreviewOpen=false,bvomBb2PreviewLoading=false;
 let bvomBb2PreviewOriginalMode=null,bvomBb2PreviewSaved=false,bvomBb2PreviewFromWorkout=false;
 let bvomBb2ExtraEntry=null;
 let bvomBb2NextBlockReview=false,bvomBb2NextBlockBase=null,bvomBb2NextBlockInputs={};
 function bvomBb2PreviewEnabled(){
- const host=String(location.origin||'').replace(/^https?:\/\//,'').split(':')[0];
- const test=window.__BVOM_BB2_TEST_BUILD;
- const testSite=host.endsWith('.netlify.app')&&test?.pr===73&&/^[a-f0-9]{40}$/.test(String(test.source||''));
- return (host==='localhost'||host==='127.0.0.1'||testSite)&&/(?:^|[?&])bb2Preview=1(?:&|$)/.test(String(location.search||''));
+ // Retain the established entry-point name for saved UI/test compatibility.
+ // BB2 is a normal BVOM programme; account and document write guards apply.
+ return true;
 }
 function bvomBb2PreviewLabel(id){
+ if(id==='single_leg_calf_raise')return hlmTxt('Single-Leg Calf Raise','片脚カーフレイズ');
  if(id==='safety_bar_squat')return hlmTxt('Safety Squat Bar Squat','セーフティスクワットバー・スクワット');
  if(String(id).includes('|'))return String(id).split('|').map(bvomBb2PreviewLabel).join(' · ');
  return bvomLang().bb2?.labels?.[id]||String(id).replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
@@ -5190,8 +5190,8 @@ function bvomBb2InjectProgramChoice(){
  if(!row&&!setup.querySelector('[data-bb2-preview]')){
   row=document.createElement('div');row.className='card';
   row.innerHTML='<b>'+hlmTxt('OTHER TRAINING PROGRAMS','その他のトレーニングプログラム')+'</b><p class="small">'+
-   hlmTxt('Bodybuilding 2 is available as a local development preview.',
-    'ボディビルディング2は、この端末限定の開発用プレビューで利用できます。')+'</p>';
+   hlmTxt('Four shorter upper/lower sessions each week.',
+    '週4回の短めの上半身／下半身トレーニングです。')+'</p>';
   setup.appendChild(row);
  }
  if(!row)return;
@@ -5201,7 +5201,7 @@ function bvomBb2InjectProgramChoice(){
   button.dataset.bb2Preview='1';
   button.onclick=bvomBb2OpenPreview;row.appendChild(button);
  }
- button.textContent=hlmTxt('BODYBUILDING 2 · PREVIEW','ボディビルディング2 · プレビュー');
+ button.textContent=hlmTxt('BODYBUILDING 2','ボディビルディング2');
  if(bvomBb2Selected())row.querySelectorAll?.('.choice').forEach(choice=>choice.classList.remove('on'));
  button.classList.toggle('on',bvomBb2Selected());
  if(bvomBb2Selected()){
@@ -5277,7 +5277,7 @@ function bvomBb2RenderPreview(){
   return `<div class="card" data-bb2-template="${templateId}"><b>${bvomLocale()==='ja'?bvomBb2PreviewLabel(templateId):headings[templateId]}</b><div class="small">${prescribed.prescribedCount} ${hlmTxt('working sets','ワーキングセット')} · ${hlmTxt('minimum to finish','完了に必要な最低セット数')} ${prescribed.minimumToFinish}</div>${rows}</div>`;
  }).join('');
  const el=document.querySelector('#setup');document.querySelector('#app').classList.add('hidden');el.classList.remove('hidden');
- el.innerHTML=`<div class="setupBee"><img src="./icon-192.png" alt="Power Bee"><div class="setupBeeTag">BEST VERSION OF MYSELF</div></div><div class="card"><b>${bvomBb2NextBlockReview?hlmTxt('BODYBUILDING 2 · NEXT BLOCK SETUP','ボディビルディング2 · 次のブロック設定'):hlmTxt('BODYBUILDING 2 · SETUP PREVIEW','ボディビルディング2 · 設定プレビュー')}</b><p class="small">${bvomBb2NextBlockReview?hlmTxt('Review your carried exercise choices, working weights and increments. Nothing changes until you confirm Start Next Block.','引き継ぐ種目・重量・増量幅を確認してください。「次のブロックを開始」を確定するまで変更されません。'):hlmTxt('Development preview: BB2 setup and workouts are saved on this device and in exported BVOM backups. BB2 training is not sent to BVOM Cloud yet.','開発中のプレビューです。BB2の設定とトレーニング記録はこの端末とBVOMバックアップに保存されます。BVOMクラウドにはまだ送信されません。')}</p>${setup.catalogueVersion< m.BB2_BROWSER_MODULES.catalogue.CATALOGUE_VERSION && !state.bb2?.opening && !(state.bb2?.events?.length) && !(state.bb2?.sealedBlocks?.length)?'<button type="button" class="secondary wide" onclick="bvomBb2UseLatestSetup()">'+hlmTxt('USE APPROVED BB2 PROGRAMME (42 CORE SETS)','承認済みBB2プログラムを使用')+'</button>':''}${setup.catalogueVersion>=3?'<label class="toggle"><input type="checkbox" data-bb2-curls-a '+(setup.optionalUpperACurls?'checked':'')+' '+(selectionsLocked?'disabled':'')+' onchange="bvomBb2PreviewCurls(this.checked,\'upper_a\')"><span>'+hlmTxt('Include optional Upper A curls','Upper Aのカール種目を追加')+'</span></label>':''}<label class="toggle"><input type="checkbox" data-bb2-curls ${setup.optionalUpperBCurls?'checked':''} ${selectionsLocked?'disabled':''} onchange="bvomBb2PreviewCurls(this.checked)"><span>${hlmTxt('Include optional Upper B curls','Upper Bのカール種目を追加')}</span></label></div>${templates}${bvomBb2NextBlockReview?'<button type="button" class="primary wide" data-bb2-next-commit onclick="bvomBb2CommitNextBlock()">'+hlmTxt('START NEXT BLOCK · SEAL PREVIOUS','次のブロックを開始 · 前のブロックを確定')+'</button><button type="button" class="secondary wide" data-bb2-next-cancel onclick="bvomBb2CancelNextBlock()">'+hlmTxt('CANCEL NEXT-BLOCK REVIEW','次のブロックの確認をキャンセル')+'</button>':blockComplete?'<p class="small">'+hlmTxt('All 32 credits earned. Use Review Next Block Setup below to change choices without altering completed training.','32回分のクレジットを獲得しました。完了した記録を変更せず、次のブロック設定を確認できます。')+'</p>':'<button type="button" class="primary wide" data-bb2-save onclick="bvomBb2SaveSetup()">'+(bvomBb2PreviewSaved?hlmTxt('SAVED ON THIS DEVICE','この端末に保存済み'):hlmTxt('SAVE BB2 SETUP','BB2設定を保存'))+'</button>'}${bvomBb2NextBlockReview?'':bvomBb2StartForm()}<button type="button" class="secondary wide" data-bb2-back onclick="bvomBb2ClosePreview()">${hlmTxt('BACK TO PROGRAMS','プログラム選択に戻る')}</button>`;
+ el.innerHTML=`<div class="setupBee"><img src="./icon-192.png" alt="Power Bee"><div class="setupBeeTag">BEST VERSION OF MYSELF</div></div><div class="card"><b>${bvomBb2NextBlockReview?hlmTxt('BODYBUILDING 2 · NEXT BLOCK SETUP','ボディビルディング2 · 次のブロック設定'):hlmTxt('BODYBUILDING 2 · SETUP','ボディビルディング2 · 設定')}</b><p class="small">${bvomBb2NextBlockReview?hlmTxt('Review your carried exercise choices, working weights and increments. Nothing changes until you confirm Start Next Block.','引き継ぐ種目・重量・増量幅を確認してください。「次のブロックを開始」を確定するまで変更されません。'):hlmTxt('Four shorter upper/lower sessions spread 42 core working sets across the week: Upper A 10, Lower A 10, Upper B 13, Lower B 9. Optional curls add 2 sets independently on each upper day. Train with controlled reps, stopping short of failure. Complete 8 credited sessions of each day (32 credits) before reviewing the next block. Setup, working weights, progression and completed History sync through your BVOM account. Workouts save on this device first and sync when connected; an unfinished workout stays safely on its original device. Export a backup before moving or resolving conflicting data.','週4回の短めの上半身／下半身トレーニングに、基本42セット（上半身A 10・下半身A 10・上半身B 13・下半身B 9）を分配します。各上半身の日に任意のカールを2セットずつ追加できます。限界まで追い込まず、丁寧に反復してください。各日8回、合計32クレジットを獲得したら次のブロックを確認します。設定・重量・進行・完了履歴はBVOMアカウントで同期します。記録はまず端末に保存され、接続後に同期されます。進行中の記録は元の端末で安全に保持します。データの移動や競合の解決前にバックアップを書き出してください。')}</p>${setup.catalogueVersion< m.BB2_BROWSER_MODULES.catalogue.CATALOGUE_VERSION && !state.bb2?.opening && !(state.bb2?.events?.length) && !(state.bb2?.sealedBlocks?.length)?'<button type="button" class="secondary wide" onclick="bvomBb2UseLatestSetup()">'+hlmTxt('USE APPROVED BB2 PROGRAMME (42 CORE SETS)','承認済みBB2プログラムを使用')+'</button>':''}${setup.catalogueVersion>=3?'<label class="toggle"><input type="checkbox" data-bb2-curls-a '+(setup.optionalUpperACurls?'checked':'')+' '+(selectionsLocked?'disabled':'')+' onchange="bvomBb2PreviewCurls(this.checked,\'upper_a\')"><span>'+hlmTxt('Include optional Upper A curls','Upper Aのカール種目を追加')+'</span></label>':''}<label class="toggle"><input type="checkbox" data-bb2-curls ${setup.optionalUpperBCurls?'checked':''} ${selectionsLocked?'disabled':''} onchange="bvomBb2PreviewCurls(this.checked)"><span>${hlmTxt('Include optional Upper B curls','Upper Bのカール種目を追加')}</span></label></div>${templates}${bvomBb2NextBlockReview?'<button type="button" class="primary wide" data-bb2-next-commit onclick="bvomBb2CommitNextBlock()">'+hlmTxt('START NEXT BLOCK · SEAL PREVIOUS','次のブロックを開始 · 前のブロックを確定')+'</button><button type="button" class="secondary wide" data-bb2-next-cancel onclick="bvomBb2CancelNextBlock()">'+hlmTxt('CANCEL NEXT-BLOCK REVIEW','次のブロックの確認をキャンセル')+'</button>':blockComplete?'<p class="small">'+hlmTxt('All 32 credits earned. Use Review Next Block Setup below to change choices without altering completed training.','32回分のクレジットを獲得しました。完了した記録を変更せず、次のブロック設定を確認できます。')+'</p>':'<button type="button" class="primary wide" data-bb2-save onclick="bvomBb2SaveSetup()">'+(bvomBb2PreviewSaved?hlmTxt('SAVED ON THIS DEVICE','この端末に保存済み'):hlmTxt('SAVE BB2 SETUP','BB2設定を保存'))+'</button>'}${bvomBb2NextBlockReview?'':bvomBb2StartForm()}<button type="button" class="secondary wide" data-bb2-back onclick="bvomBb2ClosePreview()">${hlmTxt('BACK TO PROGRAMS','プログラム選択に戻る')}</button>`;
 }
 function bvomBb2UseLatestSetup(){
  if(!bvomBb2PreviewEnabled()||!bvomBb2PreviewOpen||!bvomBb2PreviewModule||
@@ -5449,13 +5449,13 @@ function bvomBb2CloudRestoreMessage(){
   'この端末のBVOMデータを保存済みのクラウドデータで置き換えます。復元前のデータは、この端末に1段階の復元用コピーとして保存されます。');
  const b=state.bb2;
  if(!b||!(b.setup||b.opening||b.events?.length||b.sealedBlocks?.length))return ordinary;
- return hlmTxt('Your local BB2 setup and workout history will be kept unchanged. BB2 is not yet backed up to BVOM Cloud; export a current BVOM backup for another device. ',
-  '端末のBB2設定とトレーニング履歴は変更せず保持されます。BB2はまだBVOMクラウドに保存されません。別の端末に備えてBVOMバックアップを書き出してください。 ')+ordinary;
+ return hlmTxt('Your local BB2 setup and workout history will be kept unchanged. BB2 sync is checked separately in Settings with revision conflict protection. ',
+  '端末のBB2設定と履歴は変更せず保持されます。BB2の同期はSettingsで別途確認され、更新の競合から保護されます。 ')+ordinary;
 }
 
 // Read-only mapping of the existing BVOM account/document guards for the
-// dormant BB2 compatibility adapter. It performs no cloud I/O or registration.
-// The two rollout gates are deliberately hard-coded OFF in the real app.
+// BB2 revisioned transport. This snapshot performs no I/O.
+// Revisioned BB2 transport is enabled; all account/document guards still apply.
 function bvomBb2DormantAccountSnapshot(){
  const ownerId=bvomCloud.user?.id||null;
  const app=document.querySelector('#app');
@@ -5481,21 +5481,21 @@ function bvomBb2DormantAccountSnapshot(){
   localBlobUnchanged,
   legacyWorkoutActive:bvomAnyWorkoutActive(),
   cloudConflict:bvomCloud.conflict,
-  bb2WriterEnabled:false,
-  multiDeviceFenceVerified:false
+  bb2WriterEnabled:true,
+  multiDeviceFenceVerified:true
  });
 }
 
 // A real BVOM document adapter for the import-inert BB2 cloud coordinator.
-// Nothing calls this from production navigation, startup, Settings or Finish.
-// Normal invocations keep both rollout gates OFF. The isolated test-only path
+// The existing account lifecycle binds this adapter after ownership checks.
+// The isolated test-only client injection
 // requires localhost preview, a local Supabase URL and matching authenticated
 // owner; it cannot contact the configured production BVOM Cloud backend.
 let bvomBb2CloudCoordinatorModule=null;
 async function bvomBb2CreateDormantCloudCoordinator({isolatedClient=null}={}){
  const isolated=isolatedClient!==null;
  if(isolated){
-  if(!bvomBb2PreviewEnabled()||!/^http:\/\/(?:127\.0\.0\.1|localhost):54321\/?$/.test(
+  if(!/^https?:\/\/(?:127\.0\.0\.1|localhost)(?::[0-9]+)?$/.test(String(location.origin||''))||!/^http:\/\/(?:127\.0\.0\.1|localhost):54321\/?$/.test(
       String(isolatedClient?.supabaseUrl||''))||
      typeof isolatedClient?.auth?.getUser!=='function')
    throw new Error('BB2 isolated cloud test refused: non-local client or preview');
@@ -5540,10 +5540,9 @@ async function bvomBb2CreateDormantCloudCoordinator({isolatedClient=null}={}){
  });
 }
 
-// The normal BVOM account lifecycle owns this binding. In production the
-// coordinator is registered with BOTH writer gates still hard-OFF; there is
-// no BB2 cloud I/O. Only the authenticated localhost Supabase proof can run
-// the gated download and debounced post-workout/setup uploads.
+// The normal BVOM account lifecycle owns this binding and revokes it on
+// sign-out/account switch. Revision CAS, journal ancestry, durable intent and
+// document ownership guard downloads and debounced post-workout/setup uploads.
 let bvomBb2AccountBinding=null,bvomBb2AccountUploadTimer=null;
 function bvomBb2AccountDisconnect(){
  clearTimeout(bvomBb2AccountUploadTimer);bvomBb2AccountUploadTimer=null;
@@ -5551,7 +5550,7 @@ function bvomBb2AccountDisconnect(){
 }
 function bvomBb2AccountStatus(){
  const binding=bvomBb2AccountBinding;
- if(!binding?.isolated)return null;
+ if(!binding)return null;
  return binding.lastUpload?.status==='conflict'||binding.lastDownload?.status==='conflict'?
   'conflict':binding.lastUpload?.status==='uncertain'||binding.lastDownload?.status==='uncertain'?
   'uncertain':binding.lastUpload?.status==='unavailable'||binding.lastDownload?.status==='unavailable'?
@@ -5564,7 +5563,7 @@ function bvomBb2AccountStatusRender(){
  if(document.querySelector('#settings:not(.hidden)'))renderSettings();
 }
 async function bvomBb2AccountSyncNow(binding=bvomBb2AccountBinding){
- if(!binding?.isolated||binding!==bvomBb2AccountBinding||
+ if(!binding||binding!==bvomBb2AccountBinding||
     !bvomBb2PreviewEnabled()||bvomAnyWorkoutActive())return;
  if(binding.syncing){binding.resync=true;return}
  binding.syncing=true;
@@ -5624,13 +5623,13 @@ async function bvomBb2ConnectSignedInAccount(){
   const binding={ownerId,client,isolated,coordinator,lastDownload:null,lastUpload:null,
    syncing:false,resync:false,conflictNoticeShown:false};
   bvomBb2AccountBinding=binding;
-  if(isolated)await bvomBb2AccountSyncNow(binding);
+  await bvomBb2AccountSyncNow(binding);
   return true;
  }catch(error){console.warn('BB2 dormant account binding unavailable',error);return false}
 }
 function bvomBb2AccountSyncSchedule(){
  const binding=bvomBb2AccountBinding;
- if(!binding?.isolated||!bvomBb2PreviewEnabled()||!state.bb2?.setup||
+ if(!binding||!bvomBb2PreviewEnabled()||
     bvomAnyWorkoutActive())return;
  clearTimeout(bvomBb2AccountUploadTimer);
  bvomBb2AccountUploadTimer=setTimeout(()=>{
@@ -5639,7 +5638,7 @@ function bvomBb2AccountSyncSchedule(){
 }
 function bvomBb2AccountUseCloud(){
  const binding=bvomBb2AccountBinding;
- if(!binding?.isolated||bvomBb2AccountStatus()!=='conflict'||
+ if(!binding||bvomBb2AccountStatus()!=='conflict'||
     !bvomBb2PreviewEnabled()||bvomAnyWorkoutActive())return;
  bvomChoiceModal(hlmTxt('REPLACE LOCAL BB2 WITH CLOUD?','端末のBB2をクラウドで置き換えますか？'),
   hlmTxt('Only BB2 setup and completed BB2 history will be replaced. Other BVOM programmes remain untouched. A complete one-step local recovery copy will be saved first. Export a BVOM backup too if you want a separate file.',
@@ -5665,7 +5664,7 @@ function bvomBb2AccountUseCloud(){
 const bvomBb2BaseRenderSettings=renderSettings;
 renderSettings=function(...args){
  const result=bvomBb2BaseRenderSettings(...args);
- if(!bvomBb2AccountBinding?.isolated)return result;
+ if(!bvomBb2AccountBinding)return result;
  const settings=document.querySelector('#settings');
  if(!settings)return result;
  const status=bvomBb2AccountStatus();
@@ -5684,7 +5683,7 @@ renderSettings=function(...args){
    'BB2アカウントの確認待ちです。記録はこの端末に保持されています。')
  }[status];
  const card=document.createElement('div');card.className='card';
- card.innerHTML='<b>'+hlmTxt('BB2 CLOUD · TEST PREVIEW','BB2クラウド · テストプレビュー')+'</b><p class="small">'+
+ card.innerHTML='<b>'+hlmTxt('BB2 CLOUD','BB2クラウド')+'</b><p class="small">'+
   message+'</p><button type="button" class="secondary wide" data-bb2-sync-retry>'+hlmTxt(
    'CHECK BB2 CLOUD AGAIN','BB2クラウドを再確認')+'</button>'+
   (status==='conflict'?'<button type="button" class="secondary wide" data-bb2-sync-backup>'+hlmTxt(
@@ -5702,13 +5701,17 @@ showApp=function(...args){
  bvomBb2AccountSyncSchedule();return result;
 };
 // Resuming an older device must recheck the latest account revision before
-// recording more work. These listeners remain inert outside localhost proof.
+// recording more work. Active workouts remain local and are never replaced.
 window.addEventListener('focus',()=>bvomBb2AccountSyncSchedule());
+window.addEventListener('online',()=>{
+ if(bvomBb2AccountBinding)bvomBb2AccountSyncSchedule();
+ else if(bvomCloud.user&&!bvomCloud.offlineLocalAccess)void bvomBb2ConnectSignedInAccount();
+});
 document.addEventListener('visibilitychange',()=>{
  if(document.visibilityState==='visible')bvomBb2AccountSyncSchedule();
 });
 
-// BB2 Stage (ii): local-only Start, prescribed sets, recovery, Finish, quota,
+// BB2: local-first Start, prescribed sets, recovery, Finish, quota,
 // History and Discard. The existing BVOM data document remains authoritative.
 let bvomBb2Day='upper_a';
 let bvomBb2Kind='NORMAL';
@@ -5737,7 +5740,7 @@ function bvomBb2LeaveProgram(){
 function bvomBb2IdleWorkout(){
  const el=document.querySelector('#workout');if(!el)return;
  el.innerHTML='<div class="toprow"><div><b>BODYBUILDING 2</b>'+
-  '<div class="small">'+hlmTxt('Four-day upper/lower training · development preview','週4日の上半身／下半身トレーニング · 開発用プレビュー')+'</div></div></div>'+
+  '<div class="small">'+hlmTxt('Four-day upper/lower training','週4日の上半身／下半身トレーニング')+'</div></div></div>'+
   '<div class="card"><b>'+hlmTxt('READY FOR YOUR NEXT WORKOUT','次のワークアウトの準備ができました')+'</b>'+
   '<p class="small">'+hlmTxt('Your BB2 setup and completed sessions are saved in BVOM on this device. Choose Upper A, Lower A, Upper B or Lower B when you start; the audited progression engine keeps each exercise\'s history.',
    'BB2の設定と完了済みセッションは、この端末のBVOMに保存されています。開始時に上半身A、下半身A、上半身B、下半身Bを選択できます。種目ごとの履歴は進行管理エンジンに保持されます。')+'</p>'+
@@ -5914,7 +5917,7 @@ function bvomBb2StartForm(){
   (projection?bvomBb2PendingChoices(projection)+bvomBb2StallActions(projection):'')+
   '<div class="card"><b>'+hlmTxt('BB2 DEVELOPMENT START','BB2開発用スタート')+'</b><p class="small">'+hlmTxt('Enter real starting loads. Low-stress sessions are optional, use about half the sets and do not earn progression or credits.','実際に使用する開始重量を入力してください。軽めのワークアウトは任意で、セット数は約半分になり、重量の進行やクレジットは獲得しません。')+'</p>'+
   '<div class="choiceRow">'+days+'</div><div class="choiceRow">'+kindsHtml+'</div>'+rows+
-  '<button type="button" class="primary wide" data-bb2-start onclick="bvomBb2Begin()">'+hlmTxt('START TEST WORKOUT','テストワークアウトを開始')+'</button></div>';
+  '<button type="button" class="primary wide" data-bb2-start onclick="bvomBb2Begin()">'+hlmTxt('START WORKOUT','ワークアウトを開始')+'</button></div>';
 }
 function bvomBb2ValidationNotice(message,selector){
  alert(message);
@@ -6556,13 +6559,13 @@ function bvomBb2Workout(){
  const done=b.events.filter(e=>e.type==='SET_RECORDED'&&e.sessionId===b.activeSessionId).length;
  el.innerHTML='<div class="toprow"><b>BODYBUILDING 2 · '+bvomEsc(bvomBb2PreviewLabel(start.templateId))+
   (start.kind==='RECOVERY'?' · '+hlmTxt('LOW-STRESS RECOVERY','軽めの回復ワークアウト'):start.kind==='EXTRA_NORMAL'?' · '+hlmTxt('EXTRA WORKOUT','追加ワークアウト'):'')+
-  '</b></div><div class="notice">'+hlmTxt('Development-only:','開発用：')+' '+done+'/'+count+' '+hlmTxt('prescribed sets recorded;','予定セットを記録済み。')+' '+
+  '</b></div><div class="notice">'+hlmTxt('Workout:','ワークアウト：')+' '+done+'/'+count+' '+hlmTxt('prescribed sets recorded;','予定セットを記録済み。')+' '+
   (start.kind==='RECOVERY'?hlmTxt('recovery never earns a credit or progression.','回復ワークアウトではクレジットや進行を獲得しません。'):minimum+' '+hlmTxt('required for Finish.','セット以上で終了できます。'))+
-  ' '+hlmTxt('BB2 is local-only; cloud upload is disabled.','BB2は端末内のみで保存され、クラウド送信は無効です。')+'</div>'+html+
+  ' '+hlmTxt('Saved on this device. Cloud sync resumes after Finish or Save Incomplete.','端末に保存済みです。完了または未完了として保存した後にクラウド同期を再開します。')+'</div>'+html+
   '<button type="button" class="primary wide" data-bb2-finish '+(done<(start.kind==='RECOVERY'?1:minimum)?'disabled':'')+
   ' onclick="bvomBb2End(\'FINISH\')">'+hlmTxt('FINISH WORKOUT','ワークアウトを終了')+'</button>'+
   '<button type="button" class="secondary wide" data-bb2-incomplete onclick="bvomBb2End(\'INCOMPLETE\')">'+hlmTxt('END AS INCOMPLETE','未完了として終了')+'</button>'+
-  '<button class="secondary wide" data-bb2-discard onclick="bvomBb2Discard()">'+hlmTxt('DISCARD TEST WORKOUT','テストワークアウトを破棄')+'</button>';
+  '<button class="secondary wide" data-bb2-discard onclick="bvomBb2Discard()">'+hlmTxt('DISCARD WORKOUT','ワークアウトを破棄')+'</button>';
  bvomOrderApply('workout');
 }
 function bvomBb2Log(i,j,extra=false,entryRoot=null){

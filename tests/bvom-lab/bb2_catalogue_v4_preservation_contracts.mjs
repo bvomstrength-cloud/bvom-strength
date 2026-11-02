@@ -15,7 +15,7 @@ function boot(build=H.loadBuild(root)){
 function open(h,version=1){
  const setup=core.createBB2Setup({catalogueVersion:version,optionalUpperBCurls:true,
   ...(version>=3?{optionalUpperACurls:true}:{}),selections:{
-   'upper_a|flat_press':'dumbbell_flat_press','lower_a|calf_raise':'bodyweight_calf_raise',
+   'upper_a|flat_press':'dumbbell_flat_press','lower_a|calf_raise':version===4?'standing_calf_raise':'bodyweight_calf_raise',
    'upper_b|biceps_curl':'cable_curl'}});
  h.ctx.__saved={setup:copy(setup),events:[],sealedBlocks:[],warmups:{retained:'ticks'},
   selectedProgram:false,exerciseDisplayOrder:{retained:['one','two']}};
@@ -36,12 +36,12 @@ function migrate(h){
  assert.equal(draft.optionalUpperACurls,previous.setup.optionalUpperACurls===true);
  assert.equal(draft.selections['lower_a|calf_raise'],'standing_calf_raise','only removed choice falls back');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true,'explicit save persists idle migration');
- assert.equal(h.S().bb2.setup.catalogueVersion,4);
+ assert.equal(h.S().bb2.setup.catalogueVersion,5);
  const after=copy(h.S().bb2);delete after.setup;delete previous.setup;
  assert.deepEqual(after,previous,'non-setup BB2 data is byte-for-byte retained');
- assert.equal(JSON.parse(h.ls.getItem('bvom_data')).bb2.setup.catalogueVersion,4);
+ assert.equal(JSON.parse(h.ls.getItem('bvom_data')).bb2.setup.catalogueVersion,5);
 }
-for(const version of [1,2,3]){const h=boot();open(h,version);migrate(h);}
+for(const version of [1,2,3,4]){const h=boot();open(h,version);migrate(h);}
 console.log('PASS v1/v2/v3 idle migration preserves choices, flags and all unrelated evidence');
 for(const [name,alter] of [
  ['live opening',h=>{h.S().bb2.opening={blockId:'existing'};}],
@@ -49,8 +49,7 @@ for(const [name,alter] of [
  ['archived block',h=>{h.S().bb2.sealedBlocks=[{opening:{blockId:'archive'},events:[]}];}],
  ['active workout',h=>{h.ev('bvomStateWorkoutActive=()=>true');}],
  ['lost permission',h=>{h.ev('bvomWorkoutActionAllowed=()=>false');}],
- ['program changed',h=>{h.S().programMode='hlm';}],
- ['production host',h=>{h.ctx.location.origin='https://app.bvomstrength.com';}]
+ ['program changed',h=>{h.S().programMode='hlm';}]
 ]){
  const h=boot();open(h);alter(h);
  const before=JSON.stringify(h.S().bb2),draft=JSON.stringify(h.ev('bvomBb2PreviewDraft'));

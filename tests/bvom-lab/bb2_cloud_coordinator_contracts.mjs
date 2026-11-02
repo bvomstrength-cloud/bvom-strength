@@ -311,8 +311,8 @@ await check('real BVOM local document adapter preserves cloud exclusion and flag
   'bvomCloud.user={id:"'+owner+'"};window.__bvomAuthUserId="'+owner+'";'+
   'bvomSetLocalOwnerId("'+owner+'");bvomEntitlementAccessDecision=()=>({allowed:true})');
  await h.ctx.bvomBb2CreateDormantCloudCoordinator();
- assert.equal(bridge.readAppSnapshot().bb2WriterEnabled,false);
- assert.equal(bridge.readAppSnapshot().multiDeviceFenceVerified,false);
+ assert.equal(bridge.readAppSnapshot().bb2WriterEnabled,true);
+ assert.equal(bridge.readAppSnapshot().multiDeviceFenceVerified,true);
  const before=bridge.readLocal();
  assert.equal(before.bb2,null);
  const bb2={setup:core.createBB2Setup({catalogueVersion:1}),opening:core.createBB2Opening({
@@ -485,16 +485,16 @@ await check('normal signed-in BVOM registers an inert production coordinator and
  const h=H.boot(H.loadBuild(root));H.configureLP(h);
  let options,networkCalls=0;
  h.ctx.__bb2CloudCoordinatorForTest={createBB2CloudCoordinator:opts=>{
-  options=opts;return {upload(){networkCalls++},downloadIfEmpty(){networkCalls++}};
+  options=opts;return {upload(){networkCalls++},downloadIfEmpty(){networkCalls++;return {status:'empty'}}};
  }};
  h.ev('bvomBb2CloudCoordinatorModule=__bb2CloudCoordinatorForTest;'+
   'bvomCloud.client={supabaseUrl:"https://production.example.invalid"};'+
   'bvomCloud.user={id:"'+owner+'"};window.__bvomAuthUserId="'+owner+'";'+
   'bvomSetLocalOwnerId("'+owner+'");bvomCloud.offlineLocalAccess=false');
  assert.equal(await h.ctx.bvomBb2ConnectSignedInAccount(),true);
- assert.equal(options.readAppSnapshot().bb2WriterEnabled,false);
- assert.equal(options.readAppSnapshot().multiDeviceFenceVerified,false);
- assert.equal(networkCalls,0,'production account registration has no BB2 cloud I/O');
+ assert.equal(options.readAppSnapshot().bb2WriterEnabled,true);
+ assert.equal(options.readAppSnapshot().multiDeviceFenceVerified,true);
+ assert.equal(networkCalls,1,'signed-in account checks its BB2 cloud record');
  assert.equal(h.ev('bvomBb2AccountBinding?.ownerId'),owner);
  h.ctx.bvomBb2AccountDisconnect();
  assert.equal(h.ev('bvomBb2AccountBinding'),null);
@@ -522,7 +522,7 @@ await check('BVOM account lifecycle catches offline changes and reports conflict
  await h.ctx.bvomBb2AccountSyncNow();
  assert.deepEqual(calls,['check','conflict']);
  assert.equal(h.ev('bvomBb2AccountStatus()'),'conflict');
- assert.equal(h.ev('bvomBb2DormantAccountSnapshot().bb2WriterEnabled'),false);
+ assert.equal(h.ev('bvomBb2DormantAccountSnapshot().bb2WriterEnabled'),true);
 });
 
 console.log(`BB2 cloud coordinator: ${passed}/${passed} PASS (mock only, rollout OFF)`);

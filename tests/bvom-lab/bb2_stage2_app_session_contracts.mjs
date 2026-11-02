@@ -51,9 +51,9 @@ test('actual BVOM snapshot tracks account, lock and persisted data; rollout stay
   assert.equal(initial.localOwnerId, 'owner-1');
   assert.equal(initial.documentLockOwned, true);
   assert.equal(initial.localBlobUnchanged, true);
-  assert.equal(initial.bb2WriterEnabled, false);
-  assert.equal(initial.multiDeviceFenceVerified, false);
-  assert.equal(bb2AppWriteStatus(initial, 'owner-1').allowed, false);
+  assert.equal(initial.bb2WriterEnabled, true);
+  assert.equal(initial.multiDeviceFenceVerified, true);
+  assert.equal(bb2AppWriteStatus(initial, 'owner-1').allowed, true);
   h.ev('bvomCloud.user={id:"other-owner"};bvomCloud.accountSwitchDeferred=true;');
   assert.equal(read().cloudUserId, 'other-owner');
   assert.equal(read().accountSwitchDeferred, true);

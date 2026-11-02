@@ -4,7 +4,7 @@ import {createRequire} from 'node:module';
 import * as core from '../../bb2/browser-core.mjs';
 import {validateBB2PortableCatalogue,validateBB2PortableGenesis} from '../../bb2/cloud-coordinator.mjs';
 const require=createRequire(import.meta.url),H=require('./lib/bvom_harness');
-const catalogueVersion=process.argv.includes('--legacy-v3')?3:4;
+const catalogueVersion=process.argv.includes('--legacy-v3')?3:process.argv.includes('--legacy-v4')?4:5;
 const root=new URL('../..',import.meta.url).pathname,owner='11111111-1111-4111-8111-111111111111';
 function boot(ls){
  const h=H.boot(H.loadBuild(root),ls?{ls}:{});if(!ls)H.configureLP(h);

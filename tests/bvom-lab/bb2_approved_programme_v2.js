@@ -16,7 +16,7 @@ console.log('PASS BB2 owner-approved 42-set design contract');
 
 const core = require('../../bb2/catalogue.cjs');
 const setup = core.createBB2Setup();
-assert.equal(setup.catalogueVersion,4);
+assert.equal(setup.catalogueVersion,5);
 assert.equal(setup.optionalUpperACurls,false);
 assert.equal(setup.optionalUpperBCurls,false);
 for (const [day,rows] of Object.entries(DAYS)) {

@@ -27,7 +27,7 @@ function open(h){h.ev('bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.
  'bvomBb2PreviewDraft=__core.createBB2Setup(state.bb2?.setup);bvomBb2PreviewSaved=!!state.bb2?.setup;bvomBb2RenderPreview()')}
 let h=boot();open(h);
 assert.equal(h.ctx.bvomBb2SaveSetup(),true);
-assert.equal(h.S().bb2.setup.catalogueVersion,4);
+assert.equal(h.S().bb2.setup.catalogueVersion,5);
 const counts={upper_a:10,lower_a:10,upper_b:13,lower_b:9};
 const cloud=JSON.stringify(h.ctx.bvomCloudPayload()),legacyHistory=JSON.stringify(h.S().history);
 for(let round=0;round<8;round++)for(const day of Object.keys(counts)){
@@ -48,7 +48,7 @@ for(let round=0;round<8;round++)for(const day of Object.keys(counts)){
  if(round===0){
   // Persisted v2 sessions reopen with unchanged immutable prescriptions.
   h=boot(h.ls);
-  assert.equal(h.S().bb2.setup.catalogueVersion,4);
+  assert.equal(h.S().bb2.setup.catalogueVersion,5);
   assert.equal(core.foldBB2Block(h.S().bb2.opening,h.S().bb2.events).quotas[day],1);
  }
 }
@@ -74,7 +74,7 @@ console.log('PASS v2 low-stress session follows approved ordering and half-volum
 open(h);assert.equal(h.ctx.bvomBb2NextBlock(),true);
 const previousLoad=core.foldBB2Block(h.S().bb2.opening,h.S().bb2.events).progress['upper_a|flat_press|bench_press'].loadG;
 assert.equal(h.ctx.bvomBb2CommitNextBlock(),true);
-assert.equal(h.S().bb2.setup.catalogueVersion,4);
+assert.equal(h.S().bb2.setup.catalogueVersion,5);
 assert.equal(h.S().bb2.sealedBlocks.length,1);
 assert.equal(core.foldBB2Block(h.S().bb2.opening,h.S().bb2.events).progress['upper_a|flat_press|bench_press'].loadG,previousLoad);
 assert.deepEqual(core.foldBB2Block(h.S().bb2.opening,h.S().bb2.events).quotas,{upper_a:0,lower_a:0,upper_b:0,lower_b:0});
