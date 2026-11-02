@@ -95,7 +95,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   'bvomBb2PreviewDraft=bvomBb2PreviewModule.createBB2Setup({catalogueVersion:1});'+
   'bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;bvomBb2RenderPreview()');
  const html=()=>h.ctx.document.querySelector('#setup').innerHTML;
- assert.match(html(),/BODYBUILDING 2 · SETUP/);
+ assert.match(html(),/Bodybuilding 2 — 4-Day Muscle-Building Programme/);
  const jaLabels=h.ctx.BVOM_LOCALES.ja.bb2.labels;
  const ids=new Set(catalogue.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER);
  for(const template of catalogue.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER)
@@ -2236,7 +2236,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.match(restarted.h.ctx.document.querySelector('#warmup').innerHTML,/BODYBUILDING 2/);
  restarted.h.ctx.showApp();
  await restarted.h.ctx.bvomBb2OpenPreview();
- assert.match(restarted.h.ctx.document.querySelector('#setup').innerHTML,/BODYBUILDING 2 · SETUP/,
+ assert.match(restarted.h.ctx.document.querySelector('#setup').innerHTML,/Bodybuilding 2 — 4-Day Muscle-Building Programme/,
   'BB2 next-workout button opens the existing setup and Start UI');
  restarted.h.ctx.bvomBb2ClosePreview();
  assert.equal(restarted.h.ctx.document.querySelector('#app').classList.contains('hidden'),false,

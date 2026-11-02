@@ -86,6 +86,49 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>{showSetup();showSetup()});
   assert.equal(await page.locator('#setup [data-bb2-preview]').count(),1,'one BB2 button in the standard program chooser');
   assert.equal(await page.locator('#setup [data-bb-program]').count(),1,'BB1 chooser remains available');
+  assert.equal(await page.title(),'BVOM Strength v2.9.22');
+  assert.match(await page.locator('header').textContent(),/v2\.9\.22/);
+  assert.equal(await page.evaluate(()=>BVOM_BUILD),'2.9.22');
+  fs.mkdirSync(screenshots,{recursive:true});
+  for(const lang of ['en','ja']){
+   await page.evaluate(lang=>{changeLanguage(lang);showSetup();showSetup()},lang);
+   const copy=await page.evaluate(()=>bvomBb2ProgrammeInfo());
+   const description=page.locator('#setup [data-bb2-description]');
+   assert.equal(await description.count(),1,'chooser contains one BB2 explanation');
+   assert.ok((await description.textContent()).includes(copy.title));
+   assert.ok((await description.textContent()).includes(copy.body));
+   const typography=await description.locator('b').evaluate(el=>{
+    const other=document.querySelector('#setup [data-bb-description] b');
+    return [getComputedStyle(el).fontSize,getComputedStyle(other).fontSize,
+     getComputedStyle(el).fontWeight,getComputedStyle(other).fontWeight];
+   });
+   assert.equal(typography[0],typography[1]);assert.equal(typography[2],typography[3]);
+   await description.locator('b').scrollIntoViewIfNeeded();
+   await page.screenshot({path:path.join(screenshots,'bb2-programme-selection-'+lang+'-mobile.png')});
+   await page.evaluate(()=>{showApp();renderInfo();activateTab('info')});
+   const help=page.locator('#info [data-bb2-programme-info]');
+   assert.equal(await help.count(),1);
+   assert.ok((await help.textContent()).includes(copy.body));
+   assert.equal(await help.evaluate(el=>el.tagName),'P');
+   assert.equal(await help.locator('b').textContent(),copy.title);
+   assert.equal(await help.evaluate(el=>getComputedStyle(el).fontSize===
+    getComputedStyle(el.closest('.infoCard').querySelector('p')).fontSize),true,
+    'BB2 uses the same Info paragraph typography as the other programmes');
+   await help.scrollIntoViewIfNeeded();
+   await page.screenshot({path:path.join(screenshots,'bb2-programme-help-'+lang+'-mobile.png')});
+   await page.evaluate(()=>showSetup());
+   await page.locator('#setup [data-bb2-preview]').click();
+   await page.waitForSelector('#setup [data-bb2-programme-info]');
+   assert.equal((await page.locator('#setup [data-bb2-programme-info]').textContent()).trim(),copy.body);
+   assert.ok((await page.locator('#setup').textContent()).includes(copy.title));
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,
+    'BB2 explanation fits the 390px mobile viewport');
+   await page.locator('#setup [data-bb2-programme-info]').scrollIntoViewIfNeeded();
+   await page.screenshot({path:path.join(screenshots,'bb2-programme-setup-'+lang+'-mobile.png')});
+   await page.locator('#setup [data-bb2-back]').click();
+  }
+  await page.evaluate(()=>{changeLanguage('en');showSetup()});
+  console.log('PASS v2.9.22 mobile EN/JA programme chooser, setup and Info explanation with matching typography');
   await page.evaluate(()=>{changeLanguage('ja');showSetup()});
   assert.match(await page.locator('#setup [data-bb2-preview]').textContent(),
    /ボディビルディング2/,'BB2 programme entry follows Japanese locale');

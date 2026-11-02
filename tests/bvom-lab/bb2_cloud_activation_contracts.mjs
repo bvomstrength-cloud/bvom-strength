@@ -128,3 +128,23 @@ console.log('PASS BB2 v5: 42 sets, both calf choices, historical Log compatibili
  assert.equal(ui.S().bb2.activeSessionId,'retained-active-workout');
 }
 console.log('PASS unified BVOM Cloud card, errors, conflict actions and existing-program isolation');
+
+// Candidate release markers and shared EN/JA programme information.
+{
+ const info=H.boot(H.loadBuild(root));H.configureLP(info);
+ assert.equal(info.ev('BVOM_BUILD'),'2.9.22');
+ for(const lang of ['en','ja']){
+  info.ctx.__lang=lang;info.ev('state.language=__lang;renderInfo()');
+  const copy=info.ctx.bvomBb2ProgrammeInfo();
+  const help=info.ctx.document.querySelector('#info').innerHTML;
+  assert.ok(help.includes('<p data-bb2-programme-info><b>'+copy.title+'</b><br>'+copy.body+'</p>'));
+  assert.equal(help.split(copy.title).length-1,1,'one programme explanation beside its siblings');
+  info.ctx.__core=core;
+  info.ev('bvomBb2PreviewModule=__core;bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;'+
+   'bvomBb2PreviewDraft=__core.createBB2Setup();bvomBb2RenderPreview()');
+  const setupHtml=info.ctx.document.querySelector('#setup').innerHTML;
+  assert.ok(setupHtml.includes(copy.title));assert.ok(setupHtml.includes(copy.body));
+  if(lang==='en'){assert.match(copy.body,/Monday, Tuesday, Thursday and Friday/);assert.match(copy.body,/Wednesday for recovery/);assert.match(copy.body,/32 qualifying workouts/);}
+ }
+}
+console.log('PASS v2.9.22 candidate and consistent EN/JA programme help/setup copy');

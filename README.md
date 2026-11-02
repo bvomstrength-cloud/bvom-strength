@@ -2,6 +2,14 @@
 
 Production source repository for BVOM Strength.
 
+## Unreleased candidate — v2.9.22 (draft PR #73)
+
+- Continues the accepted BB2 cloud/UI candidate `daab92d57ede34538fb411da3927b7de947ec752`.
+- Adds the EN/JA Bodybuilding 2 programme explanation to programme selection, setup and Info, using existing typography. Describes the four-day schedule, muscle/strength purpose, exercise choices, guided progression, optional recovery sessions and 32 qualifying workouts.
+- Candidate title, header, `BVOM_BUILD`, service-worker registration, worker `BUILD` and cache use **2.9.22**. Test packaging derives its version and isolated source-specific cache from those markers.
+- BB2 cloud integration, programme prescriptions and persisted data formats are unchanged. No merge, deployment or production database change is authorized by this candidate.
+- **Live approved production remains v2.9.21**, recorded below. Physical acceptance and release approval are still required before publishing v2.9.22.
+
 ## Current approved release — v2.9.21
 
 - **GitHub application baseline:** merged `main` application commit `4f31e590e2849580e47d672e32aa1d0e23a18e96` (1 November 2026). Later documentation-only commits may advance `main` without changing deployable application files.
