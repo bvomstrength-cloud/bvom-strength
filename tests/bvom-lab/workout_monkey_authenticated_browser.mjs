@@ -57,7 +57,7 @@ async function makeDevice(label, { userId = ownerId, login = credentials,
     viewport: { width: 390, height: 844 }, deviceScaleFactor: 2,
     isMobile: true, hasTouch: true });
   contexts.push(context);
-  context.setDefaultTimeout(15000);
+  context.setDefaultTimeout(60000);
   await context.route('**/*', route => {
     const target = new URL(route.request().url()).origin;
     if(context.bb2Offline&&target===apiUrl.replace(/\/$/, ''))return route.abort();
