@@ -5253,9 +5253,9 @@ async function bvomBb2OpenPreview(){
   bvomBb2PreviewFromWorkout=fromWorkout;
   bvomBb2PreviewOpen=true;bvomBb2RenderPreview();
  }catch(e){console.error('BB2 setup preview unavailable',e);
-  bvomBeeModal(hlmTxt('BB2 PREVIEW UNAVAILABLE','BB2プレビューを表示できません'),
-   hlmTxt('The development catalogue could not be loaded. Your BVOM data has not changed.',
-    '開発用カタログを読み込めませんでした。BVOMのデータは変更されていません。'));
+  bvomBeeModal(hlmTxt('BB2 UNAVAILABLE','BB2を表示できません'),
+   hlmTxt('The BB2 catalogue could not be loaded. Your BVOM data has not changed.',
+    'BB2カタログを読み込めませんでした。BVOMのデータは変更されていません。'));
  }finally{bvomBb2PreviewLoading=false}
 }
 function bvomBb2RenderPreview(){

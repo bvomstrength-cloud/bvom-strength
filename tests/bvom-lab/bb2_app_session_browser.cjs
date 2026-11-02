@@ -103,7 +103,7 @@ test('real BVOM source mapping is read-only, accounts and document ownership are
   } finally { await p.close(); }
 });
 
-test('real app boots with both BB2 rollout gates shut; no local/cloud mutation', async () => {
+test('explicit disabled-writer controls block without local/cloud mutation', async () => {
   const p = await open();
   try {
     const before = await p.evaluate(() => ({

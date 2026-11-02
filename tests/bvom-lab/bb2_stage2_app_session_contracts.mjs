@@ -35,7 +35,7 @@ test('all documented app, entitlement, window, persistence and cloud fences pass
     { allowed: true, reason: 'eligible' });
 });
 
-test('actual BVOM snapshot tracks account, lock and persisted data; rollout stays off', () => {
+test('actual BVOM snapshot enables transport with live account, lock and data guards', () => {
   const root = path.resolve(import.meta.dirname, '../..');
   const h = H.boot(H.loadBuild(root), { supabase: null, online: false });
   H.configureLP(h);

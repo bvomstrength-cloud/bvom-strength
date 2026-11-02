@@ -77,7 +77,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   'imported developer data cannot hijack the normal Warm-up tab');
  assert.doesNotMatch(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-log/,
   'imported developer data cannot hijack the normal Workout tab');
- console.log('PASS: BB2 development preview not visible on normal or production URLs');
+ console.log('PASS: BB2 normal programme entry is visible without a preview URL');
 }
 
 {

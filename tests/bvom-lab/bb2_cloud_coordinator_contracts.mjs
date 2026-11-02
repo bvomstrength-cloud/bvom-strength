@@ -302,7 +302,7 @@ await check('disabled real-account rollout fence stops read and write before I/O
  assert.equal(db.server.readCount,count);
 });
 
-await check('real BVOM local document adapter preserves cloud exclusion and flags OFF',async()=>{
+await check('real BVOM document adapter preserves legacy isolation and enables revisioned sync',async()=>{
  const h=H.boot(H.loadBuild(root));H.configureLP(h);
  const initial=JSON.stringify(h.ctx.bvomCloudPayload());
  let bridge;
@@ -481,7 +481,7 @@ await check('real BVOM adapter enables isolated local Auth only behind localhost
  assert.equal(adapter.readAppSnapshot().cloudUserId,owner);
 });
 
-await check('normal signed-in BVOM registers an inert production coordinator and revokes it',async()=>{
+await check('normal signed-in BVOM registers its revisioned coordinator and revokes it',async()=>{
  const h=H.boot(H.loadBuild(root));H.configureLP(h);
  let options,networkCalls=0;
  h.ctx.__bb2CloudCoordinatorForTest={createBB2CloudCoordinator:opts=>{
@@ -525,4 +525,4 @@ await check('BVOM account lifecycle catches offline changes and reports conflict
  assert.equal(h.ev('bvomBb2DormantAccountSnapshot().bb2WriterEnabled'),true);
 });
 
-console.log(`BB2 cloud coordinator: ${passed}/${passed} PASS (mock only, rollout OFF)`);
+console.log(`BB2 cloud coordinator: ${passed}/${passed} PASS (mock transport; authenticated proof runs separately)`);

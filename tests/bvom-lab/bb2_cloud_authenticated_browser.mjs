@@ -224,7 +224,7 @@ try {
   const accountId = accountUser.data.user.id;
   const accountPhone = await makeDevice('signed-in phone', {
     userId: accountId, login: accountCredentials, accountFlow: true });
-  await check('BVOM actual sign-in binds the right authenticated account without a writer in production', async () => {
+  await check('BVOM actual sign-in binds the verified account to its revisioned coordinator', async () => {
     const binding = await accountPhone.evaluate(() => ({
       ownerId: bvomBb2AccountBinding?.ownerId,
       verifiedId: bvomCloud.user?.id,
@@ -420,6 +420,8 @@ try {
     const restoreDevice=await makeDevice('older-backup device',{
       userId:accountId,login:accountCredentials,accountFlow:true});
     await restoreDevice.waitForFunction(()=>state.bb2?.cloudSync?.baseline?.revision===5);
+    const beforeRemote=await admin.from('bvom_cloud_state').select('revision,state').eq('user_id',accountId).single();
+    if(beforeRemote.error)throw beforeRemote.error;
     await restoreDevice.evaluate(()=>activateTab('settings'));
     await restoreDevice.locator('#settings input[type="file"]').setInputFiles({
       name:'older-bb2-backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(oldBackup))});
@@ -432,9 +434,14 @@ try {
       bvomCloud.client=client;await bvomCloudInit();
       const result=await client.auth.signInWithPassword(login);if(result.error)throw result.error;
     },{url:apiUrl,key:anonKey,login:accountCredentials});
-    await restoreDevice.waitForFunction(()=>bvomBb2AccountStatus()==='conflict');
+    await restoreDevice.waitForFunction(()=>bvomBb2AccountStatus()==='conflict'||
+      (bvomBb2AccountStatus()==='current'&&state.bb2.cloudSync.baseline.revision===5));
+    if(await restoreDevice.evaluate(()=>bvomBb2AccountStatus()==='current'))
+      assert.equal(await restoreDevice.evaluate(()=>state.bb2.events.filter(e=>e.type==='WORKOUT_FINISHED').length),2,
+        'unchanged old backup safely fast-forwards to the newer cloud history');
     const remote=await admin.from('bvom_cloud_state').select('revision,state').eq('user_id',accountId).single();
     if(remote.error)throw remote.error;
+    assert.deepEqual(remote.data,beforeRemote.data,'old backup cannot modify any newer cloud bytes');
     assert.equal(remote.data.revision,5);
     assert.equal(remote.data.state.snapshot.events.filter(e=>e.type==='WORKOUT_FINISHED').length,2);
     assert.ok(await restoreDevice.evaluate(()=>localStorage.getItem('bvom_pre_restore')),'pre-restore recovery copy retained');
