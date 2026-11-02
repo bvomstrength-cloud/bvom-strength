@@ -557,6 +557,29 @@ try {
     assert.equal(await b.evaluate(()=>JSON.stringify(state.bb2.events)),raw,'second authenticated device receives exact canonical journal');
     await b.evaluate(()=>window.dispatchEvent(new Event('focus')));
     assert.equal(await b.evaluate(()=>state.bb2.events.filter(e=>e.type==='WORKOUT_FINISHED').length),1);
+    // Test interrupted/incomplete recovery separately from the qualifying Finish.
+    await b.evaluate(()=>activateTab('workout'));
+    await b.locator('#workout [data-bb2-next-workout]').click();
+    await b.locator('#setup [data-bb2-day="lower_a"]').click();
+    for(const el of await b.locator('#setup [data-bb2-load]:not([disabled])').all())await el.fill('60');
+    for(const el of await b.locator('#setup [data-bb2-inc]').all())await el.fill('2.5');
+    await b.locator('#setup [data-bb2-start]').click();await recordSet(b,'0|0');
+    const interrupted=await b.evaluate(()=>state.bb2.activeSessionId);
+    await b.reload();await b.waitForSelector('#app:not(.hidden)');
+    await b.waitForSelector('#workout [data-bb2-set="0|0"].done');
+    assert.equal(await b.evaluate(()=>state.bb2.activeSessionId),interrupted,'interrupted sets survive reload');
+    await b.locator('#timerbar .finish').click();
+    await b.locator('.bvomModalOverlay [data-l]').click();
+    assert.equal(await b.evaluate(()=>state.bb2.activeSessionId),interrupted,'Cancel retains interrupted workout');
+    await b.locator('#timerbar .finish').click();
+    await b.locator('.bvomModalOverlay [data-r]').click();
+    await b.locator('.bvomModalOverlay [data-note]').fill('Recovered incomplete session');
+    await b.locator('.bvomModalOverlay [data-save]').click();
+    await b.locator('.bvomModalOverlay [data-ok]').click();
+    assert.equal(await b.evaluate(()=>state.bb2.events.filter(e=>e.type==='CREDIT_GRANTED').length),1);
+    assert.equal(await b.evaluate(()=>state.bb2.events.filter(e=>e.type==='WORKOUT_INCOMPLETE').length),1);
+    await b.locator('.tab[data-tab="history"]').click();
+    assert.match(await b.locator('#history').textContent(),/Recovered incomplete session/);
   });
 
   console.log(`BB2 real app authenticated Chromium: ${passed}/${passed} PASS`);

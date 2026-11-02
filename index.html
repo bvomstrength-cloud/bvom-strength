@@ -6524,17 +6524,9 @@ function bvomBb2Workout(){
  const html=start.slots.map((initial,i)=>{
   const s=bvomBb2WorkingSlot(initial,b.events,b.activeSessionId);
   const key=start.templateId+'|'+s.roleSlotId+'|'+s.exerciseId;
-  const p=projection.progress[key],signal=projection.stallSignals[key];
+  const signal=projection.stallSignals[key];
   const recovery=start.kind==='RECOVERY';
-  const calibration=false;
-  const trial=bvomBb2SessionTrial(s,b.events,b.activeSessionId);
-  const canRevise=bvomBb2CalibrationEligible(s,b.events,b.activeSessionId,projection,start.templateId);
-  const canAccept=calibration&&s.equipment==='loaded'&&
-   bvomBb2CalibrationSetsComplete(s,b.events,b.activeSessionId)&&
-   !b.events.some(e=>e.type==='CALIBRATION_ACCEPTED'&&e.sessionId===b.activeSessionId&&
-    e.roleSlotId===s.roleSlotId);
   const feedback=recovery?hlmTxt('Low-stress preparation: comfortable reps near the bottom of the range, with at least 4 reps in reserve. No progression.','軽めの回復ワークアウト：目標回数の下限付近で余裕を持って行い、余力を4回以上残します。重量は進行しません。'):
-   calibration?hlmTxt('First eligible exposure calibrates this lift; no automatic increase.','初回の対象セッションで使用重量を調整します。自動増量はありません。'):
    signal?.kind==='OFFER'?hlmTxt('Stall review available: load reduction, exercise swap or recovery are optional.','停滞の見直しが可能です。減量、種目変更、回復ワークアウトは任意です。'):
    signal?.kind==='NOTE'?hlmTxt('Three comparable exposures without a new rep best.','同条件の3回のセッションで回数の自己ベストを更新していません。'):
    hlmTxt('Progression is evaluated from completed prescribed sets after Finish.','終了後、完了した予定セットに基づいて進行を判定します。');
@@ -7281,7 +7273,8 @@ function bvomBb2FinishFromControls(){
  const note=outcome=>bvomSessionNoteModal('',text=>{
   try{
    if(!bvomWorkoutActionAllowed()||state.bb2!==b||b.activeSessionId!==sessionId||b.events.length!==head)return;
-   const duration=bvomDuration();
+   const seconds=start.startedAt?Math.max(0,Math.floor((Date.now()-start.startedAt)/1000)):0;
+   const duration=Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');
    if(!bvomBb2End(outcome,{note:text,knownWorkingWeights:true,completedAt:Date.now()})){
     alert(hlmTxt('The workout could not be saved. Your recorded sets are still on this device. Please try Finish again.',
      'ワークアウトを保存できませんでした。記録済みセットはこの端末に保持されています。もう一度FINISHを試してください。'));return;
