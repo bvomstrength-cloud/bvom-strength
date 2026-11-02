@@ -515,7 +515,7 @@ try {
     for(let j=0;j<ticks;j++)await a.locator('#warmup [data-bb2-warm-tick="0|'+j+'"]').click();
     assert.ok(await a.evaluate(()=>state.timerStart>0));
     assert.equal(await a.locator('#timerbar .cancel').isVisible(),true,'shared timer Cancel remains available');
-    assert.equal(await a.locator('.tab[data-tab="workout"]').evaluate(e=>e.classList.contains('active')),true);
+    assert.equal(await a.locator('.tab[data-tab="workout"]').evaluate(e=>e.classList.contains('on')),true);
     assert.equal(await a.evaluate(()=>state.bb2.events.filter(e=>e.type==='SET_RECORDED').length),0);
     const slots=await a.evaluate(()=>state.bb2.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===state.bb2.activeSessionId).slots);
     for(const [i,s]of slots.entries())for(let j=0;j<s.sets;j++){
