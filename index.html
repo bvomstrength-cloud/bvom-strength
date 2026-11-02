@@ -6035,7 +6035,7 @@ function bvomBb2Begin(){
   bvomBb2PreviewOpen=false;bvomBb2PreviewDraft=null;bvomBb2PreviewFromWorkout=false;
   document.querySelector('#setup').classList.add('hidden');
   document.querySelector('#app').classList.remove('hidden');
-  renderAll();return true;
+  renderAll();activateTab('workout');return true;
  }catch(e){console.error('BB2 Start rejected',e);return false}
 }
 // Review is UI-only: neither the completed block nor its setup can change

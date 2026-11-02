@@ -572,7 +572,9 @@ try {
     await b.locator('#setup [data-bb2-day="lower_a"]').click();
     for(const el of await b.locator('#setup [data-bb2-load]:not([disabled])').all())await el.fill('60');
     for(const el of await b.locator('#setup [data-bb2-inc]').all())await el.fill('2.5');
-    await b.locator('#setup [data-bb2-start]').click();await recordSet(b,'0|0');
+    await b.locator('#setup [data-bb2-start]').click();
+    assert.equal(await b.locator('.tab[data-tab="workout"]').evaluate(e=>e.classList.contains('on')),true,'Start opens the new workout from History');
+    await recordSet(b,'0|0');
     const interrupted=await b.evaluate(()=>state.bb2.activeSessionId);
     await b.reload();await b.waitForSelector('#app:not(.hidden)');
     await b.waitForSelector('#workout [data-bb2-set="0|0"].done');

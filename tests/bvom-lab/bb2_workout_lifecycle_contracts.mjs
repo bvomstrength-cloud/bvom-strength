@@ -20,7 +20,9 @@ function boot(previous){
 function start(h){
  h.ev('bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;'+
   'bvomBb2PreviewDraft=__core.createBB2Setup(state.bb2?.setup);bvomBb2PreviewSaved=!!state.bb2?.setup;bvomBb2RenderPreview()');
- assert.equal(h.ctx.bvomBb2SaveSetup(),true);assert.equal(h.ctx.bvomBb2Begin(),true);
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);h.ctx.activateTab('history');
+ assert.equal(h.ctx.bvomBb2Begin(),true);
+ assert.equal(h.ctx.document.querySelector('#workout').classList.contains('hidden'),false,'Start opens Workout even when setup was entered from History');
  return h.S().bb2.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===h.S().bb2.activeSessionId);
 }
 function answerNote(h,text){const o=h.lastOverlay();assert.match(o.innerHTML,/data-note/);o.querySelector('[data-note]').value=text;o.querySelector('[data-save]').onclick();}
