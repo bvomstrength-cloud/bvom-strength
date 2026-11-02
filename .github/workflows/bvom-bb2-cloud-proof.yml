@@ -54,6 +54,31 @@ jobs:
       - name: Verify two authenticated BVOM mobile browser devices
         run: node tests/bvom-lab/bb2_cloud_authenticated_browser.mjs
 
+      - name: Check out exact production v2.9.21 source for isolated comparison
+        uses: actions/checkout@v4
+        with:
+          ref: c22e79e101610c3002929fd1b73fe3530cec0c20
+          path: .bvom-production-v2.9.21
+
+      - name: Verify candidate and production guard counterfactuals
+        run: node tests/bvom-lab/legacy_cloud_pause_contracts.cjs .bvom-production-v2.9.21
+
+      - name: Reproduce five legacy pauses against production code with disposable Auth
+        env:
+          MONKEY_APP_ROOT: .bvom-production-v2.9.21
+          LEGACY_CLOUD_AUDIT: production-v2.9.21
+          MONKEY_OUTPUT: ${{ runner.temp }}/bvom-legacy-production-audit
+          MONKEY_SOURCE: c22e79e101610c3002929fd1b73fe3530cec0c20
+        run: node tests/bvom-lab/workout_monkey_authenticated_browser.mjs
+
+      - name: Preserve production-code comparison traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BVOM-Legacy-Production-Cloud-Audit
+          path: ${{ runner.temp }}/bvom-legacy-production-audit
+          if-no-files-found: warn
+
       - name: Run both seeded five-programme workout journeys
         env:
           MONKEY_OUTPUT: ${{ runner.temp }}/bvom-workout-monkeys

@@ -26,9 +26,9 @@ function knownLoad(profile,id){
 }
 async function stored(p){return p.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')))}
 async function tab(p,name){await p.locator('.tab[data-tab="'+name+'"]').click()}
-async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handleConflict,output,smoke=false,uiOnly=false}){
+async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handleConflict,output,smoke=false,uiOnly=false,legacyAudit=false,auditEvent=null}){
  let lastFinishedSets=0,allowSeal=false,accessoryId;let seed=profile.seed;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296};
- const report={profile:profile.name,bodyweight:profile.bodyweight,seed:profile.seed,mode:uiOnly?'UI-ONLY':smoke?'SMOKE':'FULL',verdict:'RUNNING',counts:{},sets:0,setsByProgramme:{},progression:{increases:0,reductions:0,holds:0,missedRepSets:0,failedAttempts:0,difficultyAccepts:0,difficultyHolds:0},skippedOptionalSets:0,transitions:[],checks:[],workouts:[],actions:[],defects:[]};
+ const report={profile:profile.name,bodyweight:profile.bodyweight,seed:profile.seed,mode:legacyAudit?'LEGACY-AUDIT':uiOnly?'UI-ONLY':smoke?'SMOKE':'FULL',verdict:'RUNNING',counts:{},sets:0,setsByProgramme:{},progression:{increases:0,reductions:0,holds:0,missedRepSets:0,failedAttempts:0,difficultyAccepts:0,difficultyHolds:0},skippedOptionalSets:0,transitions:[],checks:[],workouts:[],actions:[],defects:[]};
  const file=path.join(output,profile.name.toLowerCase()+'.json');
  const write=()=>fs.writeFileSync(file,JSON.stringify(report,null,2));
  const action=label=>{report.actions.push(label);write()};
@@ -127,7 +127,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
    await coreSet(name,i,reps);if(incomplete)break;
   }if(incomplete)break;}
   if(stage==='LP/RPT'&&!incomplete){if(n%3!==0)await accessorySets(n);else{report.skippedOptionalSets+=2;action('Skip two optional bodyweight accessory sets');}}
-  if(n===2){const saved=clone((await stored(p)).session);await p.reload();await p.waitForSelector('#app:not(.hidden)');await p.waitForFunction(()=>bvomWindowLockOwned===true);await reconnect(p);assert.deepEqual((await stored(p)).session,saved);pass(stage+' interrupted workout reload retains actual sets');}
+  if(n===2){const saved=clone((await stored(p)).session);if(auditEvent)await auditEvent(stage,'before_reload');await p.reload();await p.waitForSelector('#app:not(.hidden)');await p.waitForFunction(()=>bvomWindowLockOwned===true);await reconnect(p);assert.deepEqual((await stored(p)).session,saved);if(auditEvent)await auditEvent(stage,'after_reload');pass(stage+' interrupted workout reload retains actual sets');}
   await finish(stage,n,{incomplete});const after=await stored(p);
   for(const name of names){const intermediate=stage==='HLM'||stage==='4-Day Split',a=intermediate?(before.hlm?.nextHeavy?.[name]??before.hlm?.driver?.[name]??before.weights[name]):before.weights[name],b=intermediate?(after.hlm?.nextHeavy?.[name]??after.hlm?.driver?.[name]??after.weights[name]):after.weights[name];report.progression[b>a?'increases':b<a?'reductions':'holds']++;
    if((after.attempts?.[name]||0)>(before.attempts?.[name]||0)||(after.hlm?.failCount?.[name]||0)>(before.hlm?.failCount?.[name]||0))report.progression.failedAttempts++;
@@ -208,7 +208,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
    const target=s.sets[j].maxReps??s.sets[j].target??8,reps=onramp?target:n%6===3?Math.max(1,target-3):target;
    await m.locator('[data-reps]').fill(String(reps));await m.locator('[data-save]').click();await m.waitFor({state:'detached'});report.sets++;if(!onramp&&n%6===3)report.progression.missedRepSets++;await rest(onramp?90:s.numeric&&s.sets.length===3?120:90);
   }
-  if(n===2){const live=clone((await stored(p)).session);await p.reload();await p.waitForSelector('#app:not(.hidden)');await p.waitForFunction(()=>bvomWindowLockOwned);await reconnect(p);assert.deepEqual((await stored(p)).session,live);pass(stage+' interrupted reload preserves all actual sets');}
+  if(n===2){const live=clone((await stored(p)).session);if(auditEvent)await auditEvent(stage,'before_reload');await p.reload();await p.waitForSelector('#app:not(.hidden)');await p.waitForFunction(()=>bvomWindowLockOwned);await reconnect(p);assert.deepEqual((await stored(p)).session,live);if(auditEvent)await auditEvent(stage,'after_reload');pass(stage+' interrupted reload preserves all actual sets');}
   await finish(stage,n,{onramp});
   if(!onramp){const progress=(await stored(p)).bodybuilding.progression;for(const{id}of slots){const now=progress[id],old=priorProgress[id];if(old&&now&&Number.isFinite(old.load)&&Number.isFinite(now.load))report.progression[now.load>old.load?'increases':now.load<old.load?'reductions':'holds']++;}}
   if(!uiOnly)await p.waitForTimeout(1500);await decisions();
@@ -283,7 +283,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   await setup('fourday');for(let n=1;n<=16;n++)await legacyWorkout('4-Day Split',n);await backup('FourDay');
   await bbSetup();for(let n=1;n<=6&&await p.evaluate(()=>bvomBbOnRampActive());n++)await bbWorkout(n,true);
   assert.equal(await p.evaluate(()=>bvomBbOnRampActive()),false,'actual On-Ramp hands off');
-  for(let n=1;n<=24;n++)await bbWorkout(n);assert.equal((await stored(p)).bodybuilding.completedSessions,24);await backup('BB1');
+  for(let n=1;n<=(legacyAudit?2:24);n++)await bbWorkout(n);if(legacyAudit){await backup('BB1-audit');assert.equal(report.watches?.length,5,'all five historical pause boundaries reproduced');report.verdict='WATCH';pass('LEGACY AUDIT ONLY: all five pauses reproduced; not full-journey release evidence');return report}assert.equal((await stored(p)).bodybuilding.completedSessions,24);await backup('BB1');
   await bb2Setup();await bb2Workout('upper_a',0,{incomplete:true});
   for(let week=1;week<=8;week++){
    for(const day of ['upper_a','lower_a','upper_b','lower_b']){const offline=week===3&&day==='lower_a';if(offline&&!uiOnly)await offlineBB2('before',p,report);await bb2Workout(day,week,{threshold:week===2&&day==='upper_a'});if(offline&&!uiOnly)await offlineBB2('after',p,report);}

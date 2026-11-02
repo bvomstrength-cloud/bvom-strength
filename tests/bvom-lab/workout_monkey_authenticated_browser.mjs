@@ -14,7 +14,8 @@ const output=path.resolve(process.env.MONKEY_OUTPUT||'/tmp/bvom-workout-monkeys'
 
 const require = createRequire(import.meta.url);
 const H = require('./lib/bvom_harness');
-const root = path.resolve(import.meta.dirname, '../..');
+const root = path.resolve(process.env.MONKEY_APP_ROOT||path.resolve(import.meta.dirname, '../..'));
+const legacyAudit=process.env.LEGACY_CLOUD_AUDIT==='production-v2.9.21';
 const h = H.boot(H.loadBuild(root)); H.configureLP(h);
 const fixture = JSON.parse(h.ls.getItem('bvom_data'));
 const localStatus = JSON.parse(execFileSync('supabase', ['status', '-o', 'json'],
@@ -92,7 +93,7 @@ async function makeDevice(label, { userId = ownerId, login = credentials,
       if (signed.error) throw signed.error;
     }, { url: apiUrl, key: anonKey, ...login });
     try {
-      await page.waitForFunction(id => bvomBb2AccountBinding?.ownerId === id &&
+      await page.waitForFunction(id => (typeof bvomBb2AccountBinding==='undefined'||bvomBb2AccountBinding?.ownerId === id) &&
         bvomCloud.user?.id === id && window.__bvomAuthUserId === id &&
         bvomCloud.offlineLocalAccess === false, userId);
     } catch (error) {
@@ -103,7 +104,7 @@ async function makeDevice(label, { userId = ownerId, login = credentials,
         entitlement: bvomEntitlement.record?.status,
         accountSwitchDeferred: bvomCloud.accountSwitchDeferred,
         appVisible: !document.querySelector('#app').classList.contains('hidden'),
-        bound: !!bvomBb2AccountBinding
+        bound: typeof bvomBb2AccountBinding!=='undefined'&&!!bvomBb2AccountBinding
       }));
       console.error('Isolated BVOM account binding diagnostic:', state);
       throw error;
@@ -147,13 +148,34 @@ async function signIn(page,login){
 try{
  browser=await chromium.launch({headless:true,args:['--no-sandbox']});
  await Promise.all(profiles.map(async profile=>{
-  const login={email:'journey-'+profile.name.toLowerCase()+'@example.invalid',password:'Disposable-Journey-2026!'};
+  const login={email:(legacyAudit?'audit-production-':'journey-')+profile.name.toLowerCase()+'@example.invalid',password:'Disposable-Journey-2026!'};
   const user=await admin.auth.admin.createUser({...login,email_confirm:true});if(user.error)throw user.error;
   const userId=user.data.user.id;
   const page=await makeDevice(profile.name,{userId,login,accountFlow:true,configured:false});
   const reconnect=p=>signIn(p,login);
 
+  const traces=[];
+  function differences(a,b,prefix=''){
+   if(JSON.stringify(a)===JSON.stringify(b))return [];
+   if(!a||!b||typeof a!=='object'||typeof b!=='object'||Array.isArray(a)||Array.isArray(b))return [prefix];
+   return [...new Set([...Object.keys(a),...Object.keys(b)])].sort().flatMap(k=>differences(a[k],b[k],prefix?prefix+'.'+k:k));
+  }
+  async function auditEvent(stage,event){
+   const q=await admin.from('bvom_data').select('data').eq('user_id',userId).order('created_at',{ascending:false}).limit(1).single();if(q.error)throw q.error;
+   const trace=await page.evaluate(remote=>{
+    const parse=s=>s?JSON.parse(s):null;
+    return {local:parse(bvomCloudComparableFingerprint(bvomCloudPayload())),remote:parse(bvomCloudComparableFingerprint(remote)),
+     baseline:parse(bvomCloud.workoutBaselineFingerprint),remoteFingerprint:parse(bvomCloud.remoteFingerprint),
+     active:bvomStateWorkoutActive(state),syncReady:bvomCloud.syncReady,conflict:bvomCloud.conflict,
+     message:bvomCloud.message,configured:state.configured};
+   },q.data.data);
+   trace.stage=stage;trace.event=event;trace.baselineMatchesRemote=JSON.stringify(trace.baseline)===JSON.stringify(trace.remote);
+   trace.localRemoteDifferences=differences(trace.local,trace.remote);trace.baselineRemoteDifferences=differences(trace.baseline,trace.remote);
+   traces.push(trace);fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-legacy-baseline-trace.json'),JSON.stringify({source:process.env.MONKEY_SOURCE,legacyAudit,traces},null,2));
+   console.log('LEGACY TRACE '+profile.name+' '+stage+' '+event+' '+JSON.stringify({baselinePresent:!!trace.baseline,baselineMatchesRemote:trace.baselineMatchesRemote,localRemoteDifferences:trace.localRemoteDifferences,baselineRemoteDifferences:trace.baselineRemoteDifferences}));
+  }
   async function handleConflict(p,report){
+   await auditEvent((await stored(p)).history.at(-1)?.note||'Bodybuilding On-Ramp','pause');
    const local=await stored(p);assert.equal(await p.evaluate(()=>bvomStateWorkoutActive(state)),false,'only finished sessions can explicitly upload');
    const q=await admin.from('bvom_data').select('data').eq('user_id',userId).order('created_at',{ascending:false}).limit(1).single();if(q.error)throw q.error;
    const history=q.data.data.history;assert.ok(local.history.length>history.length,'explicit recovery requires newly finished local workouts');assert.deepEqual(local.history.slice(0,history.length),history,'every remote workout remains in the local journal');
@@ -252,9 +274,9 @@ try{
    if(label==='BB2-mid')await concurrentCorrections(p,second,report);
    await second.context().close();
   }
-  const report=await runJourney({page,profile,checkpoint,reconnect,offlineBB2,handleConflict,output,smoke});summaries.push(report);
+  const report=await runJourney({page,profile,checkpoint,reconnect,offlineBB2,handleConflict,output,smoke,legacyAudit,auditEvent});summaries.push(report);
  }));
- fs.writeFileSync(path.join(output,'summary.json'),JSON.stringify({source:process.env.MONKEY_SOURCE||'local',smoke,profiles:summaries},null,2));
+ fs.writeFileSync(path.join(output,'summary.json'),JSON.stringify({source:process.env.MONKEY_SOURCE||'local',smoke,legacyAudit,profiles:summaries},null,2));
  for(const r of summaries)console.log('MONKEY RESULT '+r.profile+' '+r.verdict+' '+JSON.stringify({counts:r.counts,sets:r.sets,setsByProgramme:r.setsByProgramme,progression:r.progression,skippedOptionalSets:r.skippedOptionalSets,restSecondsSimulated:r.restSecondsSimulated,sealedBlocks:r.sealedBlocks,transitions:r.transitions,checks:r.checks.length,watches:r.watches||[],defects:r.defects}));
  if(summaries.some(r=>r.verdict==='FAIL'))process.exitCode=1;
 }finally{
