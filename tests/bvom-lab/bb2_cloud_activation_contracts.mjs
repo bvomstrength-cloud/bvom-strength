@@ -94,5 +94,26 @@ console.log('PASS BB2 v5: 42 sets, both calf choices, historical Log compatibili
  assert.match(ui.ctx.bvomCloudStatusText(),/Cloud and device match/,'unused BB2 transport does not change other programme status');
  ui.ev('bvomBb2AccountBinding=null');
  assert.doesNotMatch(ui.ctx.bvomCloudCard(),/data-cloud-programme-notice/);
+ // A legacy conflict blocks the BB2 coordinator. The common Restore action
+ // must resolve that legacy boundary first, rather than trapping both copies.
+ let legacyLookups=0,programmeRecoveries=0;
+ ui.ctx.__client={from(){legacyLookups++;throw Error('isolated lookup stopped')}};
+ ui.ctx.bvomBb2AccountUseCloud=()=>{programmeRecoveries++};
+ ui.ev("state.bb2={setup:__setup};bvomCloud.client=__client;bvomCloud.offlineLocalAccess=false;"+
+  "bvomCloud.accountSwitchDeferred=false;bvomCloud.conflict=true;"+
+  "bvomBb2AccountBinding={lastDownload:{status:'conflict'},lastUpload:null,syncing:false}");
+ assert.match(ui.ctx.bvomCloudCard(),/Resolve the other saved-data conflict first/);
+ await ui.ctx.bvomCloudRestore();
+ assert.equal(legacyLookups,1,'legacy recovery remains reachable with simultaneous conflicts');
+ assert.equal(programmeRecoveries,0);
+ ui.ev('bvomCloud.conflict=false');
+ await ui.ctx.bvomCloudRestore();
+ assert.equal(programmeRecoveries,1,'programme-only conflict uses the same Restore action');
+ ui.ev("state.bb2.activeSessionId='retained-active-workout'");
+ await ui.ctx.bvomCloudRestore();
+ assert.match(ui.ev('bvomCloud.message'),/Finish the current workout/);
+ assert.equal(programmeRecoveries,1,'active workout never enters conflict replacement');
+ assert.equal(legacyLookups,1,'active workout never fetches a replacement');
+ assert.equal(ui.S().bb2.activeSessionId,'retained-active-workout');
 }
 console.log('PASS unified BVOM Cloud card, errors, conflict actions and existing-program isolation');

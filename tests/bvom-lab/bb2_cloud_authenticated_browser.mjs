@@ -463,7 +463,12 @@ try {
   });
 
   await check('shared cloud controls safely retry and confirm BB2 conflict recovery', async () => {
-    const loser=await accountPhone.evaluate(()=>bvomBb2AccountStatus()==='conflict')?accountPhone:peer;
+    // Identify the losing journal by its durable revision, not a transient
+    // status that focus/network retries may have changed since the race.
+    const loser=await accountPhone.evaluate(()=>state.bb2.cloudSync.baseline.revision===4)?accountPhone:peer;
+    loser.context().bb2Offline=false;
+    await loser.evaluate(()=>window.dispatchEvent(new Event('online')));
+    await loser.waitForFunction(()=>bvomBb2AccountStatus()==='conflict'&&!bvomBb2AccountBinding.syncing);
     const remoteBefore=await admin.from('bvom_cloud_state').select('revision,state').eq('user_id',accountId).single();
     if(remoteBefore.error)throw remoteBefore.error;
     await loser.locator('#bvomCloudConflictOverlay [data-settings]').click();

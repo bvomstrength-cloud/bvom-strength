@@ -5683,7 +5683,9 @@ function bvomBb2CloudStatusText(){
 }
 function bvomBb2CloudNotice(){
  if(!bvomBb2CloudRelevant())return '';
- const message={
+ const message=bvomCloud.conflict&&bvomBb2AccountStatus()==='conflict'?hlmTxt(
+  'Bodybuilding 2 also has conflicting changes. Both journals are preserved. Resolve the other saved-data conflict first; Bodybuilding 2 will then be checked again.',
+  'ボディビルディング2にも変更の競合があります。両方の記録は保持されています。先に他の保存データの競合を解決してください。その後、ボディビルディング2を再確認します。'):{
   conflict:hlmTxt('Bodybuilding 2 has different changes on this device and in BVOM Cloud. Both copies are preserved. Export a backup using Backup / Restore below. Use Cloud Copy offers a confirmed replacement of Bodybuilding 2 only; Sync Now retries safely without overwriting the other journal.',
    'この端末とBVOMクラウドに異なるボディビルディング2の変更があります。両方のデータは保持されています。下のバックアップ／復元からバックアップを書き出してください。「クラウドのデータを使用」はボディビルディング2のみの置き換えを確認します。「今すぐ同期」は別の記録を上書きせず安全に再試行します。'),
   uncertain:hlmTxt('Bodybuilding 2 saving could not be confirmed. Keep this device’s data. BVOM will retry when connected.',
@@ -5702,7 +5704,7 @@ bvomCloudSaveNow=async function(...args){
 };
 const bvomBb2BaseCloudRestore=bvomCloudRestore;
 bvomCloudRestore=async function(...args){
- if(!bvomCloud.offlineLocalAccess&&!bvomCloud.accountSwitchDeferred&&bvomBb2CloudRelevant()&&bvomBb2AccountStatus()==='conflict'){
+ if(!bvomAnyWorkoutActive()&&!bvomCloud.conflict&&!bvomCloud.offlineLocalAccess&&!bvomCloud.accountSwitchDeferred&&bvomBb2CloudRelevant()&&bvomBb2AccountStatus()==='conflict'){
   bvomBb2AccountUseCloud();return;
  }
  return bvomBb2BaseCloudRestore(...args);
