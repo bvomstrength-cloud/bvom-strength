@@ -28,7 +28,7 @@ async function stored(p){return p.evaluate(()=>JSON.parse(localStorage.getItem('
 async function tab(p,name){await p.locator('.tab[data-tab="'+name+'"]').click()}
 async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handleConflict,output,smoke=false,uiOnly=false}){
  let lastFinishedSets=0,allowSeal=false,accessoryId;let seed=profile.seed;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296};
- const report={profile:profile.name,bodyweight:profile.bodyweight,seed:profile.seed,mode:uiOnly?'UI-ONLY':smoke?'SMOKE':'FULL',verdict:'RUNNING',counts:{},sets:0,setsByProgramme:{},progression:{increases:0,reductions:0,holds:0,missedRepSets:0,failedAttempts:0},skippedOptionalSets:0,transitions:[],checks:[],workouts:[],actions:[],defects:[]};
+ const report={profile:profile.name,bodyweight:profile.bodyweight,seed:profile.seed,mode:uiOnly?'UI-ONLY':smoke?'SMOKE':'FULL',verdict:'RUNNING',counts:{},sets:0,setsByProgramme:{},progression:{increases:0,reductions:0,holds:0,missedRepSets:0,failedAttempts:0,difficultyAccepts:0,difficultyHolds:0},skippedOptionalSets:0,transitions:[],checks:[],workouts:[],actions:[],defects:[]};
  const file=path.join(output,profile.name.toLowerCase()+'.json');
  const write=()=>fs.writeFileSync(file,JSON.stringify(report,null,2));
  const action=label=>{report.actions.push(label);write()};
@@ -109,6 +109,13 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   const before=await stored(p);if(n===1||n%4===0)await warm(stage);
   if(stage==='LP/RPT'&&n===6){await tab(p,'workout');await p.locator('#work-Squat .weight').click();await p.locator('.bvomModalOverlay [data-w]').fill(String(before.weights.Squat*.9));await p.locator('.bvomModalOverlay [data-s]').click();action('Manual 10% Squat deload after repeated failed targets');}
 
+  if(stage==='LP/RPT'&&n===6){
+   const prior=await stored(p),attempts=prior.attempts.Deadlift||0;assert.ok(attempts>0,'increment edit genuinely follows an unsuccessful Deadlift exposure');
+   await tab(p,'settings');const details=p.locator('details').filter({has:p.locator('#incDeadlift')});if(!await details.evaluate(e=>e.open))await details.locator('summary').click();
+   await p.locator('#incDeadlift').selectOption('2.5');await p.locator('button[onclick="saveLiftSettings(\'Deadlift\')"]').click();await decisions();
+   assert.equal((await stored(p)).attempts.Deadlift,attempts,'increment-only edit preserves earned failure attempts');assert.deepEqual((await stored(p)).history,prior.history);
+   pass('mid-journey increment change preserves the existing failed-attempt count');if(!uiOnly)await p.waitForTimeout(1500);await decisions();await tab(p,'workout');
+  }
   const names=await p.evaluate(()=>program().map(x=>x[0]));
   for(const name of names){
    await tab(p,'workout');const skip=p.locator('#workout button[onclick="skipOptionalSingle(\''+name+'\')"]');
@@ -122,7 +129,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   if(stage==='LP/RPT'&&!incomplete){if(n%3!==0)await accessorySets(n);else{report.skippedOptionalSets+=2;action('Skip two optional bodyweight accessory sets');}}
   if(n===2){const saved=clone((await stored(p)).session);await p.reload();await p.waitForSelector('#app:not(.hidden)');await p.waitForFunction(()=>bvomWindowLockOwned===true);await reconnect(p);assert.deepEqual((await stored(p)).session,saved);pass(stage+' interrupted workout reload retains actual sets');}
   await finish(stage,n,{incomplete});const after=await stored(p);
-  for(const name of names){const a=before.hlm?.driver?.[name]&&stage!=='LP/RPT'?before.hlm.driver[name]:before.weights[name],b=after.hlm?.nextHeavy?.[name]&&stage!=='LP/RPT'?after.hlm.nextHeavy[name]:after.weights[name];report.progression[b>a?'increases':b<a?'reductions':'holds']++;
+  for(const name of names){const intermediate=stage==='HLM'||stage==='4-Day Split',a=intermediate?(before.hlm?.nextHeavy?.[name]??before.hlm?.driver?.[name]??before.weights[name]):before.weights[name],b=intermediate?(after.hlm?.nextHeavy?.[name]??after.hlm?.driver?.[name]??after.weights[name]):after.weights[name];report.progression[b>a?'increases':b<a?'reductions':'holds']++;
    if((after.attempts?.[name]||0)>(before.attempts?.[name]||0)||(after.hlm?.failCount?.[name]||0)>(before.hlm?.failCount?.[name]||0))report.progression.failedAttempts++;
   }
 
@@ -188,8 +195,8 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   const stage=onramp?'BB1 On-Ramp':'BB1',priorProgress=clone((await stored(p)).bodybuilding.progression);action(stage+' '+n+' begin');await decisions();await tab(p,'workout');
   for(let k=0;k<12;k++){
    const card=p.locator('#workout [data-bb-difficulty]').first();if(!await card.count())break;const id=await card.getAttribute('data-bb-difficulty');
-   if(n%4===0){await card.locator('button[onclick="bvomBbDifficultyHold(\''+id+'\')"]').click();action('HOLD earned bodyweight difficulty '+id);}
-   else{await card.locator('button[onclick="bvomBbDifficultyAccept(\''+id+'\')"]').click();const m=p.locator('.bvomModalOverlay').last();await m.locator('[data-difficulty-value]').fill('chosen band assistance '+n);await m.locator('[data-accept]').click();action('ACCEPT explicit bodyweight assistance change '+id);}
+   if(n%4===0){await card.locator('button[onclick="bvomBbDifficultyHold(\''+id+'\')"]').click();report.progression.difficultyHolds++;action('HOLD earned bodyweight difficulty '+id);}
+   else{await card.locator('button[onclick="bvomBbDifficultyAccept(\''+id+'\')"]').click();const m=p.locator('.bvomModalOverlay').last();await m.locator('[data-difficulty-value]').fill('chosen band assistance '+n);await m.locator('[data-accept]').click();report.progression.difficultyAccepts++;action('ACCEPT explicit bodyweight assistance change '+id);}
   }
   if(n===1&&!onramp)await warm(stage);
   const slots=await p.evaluate(onramp=>{const ss=onramp?bvomBbOnRampSlots(bvomBbOnRampDay()):bvomBbSlotsForDay(bvomBbDay());return ss.map(slot=>{const id=state.bodybuilding.selections[slot];return {slot,id,numeric:bvomBbNumericExercise(id),equipment:BVOM_BB_EXERCISES[id].equipment,sets:onramp?Array.from({length:bvomBbOnRampSetCount(id)},()=>({maxReps:bvomBbOnRampTarget(id)[1]})):bvomBbPrescription(id).sets}})},onramp);
@@ -203,7 +210,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   }
   if(n===2){const live=clone((await stored(p)).session);await p.reload();await p.waitForSelector('#app:not(.hidden)');await p.waitForFunction(()=>bvomWindowLockOwned);await reconnect(p);assert.deepEqual((await stored(p)).session,live);pass(stage+' interrupted reload preserves all actual sets');}
   await finish(stage,n,{onramp});
-  if(!onramp)for(const[id,now]of Object.entries((await stored(p)).bodybuilding.progression)){const old=priorProgress[id];if(old&&Number.isFinite(old.load)&&Number.isFinite(now.load))report.progression[now.load>old.load?'increases':now.load<old.load?'reductions':'holds']++;}
+  if(!onramp){const progress=(await stored(p)).bodybuilding.progression;for(const{id}of slots){const now=progress[id],old=priorProgress[id];if(old&&now&&Number.isFinite(old.load)&&Number.isFinite(now.load))report.progression[now.load>old.load?'increases':now.load<old.load?'reductions':'holds']++;}}
   if(!uiOnly)await p.waitForTimeout(1500);await decisions();
  }
  async function bb2Setup(){
@@ -263,7 +270,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   if(incomplete||kind==='RECOVERY')assert.deepEqual(after.progress,recoveryBefore||before.progress,'incomplete/recovery cannot progress loads');
   else {
    for(const [i,s]of slots.entries())if(s.equipment==='loaded'&&selected.filter(x=>x.i===i).length===s.sets&&n%5!==3&&n%5!==4){const key=day+'|'+s.roleSlotId+'|'+s.exerciseId;assert.equal(after.progress[key].loadG,s.plannedG+s.incrementG,'complete on-plan ceiling sets earn exactly one increment per exercise/slot');}
-   for(const [key,v]of Object.entries(after.progress)){const old=before.progress[key]?.loadG;if(old!=null&&v.loadG!=null)report.progression[v.loadG>old?'increases':v.loadG<old?'reductions':'holds']++;}
+   for(const s of slots.filter(s=>s.equipment==='loaded'&&selected.some(x=>x.s.roleSlotId===s.roleSlotId))){const key=day+'|'+s.roleSlotId+'|'+s.exerciseId,v=after.progress[key],old=before.progress[key]?.loadG;if(old!=null&&v?.loadG!=null)report.progression[v.loadG>old?'increases':v.loadG<old?'reductions':'holds']++;}
   }
  }
  try{
