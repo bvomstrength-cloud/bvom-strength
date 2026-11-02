@@ -49,4 +49,23 @@ assert.doesNotMatch(html,/cloud.*disabled|not sent to BVOM Cloud|SETUP PREVIEW/)
 assert.equal(h.ctx.bvomBb2SaveSetup(),true);
 assert.equal(h.S().bb2.setup.catalogueVersion,5);
 assert.equal(h.ctx.bvomCloudPayload().bb2,undefined,'legacy clients cannot overwrite BB2 storage');
+// JSONB reorders object keys. A downloaded setup is semantically unchanged,
+// and must remain idempotent to Save and trainable without rewriting history.
+h.ev('state.bb2.setup=JSON.parse(bvomCloudStable(state.bb2.setup));save({durable:true,localOnly:true});'+
+ 'bvomBb2PreviewDraft=__core.createBB2Setup(state.bb2.setup);bvomBb2PreviewSaved=true');
+const raw=h.ls.getItem('bvom_data');
+assert.equal(h.ctx.bvomBb2SaveSetup(),true);
+assert.equal(h.ls.getItem('bvom_data'),raw,'cloud key order must not cause an unnecessary setup write');
+const query=h.ctx.document.querySelector;
+h.ctx.document.querySelector=selector=>{
+ if(/data-bb2-load=/.test(selector))return {value:'60'};
+ if(/data-bb2-inc=/.test(selector))return {value:'2.5'};
+ return query(selector);
+};
+h.ev("bvomBb2PreviewDraft=__core.BB2_BROWSER_MODULES.catalogue.chooseBB2Exercise(bvomBb2PreviewDraft,'upper_a','flat_press','dumbbell_flat_press')");
+assert.equal(h.ctx.bvomBb2Begin(),false,'a genuinely unsaved exercise change still blocks Start');
+assert.equal(h.ls.getItem('bvom_data'),raw);
+h.ev('bvomBb2PreviewDraft=__core.createBB2Setup(state.bb2.setup)');
+assert.equal(h.ctx.bvomBb2Begin(),true,'a downloaded JSONB setup can start offline');
+assert.ok(h.S().bb2.activeSessionId);
 console.log('PASS BB2 v5: 42 sets, both calf choices, historical Log compatibility, normal entry, setup explanation and legacy transport isolation');

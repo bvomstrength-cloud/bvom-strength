@@ -5326,7 +5326,7 @@ function bvomBb2SaveSetup(){
     !bvomWorkoutActionAllowed()||bvomStateWorkoutActive(state))return false;
  bvomBb2PreviewModule.validateBB2Setup(bvomBb2PreviewDraft);
  const snapshot=JSON.parse(JSON.stringify(bvomBb2PreviewDraft));
- if(JSON.stringify(state.bb2?.setup)===JSON.stringify(snapshot)){
+ if(bvomCloudStable(state.bb2?.setup)===bvomCloudStable(snapshot)){
   bvomBb2PreviewSaved=true;bvomBb2RenderPreview();return true;
  }
  const before=state.bb2;
@@ -5930,7 +5930,9 @@ function bvomBb2Begin(){
     !bvomBb2PreviewModule||!bvomWorkoutActionAllowed()||bvomStateWorkoutActive(state)||
     state.programMode!==bvomBb2PreviewOriginalMode)return false;
  const m=bvomBb2PreviewModule,old=state.bb2;
- if(!old?.setup||JSON.stringify(old.setup)!==JSON.stringify(bvomBb2PreviewDraft))return false;
+ // Supabase JSONB may reorder keys. Compare content, preserving the guard
+ // against genuinely unsaved exercise/optional-curl edits after download.
+ if(!old?.setup||bvomCloudStable(old.setup)!==bvomCloudStable(bvomBb2PreviewDraft))return false;
  try{
   const opening=old.opening||m.createBB2Opening({
    ownerId:localStorage.getItem(BVOM_DATA_OWNER_KEY)||'bb2-test-owner',

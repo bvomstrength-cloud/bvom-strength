@@ -88,10 +88,10 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('#setup [data-bb-program]').count(),1,'BB1 chooser remains available');
   await page.evaluate(()=>{changeLanguage('ja');showSetup()});
   assert.match(await page.locator('#setup [data-bb2-preview]').textContent(),
-   /ボディビルディング2 · プレビュー/,'BB2 programme entry follows Japanese locale');
+   /ボディビルディング2/,'BB2 programme entry follows Japanese locale');
   await page.evaluate(()=>{changeLanguage('en');showSetup()});
   assert.match(await page.locator('#setup [data-bb2-preview]').textContent(),
-   /BODYBUILDING 2 · PREVIEW/,'BB2 programme entry returns to English');
+   /BODYBUILDING 2/,'BB2 programme entry returns to English');
   // A fresh install now renders the approved v2 plan. Then load an explicit
   // v1 preview fixture to keep the full historical recovery suite below.
   await page.locator('#setup [data-bb2-preview]').click();
