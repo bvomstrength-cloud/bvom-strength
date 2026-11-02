@@ -11,6 +11,7 @@ const H=require('./lib/bvom_harness');
 const path=require('node:path');
 const root=path.resolve(import.meta.dirname,'../..');
 
+function openHistory(h){h.ev('bvomExpandedHistoryIndex=bvomBb2HistoryRef(bvomBb2HistoryProjection().rows.at(-1));renderHistory()')}
 function fixture({ls}={}){
  const h=H.boot(H.loadBuild(root),ls?{ls}:{});if(!ls)H.configureLP(h);
  h.ctx.__bb2PortableCatalogueForTest={validateBB2PortableCatalogue,
@@ -650,6 +651,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(p.history[0].validCount,2,'only prescribed sets count');
  assert.equal(p.history[0].sets.filter(s=>!s.prescribed).length,31,
   'all permitted extra sets remain in History');
+ openHistory(h);
  assert.match(h.ctx.document.querySelector('#history').innerHTML,/EXTRA SET/,
   'the shared History labels logged extra work');
  assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
@@ -736,6 +738,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(proj.history[0].validCount,9);
  assert.equal(state.history.length,JSON.parse(before).history.length,'legacy History stays byte-level separate');
  assert.match(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-history-section/);
+ openHistory(h);
  assert.match(h.ctx.document.querySelector('#history').innerHTML,/Credit awarded/);
  assert.match(h.ctx.document.querySelector('#history').innerHTML,/CURRENT BB2 WORKING PLANS/);
  assert.match(h.ctx.document.querySelector('#history').innerHTML,/Bench Press: 60 kg/,
@@ -1441,10 +1444,13 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ctx.bvomBb2End('FINISH'),true);
  const original=h.S().bb2.events.find(e=>e.type==='SET_RECORDED');
  const persisted=h.ls.getItem('bvom_data');
- assert.match(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-correct-save="0\|0"/);
- assert.match(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-correct-actual="0\|0"/);
- assert.match(h.ctx.document.querySelector('#history').innerHTML,/class="warmrow bb2HistoryCorrection"/,
-  'BB2 History correction uses its own responsive row instead of generic warm-up grid');
+ openHistory(h);
+ assert.match(h.ctx.document.querySelector('#history').innerHTML,/EDIT SETS/);
+ assert.doesNotMatch(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-correct-save/,'History summaries do not contain inline correction forms');
+ assert.equal(h.ctx.bvomBb2HistoryEditSets(0),true);
+ assert.match(h.lastOverlay().innerHTML,/data-bb2-correct-save="0\|0"/);
+ assert.match(h.lastOverlay().innerHTML,/data-bb2-correct-actual="0\|0"/);
+ h.lastOverlay().remove();
  h.ctx.__bb2Correction.reps='0';
  assert.equal(h.ctx.bvomBb2CorrectSet(0,0),false,'invalid zero-rep edit refused');
  assert.match(notice,/whole rep count of at least 1/,'F3 invalid correction explains the valid range');
@@ -1500,7 +1506,8 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ctx.bvomBb2CorrectSet(0,0),false,'blank actual refused');
  assert.equal(h.ls.getItem('bvom_data'),beforeInvalid,'invalid mass cannot write');
  h.ctx.__bb2Correction.actual=h.ctx.bvomBb2DisplayLoad(correct.actualG);
- assert.match(h.ctx.document.querySelector('#history').innerHTML,/7 reps/,'History rerenders corrected set');
+ openHistory(h);
+ assert.match(h.ctx.document.querySelector('#history').innerHTML,/7×/,'shared History rerenders corrected set');
  h.ctx.__bb2Correction.reps='6';
  const success=h.ls.getItem('bvom_data'),setItem=h.ls.setItem;
  h.ls.setItem=(key,value)=>{if(key==='bvom_data')throw Error('simulated disk full');return setItem(key,value)};
@@ -1538,7 +1545,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   assert.equal(h.ctx.bvomBb2Log(i,j),true);
  assert.equal(h.ctx.bvomBb2VoidSet(0,8),false,'cannot void an active workout set');
  assert.equal(h.ctx.bvomBb2End('FINISH'),true);
- assert.match(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-void-save="0\|8"/);
+ openHistory(h);assert.match(h.ctx.document.querySelector('#history').innerHTML,/EDIT SETS/);
  const beforeVoid=h.ls.getItem('bvom_data'),events=h.S().bb2.events;
  h.ctx.confirm=()=>false;
  assert.equal(h.ctx.bvomBb2VoidSet(0,8),false,'cancelled destructive action does not write');
@@ -1562,6 +1569,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(projection.progress['upper_a|'+first.roleSlotId+'|'+first.exerciseId]?.calibrated??false,false,
   'credit-revoking correction also retracts its progression and calibration evidence');
  assert.equal(h.ctx.bvomBb2VoidSet(0,8),false,'removed set cannot be voided twice');
+ openHistory(h);
  assert.match(h.ctx.document.querySelector('#history').innerHTML,/8\/12 prescribed sets/);
  assert.doesNotMatch(h.ctx.document.querySelector('#history').innerHTML,/Credit awarded/);
  const persisted=h.ls.getItem('bvom_data'),setItem=h.ls.setItem;
@@ -1627,7 +1635,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   assert.equal(h.ctx.bvomBb2Log(i,j),true);
  assert.equal(h.ctx.bvomBb2VoidSession(0),false,'cannot retrospectively void while a workout is active');
  assert.equal(h.ctx.bvomBb2End('FINISH'),true);
- assert.match(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-void-session="0"/);
+ openHistory(h);assert.match(h.ctx.document.querySelector('#history').innerHTML,/DELETE WORKOUT/);
  const original=h.S().bb2,raw=h.ls.getItem('bvom_data');
  h.ctx.confirm=()=>false;
  assert.equal(h.ctx.bvomBb2VoidSession(0),false,'cancelled workout removal writes nothing');

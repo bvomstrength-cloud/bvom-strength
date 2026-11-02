@@ -26,10 +26,11 @@ async function recordBB2Set(page,key,reps,{opened=false,actual}={}){
  await page.locator('.bvomModalOverlay [data-save]').click();
  await page.locator('.bvomModalOverlay').waitFor({state:'detached'});
 }
-async function expandHistory(page){const summary=page.locator('#history .bb2HistoryDetails:not([open]) > summary').first();if(await summary.count())await summary.click()}
+async function expandHistory(page){await page.evaluate(()=>activateTab('history'));const summary=page.locator('#history [data-bb2-history] .histSummary[aria-expanded="false"]').first();if(await summary.count())await summary.click()}
+async function editHistorySets(page){if(!await page.locator('[data-history-correction]').count()){await expandHistory(page);await page.locator('#history [onclick="bvomBb2HistoryEditSets(0)"]').click()}}
 async function assertMobileCorrectionLayout(page,language){
- await expandHistory(page);
- const bounds=await page.locator('#history .bb2HistoryCorrection').first().evaluate(row=>{
+ await editHistorySets(page);
+ const bounds=await page.locator('[data-history-correction] .bb2HistoryCorrection').first().evaluate(row=>{
   const rect=el=>{const r=el.getBoundingClientRect();return {
    left:r.left,right:r.right,top:r.top,width:r.width,height:r.height};};
   return {row:rect(row),scrollWidth:row.scrollWidth,clientWidth:row.clientWidth,
@@ -430,6 +431,7 @@ const server=http.createServer((req,res)=>{
   await page.waitForSelector('#timerbar .finish:not([disabled])');
   await page.evaluate(()=>bvomBb2End('FINISH'));
   await page.waitForSelector('#history [data-bb2-history]',{state:'attached'});
+  await expandHistory(page);
   const finished=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
   assert.equal(finished.bb2.activeSessionId,null);
   assert.equal(finished.timerStart,null,'Finish atomically stops the running rest clock');
@@ -440,15 +442,18 @@ const server=http.createServer((req,res)=>{
    'after Finish, the normal Workout tab offers the next BB2 workout');
   assert.equal(finished.history.length,fixture.history.length,'legacy History unchanged after BB2 Finish');
   assert.equal(await page.evaluate(()=>bvomBb2End('FINISH')),false,'repeat Finish is idempotent');
+  await expandHistory(page);
   assert.match(await page.locator('#history').textContent(),/Credit awarded/);
   await page.evaluate(()=>activateTab('history'));
   await page.evaluate(()=>changeLanguage('ja'));
   await page.waitForSelector('#history [data-bb2-history]');
   const jaHistory=await page.locator('#history [data-bb2-history]').first().textContent();
   assert.match(jaHistory,/クレジット獲得/,'BB2 History credit and status show Japanese labels');
-  assert.match(jaHistory,/セットを修正/,'BB2 History correction controls localise');
-  assert.match(jaHistory,/実際の重量を修正/,'BB2 actual-load corrections localise');
+  assert.match(jaHistory,/セットを編集/,'shared History offers the localised set editor');
   await assertMobileCorrectionLayout(page,'Japanese 390px');
+  assert.match(await page.locator('[data-history-correction]').textContent(),/セットを修正/);
+  assert.match(await page.locator('[data-history-correction]').textContent(),/実際の重量を修正/);
+  await page.locator('[data-history-correction] [data-close]').click();
   assert.match(jaHistory,/ワークアウトを削除/,'BB2 History removal controls localise');
   assert.match(await page.locator('#history').textContent(),/BB2の現在の使用重量と設定/);
   const japaneseHistoryWidth=await page.locator('#history [data-bb2-history]').first().boundingBox();
@@ -458,27 +463,28 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>changeLanguage('en'));
   await page.evaluate(()=>activateTab('history'));
   await assertMobileCorrectionLayout(page,'English 390px');
-  const correction=page.locator('#history [data-bb2-correct-reps="0|0"]');
+  const correction=page.locator('[data-history-correction] [data-bb2-correct-reps="0|0"]');
   await correction.fill('0');
   const invalidRaw=await page.evaluate(()=>localStorage.getItem('bvom_data'));
   const invalidDialog=page.waitForEvent('dialog');
-  const invalidClick=page.locator('#history [data-bb2-correct-save="0|0"]').click();
+  const invalidClick=page.locator('[data-history-correction] [data-bb2-correct-save="0|0"]').click();
   const invalidNotice=await invalidDialog;
   assert.match(invalidNotice.message(),/whole rep count of at least 1/);await invalidNotice.accept();await invalidClick;
   assert.equal(await page.evaluate(()=>localStorage.getItem('bvom_data')),invalidRaw);
   await correction.fill('7');
-  await page.locator('#history [data-bb2-correct-hard="0|0"]').check();
-  await page.locator('#history [data-bb2-correct-save="0|0"]').click();
+  await page.locator('[data-history-correction] [data-bb2-correct-hard="0|0"]').check();
+  await page.locator('[data-history-correction] [data-bb2-correct-save="0|0"]').click();
   assert.equal(await page.evaluate(()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
    const e=b.events.at(-1);
    return e.type==='SET_CORRECTED'&&e.reps===7&&e.harderThanIntended&&
     e.actualG===undefined&&b.events.filter(x=>x.type==='CREDIT_GRANTED').length===1;
   }),true,'real History correction is one ledger event and cannot duplicate credit');
-  const actual=page.locator('#history [data-bb2-correct-actual="0|0"]');
+  await editHistorySets(page);
+  const actual=page.locator('[data-history-correction] [data-bb2-correct-actual="0|0"]');
   const priorActual=Number(await actual.inputValue());
   await actual.fill(String(priorActual+1));
-  await page.locator('#history [data-bb2-correct-save="0|0"]').click();
+  await page.locator('[data-history-correction] [data-bb2-correct-save="0|0"]').click();
   assert.equal(await page.evaluate(()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
    const e=b.events.at(-1);
@@ -488,16 +494,19 @@ const server=http.createServer((req,res)=>{
     p.history[0].sets[0].actualG===e.actualG&&
     b.events.filter(x=>x.type==='CREDIT_GRANTED').length===1;
   }),true,'real actual-load History correction preserves audit provenance and credit');
-  assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/7 reps/);
+  assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/7×/);
+  await editHistorySets(page);
   const correctedRaw=await page.evaluate(()=>localStorage.getItem('bvom_data'));
-  await page.locator('#history [data-bb2-correct-save="0|0"]').click();
+  await page.locator('[data-history-correction] [data-bb2-correct-save="0|0"]').click();
   assert.equal(await page.evaluate(()=>localStorage.getItem('bvom_data')),correctedRaw,
    'unchanged History correction writes nothing');
   assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
   await page.reload();
   await page.waitForSelector('#history [data-bb2-history]',{state:'attached'});
+  await expandHistory(page);
+  await expandHistory(page);
   assert.match(await page.locator('#history').textContent(),/Credit awarded/);
-  assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/7 reps/,
+  assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/7×/,
    'completed History corrections survive actual browser reload');
   assert.equal(await page.evaluate(()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
@@ -508,8 +517,9 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
   await page.evaluate(()=>activateTab('history'));
   await expandHistory(page);
+  await editHistorySets(page);
   page.once('dialog',dialog=>dialog.accept());
-  await page.locator('#history [data-bb2-void-save="0|8"]').click();
+  await page.locator('[data-history-correction] [data-bb2-void-save="0|8"]').click();
   assert.equal(await page.evaluate(async()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
    const tail=b.events.slice(-2);
@@ -523,19 +533,21 @@ const server=http.createServer((req,res)=>{
   assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/No credit/);
   await page.reload();
   await page.waitForSelector('#history [data-bb2-history]',{state:'attached'});
+  await expandHistory(page);
   assert.match(await page.locator('#history [data-bb2-history]').first().textContent(),/No credit/,
    'void and revocation survive full app reload');
   await page.evaluate(()=>activateTab('history'));
   await expandHistory(page);
-  page.once('dialog',dialog=>dialog.accept());
-  await page.locator('#history [data-bb2-void-session="0"]').click();
+  await page.locator('#history [data-bb2-history]').first().getByRole('button',{name:'DELETE WORKOUT',exact:true}).click();
+  await page.locator('.bvomModalOverlay [data-r]').click();
+  await page.locator('.bvomModalOverlay button').first().click();
   assert.equal(await page.evaluate(async()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
    const ledger=await import('./bb2/browser-core.mjs');
    const projection=ledger.foldBB2Block(b.opening,b.events);
-   return b.events.at(-1).type==='SESSION_VOIDED'&&
-    projection.history[0].status==='VOID'&&projection.quotas.upper_a===0;
-  }),true,'real History Remove Workout voids previously credit-revoked session without duplicate credit events');
+   return b.events.at(-1).type==='HISTORY_HIDDEN'&&
+    projection.history[0].hidden&&projection.quotas.upper_a===0;
+  }),true,'shared History Delete hides the corrected record without additional credit events');
   assert.equal(await page.locator('#history [data-bb2-history]').count(),0,
    'a voided BB2 workout disappears from shared History');
   await page.reload();

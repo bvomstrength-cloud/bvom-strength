@@ -44,7 +44,8 @@ async function proveV3TrainingAndRestore(page){
  await page.locator('.tab[data-tab="workout"]').click();await record(4,0,15);
  await page.evaluate(()=>bvomBb2End('INCOMPLETE')); // historical journal fixture
  await page.locator('.tab[data-tab="history"]').click();
- assert.match(await page.locator('#history').textContent(),/15 reps · 31 kg/);
+ await page.locator('#history [data-bb2-history]').first().locator('.histSummary').click();
+ assert.match(await page.locator('#history').textContent(),/15×31 kg/);
  await page.locator('.tab[data-tab="settings"]').click();
  const downloadEvent=page.waitForEvent('download');await page.locator('#settings button[onclick="exportBackup()"]').click();
  const download=await downloadEvent,bytes=fs.readFileSync(await download.path()),backup=JSON.parse(bytes);
@@ -57,7 +58,8 @@ async function proveV3TrainingAndRestore(page){
  assert.equal(await page.evaluate(()=>JSON.stringify(state.bb2)),before,'actual file restore preserves complete v3 journal');
  await page.locator('.tab[data-tab="history"]').click();
  await page.waitForSelector('#history [data-bb2-history]');
- assert.match(await page.locator('#history').textContent(),/15 reps · 31 kg/);
+ await page.locator('#history [data-bb2-history]').first().locator('.histSummary').click();
+ assert.match(await page.locator('#history').textContent(),/15×31 kg/);
  const result=await page.evaluate(async()=>{
   const core=await import('./bb2/browser-core.mjs'),b=state.bb2,p=core.foldBB2Block(b.opening,b.events);
   return {curl:p.progress['upper_a|biceps_curl|barbell_curl'],setup:b.setup,credits:p.quotas.upper_a};
@@ -72,7 +74,7 @@ async function proveV3TrainingAndRestore(page){
  try{
   const output=path.join(temp,'site');packageBB2Test({sourceSha:'1234567890abcdef1234567890abcdef12345678',output,zipFile:path.join(temp,'test.zip')});
   const h=H.boot(H.loadBuild(root));H.configureLP(h);const fixture=JSON.parse(h.ls.getItem('bvom_data'));
-  browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+  browser=await chromium.launch({headless:true,executablePath:process.env.BVOM_CHROMIUM_PATH||undefined,args:['--no-sandbox']});
   const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers:'block'});
   context.setDefaultTimeout(10000);
   const allowed=new Set(['bb2-package-proof.netlify.app','app.bvomstrength.com']);

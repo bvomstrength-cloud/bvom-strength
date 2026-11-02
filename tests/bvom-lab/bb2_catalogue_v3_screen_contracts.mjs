@@ -43,7 +43,8 @@ assert.ok(warm.includes('Working: '+h.ctx.bvomBb2DisplayLoad(31000)+' lb'),'Warm
 h.ctx.changeUnits('kg',true);
 assert.equal(h.ctx.bvomBb2Log(4,0),true);assert.equal(h.ctx.bvomBb2End('INCOMPLETE'),true);
 h.ctx.renderHistory();
-assert.match(h.ctx.document.querySelector('#history').innerHTML,/15 reps · 31 kg/,'History shows actual mass inherited from an earned prescription');
+h.ev('bvomExpandedHistoryIndex=bvomBb2HistoryRef(bvomBb2HistoryProjection().rows.at(-1));renderHistory()');
+assert.match(h.ctx.document.querySelector('#history').innerHTML,/15×31 kg/,'History shows actual mass inherited from an earned prescription');
 // Swaps retain both variants, increments and immutable historical plans.
 open(h);h.ctx.bvomBb2PreviewChoose('upper_a','biceps_curl','dumbbell_curl');assert.equal(h.ctx.bvomBb2SaveSetup(),true);
 open(h);h.ctx.bvomBb2PreviewChoose('upper_a','biceps_curl','barbell_curl');assert.equal(h.ctx.bvomBb2SaveSetup(),true);
@@ -60,7 +61,8 @@ assert.equal(typeof confirmRestore,'function','v3 backup reaches the real restor
 assert.deepEqual(JSON.parse(restored.ls.getItem('bvom_data')).bb2,saved);
 assert.ok(restored.ls.getItem('bvom_pre_restore'));
 restored=boot(restored.ls);restored.ctx.renderHistory();
-assert.match(restored.ctx.document.querySelector('#history').innerHTML,/15 reps · 31 kg/);
+restored.ev('bvomExpandedHistoryIndex=bvomBb2HistoryRef(bvomBb2HistoryProjection().rows.at(-1));renderHistory()');
+assert.match(restored.ctx.document.querySelector('#history').innerHTML,/15×31 kg/);
 p=core.foldBB2Block(restored.S().bb2.opening,restored.S().bb2.events);assert.equal(p.progress[curlKey].loadG,31000);
 assert.equal(p.progress[curlKey].incrementG,1000);assert.equal(restored.S().bb2.setup.optionalUpperACurls,true);assert.equal(restored.S().bb2.setup.optionalUpperBCurls,true);
 assert.equal(restored.S().bb2.setup.selections['upper_b|biceps_curl'],'cable_curl');

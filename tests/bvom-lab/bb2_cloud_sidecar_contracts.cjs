@@ -343,6 +343,17 @@ async function main() {
     assert.equal((await write(firstCloud, null, null, fresh.client)).status, 'committed');
     assert.equal((await write(bothFinished, 1, firstCloud, fresh.client)).status,
       'committed', 'two offline block rotations must remain uploadable');
+    const annotated=copy(bothFinished.snapshot),archive=annotated.sealedBlocks[0],session=archive.events.find(e=>e.type==='WORKOUT_STARTED').sessionId;
+    for(const [type,extra] of [['NOTE_EDITED',{text:'Shared archived note'}],['HISTORY_HIDDEN',{}]])archive.events.push({type,eventId:'annotation-'+archive.events.length,commitOrdinal:archive.events.length+1,blockId:archive.opening.blockId,sessionId:session,...extra});
+    const annotatedCloud=sidecar.createBB2CloudSidecar({ownerId,bb2:annotated,previousRevision:2,requestId:'archived-history-annotations'});
+    assert.equal((await write(annotatedCloud,2,bothFinished,fresh.client)).status,'committed','sealed note/delete annotations remain uploadable');
+    const before=core.foldBB2Block(first.opening,first.events),after=core.foldBB2Block(archive.opening,archive.events);
+    assert.deepEqual(after.progress,before.progress);assert.deepEqual(after.quotas,before.quotas);assert.deepEqual(after.closingSnapshot,before.closingSnapshot);
+    assert.equal(after.history[0].note,'Shared archived note');assert.equal(after.history[0].hidden,true);
+    const tampered=copy(annotated);tampered.sealedBlocks[0].events.find(e=>e.type==='WORKOUT_STARTED').startedAt=1;
+    const changed=sidecar.createBB2CloudSidecar({ownerId,bb2:tampered,previousRevision:3,requestId:'reject-archived-prefix-rewrite'});
+    assert.equal((await write(changed,3,annotatedCloud,fresh.client)).status,'conflict','annotation permission never allows rewriting a sealed prefix');
+    assert.equal((await write(annotatedCloud,2,bothFinished,fresh.client)).status,'conflict','stale revision still fails');
     const fakeSecond = { ...second, opening:
       core.createBB2Opening({ ownerId, blockId: second.opening.blockId }) };
     assert.throws(() => sidecar.createBB2CloudSidecar({ ownerId, bb2: {

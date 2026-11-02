@@ -211,7 +211,8 @@ try{
    const before=await remoteBB2(),originalEvents=(await stored(a)).bb2.events;
    for(const [device,delta]of [[a,1],[b,2]]){
     device.context().bb2Offline=true;await device.locator('.tab[data-tab="history"]').click();
-    const row=device.locator('#history .histLift').filter({hasText:'EXTRA SET'}).first();const input=row.locator('[data-bb2-correct-reps]');const reps=Number(await input.inputValue());await input.fill(String(reps+delta));await row.locator('[data-bb2-correct-save]').click();
+    const card=device.locator('#history [data-bb2-history]').first();if(await card.locator('.histSummary').getAttribute('aria-expanded')==='false')await card.locator('.histSummary').click();await card.getByRole('button',{name:'EDIT SETS',exact:true}).click();
+    const row=device.locator('[data-history-correction] .histLift').filter({hasText:'EXTRA SET'}).first();const input=row.locator('[data-bb2-correct-reps]');const reps=Number(await input.inputValue());await input.fill(String(reps+delta));await row.locator('[data-bb2-correct-save]').click();
    }
    const copies=await Promise.all([a,b].map(async d=>(await stored(d)).bb2.events));
    assert.equal(copies[0].length,originalEvents.length+1);assert.equal(copies[1].length,originalEvents.length+1);assert.notDeepEqual(copies[0],copies[1]);

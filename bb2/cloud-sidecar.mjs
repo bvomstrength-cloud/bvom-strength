@@ -136,7 +136,15 @@ function descendsFromBaseline(baseline, next) {
   const prev = baseline.snapshot, upcoming = next.snapshot;
   if (upcoming.sealedBlocks.length < prev.sealedBlocks.length) return false;
   for (let i = 0; i < prev.sealedBlocks.length; i++) {
-    if (stable(prev.sealedBlocks[i]) !== stable(upcoming.sealedBlocks[i])) return false;
+    const old=prev.sealedBlocks[i],next=upcoming.sealedBlocks[i];
+    // Sealed training is immutable; the ledger already permits append-only
+    // History text/visibility annotations after sealing. Validate both folds
+    // above and keep the exact original opening and complete event prefix.
+    if (stable(old) !== stable(next) &&
+        (stable({...old,events:[]}) !== stable({...next,events:[]}) ||
+         !eventLineage(old.events,next.events) ||
+         !next.events.slice(old.events.length).every(e =>
+           ['NOTE_EDITED','HISTORY_HIDDEN','HISTORY_UNHIDDEN'].includes(e.type)))) return false;
   }
   if (!prev.opening) return true;
   if (upcoming.opening?.blockId === prev.opening.blockId) {

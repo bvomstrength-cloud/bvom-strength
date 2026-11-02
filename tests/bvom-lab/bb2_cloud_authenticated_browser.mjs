@@ -627,9 +627,20 @@ try {
     const bodyweightSets=journal.filter(e=>e.type==='SET_RECORDED'&&e.variation);assert.ok(bodyweightSets.length);assert.ok(bodyweightSets.every(e=>e.actualBodyweightKg===84.25),'body mass survives the revisioned authenticated write');
     await b.evaluate(()=>window.dispatchEvent(new Event('focus')));await b.waitForFunction(n=>state.bb2.events.length===n,journal.length);
     assert.deepEqual(await b.evaluate(()=>state.bb2.events),journal);
-    await b.locator('#history > [data-bb2-history]').first().locator('summary').click();assert.match(await b.locator('#history > [data-bb2-history]').first().textContent(),/Actual bodyweight.*84.25 kg/);await b.waitForFunction(()=>document.querySelectorAll('#history > .histCard').length===18&&document.querySelector('#history > .histCard').textContent.includes('Android-shape extra set cloud proof'));assert.equal(await b.locator('#history > .histCard').count(),18);assert.match(await b.locator('#history > .histCard').first().textContent(),/Android-shape extra set cloud proof/);
+    await b.locator('#history > [data-bb2-history]').first().locator('.histSummary').click();assert.match(await b.locator('#history > [data-bb2-history]').first().textContent(),/Actual bodyweight.*84.25 kg/);await b.waitForFunction(()=>document.querySelectorAll('#history > .histCard').length===18&&document.querySelector('#history > .histCard').textContent.includes('Android-shape extra set cloud proof'));assert.equal(await b.locator('#history > .histCard').count(),18);assert.match(await b.locator('#history > .histCard').first().textContent(),/Android-shape extra set cloud proof/);
     assert.equal(journal.filter(e=>e.type==='CREDIT_GRANTED').length,2);assert.equal(journal.filter(e=>e.type==='EXTRA_SET_RECORDED').length,1);assert.equal(await b.evaluate(()=>state.history.length),16);
     const projection=await a.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events));assert.equal(projection.history.at(-1).sets.filter(s=>!s.prescribed).length,1);
+    const aCard=a.locator('#history > [data-bb2-history]').first();if(await aCard.locator('.histSummary').getAttribute('aria-expanded')==='false')await aCard.locator('.histSummary').click();
+    await aCard.getByRole('button',{name:'EDIT NOTE',exact:true}).click();await a.locator('.bvomModalOverlay [data-note]').fill('Shared History cloud note');await a.locator('.bvomModalOverlay [data-save]').click();
+    await a.waitForFunction(()=>state.bb2.cloudSync?.baseline?.snapshot?.events?.length===state.bb2.events.length);
+    await b.evaluate(()=>window.dispatchEvent(new Event('focus')));await b.waitForFunction(()=>state.bb2.events.at(-1).type==='NOTE_EDITED'&&state.bb2.events.at(-1).text==='Shared History cloud note');
+    const beforeDelete=await a.evaluate(()=>{const p=bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events);return {progress:p.progress,quotas:p.quotas}});
+    await aCard.getByRole('button',{name:'DELETE WORKOUT',exact:true}).click();await a.locator('.bvomModalOverlay [data-r]').click();await a.locator('.bvomModalOverlay button').first().click();
+    await a.waitForFunction(()=>state.bb2.cloudSync?.baseline?.snapshot?.events?.length===state.bb2.events.length);
+    await b.evaluate(()=>window.dispatchEvent(new Event('focus')));await b.waitForFunction(()=>state.bb2.events.at(-1).type==='HISTORY_HIDDEN');
+    const deleted=await b.evaluate(()=>{const p=bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events);return {progress:p.progress,quotas:p.quotas}});assert.deepEqual(deleted,beforeDelete);
+    const remote=await admin.from('bvom_cloud_state').select('state').eq('user_id',id).single();if(remote.error)throw remote.error;assert.equal(remote.data.state.snapshot.events.at(-1).type,'HISTORY_HIDDEN');
+    assert.deepEqual(await b.evaluate(()=>state.bb2.events),remote.data.state.snapshot.events);assert.equal(await b.locator('#history > .histCard').count(),17);assert.equal(await b.evaluate(()=>state.history.length),16);
     await a.context().close();await b.context().close();
   });
 
