@@ -157,7 +157,9 @@ try{
    const local=await stored(p);assert.equal(await p.evaluate(()=>bvomStateWorkoutActive(state)),false,'only finished sessions can explicitly upload');
    const q=await admin.from('bvom_data').select('data').eq('user_id',userId).order('created_at',{ascending:false}).limit(1).single();if(q.error)throw q.error;
    const history=q.data.data.history;assert.ok(local.history.length>history.length,'explicit recovery requires newly finished local workouts');assert.deepEqual(local.history.slice(0,history.length),history,'every remote workout remains in the local journal');
-   report.watches=report.watches||[];report.watches.push({code:'LEGACY_RELOAD_CLOUD_PAUSE',localHistory:local.history.length,cloudHistory:history.length,explanation:'Interrupted legacy workout survives reload and Finish, but its volatile cloud baseline is lost. Existing safe conflict protection pauses upload; explicit user recovery is required.'});
+   await p.screenshot({path:path.join(output,profile.name.toLowerCase()+'-legacy-cloud-pause-'+local.history.length+'.png')});
+   report.watches=report.watches||[];report.watches.push({code:'LEGACY_CLOUD_EXPLICIT_RECOVERY',localHistory:local.history.length,cloudHistory:history.length,workout:local.history.at(-1)?.note,explanation:'Legacy cloud protection cannot prove automatic continuation across this setup/reload boundary. Explicit user recovery is required; every remote workout was verified retained.'});
+   console.log('WATCH MONKEY '+profile.name+' legacy explicit recovery: local History '+local.history.length+', cloud History '+history.length+', workout '+local.history.at(-1)?.note);
    await p.locator('#bvomCloudConflictOverlay [data-settings]').click();for(let i=0;i<5&&await p.locator('.bvomModalOverlay [data-ok]').count();i++)await p.locator('.bvomModalOverlay [data-ok]').last().click();await p.locator('#settings button[onclick="bvomCloudSaveNow()"]').click();
    await p.waitForFunction(()=>!bvomCloud.busy&&!bvomCloud.conflict&&bvomCloud.syncReady);
    const after=await admin.from('bvom_data').select('data').eq('user_id',userId).order('created_at',{ascending:false}).limit(1).single();if(after.error)throw after.error;
@@ -218,19 +220,28 @@ try{
    let remote;
    for(let i=0;i<150;i++){
     const q=await admin.from('bvom_data').select('data').eq('user_id',userId).order('created_at',{ascending:false}).limit(1).maybeSingle();if(q.error)throw q.error;remote=q.data?.data;
-    let same=!!remote;try{for(const key of ['history','weights','core','hlm','pbs','bodybuilding'])assert.deepEqual(remote?.[key],expected[key])}catch{same=false}if(same)break;
+    let same=!!remote;try{for(const key of ['history','weights','core','hlm','pbs','bodybuilding','accessoryList','accessoryProgress','plateMode','barByLift','enabledMicro','enabledStandard','profile','profileLabel','unit'])assert.deepEqual(remote?.[key],expected[key])}catch{same=false}if(same)break;
     await new Promise(r=>setTimeout(r,100));
    }
    assert.ok(remote,'actual legacy cloud row exists');
-   for(const key of ['history','weights','core','hlm','pbs','bodybuilding'])assert.deepEqual(remote[key],expected[key],'stored cloud '+key);
+   for(const key of ['history','weights','core','hlm','pbs','bodybuilding','accessoryList','accessoryProgress','plateMode','barByLift','enabledMicro','enabledStandard','profile','profileLabel','unit'])assert.deepEqual(remote[key],expected[key],'stored cloud '+key);
+   let expectedBB2,observed;
+   if(label.startsWith('BB2')){
+    expectedBB2=(await stored(p)).bb2;let matched=false;
+    for(let i=0;i<150;i++){
+     observed=await remoteBB2();try{for(const key of ['setup','opening','events','sealedBlocks'])assert.deepEqual(observed.state.snapshot[key]??[],expectedBB2[key]??[]);matched=true}catch{}if(matched)break;await new Promise(r=>setTimeout(r,100));
+    }
+    if(!matched)fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-cloud-mismatch.json'),JSON.stringify({expected:expectedBB2,observed},null,2));
+    assert.ok(matched,'automatic cloud upload must store the exact current block, events and sealed archives');
+   }
    const second=await makeDevice(profile.name+' receiving device '+label,{userId,login,accountFlow:true});
    await second.waitForTimeout(100);const notice=second.locator('#bvomCloudConflictOverlay [data-settings]');if(await notice.isVisible())await notice.click();else await second.locator('.tab[data-tab="settings"]').click();
    await second.locator('#settings button[onclick="bvomCloudRestore()"]').click();
    const reload=second.waitForEvent('domcontentloaded');await second.locator('.bvomModalOverlay [data-r]').click();await reload;await second.waitForSelector('#app:not(.hidden)');await reconnect(second);
-   const downloaded=await stored(second);for(const key of ['history','weights','core','hlm','pbs','bodybuilding'])assert.deepEqual(downloaded[key],expected[key],'second-device '+key);
+   const downloaded=await stored(second);for(const key of ['history','weights','core','hlm','pbs','bodybuilding','accessoryList','accessoryProgress','plateMode','barByLift','enabledMicro','enabledStandard','profile','profileLabel','unit'])assert.deepEqual(downloaded[key],expected[key],'second-device '+key);
    if(label.startsWith('BB2')){
     const credits=label==='BB2-mid'?16:32;
-    await second.waitForFunction(credits=>[...(state.bb2?.events||[]),...(state.bb2?.sealedBlocks||[]).flatMap(b=>b.events)].filter(e=>e.type==='CREDIT_GRANTED').length===credits,credits);
+    await second.waitForFunction(({credits,block,revision})=>state.bb2?.opening?.blockId===block&&state.bb2?.cloudSync?.baseline?.revision===revision&&[...(state.bb2?.events||[]),...(state.bb2?.sealedBlocks||[]).flatMap(b=>b.events)].filter(e=>e.type==='CREDIT_GRANTED').length===credits,{credits,block:expectedBB2.opening.blockId,revision:observed.revision});
     const local=(await stored(p)).bb2,actual=(await stored(second)).bb2;
     assert.deepEqual(actual.events,local.events);assert.deepEqual(actual.setup,local.setup);assert.deepEqual(actual.opening,local.opening);assert.deepEqual(actual.sealedBlocks||[],local.sealedBlocks||[]);
     const q=await admin.from('bvom_cloud_state').select('revision,state').eq('user_id',userId).single();if(q.error)throw q.error;
@@ -244,7 +255,7 @@ try{
   const report=await runJourney({page,profile,checkpoint,reconnect,offlineBB2,handleConflict,output,smoke});summaries.push(report);
  }));
  fs.writeFileSync(path.join(output,'summary.json'),JSON.stringify({source:process.env.MONKEY_SOURCE||'local',smoke,profiles:summaries},null,2));
- for(const r of summaries)console.log('MONKEY RESULT '+r.profile+' '+r.verdict+' '+JSON.stringify({counts:r.counts,sets:r.sets,progression:r.progression,defects:r.defects}));
+ for(const r of summaries)console.log('MONKEY RESULT '+r.profile+' '+r.verdict+' '+JSON.stringify({counts:r.counts,sets:r.sets,setsByProgramme:r.setsByProgramme,progression:r.progression,skippedOptionalSets:r.skippedOptionalSets,restSecondsSimulated:r.restSecondsSimulated,sealedBlocks:r.sealedBlocks,transitions:r.transitions,checks:r.checks.length,watches:r.watches||[],defects:r.defects}));
  if(summaries.some(r=>r.verdict==='FAIL'))process.exitCode=1;
 }finally{
  for(const context of contexts)await context.close().catch(()=>{});

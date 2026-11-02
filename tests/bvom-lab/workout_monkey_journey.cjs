@@ -35,10 +35,19 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
  const pass=label=>{report.checks.push(label);console.log('PASS MONKEY '+profile.name+': '+label);write()};
  const errors=[];p.on('pageerror',e=>errors.push(e.message));p.on('dialog',async d=>{if(allowSeal&&d.type()==='confirm'){action('Explicitly confirm sealing the completed BB2 block');await d.accept();return}errors.push('Unexpected '+d.type()+': '+d.message());await d.dismiss()});
  const healthy=()=>assert.deepEqual(errors,[],'no uncaught errors or unexpected native dialogs');
- async function rest(){assert.ok((await stored(p)).timerStart,'recording must start the shared rest timer');await p.evaluate(()=>{window.__monkeyRestMs=(window.__monkeyRestMs||0)+90000;sessionStorage.setItem('monkey-rest-ms',String(window.__monkeyRestMs))});}
+ async function rest(seconds=90){
+  assert.ok((await stored(p)).timerStart,'recording must start the shared rest timer');
+  report.restSecondsSimulated=(report.restSecondsSimulated||0)+seconds;
+  await p.evaluate(seconds=>{window.__monkeyRestMs=(window.__monkeyRestMs||0)+seconds*1000;sessionStorage.setItem('monkey-rest-ms',String(window.__monkeyRestMs))},seconds);
+  if(report.sets===1)await p.waitForFunction(seconds=>{const text=document.querySelector('#clock').textContent.split(':').map(Number),elapsed=text[0]*60+text[1];return elapsed>=seconds&&elapsed<=seconds+3},seconds);
+ }
  // Accelerate rest elapsed time only. Calendar timestamps remain real; no
  // programme counters, weights or decisions are injected or fast-forwarded.
- const installClock=()=>{const realNow=Date.now.bind(Date);window.__monkeyRestMs=Number(sessionStorage.getItem('monkey-rest-ms'))||0;Date.now=()=>realNow()+(window.__monkeyRestMs||0)};
+ const installClock=()=>{
+  const RealDate=Date;window.__monkeyRestMs=Number(sessionStorage.getItem('monkey-rest-ms'))||0;
+  class RestDate extends RealDate{constructor(...args){super(...(args.length?args:[RealDate.now()+(window.__monkeyRestMs||0)]))}static now(){return RealDate.now()+(window.__monkeyRestMs||0)}}
+  window.Date=RestDate;
+ };
  await p.context().addInitScript(installClock);await p.evaluate(installClock);
  async function decisions(){
   for(let n=0;n<12;n++){
@@ -63,6 +72,12 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   if(incomplete){const q=p.locator('.bvomModalOverlay').last();await q.locator('[data-finish],[data-r],[data-accept]').click()}
   const note=profile.name+' '+stage+' '+n+' seed '+profile.seed;
   if(!onramp){await p.locator('.bvomModalOverlay [data-note]').fill(note);await p.evaluate(()=>document.querySelector('#timerbar .finish').click());assert.equal(await p.locator('.bvomModalOverlay [data-note]').count(),1);await p.locator('.bvomModalOverlay [data-save]').click();}
+  if(stage.startsWith('BB2')){
+   const work=before.bb2.events.filter(e=>e.sessionId===before.bb2.activeSessionId&&['SET_RECORDED','EXTRA_SET_RECORDED'].includes(e.type)),known=work.every(e=>Number.isSafeInteger(e.actualG)&&!e.variation);
+   const text=await p.locator('.bvomModalOverlay .savedStats .num').nth(1).textContent();
+   if(known){assert.ok(!text.includes('~'),'BB2 must not inherit a previous programme approximation flag');assert.ok(Math.abs(Number(text.split(' ')[0])-work.reduce((n,e)=>n+e.actualG/1000*e.reps,0))<.011,'shared saved volume matches actual BB2 working sets');}
+   else assert.ok(text.includes('—'),'unestimated bodyweight volume is not shown as zero');
+  }
   await decisions();await p.waitForTimeout(600);await decisions();
   const after=await stored(p);
   if(stage.startsWith('BB2')){
@@ -88,7 +103,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   pass(stage+' warm-up rest, navigation and timer Cancel');
  }
  async function repModal(reps){const m=p.locator('.bvomModalOverlay').last();let v=Number(await m.locator('[data-v]').textContent());while(v>reps){await m.locator('[data-m]').click();v--}while(v<reps){await m.locator('[data-p]').click();v++}await m.locator('[data-ok]').click();}
- async function coreSet(name,i,reps){await tab(p,'workout');await p.locator('#workout button[onclick="tapSet(\''+name+'\','+i+')"]').click();await repModal(reps);assert.equal((await stored(p)).session[name]?.[i]?.reps,reps,'actual core set is durably recorded');report.sets++;await rest();await decisions();}
+ async function coreSet(name,i,reps){await tab(p,'workout');await p.locator('#workout button[onclick="tapSet(\''+name+'\','+i+')"]').click();await repModal(reps);assert.equal((await stored(p)).session[name]?.[i]?.reps,reps,'actual core set is durably recorded');report.sets++;await rest((await stored(p)).session[name][i].load>=100?180:120);await decisions();}
  async function legacyWorkout(stage,n,{incomplete=false}={}){
   action(stage+' '+n+' begin');await decisions();await tab(p,'workout');
   const before=await stored(p);if(n===1||n%4===0)await warm(stage);
@@ -154,7 +169,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   const bytes=fs.readFileSync(await dl.path()),data=JSON.parse(bytes);const before=await stored(p);assert.deepEqual(data.data.history,before.history);
   fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-'+label.replace(/\W/g,'_')+'-backup.json'),bytes);
   const reload=p.waitForEvent('domcontentloaded');await p.locator('#settings input[type="file"]').setInputFiles({name:'monkey-backup.json',mimeType:'application/json',buffer:bytes});await p.locator('.bvomModalOverlay [data-r]').click();await reload;await p.waitForSelector('#app:not(.hidden)');await p.waitForFunction(()=>bvomWindowLockOwned===true);await reconnect(p);
-  const after=await stored(p);for(const k of ['history','weights','core','hlm','pbs','bodybuilding'])assert.deepEqual(after[k],before[k],'backup restores '+k);
+  const after=await stored(p);for(const k of ['history','weights','core','hlm','pbs','bodybuilding','accessoryList','accessoryProgress','plateMode','barByLift','enabledMicro','enabledStandard','profile','profileLabel','unit'])assert.deepEqual(after[k],before[k],'backup restores '+k);
   if(before.bb2)assert.deepEqual(after.bb2.events,before.bb2.events);pass(label+' downloaded backup and file restore retain all programme data');
   if(!uiOnly){await checkpoint(p,report,label);pass(label+' actual stored cloud and second-device data verified')}else pass(label+' UI-only debug: authenticated cloud NOT TESTED');
  }
@@ -184,7 +199,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
    if(await m.locator('[data-res]').count()&&!(await m.locator('[data-res]').inputValue()).trim())await m.locator('[data-res]').fill(profile.name==='Female'?'green band assistance':'bodyweight');
    if(await m.locator('[data-bw-estimate]').count())await m.locator('[data-bw-estimate]').fill(String(profile.bodyweight));
    const target=s.sets[j].maxReps??s.sets[j].target??8,reps=onramp?target:n%6===3?Math.max(1,target-3):target;
-   await m.locator('[data-reps]').fill(String(reps));await m.locator('[data-save]').click();await m.waitFor({state:'detached'});report.sets++;if(!onramp&&n%6===3)report.progression.missedRepSets++;await rest();
+   await m.locator('[data-reps]').fill(String(reps));await m.locator('[data-save]').click();await m.waitFor({state:'detached'});report.sets++;if(!onramp&&n%6===3)report.progression.missedRepSets++;await rest(onramp?90:s.numeric&&s.sets.length===3?120:90);
   }
   if(n===2){const live=clone((await stored(p)).session);await p.reload();await p.waitForSelector('#app:not(.hidden)');await p.waitForFunction(()=>bvomWindowLockOwned);await reconnect(p);assert.deepEqual((await stored(p)).session,live);pass(stage+' interrupted reload preserves all actual sets');}
   await finish(stage,n,{onramp});
@@ -196,7 +211,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   for(const key of ['data-bb2-curls-a','data-bb2-curls'])await p.locator('#setup ['+key+']').check();
   if(profile.name==='Male'){await p.locator('#setup [data-bb2-role="upper_a|horizontal_row"]').selectOption('barbell_row');await p.locator('#setup [data-bb2-role="upper_a|shoulder_press"]').selectOption('overhead_press');await p.locator('#setup [data-bb2-role="upper_b|horizontal_row"]').selectOption('barbell_row');}
   if(profile.name==='Female'){const sel=p.locator('#setup [data-bb2-role="upper_a|flat_press"]');const value=await sel.locator('option').evaluateAll(es=>es.find(e=>/Dumbbell/i.test(e.textContent))?.value);assert.ok(value,'dumbbell option exists for both profiles');await sel.selectOption(value);}
-  await p.locator('#setup [data-bb2-save]').click();assert.deepEqual((await stored(p)).history,before.history);
+  await p.locator('#setup [data-bb2-save]').click();const after=await stored(p);for(const key of ['history','weights','core','hlm','pbs','bodybuilding','accessoryList','accessoryProgress'])assert.deepEqual(after[key],before[key],'BB2 setup preserves previous '+key);
   report.transitions.push({to:'BB2',history:before.history.length});pass('BB2 transition retains BB1 and all prior journals; no calibration stage');
  }
 
@@ -220,7 +235,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
  }
 
  async function bb2Workout(day,n,{kind='NORMAL',incomplete=false,threshold=false}={}){
-  action('BB2 '+day+' '+kind+' '+n+' begin');if(!await p.locator('#setup [data-bb2-start]').isVisible()){await tab(p,'workout');await p.locator('#workout [data-bb2-next-workout]').click();}
+  action('BB2 '+day+' '+kind+' '+n+' begin');const recoveryBefore=kind==='RECOVERY'?await p.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events).progress):null;if(!await p.locator('#setup [data-bb2-start]').isVisible()){await tab(p,'workout');await p.locator('#workout [data-bb2-next-workout]').click();}
   for(let k=0;k<20;k++){const b=p.locator('#setup [data-bb2-choice-keep],#setup [data-bb2-choice-hold]').first();if(!await b.count())break;await b.click();}
   await p.locator('#setup [data-bb2-day="'+day+'"]').click();await p.locator('#setup [data-bb2-kind="'+kind+'"]').click();
   const plan=await p.evaluate(()=>bvomBb2PreviewModule.getBB2TemplatePrescription(state.bb2.setup,bvomBb2Day).slots);
@@ -238,14 +253,14 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   for(const {s,i,j}of selected){await tab(p,'workout');const key=i+'|'+j;await p.locator('[data-bb2-set="'+key+'"]').click();const m=p.locator('.bvomModalOverlay').last();
    const reps=kind==='RECOVERY'?s.floor:n%5===3?s.floor-1:n%5===4?s.floor:s.ceiling;
    await m.locator('[data-bb2-reps="'+key+'"]').fill(String(reps));
-   await m.locator('[data-save]').click();await m.waitFor({state:'detached'});report.sets++;if(reps<s.floor)report.progression.missedRepSets++;await rest();
+   await m.locator('[data-save]').click();await m.waitFor({state:'detached'});report.sets++;if(reps<s.floor)report.progression.missedRepSets++;await rest(kind==='RECOVERY'?60:s.plannedG>=100000?180:s.sets>=3?120:90);
   }
   if(incomplete){const live=clone((await stored(p)).bb2);await p.reload();await p.waitForSelector('#app:not(.hidden)');await p.waitForSelector('#workout [data-bb2-set].done');await p.waitForFunction(()=>bvomWindowLockOwned);await reconnect(p);assert.deepEqual((await stored(p)).bb2.events,live.events);assert.equal((await stored(p)).bb2.activeSessionId,live.activeSessionId);pass('BB2 normal Starting Setup and interrupted reload retain the active journal');}
   if(!incomplete&&kind==='NORMAL'&&n===1&&day==='upper_a'){await tab(p,'workout');await p.locator('[data-bb2-extra-add="0"]').click();const m=p.locator('.bvomModalOverlay').last();await m.locator('[data-bb2-reps]').fill(String(slots[0].floor));await m.locator('[data-save]').click();await m.waitFor({state:'detached'});report.sets++;await rest();pass('additional BB2 set recorded separately from prescribed count');}
   await finish(incomplete?'BB2 incomplete':kind==='RECOVERY'?'BB2 recovery':'BB2',n,{incomplete});
   const after=await p.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events));
   const quota=x=>Object.values(x.quotas).reduce((a,b)=>a+b,0);assert.equal(quota(after),quota(before)+(kind==='NORMAL'&&!incomplete?1:0));
-  if(incomplete||kind==='RECOVERY')assert.deepEqual(after.progress,before.progress,'incomplete/recovery cannot progress loads');
+  if(incomplete||kind==='RECOVERY')assert.deepEqual(after.progress,recoveryBefore||before.progress,'incomplete/recovery cannot progress loads');
   else {
    for(const [i,s]of slots.entries())if(s.equipment==='loaded'&&selected.filter(x=>x.i===i).length===s.sets&&n%5!==3&&n%5!==4){const key=day+'|'+s.roleSlotId+'|'+s.exerciseId;assert.equal(after.progress[key].loadG,s.plannedG+s.incrementG,'complete on-plan ceiling sets earn exactly one increment per exercise/slot');}
    for(const [key,v]of Object.entries(after.progress)){const old=before.progress[key]?.loadG;if(old!=null&&v.loadG!=null)report.progression[v.loadG>old?'increases':v.loadG<old?'reductions':'holds']++;}
@@ -270,7 +285,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   }
   const projection=await p.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events));assert.deepEqual(Object.values(projection.quotas),[8,8,8,8]);assert.equal(report.counts.BB2,32);for(const[stage,min]of Object.entries({'LP/RPT':12,HLM:12,'4-Day Split':16,BB1:24,BB2:32}))assert.ok(report.counts[stage]>=min,'minimum actual completed workouts '+stage);await backup('BB2');await sealBB2();
   healthy();report.verdict=uiOnly||report.watches?.length?'WATCH':'PASS';pass('complete five-programme UI journey and 32 BB2 credits'+(uiOnly?' — authenticated cloud NOT TESTED':''));
- }catch(e){report.verdict='FAIL';report.defects.push({message:e.message,stack:e.stack,lastActions:report.actions.slice(-12)});console.error('MONKEY UI DIAGNOSTIC',await p.evaluate(()=>({configured:state.configured,program:state.programMode,day:state.day,entitlementError:bvomEntitlement.error,modal:document.querySelector('.bvomModalOverlay')?.textContent?.slice(0,700)})).catch(()=>({})));console.error('MONKEY '+profile.name+' FAIL:',e.stack);await p.screenshot({path:path.join(output,profile.name.toLowerCase()+'-failure.png'),fullPage:true}).catch(()=>{});fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-failure.html'),await p.content().catch(()=>''));}
+ }catch(e){report.verdict='FAIL';fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-error.txt'),e.stack||String(e));fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-failure-state.json'),JSON.stringify(await stored(p),null,2));report.defects.push({message:e.message.slice(0,1800),stack:e.stack?.slice(-2200),lastActions:report.actions.slice(-12)});console.error('MONKEY UI DIAGNOSTIC',await p.evaluate(()=>({configured:state.configured,program:state.programMode,day:state.day,entitlementError:bvomEntitlement.error,bb2Cloud:typeof bvomBb2AccountStatus==='function'?bvomBb2AccountStatus():null,bb2Upload:bvomBb2AccountBinding?.lastUpload?.status,bb2UploadError:bvomBb2AccountBinding?.lastUpload?.error?.message,modal:document.querySelector('.bvomModalOverlay')?.textContent?.slice(0,700)})).catch(()=>({})));console.error('MONKEY '+profile.name+' FAIL:',e.message.slice(0,1200),e.stack?.split('\n').filter(l=>/^\s+at /.test(l)).join('\n'));await p.screenshot({path:path.join(output,profile.name.toLowerCase()+'-failure.png'),fullPage:true}).catch(()=>{});fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-failure.html'),await p.content().catch(()=>''));}
  finally{write()}
  return report;
 }

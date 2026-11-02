@@ -10,19 +10,19 @@ function boot(previous){
  h.ctx.bvomSessionNoteModal=h.realSessionNoteModal;h.ctx.bvomChoiceModal=h.realChoiceModal;
  const query=h.ctx.document.querySelector;
  h.ctx.document.querySelector=selector=>{
-  const f=selector.match(/data-bb2-(load|inc|reps|hard|assist)="([^"]+)"/);
+  const f=selector.match(/data-bb2-(load|inc|reps|hard|assist|bw-variation|bw-assist|bw-added)="([^"]+)"/);
   if(f){const b=h.S().bb2,start=b?.events?.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId),slot=start?.slots[Number(f[2].split('|')[0])];
-   return {value:f[1]==='load'?'60':f[1]==='inc'?'2.5':f[1]==='assist'?'none':String(slot?.ceiling||8),checked:false};}
+   return {value:f[1]==='load'?'60':f[1]==='inc'?'2.5':f[1]==='assist'||f[1]==='bw-assist'?'none':f[1]==='bw-variation'?slot?.variation||'chinup':f[1]==='bw-added'?'':String(slot?.ceiling||8),checked:false};}
   return query(selector);
  };
  return h;
 }
-function start(h,fail=false){
+function start(h,fail=false,day='upper_a'){
  h.ctx.bvomStartingSetupModal();h.lastOverlay().querySelector('[data-r]').onclick();
  assert.equal(h.S().configured,false,'normal Starting Setup opens an unconfigured draft');
  h.ev('bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;'+
   'bvomBb2PreviewDraft=__core.createBB2Setup(state.bb2?.setup);bvomBb2PreviewSaved=!!state.bb2?.setup;bvomBb2RenderPreview()');
- assert.equal(h.ctx.bvomBb2SaveSetup(),true);h.ctx.activateTab('history');
+ assert.equal(h.ctx.bvomBb2SaveSetup(),true);h.ctx.bvomBb2ChooseDay(day);h.ctx.activateTab('history');
  if(fail){
   const before=h.ls.getItem('bvom_data'),set=h.ls.setItem;
   h.ls.setItem=(key,value)=>{if(key==='bvom_data')throw Error('simulated Start quota');return set(key,value)};
@@ -53,6 +53,8 @@ h.ctx.renderAll();assert.equal(h.ctx.finishWorkout(),true);
 const dialog=h.lastOverlay();assert.equal(h.ctx.finishWorkout(),false,'repeated Finish cannot open another note dialog');
 assert.equal(h.lastOverlay(),dialog);assert.equal(h.S().bb2.events.filter(e=>e.type==='WORKOUT_FINISHED').length,0);
 answerNote(h,'Normal Finish — retained note');
+const expectedVolume=s.slots.reduce((n,slot)=>n+slot.sets*slot.ceiling*60,0);
+assert.ok(h.lastOverlay().innerHTML.includes('>'+expectedVolume+' kg<'),'shared saved dialog shows the actual BB2 working-set volume');
 const b=h.S().bb2,p=core.foldBB2Block(b.opening,b.events);
 assert.equal(p.quotas.upper_a,1);assert.equal(p.progress['upper_a|flat_press|bench_press'].loadG,62500,'configured load progresses on first qualifying exposure');
 assert.equal(p.history.length,1);assert.equal(p.history[0].note,'Normal Finish — retained note');assert.ok(p.history[0].completedAt);
@@ -84,3 +86,13 @@ console.log('PASS separately confirmed incomplete flow and failed-Finish transac
 
 start(boot(),true);
 console.log("PASS normal Starting Setup completes atomically with BB2 Start, with quota-failure rollback");
+
+{
+ const x=boot(),s=start(x,false,'upper_b');
+ for(const[i,slot]of s.slots.entries())for(let j=0;j<slot.sets;j++)assert.equal(x.ctx.bvomBb2Log(i,j),true);
+ assert.ok(x.S().bb2.events.some(e=>e.type==='SET_RECORDED'&&e.variation),'the session really includes unestimated bodyweight work');
+ x.ctx.finishWorkout();answerNote(x,'Bodyweight volume stays unknown');
+ assert.ok(x.lastOverlay().innerHTML.includes('>— kg<'),'unknown bodyweight volume is not invented as zero');
+ assert.match(x.lastOverlay().innerHTML,/Volume is not estimated for bodyweight or assisted exercises/);
+}
+console.log('PASS BB2 shared saved statistics use recorded working mass and explicit unknown bodyweight volume');
