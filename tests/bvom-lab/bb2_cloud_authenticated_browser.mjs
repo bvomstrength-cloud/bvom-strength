@@ -358,7 +358,17 @@ try {
     await accountPhone.locator('#setup [data-bb2-day="lower_b"]').click();
     for(const field of await accountPhone.locator('#setup [data-bb2-load]:not([disabled])').all())await field.fill('60');
     for(const field of await accountPhone.locator('#setup [data-bb2-inc]').all())await field.fill('2.5');
-    await accountPhone.locator('#setup [data-bb2-start]').click();
+    const startResult=await accountPhone.evaluate(()=>{
+      const errors=[],old=console.error;console.error=(...args)=>{errors.push(args.map(x=>x?.message||String(x)).join(' '));old(...args)};
+      try{return {started:bvomBb2Begin(),errors,day:bvomBb2Day,saved:bvomBb2PreviewSaved,
+        draftMatches:JSON.stringify(state.bb2.setup)===JSON.stringify(bvomBb2PreviewDraft),
+        originalMode:bvomBb2PreviewOriginalMode,mode:state.programMode,
+        snapshot:bvomBb2DormantAccountSnapshot(),
+        inputs:[...document.querySelectorAll('#setup [data-bb2-load],#setup [data-bb2-inc]')].map(e=>({value:e.value,disabled:e.disabled})),
+        consent:bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events).requiredConsent};}
+      finally{console.error=old}
+    });
+    assert.equal(startResult.started,true,JSON.stringify(startResult));
     await accountPhone.waitForSelector('#workout [data-bb2-set="0|0"]');
     await accountPhone.locator('#workout [data-bb2-edit-save="0"]').click();
     await accountPhone.locator('.bvomModalOverlay [data-bb-weight]').fill('65');

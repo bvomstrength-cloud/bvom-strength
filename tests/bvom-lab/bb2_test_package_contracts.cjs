@@ -19,7 +19,7 @@ try{
   ['http://localhost:8000',false,true]]){
   h.ctx.location.origin=origin;h.ctx.location.search='?bb2Preview=1';
   h.ctx.__BVOM_BB2_TEST_BUILD=marker?{pr:73,source:sha}:undefined;
-  assert.equal(h.ctx.bvomBb2PreviewEnabled(),allowed,origin+' marker='+marker);
+  assert.equal(h.ctx.bvomBb2PreviewEnabled(),true,origin+' normal programme entry; marker='+marker);
  }
  for(const hostname of ['bb2-review.netlify.app','app.bvomstrength.com','localhost']){
   let url='';const ctx={window:{},URL,location:{hostname,href:'https://'+hostname+'/'},history:{replaceState:(_a,_b,u)=>{url=String(u)}}};
@@ -27,7 +27,7 @@ try{
   assert.equal(url.includes('bb2Preview=1'),hostname!=='app.bvomstrength.com','packaged auto-entry stays off production');
  }
  const note=fs.readFileSync(path.join(output,'NETLIFY-TEST-BUILD.txt'),'utf8');
- assert.match(note,/42/);assert.match(note,/46/);assert.match(note,/cloud sync is disabled/);assert.match(note,/disposable test account/);
+ assert.match(note,/42/);assert.match(note,/46/);assert.match(note,/revision-protected BVOM account transport/);assert.match(note,/disposable test account/);
  const guard=path.join(root,'tests/bvom-lab/regression_guard.js');
  const production=cp.spawnSync(process.execPath,[guard,output],{encoding:'utf8'});
  assert.equal(production.status,1,'ordinary production gate rejects test-only cache');

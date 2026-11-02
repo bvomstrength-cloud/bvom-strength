@@ -54,7 +54,7 @@ async function open() {
     window.bb2StaticOptionalCurls = setBB2OptionalCurls;
     window.bb2StaticSetup = () => createBB2Setup({catalogueVersion:1});
     // ONLY this offline test substitutes both rollout gates. The real app's
-    // read-only snapshot always returns false for both and cannot enable sync.
+    // account guards remain real; these overrides exercise disabled-writer controls.
     window.bb2AppRead = () => ({
       ...bvomBb2DormantAccountSnapshot(),
       bb2WriterEnabled: window.bb2TestEnable === true,
@@ -85,7 +85,7 @@ test('real BVOM source mapping is read-only, accounts and document ownership are
         s.authUserId === bvomCloud.user?.id,
         s.localOwnerId === bvomLocalOwnerId(), s.documentLockOwned,
         s.documentLockState, s.localBlobUnchanged, s.entitlementAllowed];
-    }), [true, false, false, true, true, true, 'owned', true, true]);
+    }), [true, true, true, true, true, true, 'owned', true, true]);
     assert.equal(await p.evaluate(() => {
       bvomCloud.user = { id: 'different-owner' };
       return bvomBb2DormantAccountSnapshot().cloudUserId;

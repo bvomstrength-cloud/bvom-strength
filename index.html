@@ -3320,7 +3320,7 @@ function bvomBb2BackupRestoreWarning(current,incoming){
    !(local.setup||local.opening||local.events?.length||local.sealedBlocks?.length)||
    JSON.stringify(local)===JSON.stringify(incoming?.bb2))return '';
  return hlmTxt('WARNING: This device contains Bodybuilding 2 setup or workouts that will be REPLACED or REMOVED by this restore. Restored BB2 data must match the cloud baseline before it can sync. Export a current BVOM backup before continuing.',
-  '警告：この端末のボディビルディング2の設定やトレーニング記録は、この復元によって上書きまたは削除されます。BB2はまだBVOMクラウドに保存されません。続行する前に現在のBVOMバックアップを書き出してください。');
+  '警告：この端末のボディビルディング2の設定やトレーニング記録は、この復元によって上書きまたは削除されます。復元したBB2はクラウド基準データとの一致を確認してから同期します。続行する前に現在のBVOMバックアップを書き出してください。');
 }
 function importBackupFile(input){if(!bvomWorkoutActionAllowed())return;
  if(bvomCloudWorkoutActive()||bvomStoredWorkoutActive()){
