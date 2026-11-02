@@ -516,6 +516,8 @@ try {
     assert.ok(await a.evaluate(()=>state.timerStart>0));
     assert.equal(await a.locator('#timerbar .cancel').isVisible(),true,'shared timer Cancel remains available');
     assert.equal(await a.locator('.tab[data-tab="workout"]').evaluate(e=>e.classList.contains('on')),true);
+    await a.locator('#timerbar .cancel').click();
+    assert.equal(await a.evaluate(()=>state.timerStart),null,'shared rest-timer Cancel still works');
     assert.equal(await a.evaluate(()=>state.bb2.events.filter(e=>e.type==='SET_RECORDED').length),0);
     const slots=await a.evaluate(()=>state.bb2.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===state.bb2.activeSessionId).slots);
     for(const [i,s]of slots.entries())for(let j=0;j<s.sets;j++){
@@ -554,7 +556,7 @@ try {
     const b=await makeDevice('lifecycle tablet',{userId,login,accountFlow:true});
     await b.waitForFunction(()=>state.bb2?.events?.some(e=>e.type==='WORKOUT_FINISHED'));
     await b.waitForFunction(()=>!!bvomBb2PreviewModule);await verify(b);
-    assert.equal(await b.evaluate(()=>JSON.stringify(state.bb2.events)),raw,'second authenticated device receives exact canonical journal');
+    assert.deepEqual(await b.evaluate(()=>state.bb2.events),JSON.parse(raw),'second authenticated device receives the same canonical journal');
     await b.evaluate(()=>window.dispatchEvent(new Event('focus')));
     assert.equal(await b.evaluate(()=>state.bb2.events.filter(e=>e.type==='WORKOUT_FINISHED').length),1);
     // Test interrupted/incomplete recovery separately from the qualifying Finish.

@@ -27,7 +27,8 @@ jobs:
       - name: Install Supabase local CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pin the verified release: unauthenticated latest lookups hit CI rate limits.
+          version: 2.122.0
 
       - name: Start disposable local Supabase services
         run: |
