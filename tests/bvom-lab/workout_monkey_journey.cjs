@@ -1,0 +1,199 @@
+'use strict';
+// Real DOM journey. Only identity/bootstrap fixtures and the rest-clock offset
+// are injected. Programme choices, inputs, sets, decisions, Finish and restore
+// use shipped controls. Read-only prescriptions/projections provide assertions.
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const profiles=[
+ {name:'Male',seed:730901,bodyweight:90,weights:{Squat:140,'Bench Press':100,'Prone Row':85,'Overhead Press':60,Deadlift:180,'Supine Row':70},increment:2.5,small:1.25,bbLoad:70},
+ {name:'Female',seed:730902,bodyweight:65,weights:{Squat:60,'Bench Press':35,'Prone Row':32.5,'Overhead Press':22.5,Deadlift:80,'Supine Row':27.5},increment:1.25,small:.5,bbLoad:25}
+];
+const clone=x=>JSON.parse(JSON.stringify(x));
+async function stored(p){return p.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')))}
+async function tab(p,name){await p.locator('.tab[data-tab="'+name+'"]').click()}
+async function runJourney({page:p,profile,checkpoint,reconnect,output,smoke=false}){
+ let seed=profile.seed;const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296};
+ const report={profile:profile.name,bodyweight:profile.bodyweight,seed:profile.seed,mode:smoke?'SMOKE':'FULL',verdict:'RUNNING',counts:{},sets:0,progression:{increases:0,reductions:0,holds:0,missedRepSets:0},transitions:[],checks:[],workouts:[],actions:[],defects:[]};
+ const file=path.join(output,profile.name.toLowerCase()+'.json');
+ const write=()=>fs.writeFileSync(file,JSON.stringify(report,null,2));
+ const action=label=>{report.actions.push(label);write()};
+ const pass=label=>{report.checks.push(label);console.log('PASS MONKEY '+profile.name+': '+label);write()};
+ const errors=[];p.on('pageerror',e=>errors.push(e.message));p.on('dialog',async d=>{errors.push('Unexpected '+d.type()+': '+d.message());await d.dismiss()});
+ const healthy=()=>assert.deepEqual(errors,[],'no uncaught errors or unexpected native dialogs');
+ async function rest(){assert.ok((await stored(p)).timerStart,'recording must start the shared rest timer');await p.evaluate(()=>{window.__monkeyRestMs=(window.__monkeyRestMs||0)+90000});}
+ // Accelerate rest elapsed time only. Calendar timestamps remain real; no
+ // programme counters, weights or decisions are injected or fast-forwarded.
+ await p.evaluate(()=>{const realNow=Date.now.bind(Date);window.__monkeyRestMs=0;Date.now=()=>realNow()+(window.__monkeyRestMs||0)});
+ async function decisions(){
+  for(let n=0;n<12;n++){
+   const modal=p.locator('.bvomModalOverlay').last();if(!await modal.count())return;
+   if(await modal.locator('[data-note],[data-reps],[data-v]').count())return;
+   const title=(await modal.textContent()).trim();action('Decision: '+title.slice(0,180));
+   if(await modal.locator('[data-ok]').count()){await modal.locator('[data-ok]').click();continue}
+   if(await modal.locator('[data-accept]').count()){
+    const number=modal.locator('[data-number]');if(await number.isVisible())await number.fill('1');
+    await modal.locator('[data-accept]').click();continue;
+   }
+   // Explicitly retain the existing plan for optional near-miss/rep choices.
+   if(await modal.locator('[data-l]').count()){await modal.locator('[data-l]').click();continue}
+   if(await modal.locator('[data-cancel]').count()){await modal.locator('[data-cancel]').click();continue}
+   throw Error('Unrecognised decision UI: '+title.slice(0,400));
+  }throw Error('Decision UI did not settle');
+ }
+ async function finish(stage,n,{incomplete=false,onramp=false}={}){
+  const before=await stored(p),old=before.history.length,events=before.bb2?.events?.filter(e=>e.type==='WORKOUT_FINISHED'||e.type==='WORKOUT_INCOMPLETE').length||0;
+  action(stage+' '+n+' fixed FINISH');await tab(p,'workout');await p.locator('#timerbar .finish:not([disabled])').click();
+  if(incomplete){const q=p.locator('.bvomModalOverlay').last();await q.locator('[data-finish],[data-r],[data-accept]').click()}
+  const note=profile.name+' '+stage+' '+n+' seed '+profile.seed;
+  if(!onramp){await p.locator('.bvomModalOverlay [data-note]').fill(note);await p.evaluate(()=>document.querySelector('#timerbar .finish').click());assert.equal(await p.locator('.bvomModalOverlay [data-note]').count(),1);await p.locator('.bvomModalOverlay [data-save]').click();}
+  await decisions();await p.waitForTimeout(300);await decisions();
+  const after=await stored(p);
+  if(stage.startsWith('BB2')){
+   const ended=after.bb2.events.filter(e=>e.type==='WORKOUT_FINISHED'||e.type==='WORKOUT_INCOMPLETE');assert.equal(ended.length,events+1);
+   assert.equal(after.history.length,old,'BB2 must not create a second legacy journal');
+   const projection=await p.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events));assert.equal(projection.history.at(-1).note,note);
+  }else{assert.equal(after.history.length,old+1);if(!onramp)assert.equal(after.history.at(-1).note,note);assert.equal(!!after.history.at(-1).incomplete,incomplete);}
+  const snapshot=JSON.stringify(after.history),bb=JSON.stringify(after.bb2?.events);
+  await p.evaluate(()=>document.querySelector('#timerbar .finish').click());assert.equal(JSON.stringify((await stored(p)).history),snapshot);assert.equal(JSON.stringify((await stored(p)).bb2?.events),bb);
+  await tab(p,'history');if(!onramp)assert.ok((await p.locator('#history').textContent()).includes(note),'normal History shows the note');
+  assert.equal(after.history.slice(0,old).length,before.history.length);assert.deepEqual(after.history.slice(0,old),before.history,'previous History immutable');
+  report.counts[stage]=(report.counts[stage]||0)+1;report.workouts.push({stage,n,sets:report.sets,history:after.history.length,note:onramp?null:note,day:before.day});
+  healthy();console.log('MONKEY '+profile.name+' '+stage+' '+n+' saved; total sets '+report.sets);write();
+ }
+ async function warm(stage){
+  await tab(p,'warmup');let buttons;
+  if(stage==='BB2')buttons=p.locator('#warmup [data-bb2-warm-card="0"] button.set');
+  else buttons=p.locator('#warmup > .exercise').first().locator('button.set');
+  const count=await buttons.count();if(!count){pass(stage+' has no numeric warm-up for this prescription');await tab(p,'workout');return}
+  await buttons.first().click();await rest();if(count>1)await buttons.nth(count-1).click();
+  assert.equal(await p.locator('#workout').evaluate(e=>e.classList.contains('hidden')),false,'last warm-up opens Workout');
+  assert.equal(await p.locator('#timerbar .cancel').isVisible(),true);await p.locator('#timerbar .cancel').click();assert.equal((await stored(p)).timerStart,null);
+  pass(stage+' warm-up rest, navigation and timer Cancel');
+ }
+ async function repModal(reps){const m=p.locator('.bvomModalOverlay').last();let v=Number(await m.locator('[data-v]').textContent());while(v>reps){await m.locator('[data-m]').click();v--}while(v<reps){await m.locator('[data-p]').click();v++}await m.locator('[data-ok]').click();}
+ async function coreSet(name,i,reps){await tab(p,'workout');await p.locator('#workout button[onclick="tapSet(\''+name+'\','+i+')"]').click();await repModal(reps);report.sets++;await rest();await decisions();}
+ async function legacyWorkout(stage,n,{incomplete=false}={}){
+  action(stage+' '+n+' begin');await decisions();await tab(p,'workout');
+  const before=await stored(p);if(n===1||n%4===0)await warm(stage);
+  const names=await p.evaluate(()=>program().map(x=>x[0]));
+  for(const name of names){for(let i=0;i<12;i++){
+   const plan=await p.evaluate(name=>getSetPlan(name),name);if(i>=plan.length)break;
+   const fail=n>=3&&n<=5;const reps=fail?Math.max(0,plan[i].target-2):plan[i].target+(random()>.7&&plan[i].amrap?1:0);
+   if(fail)report.progression.missedRepSets++;
+   await coreSet(name,i,reps);if(incomplete)break;
+  }if(incomplete)break;}
+  if(n===2){const saved=clone((await stored(p)).session);await p.reload();await p.waitForSelector('#app:not(.hidden)');await p.waitForFunction(()=>bvomWindowLockOwned===true);await reconnect(p);assert.deepEqual((await stored(p)).session,saved);pass(stage+' interrupted workout reload retains actual sets');}
+  await finish(stage,n,{incomplete});const after=await stored(p);
+  for(const name of names){const a=before.weights[name],b=after.weights[name];report.progression[b>a?'increases':b<a?'reductions':'holds']++;}
+  if(!incomplete&&stage!=='4-Day Split'){
+   const day=stage==='HLM'?['H','L','M'][n%3]:n%2?'B':'A';await tab(p,'workout');await p.locator('#workout button[onclick="switchDay(\''+day+'\')"]').click();
+  }
+ }
+ async function openSetup(){await tab(p,'settings');await p.locator('#settings button[onclick="bvomStartingSetupModal()"]').click();await p.locator('.bvomModalOverlay [data-r]').click();}
+ async function setup(mode,initial=false){
+  const before=await stored(p);action('Choose '+mode+' through normal programme setup');
+  if(!initial)await openSetup();
+  await p.locator('#setup button[onclick="chooseProgramMode(\''+mode+'\')"]').click();
+  if(mode!=='lprpt')await p.locator('.bvomModalOverlay [data-r]').click();
+  const manual=p.locator('#setup button[onclick*="setupMode=\'manual\'"]');await manual.click();
+  for(const input of await p.locator('#setup .startw').all()){const name=await input.getAttribute('data-name');await input.fill(String(initial?profile.weights[name]:before.weights[name]));}
+  await p.locator('#setup button[onclick="completeSetup()"]').click();await p.waitForSelector('#app:not(.hidden)');await tab(p,'workout');
+  const after=await stored(p);assert.deepEqual(after.history,before.history);assert.deepEqual(after.pbs,before.pbs);
+  report.transitions.push({to:mode,history:after.history.length});pass('Transition to '+mode+' preserves History and PBs without phantom workouts');
+ }
+ async function increments(){
+  await tab(p,'settings');
+  for(const value of [.25,.5]){const b=p.locator('#settings button[onclick="togglePlate('+value+',\'enabledMicro\')"]');if(!await b.evaluate(e=>e.classList.contains('on')))await b.click();}
+  for(const name of ['Bench Press','Overhead Press']){const id=name.replace(/\W/g,'');const details=p.locator('details').filter({has:p.locator('#inc'+id)});if(!await details.evaluate(e=>e.open))await details.locator('summary').click();await p.locator('#plateMode'+id).selectOption('micro');await p.locator('#mode'+id).selectOption('rpt');await p.locator('#inc'+id).fill(String(profile.small));await p.locator('button[onclick="saveLiftSettings(\''+name+'\')"]').click();await decisions();}
+  pass('custom fractional increments accepted through Advanced Settings');
+ }
+ async function backup(label){
+  action('Backup/export and actual file restore '+label);await decisions();await tab(p,'settings');
+  const downloadEvent=p.waitForEvent('download');await p.locator('#settings button[onclick="exportBackup()"]').click();const dl=await downloadEvent;
+  const bytes=fs.readFileSync(await dl.path()),data=JSON.parse(bytes);const before=await stored(p);assert.deepEqual(data.data.history,before.history);
+  fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-'+label.replace(/\W/g,'_')+'-backup.json'),bytes);
+  const reload=p.waitForEvent('domcontentloaded');await p.locator('#settings input[type="file"]').setInputFiles({name:'monkey-backup.json',mimeType:'application/json',buffer:bytes});await p.locator('.bvomModalOverlay [data-r]').click();await reload;await p.waitForSelector('#app:not(.hidden)');await p.waitForFunction(()=>bvomWindowLockOwned===true);await reconnect(p);
+  const after=await stored(p);for(const k of ['history','weights','core','hlm','pbs','bodybuilding'])assert.deepEqual(after[k],before[k],'backup restores '+k);
+  if(before.bb2)assert.deepEqual(after.bb2.events,before.bb2.events);pass(label+' downloaded backup and file restore retain all programme data');
+  await checkpoint(p,report,label);pass(label+' actual stored cloud and second-device data verified');
+ }
+ async function bbSetup(){
+  const before=await stored(p);await openSetup();await p.locator('#setup [data-bb-program]').click();
+  // Equipment selection is genuinely available to both profiles; choose a home
+  // barbell map for A and mixed dumbbells/barbell for B using real selects.
+  const selections=profile.name==='Male'?{A1:'barbell_bench_press',A2:'high_bar_squat',A3:'barbell_row',B1:'chin_up',B2:'romanian_deadlift'}:{A1:'dumbbell_bench_press',A2:'high_bar_squat',A3:'chest_supported_dumbbell_row',B1:'chin_up',B2:'romanian_deadlift'};
+  for(const [slot,id]of Object.entries(selections)){const sel=p.locator('#setup select[onchange*="bvomBbSetupSelect(\''+slot+'\'"]');const options=await sel.locator('option').evaluateAll(es=>es.map(e=>e.value));assert.ok(options.includes(id),'approved equipment choice '+id);await sel.selectOption(id);}
+  await p.locator('#setup button[onclick="bvomBbOnRampSetupMode(\'onramp\')"]').click();
+  for(const input of await p.locator('#setup input[oninput*="increment"]').all())await input.fill(String(profile.increment));
+  await p.locator('#setup button[onclick="bvomBbCommitSetup()"]').click();await p.waitForSelector('#app:not(.hidden)');await tab(p,'workout');
+  assert.deepEqual((await stored(p)).history,before.history);report.transitions.push({to:'BB1 On-Ramp',history:before.history.length});
+ }
+ async function bbWorkout(n,onramp=false){
+  const stage=onramp?'BB1 On-Ramp':'BB1';action(stage+' '+n+' begin');await decisions();await tab(p,'workout');if(n===1&&!onramp)await warm(stage);
+  const slots=await p.evaluate(onramp=>{const ss=onramp?bvomBbOnRampSlots(bvomBbOnRampDay()):bvomBbSlotsForDay(bvomBbDay());return ss.map(slot=>{const id=state.bodybuilding.selections[slot];return {slot,id,numeric:bvomBbNumericExercise(id),equipment:BVOM_BB_EXERCISES[id].equipment,sets:onramp?Array.from({length:bvomBbOnRampSetCount(id)},()=>({maxReps:bvomBbOnRampTarget(id)[1]})):bvomBbPrescription(id).sets}})},onramp);
+  for(const s of slots)for(let j=0;j<s.sets.length;j++){
+   await tab(p,'workout');const fn=onramp?'bvomBbOnRampSetModal':'bvomBbSetModal';await p.locator('#workout button[onclick="'+fn+'(\''+s.id+'\','+j+')"]').click();const m=p.locator('.bvomModalOverlay').last();
+   if(onramp&&s.numeric){await m.locator('[data-load]').fill(String(s.equipment==='dumbbell'?profile.bbLoad/2:profile.bbLoad));await m.locator('[data-inc]').fill(String(profile.increment));}
+   if(await m.locator('[data-res]').count())await m.locator('[data-res]').fill(profile.name==='Female'?'green band assistance':'bodyweight');
+   if(await m.locator('[data-bw-estimate]').count())await m.locator('[data-bw-estimate]').fill(String(profile.bodyweight));
+   const target=s.sets[j].maxReps??s.sets[j].target??8,reps=onramp?target:n%6===3?Math.max(1,target-3):target;
+   await m.locator('[data-reps]').fill(String(reps));await m.locator('[data-save]').click();await m.waitFor({state:'detached'});report.sets++;if(!onramp&&n%6===3)report.progression.missedRepSets++;await rest();
+  }
+  await finish(stage,n,{onramp});
+ }
+ async function bb2Setup(){
+  const before=await stored(p);await openSetup();await p.locator('#setup [data-bb2-preview]').click();
+  for(const key of ['data-bb2-curls-a','data-bb2-curls'])await p.locator('#setup ['+key+']').check();
+  if(profile.name==='Female'){const sel=p.locator('#setup [data-bb2-role="upper_a|horizontal_push"]');const value=await sel.locator('option').evaluateAll(es=>es.find(e=>/Dumbbell/i.test(e.textContent))?.value);assert.ok(value,'dumbbell option exists for both profiles');await sel.selectOption(value);}
+  await p.locator('#setup [data-bb2-save]').click();assert.deepEqual((await stored(p)).history,before.history);
+  report.transitions.push({to:'BB2',history:before.history.length});pass('BB2 transition retains BB1 and all prior journals; no calibration stage');
+ }
+ async function bb2Workout(day,n,{kind='NORMAL',incomplete=false,threshold=false}={}){
+  action('BB2 '+day+' '+kind+' '+n+' begin');if(!await p.locator('#setup [data-bb2-start]').isVisible()){await tab(p,'workout');await p.locator('#workout [data-bb2-next-workout]').click();}
+  for(let k=0;k<20;k++){const b=p.locator('#setup [data-bb2-choice-keep],#setup [data-bb2-choice-hold]').first();if(!await b.count())break;await b.click();}
+  await p.locator('#setup [data-bb2-day="'+day+'"]').click();await p.locator('#setup [data-bb2-kind="'+kind+'"]').click();
+  for(const el of await p.locator('#setup [data-bb2-load]:not([disabled])').all())if(!(await el.inputValue()))await el.fill(String(profile.bbLoad));
+  for(const el of await p.locator('#setup [data-bb2-inc]').all())if(!(await el.inputValue()))await el.fill(String(profile.increment));
+  for(const input of await p.locator('#setup [data-bb2-assist]').all())await input.fill(kind==='RECOVERY'?'strong band recovery':profile.name==='Female'?'green band':'none');
+  if(kind==='RECOVERY')for(const input of await p.locator('#setup [data-bb2-bw-variation]').all())await input.fill('easier supported recovery');
+  await p.locator('#setup [data-bb2-start]').click();await p.waitForSelector('#workout [data-bb2-set]');assert.equal(await p.locator('[data-bb2-trial-save]').count(),0);
+  if(n===1&&day==='upper_a'&&kind==='NORMAL')await warm('BB2');
+  const before=await p.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events));
+  const slots=await p.evaluate(()=>state.bb2.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===state.bb2.activeSessionId).slots);
+  const required=Math.ceil(.7*slots.reduce((sum,s)=>sum+s.sets,0)),all=slots.flatMap((s,i)=>Array.from({length:s.sets},(_,j)=>({s,i,j})));
+  if(kind==='RECOVERY')assert.ok(slots.every(s=>s.sets<=2),'recovery reduces per-slot working volume');
+  const selected=incomplete?all.slice(0,required-1):threshold?all.slice(0,required):all;
+  for(const {s,i,j}of selected){await tab(p,'workout');const key=i+'|'+j;await p.locator('[data-bb2-set="'+key+'"]').click();const m=p.locator('.bvomModalOverlay').last();
+   const reps=kind==='RECOVERY'?s.floor:n%5===3?s.floor-1:n%5===4?s.floor:s.ceiling;
+   await m.locator('[data-bb2-reps="'+key+'"]').fill(String(reps));
+   await m.locator('[data-save]').click();await m.waitFor({state:'detached'});report.sets++;if(reps<s.floor)report.progression.missedRepSets++;await rest();
+  }
+  if(!incomplete&&kind==='NORMAL'&&n===1&&day==='upper_a'){await tab(p,'workout');await p.locator('[data-bb2-extra-add="0"]').click();const m=p.locator('.bvomModalOverlay').last();await m.locator('[data-bb2-reps]').fill(String(slots[0].floor));await m.locator('[data-save]').click();await m.waitFor({state:'detached'});report.sets++;await rest();pass('additional BB2 set recorded separately from prescribed count');}
+  await finish(incomplete?'BB2 incomplete':kind==='RECOVERY'?'BB2 recovery':'BB2',n,{incomplete});
+  const after=await p.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events));
+  const quota=x=>Object.values(x.quotas).reduce((a,b)=>a+b,0);assert.equal(quota(after),quota(before)+(kind==='NORMAL'&&!incomplete?1:0));
+  if(incomplete||kind==='RECOVERY')assert.deepEqual(after.progress,before.progress,'incomplete/recovery cannot progress loads');
+  else for(const [key,v]of Object.entries(after.progress)){const old=before.progress[key]?.loadG;if(old!=null&&v.loadG!=null)report.progression[v.loadG>old?'increases':v.loadG<old?'reductions':'holds']++;}
+ }
+ try{
+  assert.equal((await stored(p)).history.length,0,'no workout fixture injection');
+  await setup('lprpt',true);await increments();
+  for(let n=1;n<=(smoke?1:12);n++)await legacyWorkout('LP/RPT',n);
+  if(smoke){report.verdict='WATCH';pass('SMOKE ONLY: not full-journey release evidence');return report}
+  await legacyWorkout('LP/RPT incomplete',13,{incomplete:true});await backup('LP');
+  await setup('hlm');for(let n=1;n<=12;n++)await legacyWorkout('HLM',n);await backup('HLM');
+  await setup('fourday');for(let n=1;n<=16;n++)await legacyWorkout('4-Day Split',n);await backup('FourDay');
+  await bbSetup();for(let n=1;n<=6&&await p.evaluate(()=>bvomBbOnRampActive());n++)await bbWorkout(n,true);
+  assert.equal(await p.evaluate(()=>bvomBbOnRampActive()),false,'actual On-Ramp hands off');
+  for(let n=1;n<=24;n++)await bbWorkout(n);assert.equal((await stored(p)).bodybuilding.completedSessions,24);await backup('BB1');
+  await bb2Setup();await bb2Workout('upper_a',0,{incomplete:true});
+  for(let week=1;week<=8;week++){
+   for(const day of ['upper_a','lower_a','upper_b','lower_b'])await bb2Workout(day,week,{threshold:week===2&&day==='upper_a'});
+   if(week===2||week===6)for(const day of ['upper_a','lower_a','upper_b','lower_b'])await bb2Workout(day,week,{kind:'RECOVERY'});
+  }
+  const projection=await p.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events));assert.deepEqual(Object.values(projection.quotas),[8,8,8,8]);assert.equal(report.counts.BB2,32);await backup('BB2');
+  healthy();report.verdict='PASS';pass('complete five-programme journey and 32 BB2 credits');
+ }catch(e){report.verdict='FAIL';report.defects.push({message:e.message,stack:e.stack,lastActions:report.actions.slice(-12)});console.error('MONKEY '+profile.name+' FAIL:',e.stack);await p.screenshot({path:path.join(output,profile.name.toLowerCase()+'-failure.png'),fullPage:true}).catch(()=>{});fs.writeFileSync(path.join(output,profile.name.toLowerCase()+'-failure.html'),await p.content().catch(()=>''));}
+ finally{write()}
+ return report;
+}
+module.exports={profiles,runJourney,stored};
