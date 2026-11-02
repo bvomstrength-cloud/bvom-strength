@@ -153,6 +153,16 @@ try{
   const page=await makeDevice(profile.name,{userId,login,accountFlow:true,configured:false});
   const reconnect=p=>signIn(p,login);
 
+  async function handleConflict(p,report){
+   const local=await stored(p);assert.equal(await p.evaluate(()=>bvomStateWorkoutActive(state)),false,'only finished sessions can explicitly upload');
+   const q=await admin.from('bvom_data').select('data').eq('user_id',userId).order('created_at',{ascending:false}).limit(1).single();if(q.error)throw q.error;
+   const history=q.data.data.history;assert.ok(local.history.length>history.length,'explicit recovery requires newly finished local workouts');assert.deepEqual(local.history.slice(0,history.length),history,'every remote workout remains in the local journal');
+   report.watches=report.watches||[];report.watches.push({code:'LEGACY_RELOAD_CLOUD_PAUSE',localHistory:local.history.length,cloudHistory:history.length,explanation:'Interrupted legacy workout survives reload and Finish, but its volatile cloud baseline is lost. Existing safe conflict protection pauses upload; explicit user recovery is required.'});
+   await p.locator('#bvomCloudConflictOverlay [data-settings]').click();for(let i=0;i<5&&await p.locator('.bvomModalOverlay [data-ok]').count();i++)await p.locator('.bvomModalOverlay [data-ok]').last().click();await p.locator('#settings button[onclick="bvomCloudSaveNow()"]').click();
+   await p.waitForFunction(()=>!bvomCloud.busy&&!bvomCloud.conflict&&bvomCloud.syncReady);
+   const after=await admin.from('bvom_data').select('data').eq('user_id',userId).order('created_at',{ascending:false}).limit(1).single();if(after.error)throw after.error;
+   assert.deepEqual(after.data.data.history,local.history,'normal explicit recovery preserves every old and new workout');
+  }
   let beforeOffline;
   const remoteBB2=async()=>{const q=await admin.from('bvom_cloud_state').select('revision,state').eq('user_id',userId).single();if(q.error)throw q.error;return q.data};
   async function offlineBB2(phase,p,report){
@@ -219,19 +229,19 @@ try{
    const reload=second.waitForEvent('domcontentloaded');await second.locator('.bvomModalOverlay [data-r]').click();await reload;await second.waitForSelector('#app:not(.hidden)');await reconnect(second);
    const downloaded=await stored(second);for(const key of ['history','weights','core','hlm','pbs','bodybuilding'])assert.deepEqual(downloaded[key],expected[key],'second-device '+key);
    if(label.startsWith('BB2')){
-    const credits=label==='BB2'?32:16;
-    await second.waitForFunction(credits=>state.bb2?.events?.filter(e=>e.type==='CREDIT_GRANTED').length===credits,credits);
+    const credits=label==='BB2-mid'?16:32;
+    await second.waitForFunction(credits=>[...(state.bb2?.events||[]),...(state.bb2?.sealedBlocks||[]).flatMap(b=>b.events)].filter(e=>e.type==='CREDIT_GRANTED').length===credits,credits);
     const local=(await stored(p)).bb2,actual=(await stored(second)).bb2;
-    assert.deepEqual(actual.events,local.events);assert.deepEqual(actual.setup,local.setup);
+    assert.deepEqual(actual.events,local.events);assert.deepEqual(actual.setup,local.setup);assert.deepEqual(actual.opening,local.opening);assert.deepEqual(actual.sealedBlocks||[],local.sealedBlocks||[]);
     const q=await admin.from('bvom_cloud_state').select('revision,state').eq('user_id',userId).single();if(q.error)throw q.error;
-    assert.deepEqual(q.data.state.snapshot.events,local.events,'real revisioned cloud journal');
+    assert.deepEqual(q.data.state.snapshot.events,local.events,'real revisioned cloud journal');assert.deepEqual(q.data.state.snapshot.sealedBlocks||[],local.sealedBlocks||[],'stored sealed block journals');
     report.cloudRevision=q.data.revision;
    }
    report.checks.push(label+' automatic upload, stored cloud bytes, receiving device and previous programme journals match');
    if(label==='BB2-mid')await concurrentCorrections(p,second,report);
    await second.context().close();
   }
-  const report=await runJourney({page,profile,checkpoint,reconnect,offlineBB2,output,smoke});summaries.push(report);
+  const report=await runJourney({page,profile,checkpoint,reconnect,offlineBB2,handleConflict,output,smoke});summaries.push(report);
  }));
  fs.writeFileSync(path.join(output,'summary.json'),JSON.stringify({source:process.env.MONKEY_SOURCE||'local',smoke,profiles:summaries},null,2));
  for(const r of summaries)console.log('MONKEY RESULT '+r.profile+' '+r.verdict+' '+JSON.stringify({counts:r.counts,sets:r.sets,progression:r.progression,defects:r.defects}));

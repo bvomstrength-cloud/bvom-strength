@@ -17,12 +17,17 @@ function boot(previous){
  };
  return h;
 }
-function start(h){
+function start(h,fail=false){
  h.ctx.bvomStartingSetupModal();h.lastOverlay().querySelector('[data-r]').onclick();
  assert.equal(h.S().configured,false,'normal Starting Setup opens an unconfigured draft');
  h.ev('bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;'+
   'bvomBb2PreviewDraft=__core.createBB2Setup(state.bb2?.setup);bvomBb2PreviewSaved=!!state.bb2?.setup;bvomBb2RenderPreview()');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true);h.ctx.activateTab('history');
+ if(fail){
+  const before=h.ls.getItem('bvom_data'),set=h.ls.setItem;
+  h.ls.setItem=(key,value)=>{if(key==='bvom_data')throw Error('simulated Start quota');return set(key,value)};
+  assert.equal(h.ctx.bvomBb2Begin(),false);assert.equal(h.S().configured,false);assert.equal(h.ls.getItem('bvom_data'),before);assert.ok(!h.S().bb2.activeSessionId);return null;
+ }
  assert.equal(h.ctx.bvomBb2Begin(),true);
  assert.equal(h.S().configured,true,'BB2 Start durably completes normal Starting Setup');
  assert.equal(JSON.parse(h.ls.getItem('bvom_data')).configured,true);
@@ -76,3 +81,6 @@ console.log('PASS shared Finish, note, durable History, restart, first-exposure 
  assert.equal(x.S().bb2.events.filter(e=>e.type==='WORKOUT_FINISHED').length,0);
 }
 console.log('PASS separately confirmed incomplete flow and failed-Finish transaction retention');
+
+start(boot(),true);
+console.log("PASS normal Starting Setup completes atomically with BB2 Start, with quota-failure rollback");
