@@ -167,6 +167,10 @@ jobs:
         env:
           BB2_ANDROID_OUTPUT: ${{ runner.temp }}/bb2-android-acceptance
         run: node tests/bvom-lab/bb2_shared_progression_browser.cjs
+      - name: Verify Lower B History volume, single duration and bodyweight summaries
+        env:
+          BB2_ANDROID_OUTPUT: ${{ runner.temp }}/bb2-android-acceptance
+        run: node tests/bvom-lab/bb2_history_display_browser.cjs
       - name: Preserve Android acceptance screenshots and exported fixture
         if: always()
         uses: actions/upload-artifact@v4
