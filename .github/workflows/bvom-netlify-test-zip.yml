@@ -78,6 +78,12 @@ jobs:
           printf '%s\n' 'NETLIFY ZIP CONTENTS:'
           unzip -Z1 "$ZIP" | head -35
 
+      - name: Verify exact production packaging without test markers
+        run: |
+          node scripts/package-production.cjs --source-sha "$(git rev-parse HEAD)" \
+            --output .bvom-production-package --zip BVOM-PRODUCTION-VERIFIED.zip
+          node tests/bvom-lab/regression_guard.js .bvom-production-package
+
       - name: Upload ZIP for owner
         uses: actions/upload-artifact@v4
         with:

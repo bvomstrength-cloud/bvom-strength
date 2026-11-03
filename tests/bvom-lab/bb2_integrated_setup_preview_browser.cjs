@@ -11,7 +11,7 @@ const path=require('node:path');
 const {chromium}=require('playwright');
 const H=require('./lib/bvom_harness');
 
-const root=path.resolve(__dirname,'../..');
+const root=process.env.BVOM_APP_ROOT?path.resolve(process.env.BVOM_APP_ROOT):path.resolve(__dirname,'../..');
 const h=H.boot(H.loadBuild(root));
 H.configureLP(h);
 const fixture=JSON.parse(h.ls.getItem('bvom_data'));
@@ -86,14 +86,14 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>showSetup());
   assert.equal(await page.locator('#setup [data-bb2-preview]').count(),1,'ordinary BVOM offers BB2');
 
-  await page.goto(origin+'/index.html?bb2Preview=1');
+  await page.goto(origin+'/index.html');
   await page.waitForSelector('#app:not(.hidden)');
   await page.evaluate(()=>{showSetup();showSetup()});
   assert.equal(await page.locator('#setup [data-bb2-preview]').count(),1,'one BB2 button in the standard program chooser');
   assert.equal(await page.locator('#setup [data-bb-program]').count(),1,'BB1 chooser remains available');
-  assert.equal(await page.title(),'BVOM Strength v2.9.22');
-  assert.match(await page.locator('header').textContent(),/v2\.9\.22/);
-  assert.equal(await page.evaluate(()=>BVOM_BUILD),'2.9.22');
+  assert.equal(await page.title(),'BVOM Strength v3.0.0');
+  assert.match(await page.locator('header').textContent(),/v3\.0\.0/);
+  assert.equal(await page.evaluate(()=>BVOM_BUILD),'3.0.0');
   fs.mkdirSync(screenshots,{recursive:true});
   for(const lang of ['en','ja']){
    await page.evaluate(lang=>{changeLanguage(lang);showSetup();showSetup()},lang);
@@ -133,7 +133,7 @@ const server=http.createServer((req,res)=>{
    await page.locator('#setup [data-bb2-back]').click();
   }
   await page.evaluate(()=>{changeLanguage('en');showSetup()});
-  console.log('PASS v2.9.22 mobile EN/JA programme chooser, setup and Info explanation with matching typography');
+  console.log('PASS v3.0.0 mobile EN/JA programme chooser, setup and Info explanation with matching typography');
   await page.evaluate(()=>{changeLanguage('ja');showSetup()});
   assert.match(await page.locator('#setup [data-bb2-preview]').textContent(),
    /ボディビルディング2/,'BB2 programme entry follows Japanese locale');

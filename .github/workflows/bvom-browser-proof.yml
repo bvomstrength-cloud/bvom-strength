@@ -210,6 +210,15 @@ jobs:
           path: .bvom-production-v2915
       - name: Prove native service worker one-tap upgrade and no second prompt
         run: node tests/bvom-lab/sw_update_browser.cjs
+      - name: Check out shipped v2.9.21 for production major-version upgrade
+        uses: actions/checkout@v4
+        with:
+          ref: c22e79e101610c3002929fd1b73fe3530cec0c20
+          path: .bvom-production-v2921
+      - name: Prove native upgrade from current production without a second prompt
+        env:
+          BVOM_SW_BASELINE_ROOT: .bvom-production-v2921
+        run: node tests/bvom-lab/sw_update_browser.cjs
       - name: Check out initial v2.9.16 weight editor before plate maths
         uses: actions/checkout@v4
         with:

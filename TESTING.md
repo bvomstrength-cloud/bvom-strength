@@ -173,10 +173,16 @@ Anything else is NO-GO.
 
 GitHub Actions stages only the shipped production surface into `.bvom-candidate` before running the gate.
 
-The 12 production files are:
+The v3.0.0 production surface contains 18 files:
 
 ```text
 admin.html
+vendor/supabase-js-2.117.3.js
+bb2/browser-core.mjs
+bb2/browser-host.mjs
+bb2/app-session.mjs
+bb2/cloud-sidecar.mjs
+bb2/cloud-coordinator.mjs
 i18n/en.js
 i18n/ja.js
 icon-192.png
@@ -191,6 +197,8 @@ theme-coastal-v23f.svg
 ```
 
 Tests, fixtures and documentation are not part of the deployed candidate.
+
+Use `node scripts/package-production.cjs --source-sha <final-commit> --output <fresh-directory> --zip <production-zip>` to extract and verify exact committed production bytes. The script checks release versions, refuses test/HOLD markers and creates a reproducible ZIP. Verify the final SHA-256 and every member against the final merged release commit before handoff.
 
 If the shipped file set intentionally changes, update the workflow, static guard and architecture documentation together.
 
