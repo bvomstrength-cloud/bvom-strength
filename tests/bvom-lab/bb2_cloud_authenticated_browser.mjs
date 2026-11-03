@@ -643,7 +643,12 @@ try {
     assert.deepEqual(await b.evaluate(()=>state.bb2.events),remote.data.state.snapshot.events);assert.equal(await b.locator('#history > .histCard').count(),17);assert.equal(await b.evaluate(()=>state.history.length),16);
     // Earn on one authenticated device, consume and advance on the other.
     for(const [page,day,first] of [[a,'upper_a',true],[b,'upper_b',false]]){
-      await page.locator('.tab[data-tab="workout"]').click();await page.locator('[data-bb2-next-workout]').click();
+      if(first){await page.locator('.tab[data-tab="workout"]').click();await page.locator('[data-bb2-next-workout]').click();}
+      else{
+        // Receiving cloud training preserves this device's selected programme.
+        // Enter BB2 through the normal chooser before starting its next day.
+        await page.evaluate(()=>showSetup());await page.locator('#setup [data-bb2-preview]').click();
+      }
       if(first){
         await page.locator('[data-bb2-curls-a]').check();await page.locator('[data-bb2-curls]').check();
         for(const d of ['upper_a','upper_b'])await page.locator('[data-bb2-role="'+d+'|biceps_curl"]').selectOption('dumbbell_curl');
