@@ -2541,14 +2541,17 @@ function preserveWarmupState(fn){
  state.warmupPlans=plans;
  return result;
 }
+function bvomWorkoutDayChoices(days,selected,handler,locked){
+ return '<div class="choiceRow">'+days.map(d=>'<button class="choice '+(selected===d?'on':'')+'" onclick="'+handler+'(\''+d+'\')" '+(locked?'disabled':'')+'>'+d+'</button>').join('')+'</div>';
+}
 function renderWorkout(){
  const title=isFourDay()?'4-Day Split':isHLM()?'HLM RPT':'LP / RPT',sub=isFourDay()?hlmTxt('Upper / Lower · recommended Mon / Tue / Thu / Fri. Workouts simply continue 1 → 2 → 3 → 4.','上半身 / 下半身 · 月 / 火 / 木 / 金を推奨。トレーニング日は1 → 2 → 3 → 4の順に進みます。'):isHLM()?hlmTxt('Heavy · Light · Medium. H is the progression driver. Choose the session that suits your recovery.','Heavy · Light · Medium。Hが進行の基準です。回復状態に合わせてセッションを選べます。'):hlmTxt('A · B · A is suggested. Choose A or B whenever needed.','A・B・Aがおすすめです。必要に応じてAまたはBを選べます。');
- const days=isFourDay()?['1','2','3','4']:isHLM()?['H','L','M']:['A','B'];let h=`<div class="toprow"><div><b>${title}</b><div class="small">${sub}</div></div><div class="choiceRow">${days.map(d=>`<button class="choice ${state.day===d?'on':''}" onclick="switchDay('${d}')" ${bvomWorkoutDayLocked()?'disabled':''}>${d}</button>`).join('')}</div></div>`;
+ const days=isFourDay()?['1','2','3','4']:isHLM()?['H','L','M']:['A','B'];let h=`<div class="toprow"><div><b>${title}</b><div class="small">${sub}</div></div>${bvomWorkoutDayChoices(days,state.day,'switchDay',bvomWorkoutDayLocked())}</div>`;
  let ns=ratioNotices();if(ns.length)h+=`<div class="notice">${ns.join('<br>')}</div>`;
  program().forEach(([n])=>{let p=corePrescription(n),ss=state.session[n]||{},plan=getSetPlan(n),w=(p.kind==='hlmHeavy'?hlmHeavyTarget(n):(hlmOverride(n)||p.loads?.[p.topIndex]||state.weights[n])),mode=p.kind==='hlmHeavy'?'HLM RPT':p.kind==='hlmLight'?hlmTxt('ACTIVE RECOVERY','アクティブリカバリー'):p.kind==='hlmMedium'?hlmTxt('INTENSITY','高強度'):bvomCoreCfgForSession(n).mode==='rpt'?'RPT':bvomT('workout.straight');h+=`<div class="exercise" id="work-${n.replace(/\W/g,'')}"><div class="exhead"><div><div class="exname">${liftLabel(n)}</div><div class="small">${mode} · ${p.targets.join(' / ')}</div></div><div class="weight" onclick="editWeight('${n}')">${fmt(w)} ${unitLabel()}</div></div><div class="sets">`;plan.forEach((q,i)=>{let log=ss[i],cl=log?(log.reps>=q.target?'done':'fail'):'';const shownLoad=log&&Number.isFinite(Number(log.load))?Number(log.load):q.load;h+=`<div class="setwrap"><button class="set ${cl}" onclick="tapSet('${n}',${i})">${log?log.reps:'✓'}</button><div class="setload">${fmt(shownLoad)}×${q.target}${q.amrap?'+':''}${log&&Number.isFinite(Number(log.rpe))?` · RPE ${Number(log.rpe)}`:''}</div>${q.optional?`<div class="extraLabel">${hlmTxt('OPTIONAL','任意')}</div>`:q.drop?'<div class="extraLabel">RPT</div>':''}</div>`});if(plan.some(q=>q.optional)&&!state.hlm.skippedSingles[state.day+'|'+n])h+=`<div style="width:100%;margin-top:8px"><button class="secondary wide" onclick="skipOptionalSingle('${n}')">${hlmTxt('SKIP OPTIONAL SINGLE','任意のシングルを省略')}</button></div>`;h+='</div></div>'});h+=renderAccessories17();h+=renderGpp17();document.querySelector('#workout').innerHTML=h;bvomSyncWorkoutControls();bvomSyncGppTimerbar();
 }
 function warmupTarget(n){let p=corePrescription(n);if(isIntermediate()&&p.kind==='hlmHeavy')return p.loads[0];if(isIntermediate()&&p.kind==='hlmMedium')return p.loads[0];if(isHLM()&&p.kind==='hlmLight')return p.loads[0];return(p.kind==='rpt5')?p.loads[0]:state.weights[n]}
-function renderWarm(){const days=isFourDay()?['1','2','3','4']:isHLM()?['H','L','M']:['A','B'];let h=`<div class="toprow"><div><b>${bvomT('warmup.title')}</b><div class="small">${bvomT('warmup.help')}</div></div><div class="choiceRow">${days.map(d=>`<button class="choice ${state.day===d?'on':''}" onclick="switchDay('${d}')" ${bvomWorkoutDayLocked()?'disabled':''}>${d}</button>`).join('')}</div></div>`;program().forEach(([n])=>{let wp=getWarmupPlan(n),w=wp.target,a=wp.sets;h+=`<div class="exercise" id="warm-${n.replace(/\W/g,'')}"><div class="exhead"><div class="exname">${liftLabel(n)}</div><div class="weight">${fmt(w)} ${unitLabel()}</div></div>`;if(!a.length)h+=`<p class="small">${bvomT('warmup.none')}</p>`;a.forEach(([x,r],i)=>{let wd=(state.warmupDone||{})[state.day+'|'+n]||{};h+=`<div class="warmrow"><button class="set ${wd[i]?'done':''}" onclick="completeWarmup('${n}',${i},${a.length},this)">✓</button><b>${fmt(x)}×${r}</b><span class="plates">${plateTextFor(n,x)}</span></div>`});h+=`<div class="warmrow"><span></span><b style="color:var(--accent)">${fmt(w)} ${unitLabel()}</b><span class="plates">${bvomT('warmup.workingTop')} · ${plateTextFor(n,w)}</span></div></div>`});document.querySelector('#warmup').innerHTML=h}
+function renderWarm(){const days=isFourDay()?['1','2','3','4']:isHLM()?['H','L','M']:['A','B'];let h=`<div class="toprow"><div><b>${bvomT('warmup.title')}</b><div class="small">${bvomT('warmup.help')}</div></div>${bvomWorkoutDayChoices(days,state.day,'switchDay',bvomWorkoutDayLocked())}</div>`;program().forEach(([n])=>{let wp=getWarmupPlan(n),w=wp.target,a=wp.sets;h+=`<div class="exercise" id="warm-${n.replace(/\W/g,'')}"><div class="exhead"><div class="exname">${liftLabel(n)}</div><div class="weight">${fmt(w)} ${unitLabel()}</div></div>`;if(!a.length)h+=`<p class="small">${bvomT('warmup.none')}</p>`;a.forEach(([x,r],i)=>{let wd=(state.warmupDone||{})[state.day+'|'+n]||{};h+=`<div class="warmrow"><button class="set ${wd[i]?'done':''}" onclick="completeWarmup('${n}',${i},${a.length},this)">✓</button><b>${fmt(x)}×${r}</b><span class="plates">${plateTextFor(n,x)}</span></div>`});h+=`<div class="warmrow"><span></span><b style="color:var(--accent)">${fmt(w)} ${unitLabel()}</b><span class="plates">${bvomT('warmup.workingTop')} · ${plateTextFor(n,w)}</span></div></div>`});document.querySelector('#warmup').innerHTML=h}
 function saveHlmSettings(){if(!bvomWorkoutActionAllowed())return;ensureHLM();if(bvomStateWorkoutActive(state))bvomCaptureHlmSettingsForActiveWorkout();else state.hlmActiveWorkoutSettings=null;const clamp=id=>Math.max(1,Math.min(25,Number(document.getElementById(id)?.value)||1)),single=id=>Math.max(0,Math.min(25,Number(document.getElementById(id)?.value)||0));if(document.getElementById('hlmLight'))state.hlm.lightPct=clamp('hlmLight');state.hlm.squatMediumPct=clamp('hlmSqMed');state.hlm.benchMediumPct=clamp('hlmBnMed');state.hlm.optionalSingles=!!document.getElementById('hlmSingles')?.checked;if(document.getElementById('hlmSingleSq')){state.hlm.singlePct.Squat=single('hlmSingleSq');state.hlm.singlePct['Bench Press']=single('hlmSingleBn');state.hlm.singlePct.Deadlift=single('hlmSingleDl');}state.warmupPlans={};state.warmupDone={};save();renderAll();bvomBeeModal(isFourDay()?hlmTxt('4-DAY SETTINGS SAVED','4-Day設定を保存しました'):hlmTxt('HLM SETTINGS SAVED','HLM設定を保存しました'),hlmTxt('Your changes apply to the next applicable workout.','変更は次の該当ワークアウトから反映されます。'))}
 function saveLiftSettings(n){if(!bvomWorkoutActionAllowed())return;
  ensurePlateModes();
@@ -5858,6 +5861,17 @@ function bvomBb2LeaveProgram(){
  if(!bvomBb2Commit({...state.bb2,selectedProgram:false}))return false;
  bvomBb2ShowProgramChooser();return true;
 }
+let bvomBb2WorkoutSelection=null;
+function bvomBb2SelectionAnchor(){
+ const b=state.bb2;
+ return JSON.stringify([b?.opening?.ownerId,b?.opening?.blockId,(b?.events||[]).filter(e=>['WORKOUT_FINISHED','WORKOUT_INCOMPLETE','WORKOUT_DISCARDED','BLOCK_SEALED'].includes(e.type)).at(-1)?.eventId]);
+}
+function bvomBb2SelectWorkout(number){
+ const days=bvomBb2PreviewModule?.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER;
+ if(!bvomBb2Selected()||bvomBb2Active()||!bvomWorkoutActionAllowed()||!days?.[Number(number)-1])return false;
+ bvomBb2WorkoutSelection={anchor:bvomBb2SelectionAnchor(),day:days[Number(number)-1]};
+ bvomBb2Workout();return true;
+}
 function bvomBb2NextView(){
  const b=state.bb2,m=bvomBb2PreviewModule;if(!b?.setup||!m)return null;
  const projection=b.opening?m.foldBB2Block(b.opening,b.events||[]):null;
@@ -5869,14 +5883,14 @@ function bvomBb2NextView(){
  const incomplete=(projection?.history||[]).filter(h=>h.status.startsWith('INCOMPLETE')).at(-1);
  if(incomplete&&(!last||incomplete.finishOrdinal>last.finishOrdinal))at=days.indexOf(incomplete.templateId);
  for(let n=0;n<4;n++)if(!projection||projection.quotas[days[at]]<8)break;else at=(at+1)%4;
- const templateId=days[at],plan=m.getBB2TemplatePrescription(b.setup,templateId);
+ const templateId=bvomBb2WorkoutSelection?.anchor===bvomBb2SelectionAnchor()?bvomBb2WorkoutSelection.day:days[at],plan=m.getBB2TemplatePrescription(b.setup,templateId);
  const slots=plan.slots.map(s=>{const p=projection?bvomBb2SharedState(projection,templateId,s).progress:null;
   return {...s,...(s.equipment==='loaded'?{plannedG:p?.loadG,plannedOrigin:p?.loadOrigin,incrementG:p?.incrementG,incrementOrigin:p?.incrementOrigin}:{variation:p?.variation||s.exerciseId,assistance:p?.assistance??'none',...(p?.loadG!=null?{plannedG:p.loadG,plannedOrigin:p.loadOrigin}:{}),incrementG:p?.incrementG,incrementOrigin:p?.incrementOrigin})};});
  return {templateId,slots,kind:'NORMAL',sessionId:null,preview:true};
 }
 let bvomBb2NextSnapshot=null,bvomBb2NextSequence=0;
 function bvomBb2NextToken(){
- const snapshot=bvomCloudStable([state.bb2?.opening,state.bb2?.events,state.bb2?.setup,state.unit]);
+ const snapshot=bvomCloudStable([state.bb2?.opening,state.bb2?.events,state.bb2?.setup,state.unit,bvomBb2WorkoutSelection?.anchor===bvomBb2SelectionAnchor()?bvomBb2WorkoutSelection.day:null]);
  if(snapshot!==bvomBb2NextSnapshot){bvomBb2NextSnapshot=snapshot;bvomBb2NextSequence++}
  return String(bvomBb2NextSequence);
 }
@@ -6677,7 +6691,6 @@ function bvomBb2Workout(){
  try{projection=b.opening?m.foldBB2Block(b.opening,b.events):{progress:{},pending:{},stallSignals:{}}}catch(e){
   el.innerHTML='<div class="card">'+hlmTxt('BB2 local record could not be verified. Editing is disabled.','BB2の端末内記録を検証できませんでした。編集は無効です。')+'</div>';return;
  }
- const history=active?[]:[...(b.sealedBlocks||[]).flatMap(x=>m.foldBB2Block(x.opening,x.events).history),...(projection.history||[])];
  const html=start.slots.map((initial,i)=>{
   const s=active?bvomBb2WorkingSlot(initial,b.events,b.activeSessionId):initial;
   const pendingKey=bvomBb2PendingKey(projection,start.templateId,s);
@@ -6709,7 +6722,6 @@ function bvomBb2Workout(){
    '<button type="button" class="secondary" data-bb2-extra-add="'+i+'" onclick="bvomBb2OpenExtra('+i+')">+ '+
     hlmTxt('ADD EXTRA SET','追加セットを記録')+'</button>':'';
   return '<div class="exercise">'+bvomWorkoutExerciseHeader(bvomBb2PreviewLabel(s.exerciseId),bvomBb2PreviewLabel(s.roleSlotId)+' · '+s.sets+' × '+s.floor+'–'+s.ceiling+' '+hlmTxt('reps','回'))+
-   (!active?bvomBb2PreviousExerciseReference(s,history):'')+
    (s.equipment==='loaded'&&Number.isSafeInteger(s.plannedG)?'<div class="small" style="display:flex;align-items:center;justify-content:flex-end;margin:6px 0 12px">'+
    '<button type="button" class="secondary" data-bb2-edit-save="'+i+'" onclick="bvomBb2EditWorkingLoad('+i+')" '+
    (touched?'disabled':'')+'>'+hlmTxt('EDIT WEIGHT','重量を変更')+'</button></div>':'')+
@@ -6722,13 +6734,14 @@ function bvomBb2Workout(){
     '<button type="button" class="choice" data-bb2-plan-save="'+i+'" onclick="bvomBb2EditBodyweightPlan('+i+')" '+(touched?'disabled':'')+'>'+hlmTxt('SAVE BW PLAN','自重種目の設定を保存')+'</button></div></details>':'')+
    (recovery||signal?.kind==='OFFER'||signal?.kind==='NOTE'?'<p class="small">'+bvomEsc(feedback)+'</p>':'')+'<div class="sets">'+rows+extraRows+'</div>'+extraInput+'</div>';
  }).join('');
- const count=start.slots.reduce((n,s)=>n+s.sets,0),minimum=Math.ceil(.70*count);
+ const count=start.slots.reduce((n,s)=>n+s.sets,0);
  const done=b.events.filter(e=>e.type==='SET_RECORDED'&&e.sessionId===b.activeSessionId).length;
- el.innerHTML=(!active?'<button type="button" class="primary wide" data-bb2-start-next data-bb2-preview-token="'+bvomBb2NextToken()+'" onclick="bvomBb2StartNext('+bvomEsc(JSON.stringify(bvomBb2NextToken()))+')">'+hlmTxt('START WORKOUT','ワークアウトを開始')+'</button>':'')+'<div class="toprow"><b>BODYBUILDING 2 · '+bvomEsc(bvomBb2PreviewLabel(start.templateId))+
+ const dayNumber=String(m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.indexOf(start.templateId)+1);
+ el.innerHTML='<div class="toprow"><div><b>BODYBUILDING 2</b><div class="small">'+bvomEsc(bvomBb2PreviewLabel(start.templateId))+
   (start.kind==='RECOVERY'?' · '+hlmTxt('LOW-STRESS RECOVERY','軽めの回復ワークアウト'):start.kind==='EXTRA_NORMAL'?' · '+hlmTxt('EXTRA WORKOUT','追加ワークアウト'):'')+
-  '</b></div><div class="notice">'+(!active?hlmTxt('Review the next workout, then press Start. No session or timer has started.','次のワークアウトを確認して開始してください。セッションやタイマーはまだ開始していません。'):(hlmTxt('Workout:','ワークアウト：')+' '+done+'/'+count+' '+hlmTxt('prescribed sets recorded;','予定セットを記録済み。')+' '+
-  (start.kind==='RECOVERY'?hlmTxt('recovery never earns a credit or progression.','回復ワークアウトではクレジットや進行を獲得しません。'):minimum+' '+hlmTxt('required for Finish.','セット以上で終了できます。'))+
-  ' '+hlmTxt('Saved on this device. Use FINISH below when you are done.','端末に保存済みです。終了時は下のFINISHを使用してください。')))+'</div>'+html;
+  '</div></div>'+bvomWorkoutDayChoices(['1','2','3','4'],dayNumber,'bvomBb2SelectWorkout',active)+'</div>'+
+  (!active?'<div class="small" style="display:flex;justify-content:flex-end;margin:6px 0 12px"><button type="button" class="secondary" data-bb2-start-next data-bb2-preview-token="'+bvomBb2NextToken()+'" onclick="bvomBb2StartNext('+bvomEsc(JSON.stringify(bvomBb2NextToken()))+')">'+hlmTxt('START WORKOUT','ワークアウトを開始')+'</button></div>':
+   '<div class="small">'+done+'/'+count+' '+hlmTxt('prescribed sets recorded','予定セットを記録済み')+'</div>')+html;
  if(!active)el.innerHTML+='<button type="button" class="secondary wide" data-bb2-next-workout onclick="bvomBb2OpenPreview()">'+hlmTxt('PROGRAMME OPTIONS / RECOVERY','プログラム設定／回復')+'</button>';
  bvomSyncWorkoutControls();
  if(active)bvomOrderApply('workout');
