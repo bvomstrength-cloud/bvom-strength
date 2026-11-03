@@ -87,7 +87,7 @@ label{display:block;margin:11px 0}select{width:100%;padding:10px;border:1px soli
 .bb2BodyweightPlanFields button{width:100%;white-space:normal;word-break:normal;min-height:44px}
 @media(min-width:600px){.bb2BodyweightPlanFields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style><link rel="icon" href="./icon-192.png"><link rel="apple-touch-icon" href="./icon-192.png"><style id="bvom-finish-disabled-v221">
-#timerbar .finish:disabled{opacity:.38;filter:grayscale(.35);cursor:not-allowed}
+#timerbar .finish:disabled,#workout [data-bb2-start-next]:disabled{opacity:.38;filter:grayscale(.35);cursor:not-allowed}
 </style>
 
 <style id="bvom-themes-v23">
@@ -3161,7 +3161,7 @@ function deleteHistoryWorkout(i){if(!bvomWorkoutActionAllowed())return;
  const d=new Date(h.date),date=isNaN(d.getTime())?String(h.date||''):d.toLocaleDateString(bvomDateLocale(),{day:'numeric',month:'short',year:'numeric'});
  bvomChoiceModal(
   hlmTxt('DELETE WORKOUT?','ワークアウトを削除しますか？'),
-  hlmTxt(`Delete the workout from ${date}? This removes this history record only. It will not change your current training weights or progression.`,`${date} のワークアウトを削除しますか？ 履歴の記録だけが削除されます。現在のトレーニング重量や進行状況は変更されません。`),
+  hlmTxt(`Delete the workout from ${date}? This removes this history record only. It will not change your current training weights or progression.`,`${date} のワークアウトを削除しますか？ 履歴の記録だけが削除されます。現在のトレーニング重量や進行状況は変更されません。`)+(h.program==='bb2'?' '+hlmTxt('Any block credit already earned by this workout will remain.','このワークアウトで獲得済みのブロッククレジットは残ります。'):''),
   hlmTxt('CANCEL','キャンセル'),hlmTxt('DELETE','削除'),()=>{},()=>{
    if(!bvomWorkoutActionAllowed())return;
    if(h.program==='bb2'){if(!bvomHistoryAccountMatches(account)||JSON.stringify(bvomHistoryRecord(i))!==target)return;
@@ -5900,6 +5900,14 @@ function bvomBb2StartNext(token){
  const next=bvomBb2NextView();if(!next||next.complete||next.blocked)return false;
  bvomBb2Day=next.templateId;bvomBb2Kind='NORMAL';return bvomBb2Begin(true);
 }
+async function bvomBb2OpenExtraWorkout(token){
+ if(bvomBb2Active()||!bvomBb2Selected()||!bvomWorkoutActionAllowed())return false;
+ if(token!==bvomBb2NextToken()){bvomBb2Workout();return false;}
+ const next=bvomBb2NextView(),b=state.bb2,m=bvomBb2PreviewModule;
+ if(!next||next.complete||next.blocked||!b.opening||m.foldBB2Block(b.opening,b.events).quotas[next.templateId]!==8)return false;
+ bvomBb2Day=next.templateId;bvomBb2Kind='EXTRA_NORMAL';
+ await bvomBb2OpenPreview();return bvomBb2PreviewOpen;
+}
 function bvomBb2IdleWorkout(){return bvomBb2Workout()}
 function bvomBb2PendingKey(projection,templateId,slot){
  const key=templateId+'|'+slot.roleSlotId+'|'+slot.exerciseId;
@@ -6736,12 +6744,14 @@ function bvomBb2Workout(){
  }).join('');
  const count=start.slots.reduce((n,s)=>n+s.sets,0);
  const done=b.events.filter(e=>e.type==='SET_RECORDED'&&e.sessionId===b.activeSessionId).length;
+ const capped=!active&&projection.quotas?.[start.templateId]===8;
  const dayNumber=String(m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.indexOf(start.templateId)+1);
  el.innerHTML='<div class="toprow"><div><b>BODYBUILDING 2</b><div class="small">'+bvomEsc(bvomBb2PreviewLabel(start.templateId))+
   (start.kind==='RECOVERY'?' · '+hlmTxt('LOW-STRESS RECOVERY','軽めの回復ワークアウト'):start.kind==='EXTRA_NORMAL'?' · '+hlmTxt('EXTRA WORKOUT','追加ワークアウト'):'')+
   '</div></div>'+bvomWorkoutDayChoices(['1','2','3','4'],dayNumber,'bvomBb2SelectWorkout',active)+'</div>'+
-  (!active?'<div class="small" style="display:flex;justify-content:flex-end;margin:6px 0 12px"><button type="button" class="secondary" data-bb2-start-next data-bb2-preview-token="'+bvomBb2NextToken()+'" onclick="bvomBb2StartNext('+bvomEsc(JSON.stringify(bvomBb2NextToken()))+')">'+hlmTxt('START WORKOUT','ワークアウトを開始')+'</button></div>':
-   '<div class="small">'+done+'/'+count+' '+hlmTxt('prescribed sets recorded','予定セットを記録済み')+'</div>')+html;
+  (!active?'<div class="small" style="display:flex;justify-content:flex-end;margin:6px 0 12px"><button type="button" class="secondary" data-bb2-start-next '+(capped?'disabled aria-describedby="bb2-day-cap" ':'')+'data-bb2-preview-token="'+bvomBb2NextToken()+'" onclick="bvomBb2StartNext('+bvomEsc(JSON.stringify(bvomBb2NextToken()))+')">'+hlmTxt('START WORKOUT','ワークアウトを開始')+'</button></div>':
+   '<div class="small">'+done+'/'+count+' '+hlmTxt('prescribed sets recorded','予定セットを記録済み')+'</div>')+
+  (capped?'<div class="small" id="bb2-day-cap"><p>'+hlmTxt('This workout day has earned all 8/8 block credits. Choose another day, or use the existing Extra Workout option to train this day without another block credit.','この日は8/8のブロッククレジットを獲得済みです。別の日を選ぶか、追加ワークアウトでこの日をトレーニングできます。追加のブロッククレジットは獲得しません。')+'</p><button type="button" class="secondary" data-bb2-open-extra onclick="bvomBb2OpenExtraWorkout('+bvomEsc(JSON.stringify(bvomBb2NextToken()))+')">'+hlmTxt('EXTRA WORKOUT','追加ワークアウト')+'</button></div>':'')+html;
  if(!active)el.innerHTML+='<button type="button" class="secondary wide" data-bb2-next-workout onclick="bvomBb2OpenPreview()">'+hlmTxt('PROGRAMME OPTIONS / RECOVERY','プログラム設定／回復')+'</button>';
  bvomSyncWorkoutControls();
  if(active)bvomOrderApply('workout');
