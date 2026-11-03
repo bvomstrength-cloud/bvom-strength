@@ -650,9 +650,10 @@ try {
         await page.locator('[data-bb2-save]').click();
         assert.equal(await page.evaluate(()=>state.bb2.setup.optionalUpperACurls),true,'both-day configuration saves locally');
         await page.evaluate(()=>bvomBb2ValidatePortableJournal(state.bb2,state.bb2.opening.ownerId));
-        try{await page.waitForFunction(()=>state.bb2.cloudSync?.baseline?.snapshot?.setup?.optionalUpperACurls===true);}
-        catch(error){console.error('Shared setup sync diagnostic',await page.evaluate(()=>({status:bvomBb2AccountStatus(),upload:bvomBb2AccountBinding?.lastUpload,download:bvomBb2AccountBinding?.lastDownload,active:bvomAnyWorkoutActive(),setup:state.bb2.setup,baselineSetup:state.bb2.cloudSync?.baseline?.snapshot?.setup})));throw error;}
-
+        assert.equal(await page.evaluate(()=>bvomBb2DormantAccountSnapshot().bb2EditorOpen),true,'editor transfer fence remains active');
+        await page.locator('[data-bb2-back]').click();
+        await page.waitForFunction(()=>state.bb2.cloudSync?.baseline?.snapshot?.setup?.optionalUpperACurls===true);
+        await page.locator('.tab[data-tab="workout"]').click();await page.locator('[data-bb2-next-workout]').click();
       }
       await page.locator('[data-bb2-day="'+day+'"]').click();
       const curl=page.locator('#setup .review').filter({hasText:'Dumbbell Curl'}).last();
