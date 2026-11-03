@@ -1,5 +1,5 @@
 /* GENERATED BB2 browser core — no direct edits. */
-/* Source fingerprint SHA-256: d80628e5d36834a161cabd50fff195a108734bc6bdbdbc2fe20f5f4594ceeabc */
+/* Source fingerprint SHA-256: ecf060dae09bc159ec62870849393d9f821fc9c7b400fe271ae8767b35ed6cb8 */
 /* Regenerate: node scripts/build-bb2-browser.cjs */
 /* Import has no app, storage, network or clock side effects. */
 const factories = Object.create(null);
@@ -609,8 +609,12 @@ function sharedProgressFor(projection,key,slot=null){
   const d=policy.prescriptions.find(d=>identity(d.templateId,d.roleSlotId,d.exerciseId)===key);
   if(!d||(slot&&sharedRecipe({...slot,exerciseId:d.exerciseId})!==sharedRecipe(d)))return {key,progress:current};
   const expected=current||(slot?.incrementG!==undefined?{incrementG:slot.incrementG,variation:slot.variation??null,assistance:slot.assistance??null,loadG:slot.plannedG??null}:null);
-  const candidates=policy.prescriptions.map(d=>({key:identity(d.templateId,d.roleSlotId,d.exerciseId),d}))
-    .filter(c=>projection.progress[c.key]&&sharedRecipe(c.d)===sharedRecipe(d)&&(!expected||sharedSignature(c.d,projection.progress[c.key])===sharedSignature(d,expected)));
+  let candidates=policy.prescriptions.map(d=>({key:identity(d.templateId,d.roleSlotId,d.exerciseId),d}))
+    .filter(c=>projection.progress[c.key]&&sharedRecipe(c.d)===sharedRecipe(d)&&(!expected||
+      sharedSignature(c.d,projection.progress[c.key])===sharedSignature(d,d.equipment==='loaded'&&expected.loadG===null?{...expected,loadG:projection.progress[c.key].loadG}:expected)));
+  // An increment-only preference has no working load to inherit. Preserve its
+  // increment, but prefer a compatible established track over another empty one.
+  if(d.equipment==='loaded'&&expected?.loadG===null){const established=candidates.filter(c=>projection.progress[c.key].loadG!==null);if(established.length)candidates=established;}
   candidates.sort((a,b)=>policy.order.indexOf(b.key)-policy.order.indexOf(a.key)||(a.key<b.key?-1:a.key>b.key?1:0));
   const source=candidates[0];return source?{key:source.key,progress:projection.progress[source.key]}:{key,progress:current};
 }
@@ -2361,7 +2365,7 @@ function load(id) {
   factories[id](module, module.exports, load);
   return module.exports;
 }
-export const BB2_BROWSER_SOURCE_SHA256 = "d80628e5d36834a161cabd50fff195a108734bc6bdbdbc2fe20f5f4594ceeabc";
+export const BB2_BROWSER_SOURCE_SHA256 = "ecf060dae09bc159ec62870849393d9f821fc9c7b400fe271ae8767b35ed6cb8";
 export const BB2_BROWSER_MODULES = Object.freeze({
   ledger: Object.freeze(load("./ledger.cjs")),
   catalogue: Object.freeze(load("./catalogue.cjs")),

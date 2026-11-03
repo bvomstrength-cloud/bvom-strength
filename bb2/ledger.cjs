@@ -603,8 +603,12 @@ function sharedProgressFor(projection,key,slot=null){
   const d=policy.prescriptions.find(d=>identity(d.templateId,d.roleSlotId,d.exerciseId)===key);
   if(!d||(slot&&sharedRecipe({...slot,exerciseId:d.exerciseId})!==sharedRecipe(d)))return {key,progress:current};
   const expected=current||(slot?.incrementG!==undefined?{incrementG:slot.incrementG,variation:slot.variation??null,assistance:slot.assistance??null,loadG:slot.plannedG??null}:null);
-  const candidates=policy.prescriptions.map(d=>({key:identity(d.templateId,d.roleSlotId,d.exerciseId),d}))
-    .filter(c=>projection.progress[c.key]&&sharedRecipe(c.d)===sharedRecipe(d)&&(!expected||sharedSignature(c.d,projection.progress[c.key])===sharedSignature(d,expected)));
+  let candidates=policy.prescriptions.map(d=>({key:identity(d.templateId,d.roleSlotId,d.exerciseId),d}))
+    .filter(c=>projection.progress[c.key]&&sharedRecipe(c.d)===sharedRecipe(d)&&(!expected||
+      sharedSignature(c.d,projection.progress[c.key])===sharedSignature(d,d.equipment==='loaded'&&expected.loadG===null?{...expected,loadG:projection.progress[c.key].loadG}:expected)));
+  // An increment-only preference has no working load to inherit. Preserve its
+  // increment, but prefer a compatible established track over another empty one.
+  if(d.equipment==='loaded'&&expected?.loadG===null){const established=candidates.filter(c=>projection.progress[c.key].loadG!==null);if(established.length)candidates=established;}
   candidates.sort((a,b)=>policy.order.indexOf(b.key)-policy.order.indexOf(a.key)||(a.key<b.key?-1:a.key>b.key?1:0));
   const source=candidates[0];return source?{key:source.key,progress:projection.progress[source.key]}:{key,progress:current};
 }

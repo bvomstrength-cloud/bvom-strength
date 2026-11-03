@@ -50,7 +50,8 @@ const curl=day=>`${day}|biceps_curl|dumbbell_curl`;
 }
 {
  const j=journal({old:true});j.finish(j.begin('upper_a'));j.add('INCREMENT_EDITED',{templateId:'upper_b',roleSlotId:'biceps_curl',exerciseId:'dumbbell_curl',scope:'GLOBAL',incrementG:1000,incrementOrigin:origin(1000)});
- const a=j.begin('upper_a',{legacy:false});assert.equal(a.slots.at(-1).plannedG,11000,'later increment-only preference cannot erase an established working load');
+ const a=j.begin('upper_a',{legacy:false});assert.equal(a.slots.at(-1).plannedG,11000,'later increment-only preference cannot erase an established working load');j.finish(a);
+ const b=j.begin('upper_b',{legacy:false});assert.equal(b.slots.at(-1).plannedG,12000,'matching increment-only preference inherits the established shared load');
  console.log('PASS unconfigured load preferences cannot replace a working progression track');
 }
 {
