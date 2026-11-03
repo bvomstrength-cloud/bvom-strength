@@ -7,7 +7,7 @@ const SCHEMA_VERSION = 1;
 const FOLD_RULES_VERSION = 1;
 const TEMPLATES = Object.freeze(['upper_a', 'lower_a', 'upper_b', 'lower_b']);
 const EVENT_TYPES = Object.freeze([
-  'PROGRESSION_SHARED', 'BLOCK_CREATED', 'BLOCK_SEALED', 'WORKOUT_STARTED', 'EXERCISE_LOCKED',
+  'EXERCISE_READY', 'PROGRESSION_SHARED', 'BLOCK_CREATED', 'BLOCK_SEALED', 'WORKOUT_STARTED', 'EXERCISE_LOCKED',
   'CALIBRATION_PLAN_REVISED', 'CALIBRATION_ACCEPTED', 'SET_RECORDED',
   'EXTRA_SET_RECORDED', 'SET_CORRECTED', 'SET_VOIDED', 'WORKOUT_FINISHED',
   'WORKOUT_INCOMPLETE', 'WORKOUT_DISCARDED', 'SESSION_VOIDED',
@@ -28,7 +28,8 @@ const EVENT_FIELDS = Object.freeze({
   PROGRESSION_SHARED: ['version', 'catalogueVersion', 'prescriptions', 'openingOrder'],
   BLOCK_CREATED: ['ownerId', 'schemaVersion', 'foldRulesVersion', 'openingSnapshotVersion'],
   BLOCK_SEALED: ['sealId'],
-  WORKOUT_STARTED: ['sessionId', 'templateId', 'kind', 'slots', 'startedAt', 'progressionPolicy'],
+  EXERCISE_READY: ['sessionId','roleSlotId','exerciseId','choiceEventId'],
+  WORKOUT_STARTED: ['sessionId', 'templateId', 'kind', 'slots', 'startedAt', 'progressionPolicy','inlineDecisions'],
   EXERCISE_LOCKED: ['sessionId', 'roleSlotId', 'exerciseId', 'plannedG', 'plannedOrigin',
     'incrementG', 'incrementOrigin', 'equipment', 'sets', 'floor', 'ceiling', 'variation', 'assistance'],
   CALIBRATION_PLAN_REVISED: ['sessionId', 'roleSlotId', 'exerciseId', 'plannedG', 'plannedOrigin'],
@@ -334,7 +335,7 @@ function validateEventPayload(e) {
   }
   if (e.addedWeightG !== undefined) mass('added weight', 'addedWeightG', 'addedWeightOrigin');
 }
-function validateEvents(opening, events) {
+function validateEvents(opening, events, verifiedDiscards = new Map()) {
   if (!Array.isArray(events)) fail('events must be an array');
   const ids = new Set();
   const acceptedChoices = new Map(), revisedChoices = new Set();
@@ -394,7 +395,7 @@ function validateEvents(opening, events) {
   }
   const counts = new Map();
   for (const e of events) if (e.type === 'TOMBSTONE') {
-    const ordinal = discards.get(e.discardedSessionId);
+    const ordinal = discards.get(e.discardedSessionId)??verifiedDiscards.get(e.discardedSessionId);
     if (!ordinal || e.commitOrdinal >= ordinal) fail('unlinked discard tombstone');
     counts.set(e.discardedSessionId, (counts.get(e.discardedSessionId) || 0) + 1);
   }
@@ -403,7 +404,7 @@ function validateEvents(opening, events) {
   // been purged to a tombstone; only independently committed GLOBAL edits may
   // retain their session linkage (and their original event ordinal).
   const discardedSessionEvents = new Set([
-    'WORKOUT_STARTED', 'EXERCISE_LOCKED', 'CALIBRATION_PLAN_REVISED',
+    'EXERCISE_READY', 'WORKOUT_STARTED', 'EXERCISE_LOCKED', 'CALIBRATION_PLAN_REVISED',
     'CALIBRATION_ACCEPTED', 'SET_RECORDED', 'EXTRA_SET_RECORDED',
     'NOTE_EDITED'
   ]);
@@ -626,8 +627,12 @@ function foldBB2Block(openingSnapshot, chronologicalEvents) {
   // across distinct corrected event streams, even when their lengths match.
   return foldBB2BlockCached(openingSnapshot, chronologicalEvents, new Map());
 }
-function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
-  validateOpening(openingSnapshot); validateEvents(openingSnapshot, chronologicalEvents);
+function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache, verifiedDiscards = new Map()) {
+  validateOpening(openingSnapshot); validateEvents(openingSnapshot, chronologicalEvents,verifiedDiscards);
+  // Prefix replays may end before a verified Discard. Only internal prefixes
+  // inherit its proof; top-level journals still require the actual linked event.
+  const discardProof=new Map(verifiedDiscards);
+  for(const event of chronologicalEvents)if(event.type==='WORKOUT_DISCARDED')discardProof.set(event.sessionId,event.commitOrdinal);
   // Historical legality must be checked against the exact original prefix.
   // Without shared memoisation, nested prefix checks recursively revisit the
   // same earlier calibrations/consents and grow exponentially.
@@ -635,7 +640,7 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
     const length = ordinal - 1;
     if (!prefixCache.has(length)) {
       prefixCache.set(length, foldBB2BlockCached(openingSnapshot,
-        chronologicalEvents.slice(0, length), prefixCache));
+        chronologicalEvents.slice(0, length), prefixCache,discardProof));
     }
     return prefixCache.get(length);
   };
@@ -653,7 +658,8 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
   // pre-lock GLOBAL edits retain their original ordinal and session linkage.
   // Restrict the missing-session exception to that original Discard window.
   const discardedEditWindows = new Map();
-  for (const event of chronologicalEvents) if (event.type === 'WORKOUT_DISCARDED') {
+  for (const [sessionId,commitOrdinal] of discardProof) {
+    const event={sessionId,commitOrdinal};
     const tombstones = chronologicalEvents.filter(x =>
       x.type === 'TOMBSTONE' && x.discardedSessionId === event.sessionId &&
       x.commitOrdinal < event.commitOrdinal);
@@ -781,6 +787,8 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
         if (!Array.isArray(e.slots) || !e.slots.length) fail('missing session slots');
         if(sharing&&e.progressionPolicy!==1)fail('shared progression policy required for new Start');
         if(!sharing&&e.progressionPolicy!==undefined)fail('Start references inactive sharing policy');
+        if(e.inlineDecisions!==undefined&&(e.inlineDecisions!==1||e.kind==='RECOVERY'))fail('unsupported inline decisions');
+        const deferred=new Map();
         const slots = clone(e.slots), names = new Set();
         for (const s of slots) {
           validateSlot(s); if (names.has(s.roleSlotId)) fail('duplicate role slot'); names.add(s.roleSlotId);
@@ -797,6 +805,12 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
               progress[key]=clone(source.progress);
             }
           }
+          // Readiness belongs to the original Start prefix, even if a later
+          // correction removes the historical difficulty offer.
+          if(e.inlineDecisions===1&&s.equipment==='bodyweight'&&(pending[key]||chronologicalEvents.some(x=>x.type==='EXERCISE_READY'&&x.sessionId===e.sessionId&&x.roleSlotId===s.roleSlotId))){
+            const historical=replayBefore(e.commitOrdinal),offer=sharedPendingFor(historical,key,s);
+            if(offer?.kind==='DIFFICULTY')deferred.set(s.roleSlotId,{...clone(offer),sourceRoleSlotId:Object.entries(historical.pending).find(([,v])=>v===offer)?.[0].split('|')[1]});
+          }
           if (pending[key]) {
             // A later correction may create a pending offer *retroactively*
             // at an earlier Finish. A historical Start that was legal when
@@ -804,17 +818,35 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
             // Evaluate the offer using the ledger prefix at this Start's
             // original ordinal; new Starts still see today's unresolved offer.
             const historical = replayBefore(e.commitOrdinal);
-            if (sharedPendingFor(historical,key,s)) fail('unresolved choice blocks same exercise');
+            const offer=sharedPendingFor(historical,key,s);
+            if(offer&&e.inlineDecisions===1&&s.equipment==='bodyweight'&&offer.kind==='DIFFICULTY')deferred.set(s.roleSlotId,{...clone(offer),sourceRoleSlotId:Object.entries(historical.pending).find(([,v])=>v===offer)?.[0].split('|')[1]});
+            else if (sharedPendingFor(historical,key,s)) fail('unresolved choice blocks same exercise');
           }
         }
         sessions.set(e.sessionId, { sessionId: e.sessionId, templateId: e.templateId, kind: e.kind, slots,
-          initialSlots: clone(slots), locks: new Set(), lockSnapshots: new Map(),
+          startOrdinal:e.commitOrdinal, initialSlots: clone(slots), deferred, ready:new Set(), locks: new Set(), lockSnapshots: new Map(),
           seenSets: new Set(), accepted: new Map(), outcome: null,
           finishOrdinal: null, note: '', ...(e.startedAt !== undefined ? {startedAt:e.startedAt} : {}) });
         break;
       }
+      case 'EXERCISE_READY': {
+        const session=sessions.get(e.sessionId),slot=findSlot(session,e),offer=session.deferred.get(slot.roleSlotId);
+        if(session.outcome||!offer||session.ready.has(slot.roleSlotId)||session.locks.has(slot.roleSlotId)||session.seenSets.has(slot.roleSlotId))fail('exercise readiness is missing, duplicate or locked');
+        const choice=chronologicalEvents.find(x=>x.eventId===e.choiceEventId&&x.commitOrdinal<e.commitOrdinal);
+        if(choice?.type!=='CHOICE_RESOLVED'||choice.sourceSessionId!==offer.sessionId||
+           (choice.sourceBlockId??opening.blockId)!==(offer.sourceBlockId??opening.blockId)||
+           choice.roleSlotId!==offer.sourceRoleSlotId||
+           choice.exerciseId!==slot.exerciseId||!['HOLD','DIFFICULTY_ACCEPT'].includes(choice.decision))fail('readiness requires the matching explicit bodyweight choice');
+        if(choice.decision==='DIFFICULTY_ACCEPT'){
+          slot.variation=choice.variation;slot.assistance=choice.assistance;
+          if(choice.addedWeightG!==undefined){slot.plannedG=choice.addedWeightG;slot.plannedOrigin=clone(choice.addedWeightOrigin)}
+          else{delete slot.plannedG;delete slot.plannedOrigin}
+        }
+        session.ready.add(slot.roleSlotId);break;
+      }
       case 'EXERCISE_LOCKED': {
         const s = sessions.get(e.sessionId), slot = findSlot(s, e);
+        if (s.deferred.has(slot.roleSlotId)&&!s.ready.has(slot.roleSlotId))fail('resolve inline bodyweight decision before exercise lock');
         if (s.outcome) fail('exercise lock after workout outcome');
         if (s.locks.has(slot.roleSlotId)) fail('duplicate exercise lock');
         if (s.seenSets.has(slot.roleSlotId)) fail('late exercise lock');
@@ -880,6 +912,7 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
         if (session?.outcome) fail('session edit after workout outcome');
         const slot = session ? findSlot(session, e) : null;
         if (slot && (session.locks.has(slot.roleSlotId) || session.seenSets.has(slot.roleSlotId))) fail('edit after lock');
+        if(session?.deferred.has(slot?.roleSlotId)&&!session.ready.has(slot.roleSlotId))fail('resolve inline bodyweight decision before editing');
         const p = getProgress(key, slot);
         if (e.type === 'STALL_REDUCTION_ACCEPTED') {
           // A stalled-weight acceptance is not a generic manual weight edit.
@@ -933,6 +966,7 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
       case 'SET_RECORDED':
       case 'EXTRA_SET_RECORDED': {
         const s = sessions.get(e.sessionId), slot = findSlot(s, e);
+        if (s.deferred.has(slot.roleSlotId)&&!s.ready.has(slot.roleSlotId))fail('resolve inline bodyweight decision before recording');
         if (s.outcome) fail('set after outcome');
         if (e.actualOrigin?.kind === 'DERIVED' &&
             (e.actualG !== slot.plannedG ||
@@ -1617,7 +1651,7 @@ function discardBB2Session(events, sessionId) {
   positiveId(sessionId, 'session');
   if (!events.some(e => e.type === 'WORKOUT_STARTED' && e.sessionId === sessionId)) fail('discard unknown session');
   if (events.some(e => e.sessionId === sessionId && ['WORKOUT_FINISHED', 'WORKOUT_INCOMPLETE'].includes(e.type))) fail('cannot discard completed session');
-  const localOnly = new Set(['WORKOUT_STARTED', 'EXERCISE_LOCKED', 'CALIBRATION_PLAN_REVISED',
+  const localOnly = new Set(['EXERCISE_READY', 'WORKOUT_STARTED', 'EXERCISE_LOCKED', 'CALIBRATION_PLAN_REVISED',
     'CALIBRATION_ACCEPTED', 'SET_RECORDED', 'EXTRA_SET_RECORDED', 'NOTE_EDITED']);
   const next = events.map(e => e.sessionId === sessionId && localOnly.has(e.type) ?
     { type: 'TOMBSTONE', eventId: e.eventId, commitOrdinal: e.commitOrdinal, blockId: e.blockId, discardedSessionId: sessionId } : clone(e));

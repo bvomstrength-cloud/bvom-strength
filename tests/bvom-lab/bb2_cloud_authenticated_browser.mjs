@@ -679,6 +679,27 @@ try {
     assert.deepEqual(shared.loads,[12000,12000]);assert.equal(shared.legacy,16);assert.deepEqual(shared.events.slice(0,35),data.bb2.events);
     assert.deepEqual(await b.evaluate(()=>state.bb2.events),shared.events);
     const finalRemote=await admin.from('bvom_cloud_state').select('state').eq('user_id',id).single();if(finalRemote.error)throw finalRemote.error;assert.deepEqual(finalRemote.data.state.snapshot.events,shared.events);
+    // The next-flow readiness marker is real canonical cloud data, not UI-only.
+    for(const [page,first] of [[a,true],[b,false]]){
+      await page.locator('.tab[data-tab="workout"]').click();await page.locator('[data-bb2-next-workout]').click();await page.locator('[data-bb2-day="lower_a"]').click();
+      for(const field of await page.locator('#setup [data-bb2-load]:not([disabled])').all())if(!(await field.inputValue()))await field.fill('60');
+      for(const field of await page.locator('#setup [data-bb2-inc]').all())if(!(await field.inputValue()))await field.fill('2.5');
+      await page.locator('[data-bb2-start]').click();await page.waitForSelector('#workout [data-bb2-set]');
+      const started=await page.evaluate(()=>state.bb2.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===state.bb2.activeSessionId));
+      const bw=started.slots.findIndex(s=>s.equipment==='bodyweight');assert.ok(bw>=0);
+      if(!first){
+        assert.equal(await page.locator('[data-bb2-set="'+bw+'|0"]').isDisabled(),true);
+        for(const[i,slot]of started.slots.entries())if(i!==bw)for(let j=0;j<slot.sets;j++)await recordSet(page,i+'|'+j,slot.floor);
+        await page.locator('#workout [data-bb2-choice-hold]').click();assert.equal(await page.evaluate(()=>state.bb2.events.at(-1).type),'EXERCISE_READY');
+      }
+      for(const[i,slot]of started.slots.entries())if(first||i===bw)for(let j=0;j<slot.sets;j++)await recordSet(page,i+'|'+j,first?slot.ceiling:slot.floor);
+      await page.locator('#timerbar .finish').click();await page.locator('.bvomModalOverlay [data-note]').fill('Authenticated inline bodyweight '+first);await page.locator('.bvomModalOverlay [data-save]').click();await page.locator('.bvomModalOverlay [data-ok]').click();
+      await page.waitForFunction(()=>state.bb2.cloudSync?.baseline?.snapshot?.events?.length===state.bb2.events.length);
+      const receiver=first?b:a,n=await page.evaluate(()=>state.bb2.events.length);await receiver.evaluate(()=>window.dispatchEvent(new Event('focus')));await receiver.waitForFunction(n=>state.bb2.events.length===n,n);
+    }
+    const inlineJournal=await a.evaluate(()=>state.bb2.events);assert.ok(inlineJournal.some(e=>e.type==='EXERCISE_READY'));
+    assert.deepEqual(await b.evaluate(()=>state.bb2.events),inlineJournal);assert.deepEqual(inlineJournal.slice(0,35),data.bb2.events);
+    const inlineRemote=await admin.from('bvom_cloud_state').select('state').eq('user_id',id).single();if(inlineRemote.error)throw inlineRemote.error;assert.deepEqual(inlineRemote.data.state.snapshot.events,inlineJournal);
     await a.context().close();await b.context().close();
   });
 

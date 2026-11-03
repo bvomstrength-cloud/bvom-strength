@@ -2415,12 +2415,13 @@ H.withClock(c=>{
  }
  open();const b=h.S().bb2,p=catalogue.foldBB2Block(b.opening,b.events);
  assert.ok(Object.values(p.pending).some(x=>x.kind==='DIFFICULTY'));
- let message='';h.ctx.alert=m=>{message=m};const saved=h.ls.getItem('bvom_data');
- assert.equal(h.ctx.bvomBb2Begin(),false);assert.match(message,/Resolve the pending decision.*BB2 Decisions to Review/);
- assert.equal(h.ls.getItem('bvom_data'),saved,'F2 cannot change progression or pending decisions');
+ const pendingBefore=JSON.parse(JSON.stringify(p.pending));
+ assert.equal(h.ctx.bvomBb2Begin(),true,'Start permits unrelated exercises while bodyweight is deferred');
+ const active=h.S().bb2.activeSessionId;
+ assert.deepEqual(JSON.parse(JSON.stringify(catalogue.foldBB2Block(b.opening,h.S().bb2.events).pending)),pendingBefore,'Start must not invent a decision');
  assert.equal(h.ctx.bvomBb2ResolveChoice(Object.values(p.pending).findIndex(x=>x.kind==='DIFFICULTY'),'HOLD'),true);
- open();assert.equal(h.ctx.bvomBb2Begin(),true,'resolving the decision permits Start');
- console.log('PASS: F2 pending difficulty Start feedback and explicit resolution');
+ assert.equal(h.S().bb2.activeSessionId,active);assert.equal(h.S().bb2.events.at(-1).type,'EXERCISE_READY');
+ console.log('PASS: F2 inline bodyweight Start, preserved pending choice and explicit HOLD readiness');
 }
 
 console.log('BB2 BVOM integrated setup preview: 42/42 PASS (including F1–F4 audit regressions)');

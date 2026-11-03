@@ -171,6 +171,10 @@ jobs:
         env:
           BB2_ANDROID_OUTPUT: ${{ runner.temp }}/bb2-android-acceptance
         run: node tests/bvom-lab/bb2_history_display_browser.cjs
+      - name: Verify automatic next workout and inline bodyweight decisions at Android widths
+        env:
+          BB2_ANDROID_OUTPUT: ${{ runner.temp }}/bb2-android-acceptance
+        run: node tests/bvom-lab/bb2_next_flow_browser.cjs
       - name: Preserve Android acceptance screenshots and exported fixture
         if: always()
         uses: actions/upload-artifact@v4

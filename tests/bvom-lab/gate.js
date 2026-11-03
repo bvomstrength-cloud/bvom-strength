@@ -20,6 +20,8 @@ steps.splice(-1,0,['BB2 BODYWEIGHT METADATA AUDIT','bb2_bodyweight_audit_contrac
 steps.splice(-1,0,['BB2 SHARED INTERFACE ADAPTER','bb2_shared_interface_contracts.mjs',[]]);
 steps.splice(-1,0,['BB2 SHARED PROGRESSION','bb2_shared_progression_contracts.mjs',['--seal']]);
 steps.splice(-1,0,['BB2 HISTORY DISPLAY','bb2_history_display_contracts.mjs',[]]);
+steps.splice(-1,0,['BB2 NEXT WORKOUT FLOW','bb2_next_flow_contracts.mjs',[]]);
+steps.splice(-1,0,['BB2 INLINE DECISIONS','bb2_inline_decisions_contracts.mjs',['--seal']]);
 const out=[];for(const [name,file,args] of steps){console.log(`\n######## ${name} ########`);const r=spawnSync(process.execPath,[path.join(__dirname,file),...args],{stdio:'inherit'});out.push([name,r.status===0])}
 console.log('\n######## GATE SUMMARY ########');for(const [n,ok] of out)console.log(`${ok?'PASS':'FAIL'}  ${n}`);
 const go=out.every(x=>x[1]);console.log(`\nVERDICT: ${go?'GO':'NO-GO'}`);process.exit(go?0:1);
