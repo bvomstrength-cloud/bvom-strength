@@ -8,7 +8,7 @@ function packageProduction({sourceSha,output,zipFile,root=ROOT}){
  if(!/^[a-f0-9]{40}$/.test(sourceSha||''))throw Error('A full release commit SHA is required');
  output=path.resolve(output);zipFile=path.resolve(zipFile);
  if(fs.existsSync(output)||fs.existsSync(zipFile))throw Error('Use fresh output and ZIP paths');
- const git=(...args)=>cp.execFileSync('git',args,{cwd:root});
+ const git=(...args)=>cp.execFileSync('git',args,{cwd:root,maxBuffer:32*1024*1024});
  if(git('rev-parse',sourceSha+'^{commit}').toString().trim()!==sourceSha)throw Error('Release commit mismatch');
  const files=new Map(FILES.map(name=>[name,git('show',sourceSha+':'+name)]));
  const html=files.get('index.html').toString(),sw=files.get('sw.js').toString();
