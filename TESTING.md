@@ -151,7 +151,17 @@ The gate runs, in order:
 1. static
 2. behaviour
 3. sequence
-4. mutation + known-bad reference
+4. isolated BB2 Stage (i) golden contracts (`bb2_stage1_contracts.js`),
+   hardening contracts and independent cold-audit regressions
+   (`bb2_stage1_cold_audit_contracts.js`)
+5. mutation + known-bad reference
+
+BB2's independent contract tier checks original numeric-entry provenance alongside
+canonical integer grams: saved plans, increments, actuals and revisions require
+an immutable `*Origin` value/unit field. Unit display changes and unchanged
+rounded submissions cannot create a new load epoch; an explicitly different
+actual is a separate action. Malformed or contradictory origins fail closed.
+These are draft Stage (i) domain contracts, not live-app or cloud features.
 
 The final line must be:
 
@@ -317,3 +327,80 @@ Before any separately authorised release, verify Android Chrome/installed PWA an
 Passing automated tests means the code is eligible for the next release step; it does not itself deploy or promote anything.
 
 Production deployment, hosting promotion, store/package release, or other irreversible release actions remain separate checkpoints.
+
+## Full five-programme workout monkey journeys (PR #73)
+
+`tests/bvom-lab/workout_monkey_authenticated_browser.mjs` runs two independent,
+seeded trainees in phone-width Chromium against the disposable Supabase fixture
+used by `bvom-bb2-cloud-proof.yml`. The runner refuses a non-local Supabase API.
+It creates its own `example.invalid` accounts; never supply production credentials.
+The local SQL fixture mirrors entitlement checking and Starting Setup's trial RPC.
+It is not a production migration.
+
+Run the existing isolated workflow, or, after provisioning its local fixture and
+installing its pinned test dependencies:
+
+```sh
+MONKEY_OUTPUT=/tmp/bvom-workout-monkeys \
+MONKEY_SOURCE="$(git rev-parse HEAD)" \
+node tests/bvom-lab/workout_monkey_authenticated_browser.mjs
+```
+
+Seeds are **730901** (90 kg, experienced, barbell/home equipment) and **730902**
+(65 kg, intermediate, dumbbell/barbell variations). These are input profiles, not
+sex-specific programme rules. Both use the same controls and progression code.
+The application starts with no completed-workout fixture. Programme selection,
+working sets, reps, loads, increment choices, assisted bodyweight work, optional
+sets, extras, decisions, fixed Finish, notes, History and file restore use the
+shipped UI. Read-only prescriptions and projections support assertions; the test
+never invokes progression functions to manufacture sessions or credits.
+
+Each full journey requires at least 12 LP/RPT, 12 HLM, 16 Split, 24 BB1 main-block
+and 32 qualifying BB2 workouts. BB1's optional On-Ramp runs until its actual
+confirmed-load handoff. Eight additional BB2 low-stress sessions represent two
+optional recovery weeks; these must not earn credits or progression. Incomplete
+sessions and a precise 70% boundary are separate cases. BB2 then seals its block,
+retains its archived History and opens the next block without a phantom workout.
+Rest periods are accelerated on a coherent test clock (60–180 seconds); training
+counters still advance only through recorded sets and Finish. Reload retains the
+clock offset. Calendar values and durations therefore reflect simulated time.
+
+At programme checkpoints, downloaded exports are restored through the actual file
+input. Automatic uploads and receiving-device restoration are checked against the
+stored cloud rows, including working settings, assistance and historical records.
+BB2 additionally exercises offline completion/reconnect, concurrent corrections,
+one CAS winner, stale-device rejection, preserved losing journals, explicit
+recovery, an obsolete LP backup, and current/archived block synchronisation.
+A receiving device must observe the exact new block and server revision, not just
+the same total credit count as the previous block.
+
+The workflow always uploads `BVOM-Full-Workout-Monkeys`: per-trainee JSON reports,
+a summary with source SHA, actual exported backups, and failure/watch screenshots.
+Failures also retain the full error, local state and HTML; cloud mismatches retain
+both compared documents. Reports include counts, sets by programme, progression
+changes, missed targets, skipped optional sets, transitions, checks and watches.
+
+**Verdicts are separate from CI status.** Any incomplete full journey or failed
+assertion is FAIL. Existing legacy cloud protection can pause across setup/reload boundaries,
+including an unfinished workout reload whose pre-workout baseline is volatile. The runner records this
+as `LEGACY_CLOUD_EXPLICIT_RECOVERY` and WATCH, verifies that every remote workout remains
+in the local journal, then exercises normal explicit Sync Now recovery. It never
+silently accepts the conflict or bypasses the prefix check. A green workflow does
+not turn that WATCH into a release PASS. BB2's revision protocol remains unchanged.
+`--smoke` and the module's UI-only debugging mode are always WATCH and are not full
+authenticated release evidence.
+
+The journey identified two BB2 interface repairs: Start must durably finish normal
+Starting Setup (with rollback if saving fails), and the shared saved dialog must
+show volume from BB2's actual working sets rather than null/another programme's
+approximation flag. Unestimated bodyweight volume is shown explicitly as unknown.
+`bb2_workout_lifecycle_contracts.mjs` covers both repairs in the full regression gate.
+
+The endurance run exposed redundant historical replay for slots sharing one
+DERIVED earning event. Start validation now memoises pure prefix projections
+within a single call only. Its contract proves one replay per unique prefix and
+refuses an edited journal on the next call; owner, catalogue, lineage, CAS and
+training rules are unchanged. A real 594-event UI export measured about 4.8 s
+before and 1.7 s after for portable validation locally (diagnostic timings, not
+a device performance guarantee). Cloud/History waits are bounded at 60 seconds;
+all actual stored-byte, revision, History and minimum-count assertions remain.

@@ -54,7 +54,19 @@ const docTitle=(html.match(/<title>\s*BVOM Strength v([^<]+)<\/title>/i)||[])[1]
 t('Build identifiers all present',!!header&&!!build&&!!swq&&!!cache);
 // Permit only the explicitly tested, same-public-version guidance-only
 // v2.9.16 worker refresh; all other releases retain exact SW/cache alignment.
-const supportedCache=cache===swq||(build==='2.9.16'&&swq==='2.9.16'&&cache==='2.9.16-warmup2');
+// A marked PR73 test package deliberately uses a unique cache. This opt-in
+// never relaxes the ordinary production gate or accepts a marker alone.
+let bb2TestCache=false;
+if(process.argv.includes('--bb2-test-package')){
+ try{
+  const marker=JSON.parse(html.match(/window\.__BVOM_BB2_TEST_BUILD=(\{[^;]+\});/)?.[1]||'null');
+  const note=read('NETLIFY-TEST-BUILD.txt');
+  bb2TestCache=marker?.pr===73&&/^[a-f0-9]{40}$/.test(marker.source)&&
+   note.startsWith('BVOM BB2 TEST BUILD — PR #73 — NOT PRODUCTION\nSource: '+marker.source+'\n')&&
+   cache===build+'-pr73-'+marker.source.slice(0,12);
+ }catch(_){}
+}
+const supportedCache=cache===swq||(build==='2.9.16'&&swq==='2.9.16'&&cache==='2.9.16-warmup2')||bb2TestCache;
 t('Build identifiers agree (header, BVOM_BUILD, sw.js?v=, SW cache)',header?.replace(/ BB DEV /i,'-bb-dev').toLowerCase()===build?.toLowerCase()&&build===swq&&supportedCache,JSON.stringify({header,build,swq,cache}));
 t('Browser document title matches BVOM_BUILD',!!docTitle&&docTitle===build,JSON.stringify({docTitle,build}));
 

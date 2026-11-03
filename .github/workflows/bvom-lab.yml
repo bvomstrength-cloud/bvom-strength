@@ -16,7 +16,9 @@ jobs:
   full-regression-gate:
     name: v15.2 full regression gate
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The full gate includes both the existing application block and the
+    # focused shared-progression seal/carry fixture; retain all mutation checks.
+    timeout-minutes: 15
 
     steps:
       - name: Check out repository
@@ -32,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf .bvom-candidate
-          mkdir -p .bvom-candidate/i18n .bvom-candidate/vendor
+          mkdir -p .bvom-candidate/i18n .bvom-candidate/vendor .bvom-candidate/bb2
 
           cp index.html .bvom-candidate/
           cp admin.html .bvom-candidate/
@@ -47,6 +49,10 @@ jobs:
           cp i18n/en.js .bvom-candidate/i18n/
           cp i18n/ja.js .bvom-candidate/i18n/
           cp vendor/supabase-js-2.117.3.js .bvom-candidate/vendor/
+          cp bb2/browser-core.mjs .bvom-candidate/bb2/
+          cp bb2/browser-host.mjs bb2/app-session.mjs bb2/cloud-sidecar.mjs bb2/cloud-coordinator.mjs .bvom-candidate/bb2/
+          test -s .bvom-candidate/bb2/browser-core.mjs
+          test -s .bvom-candidate/bb2/cloud-coordinator.mjs
 
           echo "Staged BVOM production candidate:"
           find .bvom-candidate -type f -print | sort

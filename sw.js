@@ -1,11 +1,14 @@
-// v2.9.21 LP/RPT increment-only save failure-streak preservation; versioned shell cache.
-const CACHE = 'bvom-2.9.21';
-const BUILD = '2.9.21';
-const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './og-image.png', './i18n/en.js?v=6090d2f48f09', './i18n/ja.js?v=326ff8e97bb8',
+// v2.9.22 release candidate; live production remains v2.9.21 until owner approval.
+const CACHE = 'bvom-2.9.22';
+const BUILD = '2.9.22';
+const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './og-image.png', './i18n/en.js?v=6090d2f48f09', './i18n/ja.js?v=2c5d1ff918c6',
   './theme-bee-v23c.svg',
   './theme-cherry-v23f.svg',
   './theme-coastal-v23f.svg',
-  './vendor/supabase-js-2.117.3.js'
+  './vendor/supabase-js-2.117.3.js',
+  './bb2/browser-core.mjs',
+  './bb2/browser-host.mjs', './bb2/app-session.mjs',
+  './bb2/cloud-sidecar.mjs', './bb2/cloud-coordinator.mjs'
 ];
 async function bvomFetchValidatedShell(request='./index.html'){
   const response = await fetch(request,{cache:'reload'});

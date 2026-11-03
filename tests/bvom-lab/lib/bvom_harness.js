@@ -64,7 +64,7 @@ function boot(build,{ls=memStore(),ss=memStore(),supabase='inert',online=true,lo
   vm.createContext(ctx);
   for(const src of build.i18n)vm.runInContext(src,ctx);
   vm.runInContext(build.script+'\n;globalThis.__bvomHarnessEval=(expr)=>eval(expr);',ctx,{filename:'index.html#app'});
-  const h={ctx,els,log,timers,ls,realChoiceModal:ctx.bvomChoiceModal,
+  const h={ctx,els,log,timers,ls,realChoiceModal:ctx.bvomChoiceModal,realSessionNoteModal:ctx.bvomSessionNoteModal,
     S:()=>ctx.__bvomHarnessEval('state'),
     ev:x=>ctx.__bvomHarnessEval(x),
     fn:n=>ctx[n],

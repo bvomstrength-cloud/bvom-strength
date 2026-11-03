@@ -12,7 +12,7 @@ permissions:
 jobs:
   chromium-two-window-proof:
     name: Chromium two-window & Web Locks proof
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
 
     steps:
@@ -111,7 +111,7 @@ jobs:
 
   bvom-recovery-browser:
     name: BVOM real application recovery checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
@@ -142,6 +142,56 @@ jobs:
           node -e "const a=require('node:assert/strict'),r=require('./.bvom-red.json');a.equal(r.length,7);a.ok(r.every(t=>!t.pass));console.log('PASS: 7/7 new recovery contracts RED on exact pre-recovery source')"
       - name: Run isolated real BVOM application checks
         run: node tests/bvom-lab/recovery_browser.cjs
+      - name: Prove dormant BB2 owner-scoped Web Locks in real Chromium tabs
+        run: node tests/bvom-lab/bb2_browser_host_browser.cjs
+      - name: Prove dormant BB2 guards against real BVOM account and browser state
+        run: node tests/bvom-lab/bb2_app_session_browser.cjs
+      - name: Check developer-only BB2 setup preview in the real BVOM program chooser
+        run: node tests/bvom-lab/bb2_integrated_setup_preview_browser.cjs
+
+      - name: Verify Android backup History, Add Set and persistent browser reopen
+        env:
+          BB2_ANDROID_OUTPUT: ${{ runner.temp }}/bb2-android-acceptance
+        run: node tests/bvom-lab/bb2_android_acceptance_browser.cjs
+      - name: Verify BB2 UI repairs at 360px and 390px for Chin-Up and Assisted Nordic Curl
+        env:
+          BB2_ANDROID_OUTPUT: ${{ runner.temp }}/bb2-android-acceptance
+        run: |
+          node tests/bvom-lab/bb2_mobile_repairs_browser.cjs
+          node tests/bvom-lab/bb2_mobile_repairs_browser.cjs --nordic
+      - name: Compare BB1 and BB2 shared History and actions at 360px and 390px
+        env:
+          BB2_ANDROID_OUTPUT: ${{ runner.temp }}/bb2-android-acceptance
+        run: node tests/bvom-lab/bb2_shared_interface_browser.cjs
+      - name: Verify compatible cross-day progression and file restore at Android widths
+        env:
+          BB2_ANDROID_OUTPUT: ${{ runner.temp }}/bb2-android-acceptance
+        run: node tests/bvom-lab/bb2_shared_progression_browser.cjs
+      - name: Verify Lower B History volume, single duration and bodyweight summaries
+        env:
+          BB2_ANDROID_OUTPUT: ${{ runner.temp }}/bb2-android-acceptance
+        run: node tests/bvom-lab/bb2_history_display_browser.cjs
+      - name: Verify automatic next workout and inline bodyweight decisions at Android widths
+        env:
+          BB2_ANDROID_OUTPUT: ${{ runner.temp }}/bb2-android-acceptance
+        run: node tests/bvom-lab/bb2_next_flow_browser.cjs
+      - name: Preserve Android acceptance screenshots and exported fixture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BB2-Android-History-Add-Set
+          path: ${{ runner.temp }}/bb2-android-acceptance
+          if-no-files-found: ignore
+
+      - name: Verify packaged BB2 test-site entry and both optional curl days
+        run: node tests/bvom-lab/bb2_test_package_browser.cjs
+      - name: Preserve mobile BB1/BB2 Edit Weight comparison screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bb1-bb2-edit-weight-mobile-parity
+          path: ${{ runner.temp }}/bb2-ui-parity/*.png
+          if-no-files-found: ignore
       - name: Run isolated deferred Starting Setup interactions
         run: node tests/bvom-lab/starting_setup_browser.cjs
 

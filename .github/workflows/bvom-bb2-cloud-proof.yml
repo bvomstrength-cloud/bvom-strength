@@ -1,0 +1,108 @@
+name: BB2 authenticated cloud proof
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      run_endurance:
+        description: Run the separately authorised full seeded endurance journeys
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  ephemeral-supabase:
+    name: Isolated Auth / RLS / concurrent revision writes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out draft application
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Supabase local CLI
+        uses: supabase/setup-cli@v1
+        with:
+          # Pin the verified release: unauthenticated latest lookups hit CI rate limits.
+          version: 2.122.0
+
+      - name: Start disposable local Supabase services
+        run: |
+          supabase init --yes
+          # Auth + PostgREST + Postgres + gateway only; no unrelated services.
+          supabase start -x realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor,mailpit
+
+      - name: Mirror existing BVOM cloud table and owner policies locally
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -p 54322 -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -f tests/bvom-lab/fixtures/bb2_cloud_state.sql
+
+      - name: Install test-only client and mobile Chromium
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund @supabase/supabase-js@2.117.3 playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: Verify authenticated two-device transport and database conflicts
+        run: node tests/bvom-lab/bb2_cloud_authenticated_local.mjs
+
+      - name: Verify two authenticated BVOM mobile browser devices
+        run: node tests/bvom-lab/bb2_cloud_authenticated_browser.mjs
+
+      - name: Check out exact production v2.9.21 source for isolated comparison
+        uses: actions/checkout@v4
+        with:
+          ref: c22e79e101610c3002929fd1b73fe3530cec0c20
+          path: .bvom-production-v2.9.21
+
+      - name: Verify candidate and production guard counterfactuals
+        run: node tests/bvom-lab/legacy_cloud_pause_contracts.cjs .bvom-production-v2.9.21
+
+      - name: Verify normal persisted Auth reload on production code
+        env:
+          MONKEY_APP_ROOT: .bvom-production-v2.9.21
+          LEGACY_PERSISTENT_PROBE: "1"
+          MONKEY_OUTPUT: ${{ runner.temp }}/bvom-legacy-production-audit/persistent-session
+          MONKEY_SOURCE: c22e79e101610c3002929fd1b73fe3530cec0c20
+        run: node tests/bvom-lab/workout_monkey_authenticated_browser.mjs
+
+      - name: Reproduce five legacy pauses against production code with disposable Auth
+        env:
+          MONKEY_APP_ROOT: .bvom-production-v2.9.21
+          LEGACY_CLOUD_AUDIT: production-v2.9.21
+          MONKEY_OUTPUT: ${{ runner.temp }}/bvom-legacy-production-audit
+          MONKEY_SOURCE: c22e79e101610c3002929fd1b73fe3530cec0c20
+        run: node tests/bvom-lab/workout_monkey_authenticated_browser.mjs
+
+      - name: Preserve production-code comparison traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BVOM-Legacy-Production-Cloud-Audit
+          path: ${{ runner.temp }}/bvom-legacy-production-audit
+          if-no-files-found: warn
+
+      - name: Run both seeded five-programme workout journeys
+        if: github.event_name == 'workflow_dispatch' && inputs.run_endurance
+        env:
+          MONKEY_OUTPUT: ${{ runner.temp }}/bvom-workout-monkeys
+          MONKEY_SOURCE: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node tests/bvom-lab/workout_monkey_authenticated_browser.mjs
+
+      - name: Preserve monkey reports, exports and failure evidence
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.run_endurance
+        uses: actions/upload-artifact@v4
+        with:
+          name: BVOM-Full-Workout-Monkeys
+          path: ${{ runner.temp }}/bvom-workout-monkeys
+          if-no-files-found: warn
