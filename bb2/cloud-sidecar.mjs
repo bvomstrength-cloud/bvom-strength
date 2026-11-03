@@ -49,6 +49,11 @@ function checkLedgerOwnership(ownerId, bb2) {
         seen.has(opening.blockId)) throw new Error('Invalid BB2 block identity');
     seen.add(opening.blockId);
     for (const event of events) {
+      if(event?.type==='PROGRESSION_SHARED'){
+        const archiveIndex=archives.findIndex(block=>block.opening.blockId===opening.blockId);
+        const preceding=archiveIndex<0?archives:archives.slice(0,archiveIndex);
+        BB2_BROWSER_MODULES.start.validateBB2SharedPolicy(opening,events.slice(0,event.commitOrdinal-1),bb2.setup,event,{sealedBlocks:preceding,priorSealedBlock:preceding.at(-1)});
+      }
       if (event?.type !== 'EXERCISE_SWAPPED') continue;
       try {
         BB2_BROWSER_MODULES.catalogue.chooseBB2Exercise(bb2.setup,

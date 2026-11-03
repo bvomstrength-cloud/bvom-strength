@@ -128,9 +128,9 @@ async function makeDevice(label, { userId = ownerId, login = credentials,
   assert.equal(attached.ready, true, label + ' owns its BVOM document lock');
   return page;
 }
-async function recordSet(page, key) {
+async function recordSet(page, key, reps = 8) {
   await page.locator('#workout [data-bb2-set="' + key + '"]').click();
-  await page.locator('.bvomModalOverlay [data-bb2-reps="' + key + '"]').fill('8');
+  await page.locator('.bvomModalOverlay [data-bb2-reps="' + key + '"]').fill(String(reps));
   await page.locator('.bvomModalOverlay [data-save]').click();
   await page.locator('.bvomModalOverlay').waitFor({ state: 'detached' });
 }
@@ -641,6 +641,34 @@ try {
     const deleted=await b.evaluate(()=>{const p=bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events);return {progress:p.progress,quotas:p.quotas}});assert.deepEqual(deleted,beforeDelete);
     const remote=await admin.from('bvom_cloud_state').select('state').eq('user_id',id).single();if(remote.error)throw remote.error;assert.equal(remote.data.state.snapshot.events.at(-1).type,'HISTORY_HIDDEN');
     assert.deepEqual(await b.evaluate(()=>state.bb2.events),remote.data.state.snapshot.events);assert.equal(await b.locator('#history > .histCard').count(),17);assert.equal(await b.evaluate(()=>state.history.length),16);
+    // Earn on one authenticated device, consume and advance on the other.
+    for(const [page,day,first] of [[a,'upper_a',true],[b,'upper_b',false]]){
+      await page.locator('.tab[data-tab="workout"]').click();await page.locator('[data-bb2-next-workout]').click();
+      if(first){
+        await page.locator('[data-bb2-curls-a]').check();await page.locator('[data-bb2-curls]').check();
+        for(const d of ['upper_a','upper_b'])await page.locator('[data-bb2-role="'+d+'|biceps_curl"]').selectOption('dumbbell_curl');
+        await page.locator('[data-bb2-save]').click();
+        await page.waitForFunction(()=>state.bb2.cloudSync?.baseline?.snapshot?.setup?.optionalUpperACurls===true);
+      }
+      await page.locator('[data-bb2-day="'+day+'"]').click();
+      const curl=page.locator('#setup .review').filter({hasText:'Dumbbell Curl'}).last();
+      if(first){await curl.locator('[data-bb2-load]').fill('10');await curl.locator('[data-bb2-inc]').fill('1');}
+      else assert.equal(await curl.locator('[data-bb2-load]').inputValue(),'11','second device consumes shared earned load');
+      for(const field of await page.locator('#setup [data-bb2-load]:not([disabled])').all())if(!(await field.inputValue()))await field.fill('60');
+      for(const field of await page.locator('#setup [data-bb2-inc]').all())if(!(await field.inputValue()))await field.fill('2.5');
+      await page.locator('[data-bb2-start]').click();await page.waitForSelector('#workout [data-bb2-set]');
+      const started=await page.evaluate(()=>state.bb2.events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===state.bb2.activeSessionId));
+      assert.equal(started.slots.find(s=>s.exerciseId==='dumbbell_curl').plannedG,first?10000:11000);
+      for(const[i,slot]of started.slots.entries())for(let j=0;j<slot.sets;j++)await recordSet(page,i+'|'+j,slot.exerciseId==='dumbbell_curl'?slot.ceiling:slot.floor);
+      await page.locator('#timerbar .finish').click();await page.locator('.bvomModalOverlay [data-note]').fill('Authenticated shared curls '+day);await page.locator('.bvomModalOverlay [data-save]').click();await page.locator('.bvomModalOverlay [data-ok]').click();
+      await page.waitForFunction(()=>state.bb2.cloudSync?.baseline?.snapshot?.events?.length===state.bb2.events.length);
+      const receiver=first?b:a,n=await page.evaluate(()=>state.bb2.events.length);
+      await receiver.evaluate(()=>window.dispatchEvent(new Event('focus')));await receiver.waitForFunction(n=>state.bb2.events.length===n,n);
+    }
+    const shared=await a.evaluate(()=>{const p=bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events);return {events:state.bb2.events,loads:Object.entries(p.progress).filter(([k])=>k.endsWith('|dumbbell_curl')).map(([,v])=>v.loadG),legacy:state.history.length};});
+    assert.deepEqual(shared.loads,[12000,12000]);assert.equal(shared.legacy,16);assert.deepEqual(shared.events.slice(0,35),data.bb2.events);
+    assert.deepEqual(await b.evaluate(()=>state.bb2.events),shared.events);
+    const finalRemote=await admin.from('bvom_cloud_state').select('state').eq('user_id',id).single();if(finalRemote.error)throw finalRemote.error;assert.deepEqual(finalRemote.data.state.snapshot.events,shared.events);
     await a.context().close();await b.context().close();
   });
 

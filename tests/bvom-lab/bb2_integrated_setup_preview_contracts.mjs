@@ -10,6 +10,9 @@ const require=createRequire(import.meta.url);
 const H=require('./lib/bvom_harness');
 const path=require('node:path');
 const root=path.resolve(import.meta.dirname,'../..');
+// Legacy lifecycle assertions count training records; the explicit sharing
+// transition is asserted here and in dedicated migration/atomicity contracts.
+const trainingEvents=events=>events.filter(e=>e.type!=='PROGRESSION_SHARED');
 
 function openHistory(h){h.ev('bvomExpandedHistoryIndex=bvomBb2HistoryRef(bvomBb2HistoryProjection().rows.at(-1));renderHistory()')}
 function fixture({ls}={}){
@@ -422,7 +425,8 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.ok(active);
  assert.equal(h.S().programMode,'lprpt','legacy program unchanged');
  assert.equal(h.S().history.length,JSON.parse(before).history.length);
- assert.equal(h.S().bb2.events.length,1);
+ assert.equal(h.S().bb2.events.filter(e=>e.type==='PROGRESSION_SHARED').length,1);
+ assert.equal(trainingEvents(h.S().bb2.events).length,1);
  assert.equal(h.ctx.bvomCloudWorkoutActive(),true,'BB2 active workout blocks normal cloud activity');
  assert.match(h.ctx.document.querySelector('#workout').innerHTML,
   /class="sets"><div class="setwrap"><button type="button" class="set /,
@@ -434,7 +438,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.S().timerStart,null,'new working session has no running rest timer');
  dialog.querySelector('[data-bb2-reps="'+key+'"]').value='';
  dialog.querySelector('[data-save]').onclick();
- assert.equal(h.S().bb2.events.length,1,'empty modal input refuses a phantom set');
+ assert.equal(trainingEvents(h.S().bb2.events).length,1,'empty modal input refuses a phantom set');
  assert.equal(h.S().timerStart,null,'rejected set does not start rest timer');
  assert.equal(dialog.removed,false,'invalid input keeps recording dialog open');
  dialog.querySelector('[data-bb2-reps="'+key+'"]').value='8';
@@ -442,14 +446,14 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  dialog.querySelector('[data-bb2-actual="'+key+'"]').value='';
  dialog.querySelector('[data-save]').onclick();
  assert.equal(dialog.removed,false,'blank actual load keeps the dialog open');
- assert.equal(h.S().bb2.events.length,1,'blank actual load cannot create a set');
+ assert.equal(trainingEvents(h.S().bb2.events).length,1,'blank actual load cannot create a set');
  assert.equal(h.S().timerStart,null,'blank actual load cannot start the timer');
  dialog.querySelector('[data-bb2-actual="'+key+'"]').value='57.5';
  dialog.querySelector('[data-save]').onclick();
  assert.equal(dialog.removed,true,'durable save closes recording dialog');
  assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-set="0\|0"/);
  assert.match(h.ctx.document.querySelector('#workout').innerHTML,/class="set done"/);
- assert.equal(h.S().bb2.events.length,2);
+ assert.equal(trainingEvents(h.S().bb2.events).length,2);
  assert.equal(h.S().bb2.events.at(-1).actualG,57500,'actual 57.5 kg preserved instead of 60 kg plan');
  assert.equal(h.S().bb2.events.at(-1).actualOrigin.value,'57.5');
  assert.ok(h.S().timerStart>0,'successful working set starts rest timer');
@@ -465,7 +469,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ev('delete state.bb2.selectedProgram'); // Older developer sessions predate program selection.
  const restarted=fixture({ls:h.ls});
  assert.equal(restarted.h.S().bb2.activeSessionId,active,'reload retains active BB2 session');
- assert.equal(restarted.h.S().bb2.events.length,2);
+ assert.equal(trainingEvents(restarted.h.S().bb2.events).length,2);
  assert.equal(restarted.h.S().bb2.events.at(-1).actualG,57500,
   'reloading preserves the actual off-plan physical weight');
  restarted.h.ctx.location.origin='http://localhost:8000';
@@ -473,15 +477,15 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  restarted.h.ctx.__bb2CatalogueForTest=catalogue;
  restarted.h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest');
  assert.equal(restarted.h.ctx.bvomBb2Discard(),false,'a second simulated tab cannot take over original workout ownership');
- assert.equal(restarted.h.S().bb2.events.length,2,'rejected secondary Discard preserves records');
+ assert.equal(trainingEvents(restarted.h.S().bb2.events).length,2,'rejected secondary Discard preserves records');
  assert.equal(h.ctx.bvomBb2Discard(),true,'original owner can Discard with ledger tombstones');
  assert.equal(h.S().bb2.activeSessionId,null);
  assert.equal(h.S().timerStart,null,'Discard stops the rest timer in the same transaction');
  assert.equal(JSON.parse(h.ls.getItem('bvom_data')).timerStart,null,
   'discarded session cannot leave a persisted running timer');
  assert.equal(h.ctx.document.querySelector('#timerbar').classList.contains('idle'),true);
- assert.equal(h.S().bb2.events[0].type,'TOMBSTONE');
- assert.equal(h.S().bb2.events[1].type,'TOMBSTONE');
+ assert.equal(trainingEvents(h.S().bb2.events)[0].type,'TOMBSTONE');
+ assert.equal(trainingEvents(h.S().bb2.events)[1].type,'TOMBSTONE');
  assert.equal(h.S().bb2.events.at(-1).type,'WORKOUT_DISCARDED');
  assert.equal(h.S().bb2.selectedProgram,true,'Discard keeps BB2 as selected program');
  assert.match(h.ctx.document.querySelector('#workout').innerHTML,/data-bb2-next-workout/,
@@ -543,7 +547,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   return query(selector);
  };
  assert.equal(h.ctx.bvomBb2Begin(),true);
- const initial=h.ctx.bvomOrderEffective(),start=h.S().bb2.events[0];
+ const initial=h.ctx.bvomOrderEffective(),start=trainingEvents(h.S().bb2.events)[0];
  assert.equal(h.ctx.bvomOrderDayKey(),'bb2:upper_a');
  assert.deepEqual([...initial],start.slots.map(s=>s.roleSlotId),
   'the frozen Start slot order remains the default display sequence');
@@ -711,7 +715,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ctx.bvomBb2End('FINISH'),false,'below-70%-threshold Finish is refused');
  assert.equal(h.S().timerStart,timerBeforeRejectedFinish,'rejected Finish cannot cancel rest time');
  assert.equal(h.S().bb2.activeSessionId,id,'failed Finish keeps original active session');
- assert.equal(h.S().bb2.events.length,2,'failed Finish cannot append credit or outcome');
+ assert.equal(trainingEvents(h.S().bb2.events).length,2,'failed Finish cannot append credit or outcome');
  // Nine distinct prescribed working sets meet the 70% threshold for Upper A (9/12).
  for(const [slot,set] of [[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[3,0]]){
   assert.equal(h.ctx.bvomBb2Log(slot,set),true,'recorded required set '+slot+'/'+set);
@@ -836,7 +840,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   'changing an upcoming working load cannot reuse previous warm-up ticks');
  assert.notEqual(key,h.ctx.bvomBb2WarmupKey(started.sessionId,started.slots[0],
   {...plans[0],sets:plans[0].sets.slice(1)}),'different preparation plans cannot reuse ticks');
- assert.equal(h.S().bb2.events.length,1,'preparation does not create a working-set event');
+ assert.equal(trainingEvents(h.S().bb2.events).length,1,'preparation does not create a working-set event');
  assert.equal(JSON.stringify(h.S().session),legacySession,'no legacy working-set session changed');
  assert.equal(h.S().history.length,JSON.parse(before).history.length,'History is unchanged');
  assert.equal(h.ctx.bvomCloudPayload().bb2,undefined,'BB2 data still cloud-excluded');
@@ -851,7 +855,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ev('bvomWindowLockOwned=true');
  const reloaded=fixture({ls:h.ls});
  assert.equal(reloaded.h.S().warmupDone[key][0],true,'namespaced tick survives reload');
- assert.equal(reloaded.h.S().bb2.events.length,1);
+ assert.equal(trainingEvents(reloaded.h.S().bb2.events).length,1);
  assert.equal(h.ctx.bvomBb2WarmupMark(4,0),false,'NONE never stores fictitious warmup tick');
  assert.equal(h.ctx.bvomBb2Discard(),true);
  assert.equal(h.S().bb2.activeSessionId,null);
@@ -885,7 +889,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ls.getItem('bvom_data'),before,'failure cannot alter persisted BVOM data');
  assert.equal(JSON.stringify(h.S().warmupDone),priorWarm,'in-memory warm-up ticks roll back');
  assert.equal(h.S().bb2.warmupTouched,undefined,'failed tick cannot leave a phantom edit lock');
- assert.equal(h.S().bb2.events.length,1,'no ledger events created by a failed warm-up save');
+ assert.equal(trainingEvents(h.S().bb2.events).length,1,'no ledger events created by a failed warm-up save');
  assert.equal(h.ctx.bvomCloudPayload().bb2,undefined,'failed write cannot send BB2 to cloud');
  console.log('PASS: BB2 warm-up storage failure rolls back ticks and preserves ledger');
 }
@@ -921,28 +925,28 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  };
  assert.equal(h.ctx.bvomBb2Begin(),true);
  const id=h.S().bb2.activeSessionId;
- const first=h.S().bb2.events[0].slots[0];
+ const first=trainingEvents(h.S().bb2.events)[0].slots[0];
  assert.equal(first.plannedG,60000);
  assert.doesNotMatch(h.ctx.document.querySelector('#workout').innerHTML,/First eligible exposure calibrates|ACCEPT CALIBRATION/);
  assert.equal(edit('65'),true,'untouched working weight can be edited');
  let events=h.S().bb2.events;
- assert.equal(events.length,2);
- assert.equal(events[1].type,'PRESCRIPTION_EDITED');
- assert.equal(events[1].scope,'GLOBAL','pre-lock edit survives session Discard');
- assert.equal(events[1].loadG,65000);
- assert.equal(events[0].slots[0].plannedG,60000,'immutable Start plan survives edit');
+ assert.equal(trainingEvents(events).length,2);
+ assert.equal(trainingEvents(events)[1].type,'PRESCRIPTION_EDITED');
+ assert.equal(trainingEvents(events)[1].scope,'GLOBAL','pre-lock edit survives session Discard');
+ assert.equal(trainingEvents(events)[1].loadG,65000);
+ assert.equal(trainingEvents(events)[0].slots[0].plannedG,60000,'immutable Start plan survives edit');
  assert.match(h.ctx.document.querySelector('#workout').innerHTML,/65 kg/);
  assert.match(h.ctx.document.querySelector('#warmup').innerHTML,/Working: 65 kg/);
- const started=h.S().bb2.events[0],role=catalogue.getBB2TemplatePrescription(h.S().bb2.setup,started.templateId).slots[0];
+ const started=trainingEvents(h.S().bb2.events)[0],role=catalogue.getBB2TemplatePrescription(h.S().bb2.setup,started.templateId).slots[0];
  const current=h.ctx.bvomBb2WorkingSlot(started.slots[0],h.S().bb2.events,id);
  const prep=h.ctx.bvomBb2WarmupPlan(current,role),warmKey=h.ctx.bvomBb2WarmupKey(id,current,prep);
  const historyBefore=JSON.stringify(h.S().history),cloudBefore=JSON.stringify(h.ctx.bvomCloudPayload());
  assert.equal(edit(undefined,'1'),true,'same Edit Weight dialog can change only the increment');
  events=h.S().bb2.events;
- assert.equal(events.length,3);
- assert.equal(events[2].type,'INCREMENT_EDITED');
- assert.equal(events[2].incrementG,1000);
- assert.equal(events[2].scope,'GLOBAL');
+ assert.equal(trainingEvents(events).length,3);
+ assert.equal(trainingEvents(events)[2].type,'INCREMENT_EDITED');
+ assert.equal(trainingEvents(events)[2].incrementG,1000);
+ assert.equal(trainingEvents(events)[2].scope,'GLOBAL');
  assert.equal(h.ctx.bvomBb2WorkingSlot(started.slots[0],events,id).plannedG,65000);
  assert.equal(JSON.stringify(h.S().history),historyBefore,'increment edit retains History');
  assert.equal(JSON.stringify(h.ctx.bvomCloudPayload()),cloudBefore,'BB2 edits do not reach cloud');
@@ -966,11 +970,11 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  }
  invalidDialog.querySelector('[data-cancel]').onclick();
  assert.equal(edit(),true,'unchanged edit is an idempotent no-op');
- assert.equal(h.S().bb2.events.length,3);
+ assert.equal(trainingEvents(h.S().bb2.events).length,3);
  h.ev("state.unit='lb'");
  assert.equal(edit(),true,
   'resubmitting unchanged rounded pounds cannot create a false load change');
- assert.equal(h.S().bb2.events.length,3,'unit display round-trip preserves grams and epoch');
+ assert.equal(trainingEvents(h.S().bb2.events).length,3,'unit display round-trip preserves grams and epoch');
  h.ev("state.unit='kg'");
  const saved=h.ls.getItem('bvom_data');
  h.ev('bvomWindowLockOwned=false');
@@ -1031,7 +1035,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(events.at(-1).incrementG,1000);
  assert.equal(events.at(-1).commitOrdinal,events.at(-2).commitOrdinal+1);
  const reload=fixture({ls:h.ls});
- const start=events[0],savedSlot=h.ctx.bvomBb2WorkingSlot(start.slots[0],events,sid);
+ const start=trainingEvents(events)[0],savedSlot=h.ctx.bvomBb2WorkingSlot(start.slots[0],events,sid);
  assert.equal(savedSlot.plannedG,62500);
  assert.equal(savedSlot.incrementG,1000);
  assert.equal(reload.h.S().bb2.events.at(-1).incrementG,1000,'combined edit survives reload');
@@ -1072,11 +1076,11 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  dlg.querySelector('[data-bb-weight]').value='65';
  dlg.querySelector('[data-bb-increment]').value='12.50';
  dlg.querySelector('[data-save]').onclick();
- const b=h.S().bb2,start=b.events[0],slot=h.ctx.bvomBb2WorkingSlot(start.slots[0],b.events,b.activeSessionId);
+ const b=h.S().bb2,start=trainingEvents(b.events)[0],slot=h.ctx.bvomBb2WorkingSlot(start.slots[0],b.events,b.activeSessionId);
  assert.equal(slot.plannedG,65000,'weight-only editing still works with an unchanged inherited increment');
  assert.equal(slot.incrementG,12500,'unchanged increment retains canonical grams');
- assert.equal(b.events.length,2,'weight edit does not emit a phantom increment event');
- assert.equal(b.events[1].type,'PRESCRIPTION_EDITED');
+ assert.equal(trainingEvents(b.events).length,2,'weight edit does not emit a phantom increment event');
+ assert.equal(trainingEvents(b.events)[1].type,'PRESCRIPTION_EDITED');
  console.log('PASS: BB2 weight-only edit preserves inherited increments outside the new edit range');
 }
 
@@ -1099,7 +1103,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   return query(selector);
  };
  assert.equal(h.ctx.bvomBb2Begin(),true);
- const original=h.S().bb2.events[0].slots[0];
+ const original=trainingEvents(h.S().bb2.events)[0].slots[0];
  assert.equal(h.ctx.bvomBb2ReviseTrial(0),false,'cannot revise trial before recorded work');
  assert.equal(h.ctx.bvomBb2AcceptTrial(0),false,'cannot accept untested weight');
  assert.equal(h.ctx.bvomBb2Log(0,0),true);
@@ -1109,14 +1113,14 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  let events=h.S().bb2.events;
  assert.equal(events.at(-1).type,'CALIBRATION_PLAN_REVISED');
  assert.equal(events.at(-1).plannedG,65000);
- assert.equal(events[0].slots[0].plannedG,60000,'immutable Start weight retained');
- assert.equal(events[1].actualG,60000,'first actual load retained');
+ assert.equal(trainingEvents(events)[0].slots[0].plannedG,60000,'immutable Start weight retained');
+ assert.equal(trainingEvents(events)[1].actualG,60000,'first actual load retained');
  assert.equal(h.ctx.bvomBb2ReviseTrial(0),true,'unchanged trial is idempotent');
- assert.equal(h.S().bb2.events.length,3);
+ assert.equal(trainingEvents(h.S().bb2.events).length,3);
  h.ev("state.unit='lb'");
  h.ctx.__bb2TrialLoad=h.ctx.bvomBb2DisplayLoad(65000);
  assert.equal(h.ctx.bvomBb2ReviseTrial(0),true,'rounded pounds are a no-op trial');
- assert.equal(h.S().bb2.events.length,3,'unit round-trip preserves original grams');
+ assert.equal(trainingEvents(h.S().bb2.events).length,3,'unit round-trip preserves original grams');
  h.ev("state.unit='kg'");
  h.ctx.__bb2TrialLoad='67.5';
  assert.equal(h.ctx.bvomBb2ReviseTrial(0),true);
@@ -1140,7 +1144,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  reloaded.h.ctx.__bb2CatalogueForTest=catalogue;
  reloaded.h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest');
  const next=reloaded.h.S().bb2;
- assert.equal(reloaded.h.ctx.bvomBb2SessionTrial(next.events[0].slots[0],next.events,next.activeSessionId).grams,
+ assert.equal(reloaded.h.ctx.bvomBb2SessionTrial(trainingEvents(next.events)[0].slots[0],next.events,next.activeSessionId).grams,
   67500,'trial load survives offline app reload');
  const more=h.S().bb2.events.find(e=>e.type==='WORKOUT_STARTED').slots.flatMap((slot,i)=>
   i===0?[]:Array.from({length:slot.sets},(_,j)=>[i,j])).slice(0,6);
@@ -1151,7 +1155,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  const id='upper_a|'+original.roleSlotId+'|'+original.exerciseId;
  assert.equal(projection.progress[id].calibrated,true);
  assert.equal(projection.progress[id].loadG,67500,'accepted calibration becomes future working plan');
- assert.equal(b.events[0].slots[0].plannedG,60000,'historical Start unaffected');
+ assert.equal(trainingEvents(b.events)[0].slots[0].plannedG,60000,'historical Start unaffected');
  assert.equal(JSON.stringify(h.S().warmupDone),'{}','calibration events never create warm-up ticks');
  assert.equal(h.S().history.length,JSON.parse(before).history.length,'BB1 History untouched');
  assert.equal(h.ctx.bvomCloudPayload().bb2,undefined);
@@ -1208,7 +1212,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   return query(selector);
  };
  assert.equal(h.ctx.bvomBb2Begin(),true);
- const b=h.S().bb2,start=b.events[0],i=start.slots.findIndex(s=>s.equipment==='bodyweight');
+ const b=h.S().bb2,start=trainingEvents(b.events)[0],i=start.slots.findIndex(s=>s.equipment==='bodyweight');
  assert.ok(i>=0,'Upper A includes actual bodyweight vertical pull');
  const slot=start.slots[i],key='upper_a|'+slot.roleSlotId+'|'+slot.exerciseId;
  assert.equal(slot.plannedG,5000,'starting numeric BW is only explicitly entered added load');
@@ -1225,7 +1229,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ctx.bvomBb2Log(i,0),false,'missing explicit assistance refused');
  h.ctx.__bb2Actual.assistance='medium band';h.ctx.__bb2Actual.added='-3';
  assert.equal(h.ctx.bvomBb2Log(i,0),false,'negative added load refused');
- assert.equal(b.events.length,1,'invalid bodyweight entries leave ledger unchanged');
+ assert.equal(trainingEvents(b.events).length,1,'invalid bodyweight entries leave ledger unchanged');
  h.ev("state.unit='lb'");h.ctx.__bb2Actual.added=h.ctx.bvomBb2DisplayLoad(5000);
  assert.equal(h.ctx.bvomBb2Log(i,0),true,'record BW after kg-to-lb display conversion');
  let actual=h.S().bb2.events.at(-1);
@@ -1275,7 +1279,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   return query(selector);
  };
  assert.equal(h.ctx.bvomBb2Begin(),true);
- const i=h.S().bb2.events[0].slots.findIndex(s=>s.equipment==='bodyweight');
+ const i=trainingEvents(h.S().bb2.events)[0].slots.findIndex(s=>s.equipment==='bodyweight');
  const old=h.ls.getItem('bvom_data'),prior=h.S().bb2.events.length;
  const setItem=h.ls.setItem;
  h.ls.setItem=(key,value)=>{if(key==='bvom_data')throw Error('simulated storage full');return setItem(key,value)};
@@ -1303,7 +1307,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   return query(selector);
  };
  assert.equal(h.ctx.bvomBb2Begin(),true);
- const start=h.S().bb2.events[0],i=start.slots.findIndex(s=>s.equipment==='bodyweight');
+ const start=trainingEvents(h.S().bb2.events)[0],i=start.slots.findIndex(s=>s.equipment==='bodyweight');
  assert.equal(start.slots[i].plannedG,5000);
  assert.equal(h.ctx.bvomBb2Log(i,0),true,'clearing added weight means a bodyweight-only actual');
  const row=h.S().bb2.events.at(-1);
@@ -1339,22 +1343,22 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   return query(selector);
  };
  assert.equal(h.ctx.bvomBb2Begin(),true);
- const start=h.S().bb2.events[0],i=start.slots.findIndex(s=>s.equipment==='bodyweight'),slot=start.slots[i];
+ const start=trainingEvents(h.S().bb2.events)[0],i=start.slots.findIndex(s=>s.equipment==='bodyweight'),slot=start.slots[i];
  assert.equal(slot.plannedG,undefined);assert.equal(slot.assistance,'none');
  assert.equal(h.ctx.bvomBb2EditBodyweightPlan(i),true,'bodyweight prescription can be edited before work');
  let ev=h.S().bb2.events;
- assert.deepEqual(ev.slice(1).map(x=>x.type),['VARIATION_EDITED','PRESCRIPTION_EDITED']);
- assert.ok(ev.slice(1).every(x=>x.scope==='GLOBAL'),'independent edits survive Discard');
- assert.equal(ev[1].variation,'assisted pullup');assert.equal(ev[1].assistance,'light band');
- assert.equal(ev[2].loadG,2500);
+ assert.deepEqual(trainingEvents(ev).slice(1).map(x=>x.type),['VARIATION_EDITED','PRESCRIPTION_EDITED']);
+ assert.ok(trainingEvents(ev).slice(1).every(x=>x.scope==='GLOBAL'),'independent edits survive Discard');
+ assert.equal(trainingEvents(ev)[1].variation,'assisted pullup');assert.equal(trainingEvents(ev)[1].assistance,'light band');
+ assert.equal(trainingEvents(ev)[2].loadG,2500);
  assert.equal(start.slots[i].variation,'pullup','Start snapshot stays immutable');
  assert.equal(h.ctx.bvomBb2WorkingSlot(slot,ev,h.S().bb2.activeSessionId).assistance,'light band');
  assert.match(h.ctx.document.querySelector('#workout').innerHTML,/SAVE BW PLAN/);
  assert.equal(h.ctx.bvomBb2EditBodyweightPlan(i),true,'unchanged BW plan is idempotent');
- assert.equal(h.S().bb2.events.length,3);
+ assert.equal(trainingEvents(h.S().bb2.events).length,3);
  h.ev("state.unit='lb'");h.ctx.__bb2Plan.added=h.ctx.bvomBb2DisplayLoad(2500);
  assert.equal(h.ctx.bvomBb2EditBodyweightPlan(i),true,'rounded pounds resubmission is a no-op');
- assert.equal(h.S().bb2.events.length,3);
+ assert.equal(trainingEvents(h.S().bb2.events).length,3);
  h.ev("state.unit='kg'");
  const saved=h.ls.getItem('bvom_data');h.ev('bvomWindowLockOwned=false');
  h.ctx.__bb2Plan.assistance='strong band';
@@ -1368,8 +1372,8 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ctx.bvomBb2EditBodyweightPlan(i),false,'recorded set locks BW future prescription');
  assert.equal(h.ctx.bvomBb2Discard(),true);
  ev=h.S().bb2.events;
- assert.equal(ev[0].type,'TOMBSTONE','discard removes Start');
- assert.equal(ev[1].type,'VARIATION_EDITED');assert.equal(ev[2].type,'PRESCRIPTION_EDITED');
+ assert.equal(trainingEvents(ev)[0].type,'TOMBSTONE','discard removes Start');
+ assert.equal(trainingEvents(ev)[1].type,'VARIATION_EDITED');assert.equal(trainingEvents(ev)[2].type,'PRESCRIPTION_EDITED');
  assert.equal(ev.at(-2).type,'TOMBSTONE','discard removes session-only actual');
  const projection=catalogue.foldBB2Block(h.S().bb2.opening,ev);
  const id='upper_a|'+slot.roleSlotId+'|'+slot.exerciseId;
@@ -1399,7 +1403,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   return query(selector);
  };
  assert.equal(h.ctx.bvomBb2Begin(),true);
- const i=h.S().bb2.events[0].slots.findIndex(s=>s.equipment==='bodyweight');
+ const i=trainingEvents(h.S().bb2.events)[0].slots.findIndex(s=>s.equipment==='bodyweight');
  const saved=h.ls.getItem('bvom_data'),old=h.S().bb2.events.length;
  const setItem=h.ls.setItem;
  h.ls.setItem=(key,value)=>{if(key==='bvom_data')throw Error('simulated disk quota');return setItem(key,value)};
@@ -2017,8 +2021,8 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.match(h.ctx.document.querySelector('#setup').innerHTML,/data-bb2-stall-reduce="0"/);
  assert.equal(h.ctx.bvomBb2ReviewStall(0,'REDUCE'),true,'user explicitly accepts 10% load reduction');
  const b=h.S().bb2,after=catalogue.foldBB2Block(b.opening,b.events);
- assert.equal(b.events[0].type,'STALL_REDUCTION_ACCEPTED');
- assert.equal(b.events[0].loadG,90000);
+ assert.equal(trainingEvents(b.events)[0].type,'STALL_REDUCTION_ACCEPTED');
+ assert.equal(trainingEvents(b.events)[0].loadG,90000);
  assert.equal(after.progress['upper_a|flat_press|bench_press'].loadG,90000);
  assert.equal(after.progress['upper_a|flat_press|bench_press'].stallCount,0);
  assert.deepEqual(after.quotas,{upper_a:0,lower_a:0,upper_b:0,lower_b:0});
@@ -2042,8 +2046,8 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  h.ctx.bvomBb2PreviewChoose('upper_a','shoulder_press','log_push_press');
  assert.equal(h.ctx.bvomBb2SaveSetup(),true,'a changed workout choice has a durable ledger swap');
  const b=h.S().bb2;
- assert.equal(b.events.length,1);
- assert.deepEqual([b.events[0].type,b.events[0].templateId,b.events[0].roleSlotId,b.events[0].exerciseId],
+ assert.equal(trainingEvents(b.events).length,1);
+ assert.deepEqual([trainingEvents(b.events)[0].type,trainingEvents(b.events)[0].templateId,trainingEvents(b.events)[0].roleSlotId,trainingEvents(b.events)[0].exerciseId],
   ['EXERCISE_SWAPPED','upper_a','shoulder_press','log_push_press']);
  assert.equal(catalogue.foldBB2Block(b.opening,b.events).selections['upper_a|shoulder_press'],'log_push_press');
  assert.equal(b.setup.selections['upper_a|shoulder_press'],'log_push_press');

@@ -5515,7 +5515,7 @@ async function bvomBb2ValidatePortableJournal(local,ownerId){
   }
   if(open.size)throw new Error('BB2 restore refused: unfinished workout');
   portable.validateBB2PortableCatalogue(local.setup,block.events,{
-   opening:block.opening,priorSealedBlock:i?blocks[i-1]:null});
+   opening:block.opening,priorSealedBlock:i?blocks[i-1]:null,sealedBlocks:archives.slice(0,i)});
   if(i===0&&block.opening.previousSealId)
    throw new Error('BB2 restore refused: missing predecessor');
   if(i===0)portable.validateBB2PortableGenesis(block.opening,ownerId);
@@ -5984,11 +5984,31 @@ function bvomBb2ResolveChoice(index,decision){
   bvomBb2RenderPreview();return true;
  }catch(error){console.error('BB2 pending decision rejected',error);return false}
 }
+// Preview is pure. The policy event and Start are committed together only on Start.
+function bvomBb2SharedPreparation(opening,events,setup){
+ const m=bvomBb2PreviewModule,before=m.foldBB2Block(opening,events);
+ if(before.sealed||before.requiredConsent.length||(!before.sharedProgression&&Object.keys(before.pending).length))return {events,projection:before,policy:null,blocked:!before.sharedProgression};
+ return m.BB2_BROWSER_MODULES.start.prepareBB2SharedProgression(opening,events,setup,{sealedBlocks:state.bb2?.sealedBlocks||[],priorSealedBlock:state.bb2?.sealedBlocks?.at(-1)});
+}
+function bvomBb2SharedState(projection,templateId,slot){
+ return bvomBb2PreviewModule.BB2_BROWSER_MODULES.ledger.sharedProgressFor(projection,templateId+'|'+slot.roleSlotId+'|'+slot.exerciseId,slot);
+}
+function bvomBb2PreviousExerciseReference(slot,history){
+ for(const h of [...history].reverse()){
+  if(h.hidden||h.status==='VOID')continue;
+  const set=h.sets.filter(x=>x.exerciseId===slot.exerciseId).at(-1);if(!set)continue;
+  const original=(h.effectiveSlots||h.slots).find(x=>x.exerciseId===slot.exerciseId&&x.roleSlotId===set.roleSlotId);
+  const detail=bvomHistorySetText(bvomBb2SetView(set),unitLabel());
+  return '<div class="small">'+hlmTxt('Previous recorded exercise (reference only): ','同じ種目の過去の記録（参考）：')+bvomEsc(bvomBb2PreviewLabel(h.templateId)+' · '+(original?original.sets+' × '+original.floor+'–'+original.ceiling+' · ':'')+detail)+'</div>';
+ }
+ return '';
+}
 function bvomBb2StartForm(){
  if(!bvomBb2PreviewSaved||!bvomBb2PreviewModule||!state.bb2?.setup)return '';
  const m=bvomBb2PreviewModule,units=state.unit==='lb'?'lb':'kg';
  const p=m.getBB2TemplatePrescription(state.bb2.setup,bvomBb2Day);
- const b=state.bb2,projection=b.opening?m.foldBB2Block(b.opening,b.events):null;
+ const b=state.bb2,prepared=b.opening?bvomBb2SharedPreparation(b.opening,b.events,b.setup):null,projection=prepared?.projection||null;
+ const history=projection?[...(b.sealedBlocks||[]).flatMap(x=>m.foldBB2Block(x.opening,x.events).history),...projection.history]:[];
  const full=projection&&m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.every(d=>projection.quotas[d]===8);
  const kinds=full?['RECOVERY']:projection?.quotas[bvomBb2Day]===8?['EXTRA_NORMAL','RECOVERY']:['NORMAL','RECOVERY'];
  if(!kinds.includes(bvomBb2Kind))bvomBb2Kind=kinds[0];
@@ -6002,10 +6022,10 @@ function bvomBb2StartForm(){
    k==='EXTRA_NORMAL'?hlmTxt('EXTRA WORKOUT','追加ワークアウト'):
    hlmTxt('COUNTED WORKOUT','ブロック対象ワークアウト'))+'</button>').join('');
  const rows=p.slots.map((s,i)=>{
-  const progress=projection?.progress[bvomBb2Day+'|'+s.roleSlotId+'|'+s.exerciseId];
+  const shared=projection?bvomBb2SharedState(projection,bvomBb2Day,s):null,progress=shared?.progress;
   const recommended=recovery?bvomBb2RecoveryGrams(progress):null;
   return '<div class="review"><b>'+bvomEsc(bvomBb2PreviewLabel(s.exerciseId))+
-  '</b><div class="small">'+(recovery?Math.ceil(s.sets/2):s.sets)+' × '+s.floor+'–'+s.ceiling+' '+hlmTxt('reps','回')+
+  '</b>'+bvomBb2PreviousExerciseReference(s,history)+(shared?.key&&shared.key!==bvomBb2Day+'|'+s.roleSlotId+'|'+s.exerciseId?'<div class="small">'+hlmTxt('Shared progression with ','進行を共有：')+bvomEsc(bvomBb2PreviewLabel(shared.key.split('|')[0]))+'</div>':'')+'<div class="small">'+(recovery?Math.ceil(s.sets/2):s.sets)+' × '+s.floor+'–'+s.ceiling+' '+hlmTxt('reps','回')+
   (recovery?' · '+hlmTxt('easy effort, at least 4 reps in reserve','軽めの強度で余力を4回以上残す'):'')+'</div>'+
   (s.equipment==='loaded'
    ? '<label>'+(recovery?hlmTxt('Recovery working','回復時の使用重量'):hlmTxt('Starting','開始重量'))+' '+units+'<input type="number" step="any" data-bb2-load="'+i+'" '+
@@ -6045,7 +6065,7 @@ function bvomBb2Begin(){
   const opening=old.opening||m.createBB2Opening({
    ownerId:localStorage.getItem(BVOM_DATA_OWNER_KEY)||'bb2-test-owner',
    blockId:'bb2-preview-'+Date.now()});
-  const events=old.events||[],before=m.foldBB2Block(opening,events);
+  const events=old.events||[],prepared=bvomBb2SharedPreparation(opening,events,old.setup),before=prepared.projection;
   if(before.sealed||before.requiredConsent.length)return false;
   const allFull=m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.every(d=>before.quotas[d]===8);
   const kind=bvomBb2Kind;
@@ -6058,17 +6078,18 @@ function bvomBb2Begin(){
   const unit=state.unit==='lb'?'lb':'kg';
   const plan=m.getBB2TemplatePrescription(old.setup,bvomBb2Day);
   const pending=Object.entries(before.pending).find(([key])=>plan.slots.some(s=>
-   key===bvomBb2Day+'|'+s.roleSlotId+'|'+s.exerciseId));
+   key===bvomBb2Day+'|'+s.roleSlotId+'|'+s.exerciseId||m.BB2_BROWSER_MODULES.ledger.sharedPendingFor(before,bvomBb2Day+'|'+s.roleSlotId+'|'+s.exerciseId,s)===before.pending[key]));
   if(pending){
    const index=Object.keys(before.pending).indexOf(pending[0]);
    return bvomBb2ValidationNotice(hlmTxt('Resolve the pending decision for ', '次の種目の保留中の判断を確定してください：')+
     bvomBb2PreviewLabel(pending[0].split('|')[2])+hlmTxt(' in BB2 Decisions to Review before starting this workout.','（BB2の判断を確認）。'),
     '#setup [data-bb2-choice-keep="'+index+'"], #setup [data-bb2-choice-hold="'+index+'"]');
   }
+  if(prepared.blocked)return bvomBb2ValidationNotice(hlmTxt('Resolve existing BB2 decisions before enabling shared progression.','進行を共有する前に、既存のBB2の判断を確定してください。'));
   const slots=plan.slots.map((s,i)=>{
    const a={roleSlotId:s.roleSlotId,exerciseId:s.exerciseId,sets:recovery?Math.ceil(s.sets/2):s.sets,
     floor:s.floor,ceiling:s.ceiling,equipment:s.equipment};
-   const p=before.progress[bvomBb2Day+'|'+s.roleSlotId+'|'+s.exerciseId];
+   const p=bvomBb2SharedState(before,bvomBb2Day,s).progress;
    if(s.equipment==='loaded'){
     if(p&&!recovery){a.plannedG=p.loadG;a.plannedOrigin=p.loadOrigin;
      a.incrementG=p.incrementG;a.incrementOrigin=p.incrementOrigin}
@@ -6100,14 +6121,14 @@ function bvomBb2Begin(){
    }
    return a;
   });
-  const e={type:'WORKOUT_STARTED',eventId:'start:'+id,commitOrdinal:events.length+1,
-   blockId:opening.blockId,sessionId:id,templateId:bvomBb2Day,kind,slots,startedAt:Date.now()};
+  const e={type:'WORKOUT_STARTED',eventId:'start:'+id,commitOrdinal:prepared.events.length+1,
+   blockId:opening.blockId,sessionId:id,templateId:bvomBb2Day,kind,slots,startedAt:Date.now(),...(before.sharedProgression?{progressionPolicy:1}:{})};
   const guard={
    ownerId:opening.ownerId,blockId:opening.blockId,expectedHead:events.length,
    foldRulesVersion:opening.foldRulesVersion,sealRevision:before.sealRevision,activeWorkout:false};
-  const tx=recovery?m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(opening,events,[e],guard):
+  const tx=recovery?m.BB2_BROWSER_MODULES.ledger.commitBB2Transaction(opening,events,prepared.policy?[prepared.policy,e]:[e],guard):
    m.BB2_BROWSER_MODULES.start.commitBB2Start(opening,events,old.setup,e,guard,{
-    priorSealedBlock:old.sealedBlocks?.at(-1)});
+    priorSealedBlock:old.sealedBlocks?.at(-1),sealedBlocks:old.sealedBlocks||[],sharingPolicy:prepared.policy});
   if(!bvomBb2Commit({...old,opening,events:tx.events,activeSessionId:id,selectedProgram:true},{configure:true}))return false;
   bvomBb2PreviewOpen=false;bvomBb2PreviewDraft=null;bvomBb2PreviewFromWorkout=false;
   document.querySelector('#setup').classList.add('hidden');
@@ -6599,7 +6620,7 @@ function bvomBb2Workout(){
  const html=start.slots.map((initial,i)=>{
   const s=bvomBb2WorkingSlot(initial,b.events,b.activeSessionId);
   const key=start.templateId+'|'+s.roleSlotId+'|'+s.exerciseId;
-  const signal=projection.stallSignals[key];
+  const signal=projection.stallSignals[bvomBb2SharedState(projection,start.templateId,s).key];
   const recovery=start.kind==='RECOVERY';
   const feedback=recovery?hlmTxt('Low-stress preparation: comfortable reps near the bottom of the range, with at least 4 reps in reserve. No progression.','軽めの回復ワークアウト：目標回数の下限付近で余裕を持って行い、余力を4回以上残します。重量は進行しません。'):
    signal?.kind==='OFFER'?hlmTxt('Stall review available: load reduction, exercise swap or recovery are optional.','停滞の見直しが可能です。減量、種目変更、回復ワークアウトは任意です。'):

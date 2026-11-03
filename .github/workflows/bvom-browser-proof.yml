@@ -163,6 +163,10 @@ jobs:
         env:
           BB2_ANDROID_OUTPUT: ${{ runner.temp }}/bb2-android-acceptance
         run: node tests/bvom-lab/bb2_shared_interface_browser.cjs
+      - name: Verify compatible cross-day progression and file restore at Android widths
+        env:
+          BB2_ANDROID_OUTPUT: ${{ runner.temp }}/bb2-android-acceptance
+        run: node tests/bvom-lab/bb2_shared_progression_browser.cjs
       - name: Preserve Android acceptance screenshots and exported fixture
         if: always()
         uses: actions/upload-artifact@v4

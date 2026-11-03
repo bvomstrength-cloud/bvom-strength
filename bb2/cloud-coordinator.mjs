@@ -25,10 +25,13 @@ const same = (a, b) => stable(a) === stable(b);
 // catalogue contract. Frozen Stage (i) ledgers remain replayable on their own
 // terms; they are not automatically accepted as imported BVOM workouts.
 export function validateBB2PortableCatalogue(setup, events,
-  { opening = null, priorSealedBlock = null } = {}) {
+  { opening = null, priorSealedBlock = null, sealedBlocks = [] } = {}) {
   validateBB2Setup(setup);
   if (!Array.isArray(events)) throw Error('BB2 portable journal is not an array');
   for (const [index, event] of events.entries()) {
+    if(event?.type==='PROGRESSION_SHARED'){
+      BB2_BROWSER_MODULES.start.validateBB2SharedPolicy(opening,events.slice(0,index),setup,event,{priorSealedBlock,sealedBlocks});continue;
+    }
     if (event?.type === 'EXERCISE_SWAPPED') {
       // The frozen ledger validates event shape, not versioned exercise choices.
       // A portable journal must reject swaps outside this slot's catalogue,
@@ -79,7 +82,7 @@ export function validateBB2PortableCatalogue(setup, events,
       // earned load provenance, but a portable BVOM import must.
       if (!opening) throw Error('BB2 portable Start is missing its opening');
       BB2_BROWSER_MODULES.start.validateBB2NewStart(opening,
-        events.slice(0, index), historical, event, { priorSealedBlock });
+        events.slice(0, index), historical, event, { priorSealedBlock, sealedBlocks });
     } else {
       // Recovery loads are entered on that session, never forged DERIVED
       // references to another exercise's training or earning event.
@@ -107,9 +110,9 @@ function validatePortableLedger(bb2) {
   if (genesis) validateBB2PortableGenesis(genesis, genesis.ownerId);
   const archives = bb2.sealedBlocks || [];
   archives.forEach((block, index) => validateBB2PortableCatalogue(bb2.setup,
-    block.events, { opening: block.opening, priorSealedBlock: archives[index-1] || null }));
+    block.events, { opening: block.opening, priorSealedBlock: archives[index-1] || null, sealedBlocks:archives.slice(0,index) }));
   validateBB2PortableCatalogue(bb2.setup, bb2.events || [], {
-    opening: bb2.opening, priorSealedBlock: archives.at(-1) || null });
+    opening: bb2.opening, priorSealedBlock: archives.at(-1) || null, sealedBlocks:archives });
 }
 
 export function createBB2CloudCoordinator({ client, ownerId, readAppSnapshot,

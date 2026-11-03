@@ -116,7 +116,7 @@ console.log('PASS both optional curl days: reload, actual work, independent sele
 // An older v2 journal is still v2; no silent opt-in or prescription rewriting.
 h=boot();open(h);h.ev('bvomBb2PreviewDraft=__core.createBB2Setup({catalogueVersion:2})');
 assert.equal(h.ctx.bvomBb2SaveSetup(),true);assert.equal(h.ctx.bvomBb2Begin(),true);
-const oldStart=h.S().bb2.events[0];
+const oldStart=h.S().bb2.events.find(e=>e.type==='WORKOUT_STARTED');
 assert.equal(oldStart.slots.reduce((n,s)=>n+s.sets,0),10);
 for(const [i,s] of oldStart.slots.entries())for(let j=0;j<s.sets;j++)assert.equal(h.ctx.bvomBb2Log(i,j),true);
 assert.equal(h.ctx.bvomBb2End('FINISH'),true);

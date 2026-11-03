@@ -252,7 +252,7 @@ const server=http.createServer((req,res)=>{
   await exportNotice.accept();assert.equal(await exportAttempt,false);
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.activeSessionId),started.bb2.activeSessionId);
 
-  assert.equal(started.bb2.events[0].type,'WORKOUT_STARTED');
+  assert.equal(started.bb2.events.find(e=>e.type==='WORKOUT_STARTED').type,'WORKOUT_STARTED');
   assert.equal(started.programMode,fixture.programMode);
   assert.equal(await page.evaluate(()=>bvomCloudWorkoutActive()),true);
   await page.evaluate(()=>changeLanguage('ja'));
@@ -384,7 +384,7 @@ const server=http.createServer((req,res)=>{
   const discarded=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
   assert.equal(discarded.bb2.activeSessionId,null);
   assert.equal(discarded.timerStart,null,'Discard atomically stops the working-set rest timer');
-  assert.equal(discarded.bb2.events[0].type,'TOMBSTONE');
+  assert.equal(discarded.bb2.events.find(e=>e.type==='TOMBSTONE').type,'TOMBSTONE');
   assert.equal(discarded.bb2.events[1].type,'TOMBSTONE');
   assert.equal(discarded.bb2.events[2].type,'TOMBSTONE','Discard removes session-only calibration trial');
   assert.equal(discarded.bb2.events[4].type,'VARIATION_EDITED','Discard retains explicit future bodyweight identity');

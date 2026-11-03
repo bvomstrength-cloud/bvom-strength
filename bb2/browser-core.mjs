@@ -1,5 +1,5 @@
 /* GENERATED BB2 browser core — no direct edits. */
-/* Source fingerprint SHA-256: ba7cbc31d5760d7244a97ba9e893225698f1aa0a6db985a492076c1e0dfdecc8 */
+/* Source fingerprint SHA-256: d80628e5d36834a161cabd50fff195a108734bc6bdbdbc2fe20f5f4594ceeabc */
 /* Regenerate: node scripts/build-bb2-browser.cjs */
 /* Import has no app, storage, network or clock side effects. */
 const factories = Object.create(null);
@@ -13,7 +13,7 @@ const SCHEMA_VERSION = 1;
 const FOLD_RULES_VERSION = 1;
 const TEMPLATES = Object.freeze(['upper_a', 'lower_a', 'upper_b', 'lower_b']);
 const EVENT_TYPES = Object.freeze([
-  'BLOCK_CREATED', 'BLOCK_SEALED', 'WORKOUT_STARTED', 'EXERCISE_LOCKED',
+  'PROGRESSION_SHARED', 'BLOCK_CREATED', 'BLOCK_SEALED', 'WORKOUT_STARTED', 'EXERCISE_LOCKED',
   'CALIBRATION_PLAN_REVISED', 'CALIBRATION_ACCEPTED', 'SET_RECORDED',
   'EXTRA_SET_RECORDED', 'SET_CORRECTED', 'SET_VOIDED', 'WORKOUT_FINISHED',
   'WORKOUT_INCOMPLETE', 'WORKOUT_DISCARDED', 'SESSION_VOIDED',
@@ -31,9 +31,10 @@ const fail = message => { throw new Error(`BB2: ${message}`); };
 // Closed v1 payloads: imported/restored events may not smuggle unrecognised
 // training inputs into saved session plans or future versioned projections.
 const EVENT_FIELDS = Object.freeze({
+  PROGRESSION_SHARED: ['version', 'catalogueVersion', 'prescriptions', 'openingOrder'],
   BLOCK_CREATED: ['ownerId', 'schemaVersion', 'foldRulesVersion', 'openingSnapshotVersion'],
   BLOCK_SEALED: ['sealId'],
-  WORKOUT_STARTED: ['sessionId', 'templateId', 'kind', 'slots', 'startedAt'],
+  WORKOUT_STARTED: ['sessionId', 'templateId', 'kind', 'slots', 'startedAt', 'progressionPolicy'],
   EXERCISE_LOCKED: ['sessionId', 'roleSlotId', 'exerciseId', 'plannedG', 'plannedOrigin',
     'incrementG', 'incrementOrigin', 'equipment', 'sets', 'floor', 'ceiling', 'variation', 'assistance'],
   CALIBRATION_PLAN_REVISED: ['sessionId', 'roleSlotId', 'exerciseId', 'plannedG', 'plannedOrigin'],
@@ -180,7 +181,8 @@ function validateOpening(opening) {
     'ownerId', 'blockId', 'sealRevision', 'progress', 'pending', 'previousQuotas',
     'previousCreditIds', 'sealed', 'previousSealId', 'previousBlockId',
     'previousSchemaVersion', 'previousFoldRulesVersion',
-    'previousOpeningSnapshotVersion', 'selections'], 'opening snapshot');
+    'previousOpeningSnapshotVersion', 'selections', 'sharedProgression'], 'opening snapshot');
+  if (opening.sharedProgression) validateSharing(opening.sharedProgression);
   if (opening.foldRulesVersion !== FOLD_RULES_VERSION) fail('unsupported foldRulesVersion');
   positiveId(opening.ownerId, 'owner'); positiveId(opening.blockId, 'block');
   integer(opening.sealRevision, 'seal revision');
@@ -217,6 +219,7 @@ function validateOpening(opening) {
       }
     }
   }
+  if(opening.sharedProgression?.order.some(key=>!own(opening.progress,key)))fail('shared opening order references missing progression');
   if (!opening.pending || typeof opening.pending !== 'object' || Array.isArray(opening.pending)) {
     fail('invalid opening pending decisions');
   }
@@ -293,6 +296,8 @@ function validateEventPayload(e) {
       if (e.actualG !== undefined) mass('actual', 'actualG', 'actualOrigin', true);
       else if (e.actualOrigin !== undefined) fail('actual origin requires numeric load');
       break;
+    case 'PROGRESSION_SHARED':
+      validateSharing({version:e.version,catalogueVersion:e.catalogueVersion,prescriptions:e.prescriptions,order:e.openingOrder});break;
     case 'WORKOUT_FINISHED':
       if (e.progressionMode !== undefined && e.progressionMode !== 'KNOWN_WORKING_WEIGHTS') fail('invalid progression mode');
       if (e.completedAt !== undefined) integer(e.completedAt, 'completion time', 1);
@@ -580,6 +585,44 @@ function effectiveRevisions(events) {
   }
   return { records, voidSessions };
 }
+// Opt-in policy: original slot keys and old event prefixes remain unchanged.
+// Recipe equality includes every set because v1 progression gates all of them.
+function validateSharing(v) {
+  onlyFields(v,['version','catalogueVersion','prescriptions','order'],'shared progression');
+  if(v.version!==1||!Number.isInteger(v.catalogueVersion)||v.catalogueVersion<1||v.catalogueVersion>5||!Array.isArray(v.prescriptions)||!Array.isArray(v.order))fail('invalid shared progression policy');
+  const seen=new Set();
+  for(const d of v.prescriptions){
+    onlyFields(d,['templateId','roleSlotId','exerciseId','sets','floor','ceiling','equipment'],'shared prescription');
+    const key=identity(d.templateId,d.roleSlotId,d.exerciseId);if(seen.has(key))fail('duplicate shared prescription');seen.add(key);
+    integer(d.sets,'shared sets',1);integer(d.floor,'shared floor',1);integer(d.ceiling,'shared ceiling',1);
+    if(d.floor>d.ceiling||!['loaded','bodyweight'].includes(d.equipment))fail('invalid shared prescription');
+  }
+  if(new Set(v.order).size!==v.order.length)fail('duplicate shared writer');
+  for(const key of v.order){if(typeof key!=='string'||key.split('|').length!==3)fail('invalid shared writer');identity(...key.split('|'));}
+}
+function sharedRecipe(d){return d&&JSON.stringify([d.exerciseId,d.sets,d.floor,d.ceiling,d.equipment]);}
+function sharedSignature(d,p){return d&&p&&JSON.stringify([sharedRecipe(d),p.incrementG,
+  d.equipment==='bodyweight'?[p.variation,p.assistance,p.loadG===null?'qualitative':'added-weight']:(p.loadG===null?'unconfigured-loaded':'working-load')]);}
+function sharedProgressFor(projection,key,slot=null){
+  const policy=projection?.sharedProgression,current=projection?.progress?.[key];
+  if(!policy)return {key,progress:current};
+  const d=policy.prescriptions.find(d=>identity(d.templateId,d.roleSlotId,d.exerciseId)===key);
+  if(!d||(slot&&sharedRecipe({...slot,exerciseId:d.exerciseId})!==sharedRecipe(d)))return {key,progress:current};
+  const expected=current||(slot?.incrementG!==undefined?{incrementG:slot.incrementG,variation:slot.variation??null,assistance:slot.assistance??null,loadG:slot.plannedG??null}:null);
+  const candidates=policy.prescriptions.map(d=>({key:identity(d.templateId,d.roleSlotId,d.exerciseId),d}))
+    .filter(c=>projection.progress[c.key]&&sharedRecipe(c.d)===sharedRecipe(d)&&(!expected||sharedSignature(c.d,projection.progress[c.key])===sharedSignature(d,expected)));
+  candidates.sort((a,b)=>policy.order.indexOf(b.key)-policy.order.indexOf(a.key)||(a.key<b.key?-1:a.key>b.key?1:0));
+  const source=candidates[0];return source?{key:source.key,progress:projection.progress[source.key]}:{key,progress:current};
+}
+function sharedPendingFor(projection,key,slot=null){
+  if(projection.pending[key])return projection.pending[key];
+  const source=sharedProgressFor(projection,key,slot),d=projection.sharedProgression?.prescriptions.find(d=>identity(d.templateId,d.roleSlotId,d.exerciseId)===key);
+  if(!d||!source.progress)return null;
+  return Object.entries(projection.pending).find(([other])=>{
+    const o=projection.sharedProgression.prescriptions.find(d=>identity(d.templateId,d.roleSlotId,d.exerciseId)===other);
+    return o&&sharedSignature(o,projection.progress[other])===sharedSignature(d,source.progress);
+  })?.[1]||null;
+}
 function foldBB2Block(openingSnapshot, chronologicalEvents) {
   // Every top-level replay owns its prefix cache: never reuse a cached result
   // across distinct corrected event streams, even when their lengths match.
@@ -629,7 +672,29 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
   // Progression-eligible finished sessions, not dates or recovery/incomplete
   // work, define the optional four-session multi-stall review window.
   const eligibleNormalFinishes = [], stallNoteMilestones = [];
-  const grants = new Map(), activeCredits = new Map(), pending = clone(opening.pending || {});
+  let sharing=opening.sharedProgression?clone(opening.sharedProgression):null;
+  const writerOrder=sharing?[...sharing.order]:[];
+  const pendingOwn=clone(opening.pending||{});
+  const stateView=()=>({progress,pending:pendingOwn,sharedProgression:sharing?{...sharing,order:writerOrder}:null});
+  const indexDescriptors=()=>new Map((sharing?.prescriptions||[]).map(d=>[identity(d.templateId,d.roleSlotId,d.exerciseId),d]));
+  let descriptors=indexDescriptors();
+  const descriptor=key=>descriptors.get(key);
+  const peers=key=>{const signature=sharedSignature(descriptor(key),progress[key]);return signature?Object.keys(progress).filter(k=>sharedSignature(descriptor(k),progress[k])===signature):[key]};
+  const pending=new Proxy(pendingOwn,{
+    get:(target,key)=>typeof key==='string'?(target[key]||sharedPendingFor(stateView(),key)):target[key],
+    deleteProperty:(target,key)=>{for(const k of peers(key))delete target[k];delete target[key];return true}
+  });
+  const touch=key=>{const at=writerOrder.indexOf(key);if(at>=0)writerOrder.splice(at,1);writerOrder.push(key)};
+  const synchronise=(key,previousPeers=[])=>{if(!sharing||!progress[key])return;for(const other of new Set([...peers(key),...previousPeers]))if(other!==key)progress[other]=clone(progress[key]);};
+  const reconcile=()=>{
+    const original=clone(progress),seen=new Set();
+    const keys=Object.keys(original).sort((a,b)=>writerOrder.indexOf(b)-writerOrder.indexOf(a)||(a<b?-1:a>b?1:0));
+    for(const key of keys){const group=sharedSignature(descriptor(key),original[key]);if(!group||seen.has(group))continue;seen.add(group);
+      for(const other of keys)if(sharedSignature(descriptor(other),original[other])===group)progress[other]=clone(original[key]);
+    }
+  };
+  if(sharing)reconcile();
+  const grants = new Map(), activeCredits = new Map();
   const quotas = Object.fromEntries(TEMPLATES.map(x => [x, 0]));
   let sealed = !!opening.sealed, sealId = null;
   // Credit events must be valid at their own chronological ordinal, not only
@@ -648,7 +713,12 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
   };
   // Discard may tombstone the original Start while leaving an independently
   // committed GLOBAL edit at its ordinal; that edit has no live session slot.
-  const getProgress = (key, plan) => progress[key] ||= initialProgress({}, plan || {});
+  const getProgress = (key, plan) => {
+    if(!progress[key]){const source=sharing?sharedProgressFor(stateView(),key,plan):null;
+      if(source?.progress){eventPeers.set(key,peers(source.key));progress[key]=clone(source.progress)}
+      else progress[key]=initialProgress({},plan||{});
+    }return progress[key];
+  };
   // Calibration permission is historical: a later correction may make an
   // earlier exercise eligible without invalidating a trial that was legal
   // when originally recorded. Evaluate the original event prefix, not the
@@ -671,19 +741,34 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
       (origin ? clone(origin) : { kind: 'DERIVED', sourceEventId: id });
     p.epochId = id; p.bestReps = null; p.stallCount = 0;
   } };
-  const boundary = (key, ordinal, kind) => boundaries.push({ key, ordinal, kind });
+  let eventPeers=new Map();
+  const boundary = (key, ordinal, kind) => {for(const alias of new Set([key,...(sharing?peers(key):[]),...(eventPeers.get(key)||[])]))boundaries.push({key:alias,ordinal,kind});};
   const findSlot = (s, e) => {
     const slot = s?.slots.find(x => x.roleSlotId === e.roleSlotId && x.exerciseId === e.exerciseId);
     if (!slot) fail('event references missing session slot');
     return slot;
   };
   for (const e of chronologicalEvents) {
+    const changesProgress=['WORKOUT_FINISHED','PRESCRIPTION_EDITED','INCREMENT_EDITED','VARIATION_EDITED','STALL_REDUCTION_ACCEPTED','CHOICE_RESOLVED','CHOICE_REPLACED'].includes(e.type);
+    eventPeers=sharing&&changesProgress?new Map(Object.keys(progress).map(key=>[key,peers(key)])):new Map();
     // Sealing freezes *all* training-authoritative events in this block,
     // not just corrections. Notes and History visibility remain editable.
     if (sealed && !['NOTE_EDITED', 'HISTORY_HIDDEN', 'HISTORY_UNHIDDEN'].includes(e.type)) {
       fail('sealed block training state is read-only');
     }
     switch (e.type) {
+      case 'PROGRESSION_SHARED': {
+        if([...sessions.values()].some(s=>!s.outcome))fail('cannot enable shared progression during a workout');
+        if(sharing&&sameCanonicalValue(sharing.prescriptions,e.prescriptions))fail('duplicate shared progression policy');
+        const original=replayBefore(e.commitOrdinal);
+        if(Object.keys(original.pending).length||original.requiredConsent.length)fail('resolve existing decisions before sharing progression');
+        if(e.openingOrder.some(key=>!own(opening.progress,key)))fail('shared migration references missing opening progression');
+        const actualOrder=[...writerOrder];writerOrder.length=0;
+        for(const key of [...e.openingOrder,...actualOrder]){if(progress[key])touch(key)}
+        sharing={version:1,catalogueVersion:e.catalogueVersion,prescriptions:clone(e.prescriptions)};
+        descriptors=indexDescriptors();reconcile();
+        break;
+      }
       case 'WORKOUT_STARTED': {
         positiveId(e.sessionId, 'session');
         if (sessions.has(e.sessionId)) fail('duplicate session ID');
@@ -696,10 +781,24 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
         }
         if (sealed && e.kind !== 'RECOVERY') fail('sealed block only permits recovery');
         if (!Array.isArray(e.slots) || !e.slots.length) fail('missing session slots');
+        if(sharing&&e.progressionPolicy!==1)fail('shared progression policy required for new Start');
+        if(!sharing&&e.progressionPolicy!==undefined)fail('Start references inactive sharing policy');
         const slots = clone(e.slots), names = new Set();
         for (const s of slots) {
           validateSlot(s); if (names.has(s.roleSlotId)) fail('duplicate role slot'); names.add(s.roleSlotId);
           const key = identity(e.templateId, s.roleSlotId, s.exerciseId);
+          if(sharing&&e.kind!=='RECOVERY'){
+            const source=sharedProgressFor(stateView(),key,s);
+            if(source.progress){
+              const matches=p=>(s.plannedG??null)===p.loadG&&s.incrementG===p.incrementG&&
+                (s.equipment!=='bodyweight'||(s.variation===p.variation&&s.assistance===p.assistance));
+              if(!matches(source.progress)){
+                const historical=replayBefore(e.commitOrdinal),prior=sharedProgressFor(historical,key,s).progress;
+                if(!prior||!matches(prior))fail('Start must inherit compatible shared prescription');
+              }
+              progress[key]=clone(source.progress);
+            }
+          }
           if (pending[key]) {
             // A later correction may create a pending offer *retroactively*
             // at an earlier Finish. A historical Start that was legal when
@@ -707,7 +806,7 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
             // Evaluate the offer using the ledger prefix at this Start's
             // original ordinal; new Starts still see today's unresolved offer.
             const historical = replayBefore(e.commitOrdinal);
-            if (historical.pending[key]) fail('unresolved choice blocks same exercise');
+            if (sharedPendingFor(historical,key,s)) fail('unresolved choice blocks same exercise');
           }
         }
         sessions.set(e.sessionId, { sessionId: e.sessionId, templateId: e.templateId, kind: e.kind, slots,
@@ -770,6 +869,10 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
         if (!session && activeSession && activeSession.templateId === templateId &&
             activeSession.slots.some(s => s.roleSlotId === e.roleSlotId && s.exerciseId === e.exerciseId)) {
           fail('active session requires linked global edit');
+        }
+        if(sharing&&activeSession&&(!session||session.sessionId!==activeSession.sessionId)){
+          const edited=identity(templateId,e.roleSlotId,e.exerciseId);
+          if(activeSession.slots.some(s=>peers(sharedProgressFor(stateView(),edited).key).includes(identity(activeSession.templateId,s.roleSlotId,s.exerciseId))))fail('shared edit requires active session linkage');
         }
         const key = identity(templateId, e.roleSlotId, e.exerciseId);
         const window = e.sessionId ? discardedEditWindows.get(e.sessionId) : null;
@@ -908,8 +1011,18 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
         s.prescribedCount = count; s.validCount = validCount;
         s.eligible = s.outcome === 'FINISH' && sessionEligible(s) &&
           validCount >= minimumValid && !voidSessions.has(s.sessionId);
+        const advancedGroups=new Set();
         if (s.eligible) for (const slot of s.slots) {
           const key = identity(s.templateId, slot.roleSlotId, slot.exerciseId), info = evidenceFor(s, slot.roleSlotId, records);
+          if(sharing){
+            const group=sharedSignature(descriptor(key),progress[key]||initialProgress({},slot))||key;
+            if(advancedGroups.has(group))continue;advancedGroups.add(group);
+            const same=s.slots.filter(x=>sharedSignature(descriptor(identity(s.templateId,x.roleSlotId,x.exerciseId)),progress[identity(s.templateId,x.roleSlotId,x.exerciseId)]||initialProgress({},x))===group);
+            const evidence=same.map(x=>evidenceFor(s,x.roleSlotId,records));
+            info.complete=evidence.every(x=>x.complete);info.harder=evidence.some(x=>x.harder);
+            info.allTop=evidence.every(x=>x.allTop);info.onPlan=evidence.every(x=>x.onPlan);
+            info.uniform=evidence.every(x=>x.uniform&&x.actualG===info.actualG);
+          }
           if (!info.complete) continue;
           const p = getProgress(key, slot);
           // New app completions start from the user's configured working plan.
@@ -1242,6 +1355,18 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
       case 'TOMBSTONE': break;
       default: fail('unsupported event handling');
     }
+    let written=[];
+    if(['PRESCRIPTION_EDITED','INCREMENT_EDITED','VARIATION_EDITED','STALL_REDUCTION_ACCEPTED'].includes(e.type)){
+      const template=e.templateId??sessions.get(e.sessionId)?.templateId;
+      written=[identity(template,e.roleSlotId,e.exerciseId)];
+    }else if(e.type==='WORKOUT_FINISHED'){
+      const session=sessions.get(e.sessionId);written=session.slots.map(slot=>identity(session.templateId,slot.roleSlotId,slot.exerciseId)).filter(key=>progress[key]?.lastNormalSessionId===e.sessionId);
+    }else if(['CHOICE_RESOLVED','CHOICE_REPLACED'].includes(e.type)){
+      const source=sessions.get(e.sourceSessionId);
+      if(source)written=[identity(source.templateId,e.roleSlotId,e.exerciseId)];
+      else written=Object.keys(progress).filter(key=>key.split('|')[1]===e.roleSlotId&&key.split('|')[2]===e.exerciseId&&progress[key].epochId.includes(e.eventId));
+    }
+    for(const key of written){if(!progress[key])continue;touch(key);synchronise(key,e.type==='INCREMENT_EDITED'?[]:(eventPeers.get(key)||[]));}
   }
   // A corrected-ineligible credit must be explicitly revoked; never silently reallocate.
   for (const [sessionId] of activeCredits) if (!sessions.get(sessionId)?.eligible) fail('ineligible active credit requires revoke');
@@ -1298,8 +1423,9 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
   // quota, canonical sets, or the sealed closing training snapshot.
   const stallSignals = {};
   for (const [key, p] of Object.entries(progress)) {
+    if(sharing&&sharedProgressFor(stateView(),key).key!==key)continue;
     if (!p.calibrated || p.stallCount < 3) continue;
-    const dismiss = stallDismissals.get(key);
+    const dismiss = stallDismissals.get(key)||(sharing?peers(key).map(k=>stallDismissals.get(k)).find(d=>d?.epochId===p.epochId&&d.stallCount===p.stallCount):null);
     if (p.stallCount === 3) {
       stallSignals[key] = { kind: 'NOTE', epochId: p.epochId, stallCount: 3 };
     } else {
@@ -1317,7 +1443,7 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
     const p = progress[milestone.key];
     if (recentEligibleSet.has(milestone.sessionId) && p &&
         p.stallCount >= 3 && p.epochId === milestone.epochId) {
-      relevantMilestones.set(milestone.key, milestone);
+      relevantMilestones.set(sharing?sharedProgressFor(stateView(),milestone.key).key:milestone.key, milestone);
     }
   }
   const multiStallRecovery = relevantMilestones.size >= 2 ? {
@@ -1330,9 +1456,11 @@ function foldBB2BlockCached(openingSnapshot, chronologicalEvents, prefixCache) {
     ownerId: opening.ownerId, headOrdinal: chronologicalEvents.length, sealRevision: opening.sealRevision + (sealId ? 1 : 0),
     sealId, sealed, progress, quotas, activeCredits: Object.fromEntries(activeCredits),
     creditLedger: Object.fromEntries(grants), selections, unitMetadata,
-    pending, requiredConsent, stallSignals, multiStallRecovery, history,
+    pending:clone(pendingOwn), requiredConsent, stallSignals, multiStallRecovery, history,
+    ...(sharing?{sharedProgression:{...clone(sharing),order:[...writerOrder]}}:{}),
     closingSnapshot: sealed ? { schemaVersion: SCHEMA_VERSION, foldRulesVersion: FOLD_RULES_VERSION,
       openingSnapshotVersion: 1, progress: clone(progress), selections: clone(selections),
+      ...(sharing?{sharedProgression:{...clone(sharing),order:[...writerOrder]}}:{}),
       pending: Object.fromEntries(Object.entries(pending).map(([key, offer]) => {
         if (offer.sourceBlockId) return [key, clone(offer)];
         if (offer.kind === 'OFF_PLAN') {
@@ -1433,6 +1561,7 @@ function createNextBB2OpeningFromProjection(previousProjection, newBlockId) {
       previousProjection.schemaVersion !== closing.schemaVersion ||
       previousProjection.foldRulesVersion !== closing.foldRulesVersion ||
       closing.openingSnapshotVersion !== 1 ||
+      !sameCanonicalValue(previousProjection.sharedProgression??null,closing.sharedProgression??null) ||
       !sameCanonicalValue(previousProjection.progress, closing.progress) ||
       !sameCanonicalValue(previousProjection.selections, closing.selections) ||
       !sameCanonicalValue(Object.keys(previousProjection.pending || {}).sort(),
@@ -1472,6 +1601,7 @@ function createNextBB2OpeningFromProjection(previousProjection, newBlockId) {
   }
   const next = createBB2Opening({ ownerId: previousProjection.ownerId, blockId: newBlockId,
     progress: closing.progress, sealRevision: previousProjection.sealRevision });
+  if(closing.sharedProgression)next.sharedProgression=clone(closing.sharedProgression);
   next.selections = clone(closing.selections);
   next.pending = clone(closing.pending || {});
   next.previousQuotas = clone(closing.priorQuotas);
@@ -1501,7 +1631,7 @@ function discardBB2Session(events, sessionId) {
 module.exports = { SCHEMA_VERSION, FOLD_RULES_VERSION, TEMPLATES, EVENT_TYPES,
   identity, canonicalGrams, resolveNumericSubmission, createBB2Opening,
   foldBB2Block, commitBB2Transaction, planBB2Finish, createNextBB2Opening,
-  discardBB2Session };
+  discardBB2Session, sharedProgressFor, sharedPendingFor, sharedRecipe };
 };
 factories["./approved-programme-v2.cjs"] = function (module, exports, require) {
 'use strict';
@@ -1775,8 +1905,8 @@ factories["./start.cjs"] = function (module, exports, require) {
 'use strict';
 
 const { canonicalGrams, identity, foldBB2Block, createNextBB2Opening,
-  commitBB2Transaction } = require('./ledger.cjs');
-const { validateBB2Setup, getBB2TemplatePrescription } = require('./catalogue.cjs');
+  commitBB2Transaction, sharedProgressFor, sharedRecipe } = require('./ledger.cjs');
+const { validateBB2Setup, getBB2TemplatePrescription, getBB2Catalogue } = require('./catalogue.cjs');
 
 const fail = msg => { throw Error('BB2 Start: ' + msg); };
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
@@ -1813,8 +1943,60 @@ function carriedDerivedProvenance(opening, key, current, priorSealedBlock) {
   }
 }
 
+function buildBB2SharedPolicy(opening,previousEvents,setup,{sealedBlocks=[],priorSealedBlock=null}={}){
+ validateBB2Setup(setup);
+ const prescriptions=[];
+ for(const [templateId,roles] of Object.entries(getBB2Catalogue(setup.catalogueVersion)))for(const role of roles)for(const option of role.options)
+  prescriptions.push({templateId,roleSlotId:role.roleSlotId,exerciseId:option.id,sets:option.sets??role.sets,floor:option.floor??role.floor,ceiling:option.ceiling??role.ceiling,equipment:option.equipment});
+ prescriptions.sort((a,b)=>{const x=`${a.templateId}|${a.roleSlotId}|${a.exerciseId}`,y=`${b.templateId}|${b.roleSlotId}|${b.exerciseId}`;return x<y?-1:x>y?1:0});
+ const projection=foldBB2Block(opening,previousEvents);
+ if(projection.sharedProgression&&equal(projection.sharedProgression.prescriptions,prescriptions))return null;
+ if(projection.sealed||projection.requiredConsent.length||Object.keys(projection.pending).length)fail('resolve existing decisions before enabling shared progression');
+ if(previousEvents.some(e=>e.type==='WORKOUT_STARTED'&&!previousEvents.some(x=>x.sessionId===e.sessionId&&['WORKOUT_FINISHED','WORKOUT_INCOMPLETE','WORKOUT_DISCARDED'].includes(x.type))))fail('cannot enable sharing during a workout');
+ const order=Object.keys(opening.progress).sort(),touch=key=>{if(!own(opening.progress,key))return;const i=order.indexOf(key);if(i>=0)order.splice(i,1);order.push(key)};
+ const archives=sealedBlocks.length?sealedBlocks:priorSealedBlock?[priorSealedBlock]:[];
+ if(opening.previousSealId&&!archives.length)fail('shared migration needs verified sealed predecessor');
+ for(const [index,block] of archives.entries()){
+  const next=archives[index+1]?.opening||opening;
+  if(!equal(createNextBB2Opening(block.opening,block.events,next.blockId),next))fail('shared migration has invalid sealed ancestry');
+  const p=foldBB2Block(block.opening,block.events),sessions=new Map();
+  if(!p.sealed||p.ownerId!==opening.ownerId)fail('shared migration requires verified sealed history');
+  for(const e of block.events){
+   if(e.type==='WORKOUT_STARTED')sessions.set(e.sessionId,e);
+   if(e.type==='WORKOUT_FINISHED'&&sessions.get(e.sessionId)?.kind!=='RECOVERY')for(const slot of sessions.get(e.sessionId).slots){
+    const key=`${sessions.get(e.sessionId).templateId}|${slot.roleSlotId}|${slot.exerciseId}`;
+    if(p.progress[key]?.lastNormalSessionId===e.sessionId)touch(key);
+   }
+   if(['PRESCRIPTION_EDITED','INCREMENT_EDITED','VARIATION_EDITED','STALL_REDUCTION_ACCEPTED'].includes(e.type))touch(`${e.templateId??sessions.get(e.sessionId)?.templateId}|${e.roleSlotId}|${e.exerciseId}`);
+   if(['CHOICE_RESOLVED','CHOICE_REPLACED'].includes(e.type)){
+    if(sessions.get(e.sourceSessionId))touch(`${sessions.get(e.sourceSessionId).templateId}|${e.roleSlotId}|${e.exerciseId}`);
+    else for(const [key,value] of Object.entries(opening.progress))if(value.loadOrigin?.sourceEventId===e.eventId||['choice:','earned-choice:','difficulty:'].some(prefix=>value.epochId===prefix+e.eventId))touch(key);
+   }
+  }
+  for(const key of p.sharedProgression?.order||[])touch(key);
+ }
+ return {type:'PROGRESSION_SHARED',eventId:'shared-policy:'+opening.blockId+':'+(previousEvents.length+1),commitOrdinal:previousEvents.length+1,
+  blockId:opening.blockId,version:1,catalogueVersion:setup.catalogueVersion,prescriptions,openingOrder:order};
+}
+function validateBB2SharedPolicy(opening,previousEvents,setup,event,evidence={}){
+ const expected=buildBB2SharedPolicy(opening,previousEvents,setup,evidence);
+ if(!expected||!equal(expected,event))fail('shared progression migration differs from verified catalogue/history');
+ return true;
+}
+function prepareBB2SharedProgression(opening,events,setup,evidence={}){
+ const policy=buildBB2SharedPolicy(opening,events,setup,evidence),effective=policy?[...events,policy]:events;
+ return {policy,events:effective,projection:foldBB2Block(opening,effective)};
+}
+function earningKey(events,event,fallback,recorded){
+ const start=events.find(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===(event.type==='WORKOUT_FINISHED'?event.sessionId:event.sourceSessionId));
+ if(!start)return fallback;
+ const slot=start.slots.find(s=>s.exerciseId===recorded.exerciseId&&(event.type==='WORKOUT_FINISHED'||s.roleSlotId===event.roleSlotId)&&
+  (sharedRecipe(s)===sharedRecipe(recorded)||`${start.templateId}|${s.roleSlotId}|${s.exerciseId}`===fallback));
+ if(!slot)fail('shared DERIVED source has incompatible prescription');
+ return `${start.templateId}|${slot.roleSlotId}|${slot.exerciseId}`;
+}
 function validateBB2NewStart(opening, previousEvents, setup, startEvent,
-  { priorSealedBlock } = {}) {
+  { priorSealedBlock, sealedBlocks } = {}) {
   validateBB2Setup(setup);
   if (!startEvent || startEvent.type !== 'WORKOUT_STARTED' ||
       !['NORMAL', 'EXTRA_NORMAL'].includes(startEvent.kind)) {
@@ -1853,7 +2035,7 @@ function validateBB2NewStart(opening, previousEvents, setup, startEvent,
       fail('Start slot contains a non-catalogue field');
     }
     const key = identity(startEvent.templateId, recorded.roleSlotId, recorded.exerciseId);
-    const previous = projection.progress[key];
+    const previous = sharedProgressFor(projection,key,recorded).progress;
     const plannedExists = own(recorded, 'plannedG');
 
     if (prescribed.equipment === 'loaded') {
@@ -1883,16 +2065,26 @@ function validateBB2NewStart(opening, previousEvents, setup, startEvent,
       } else if (own(recorded, 'incrementOrigin')) fail('orphan increment origin');
       if (previous.loadOrigin?.kind === 'DERIVED') {
         const source = previousEvents.find(e => e.eventId === previous.loadOrigin.sourceEventId);
-        if (!source) carriedDerivedProvenance(opening, key,
-          opening.progress[key], priorSealedBlock);
+        if (!source) {
+          let carriedKey=key;
+          if(projection.sharedProgression&&(!opening.progress[key]||!equal(opening.progress[key].loadOrigin,previous.loadOrigin))){
+            carriedKey=Object.keys(opening.progress).find(candidate=>{
+              const d=projection.sharedProgression.prescriptions.find(d=>`${d.templateId}|${d.roleSlotId}|${d.exerciseId}`===candidate);
+              return d&&sharedRecipe(d)===sharedRecipe(recorded)&&opening.progress[candidate].loadG===previous.loadG&&equal(opening.progress[candidate].loadOrigin,previous.loadOrigin);
+            });
+            if(!carriedKey)fail('shared DERIVED load has no verified carried source');
+          }
+          carriedDerivedProvenance(opening,carriedKey,opening.progress[carriedKey],priorSealedBlock);
+        }
         else if (!['WORKOUT_FINISHED', 'CHOICE_RESOLVED'].includes(source.type)) {
           fail('DERIVED source is not an earning event');
         } else {
           const before = replay(source.commitOrdinal - 1);
           const after = replay(source.commitOrdinal);
-          const result = after.progress[key];
+          const sourceKey=projection.sharedProgression?earningKey(previousEvents,source,key,recorded):key;
+          const result = after.progress[sourceKey];
           if (!equal(result?.loadOrigin, previous.loadOrigin) ||
-              result.loadG === (before.progress[key]?.loadG ?? null)) {
+              result.loadG === (before.progress[sourceKey]?.loadG ?? null)) {
             fail('DERIVED source does not earn this load');
           }
         }
@@ -1911,13 +2103,16 @@ function validateBB2NewStart(opening, previousEvents, setup, startEvent,
   return projection;
 }
 
-function commitBB2Start(opening, previousEvents, setup, startEvent, guard, evidence) {
+function commitBB2Start(opening, previousEvents, setup, startEvent, guard, evidence={}) {
   if (guard?.activeWorkout !== false) fail('Start requires explicit inactive-workout guard');
-  validateBB2NewStart(opening, previousEvents, setup, startEvent, evidence);
-  return commitBB2Transaction(opening, previousEvents, [startEvent], guard);
+  const policy=evidence.sharingPolicy;
+  if(policy)validateBB2SharedPolicy(opening,previousEvents,setup,policy,evidence);
+  const effective=policy?[...previousEvents,policy]:previousEvents;
+  validateBB2NewStart(opening,effective,setup,startEvent,evidence);
+  return commitBB2Transaction(opening,previousEvents,policy?[policy,startEvent]:[startEvent],guard);
 }
 
-module.exports = { validateBB2NewStart, commitBB2Start };
+module.exports = { validateBB2NewStart, commitBB2Start, buildBB2SharedPolicy, validateBB2SharedPolicy, prepareBB2SharedProgression };
 };
 factories["./restore.cjs"] = function (module, exports, require) {
 /* BB2 Stage (ii) — pure restore/import validation boundary.
@@ -2166,7 +2361,7 @@ function load(id) {
   factories[id](module, module.exports, load);
   return module.exports;
 }
-export const BB2_BROWSER_SOURCE_SHA256 = "ba7cbc31d5760d7244a97ba9e893225698f1aa0a6db985a492076c1e0dfdecc8";
+export const BB2_BROWSER_SOURCE_SHA256 = "d80628e5d36834a161cabd50fff195a108734bc6bdbdbc2fe20f5f4594ceeabc";
 export const BB2_BROWSER_MODULES = Object.freeze({
   ledger: Object.freeze(load("./ledger.cjs")),
   catalogue: Object.freeze(load("./catalogue.cjs")),
