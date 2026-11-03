@@ -2,7 +2,7 @@
 
 The idle Workout tab now previews the next counted session through the same renderer used for active BB2 workouts. Completed credits drive Upper A → Lower A → Upper B → Lower B. Incomplete normal work repeats its day; recovery does not advance the counted rotation. Full 32-credit blocks require the existing explicit next-block review. Optional recovery prescriptions remain explicit; no harder/easier bodyweight plan is invented.
 
-Previewing only reads canonical data. Start Workout checks the exact opening/journal/setup/unit preview snapshot before committing a Start. No session or elapsed/rest clock is created by rendering. Prescribed working loads reuse the shared progression resolver, including compatible cross-day exercises and independent incompatible prescriptions. Unknown first-use loads remain editable inputs; known prescriptions use the existing Edit Weight dialog. Previous exercise records remain available as starting-load references. Idle BB2 previews hide the inactive Finish/rest bar.
+Previewing only reads canonical data. Start Workout checks the exact opening/journal/setup/unit preview snapshot before committing a Start. No session or elapsed/rest clock is created by rendering. Returning from History refreshes a stale preview while preserving unchanged first-use inputs. Prescribed working loads reuse the shared progression resolver, including compatible cross-day exercises and independent incompatible prescriptions. Unknown first-use loads remain editable inputs; known prescriptions use the existing Edit Weight dialog. Previous exercise records remain available as starting-load references. Idle BB2 previews hide the inactive Finish/rest bar.
 
 ## Which decisions need input?
 

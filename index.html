@@ -5881,7 +5881,8 @@ function bvomBb2NextToken(){
  return String(bvomBb2NextSequence);
 }
 function bvomBb2StartNext(token){
- if(token!==bvomBb2NextToken()||bvomBb2Active()||!bvomBb2Selected())return false;
+ if(bvomBb2Active()||!bvomBb2Selected())return false;
+ if(token!==bvomBb2NextToken()){bvomBb2Workout();return false;}
  const next=bvomBb2NextView();if(!next||next.complete||next.blocked)return false;
  bvomBb2Day=next.templateId;bvomBb2Kind='NORMAL';return bvomBb2Begin(true);
 }
@@ -6133,7 +6134,7 @@ function bvomBb2Begin(inline=false){
    const index=Object.keys(before.pending).indexOf(pending[0]);
    return bvomBb2ValidationNotice(inline?hlmTxt('Confirm the weight plan on the affected Workout card before Start.','開始前に該当種目のワークアウトカードで重量プランを確認してください。'):hlmTxt('Resolve the pending decision for ', '次の種目の保留中の判断を確定してください：')+
     bvomBb2PreviewLabel(pending[0].split('|')[2])+hlmTxt(' in BB2 Decisions to Review before starting this workout.','（BB2の判断を確認）。'),
-    (inline?'#workout':'#setup')+' [data-bb2-choice-keep="'+index+'"]');
+    (inline?'#workout':'#setup')+' [data-bb2-choice-keep="'+index+'"], '+(inline?'#workout':'#setup')+' [data-bb2-choice-hold="'+index+'"]');
   }
   if(prepared.blocked&&!allowInline)return bvomBb2ValidationNotice(hlmTxt('Resolve existing BB2 decisions before enabling shared progression.','進行を共有する前に、既存のBB2の判断を確定してください。'));
   const scope=inline?'#workout':'#setup';
@@ -6723,7 +6724,7 @@ function bvomBb2Workout(){
  }).join('');
  const count=start.slots.reduce((n,s)=>n+s.sets,0),minimum=Math.ceil(.70*count);
  const done=b.events.filter(e=>e.type==='SET_RECORDED'&&e.sessionId===b.activeSessionId).length;
- el.innerHTML=(!active?'<button type="button" class="primary wide" data-bb2-start-next onclick="bvomBb2StartNext('+bvomEsc(JSON.stringify(bvomBb2NextToken()))+')">'+hlmTxt('START WORKOUT','ワークアウトを開始')+'</button>':'')+'<div class="toprow"><b>BODYBUILDING 2 · '+bvomEsc(bvomBb2PreviewLabel(start.templateId))+
+ el.innerHTML=(!active?'<button type="button" class="primary wide" data-bb2-start-next data-bb2-preview-token="'+bvomBb2NextToken()+'" onclick="bvomBb2StartNext('+bvomEsc(JSON.stringify(bvomBb2NextToken()))+')">'+hlmTxt('START WORKOUT','ワークアウトを開始')+'</button>':'')+'<div class="toprow"><b>BODYBUILDING 2 · '+bvomEsc(bvomBb2PreviewLabel(start.templateId))+
   (start.kind==='RECOVERY'?' · '+hlmTxt('LOW-STRESS RECOVERY','軽めの回復ワークアウト'):start.kind==='EXTRA_NORMAL'?' · '+hlmTxt('EXTRA WORKOUT','追加ワークアウト'):'')+
   '</b></div><div class="notice">'+(!active?hlmTxt('Review the next workout, then press Start. No session or timer has started.','次のワークアウトを確認して開始してください。セッションやタイマーはまだ開始していません。'):(hlmTxt('Workout:','ワークアウト：')+' '+done+'/'+count+' '+hlmTxt('prescribed sets recorded;','予定セットを記録済み。')+' '+
   (start.kind==='RECOVERY'?hlmTxt('recovery never earns a credit or progression.','回復ワークアウトではクレジットや進行を獲得しません。'):minimum+' '+hlmTxt('required for Finish.','セット以上で終了できます。'))+
@@ -7361,6 +7362,15 @@ renderWorkout=function(...args){
   if(bvomBb2Selected())return bvomBb2IdleWorkout();
  }
  return bvomBb2OldRenderWorkout(...args);
+};
+// Refresh only stale previews on navigation; preserve unsaved first-use inputs.
+const bvomBb2BaseActivateTab=activateTab;
+activateTab=function(name){
+ if(name==='workout'&&bvomBb2Selected()&&!bvomBb2Active()){
+  const button=document.querySelector('#workout [data-bb2-start-next]');
+  if(button&&button.getAttribute('data-bb2-preview-token')!==bvomBb2NextToken())renderWorkout();
+ }
+ return bvomBb2BaseActivateTab(name);
 };
 // BB2 preparation uses the existing Warm-up tab and BVOM strength warmups()
 // for recognised barbell lifts. All preparation is separate from the frozen
