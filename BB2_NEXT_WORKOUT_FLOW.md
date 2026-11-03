@@ -1,4 +1,4 @@
-# BB2 next workout and inline decisions — HOLD
+# BB2 next workout and inline decisions — v3.0.0
 
 The idle Workout tab now previews the next counted session through the same renderer used for active BB2 workouts. Completed credits drive Upper A → Lower A → Upper B → Lower B. Incomplete normal work repeats its day; recovery does not advance the counted rotation. Full 32-credit blocks require the existing explicit next-block review. Optional recovery prescriptions remain explicit; no harder/easier bodyweight plan is invented.
 
@@ -36,4 +36,4 @@ No database, RLS, ownership, revision CAS or stale-device policy changes. No new
 - Authenticated cloud browser proof trains a bodyweight offer on one device, resolves it inline on the second, and compares the exact canonical journal with the stored server row.
 - Full existing regression, browser, cloud-isolation and packaging checks remain required. No additional 220-session endurance run.
 
-PR #73 remains draft. Production v2.9.21 stays on HOLD. Next checkpoint: owner Android acceptance using the separately packaged v2.9.22 test build.
+Owner approved PR #73 at `de34b476c38b9874ce65fb4cf880f12754282539` for v3.0.0 production preparation. The integration was merged as `1bd75e2f219ffe9ca19901112a8178dcb87c309c`. Deployment is manual by the owner; live hosting remains v2.9.21 until upload.

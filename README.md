@@ -2,19 +2,16 @@
 
 Production source repository for BVOM Strength.
 
-## Unreleased candidate — v2.9.22 (draft PR #73)
+## Owner-approved release — v3.0.0 (manual deployment pending)
 
-- Full male/female workout journeys exercise all five programmes through the real mobile UI and disposable authenticated cloud. See `TESTING.md` for seeds, reports and explicit PASS/WATCH/FAIL criteria. BB2 Start now completes normal Starting Setup durably; shared saved statistics use its recorded working sets. BB2 Start validation reuses identical prefix replays within one call, preserving every provenance check while reducing full-journal stalls.
+- **Approval:** The owner approved BB2 integration at `de34b476c38b9874ce65fb4cf880f12754282539` for production. PR #73 was squash-merged as `1bd75e2f219ffe9ca19901112a8178dcb87c309c`; all four approved-head workflows passed.
+- **Version:** v3.0.0 replaces the proposed v2.9.22 production release. Title, header, `BVOM_BUILD`, first-install worker URL, worker `BUILD` and cache identify v3.0.0. Existing worker registrations and manifest app identity remain stable during upgrades.
+- **Integration:** BB2 is available through the normal programme chooser alongside BB1, LP/RPT, HLM, Custom and 4-Day Split. It reuses the numbered selector, workout controls, History and sharing. Automatic next-workout previews, shared compatible progression, inline bodyweight decisions, recovery and 32-credit blocks retain the approved behaviour, including both final audit repairs.
+- **Data:** No release migration, local-storage key change, progression rewrite, database schema or Supabase policy change. Existing History, backups, interrupted sessions, ownership, revision and stale-device protections remain in place.
+- **Packaging:** `scripts/package-production.cjs` produces `BVOM-v3.0.0-PRODUCTION.zip` from the final Git commit's 18 required production files. It includes no test marker, test cache, notes, fixtures or documentation. Verification and the complete SHA-256 accompany the handoff ZIP.
+- **Deployment:** Owner approved source promotion and release preparation, not an automated hosting deployment. **Live hosting remains v2.9.21 until the owner manually uploads the verified v3.0.0 ZIP.** Retain the verified v2.9.21 package for rollback. Physical installed-PWA acceptance after upload remains an owner check.
 
-- BB2 lifecycle repair: shared fixed Finish and note/saved dialogs; atomic canonical Finish/credit/note, ordinary History, warm-up rest/navigation, and configured-weight progression without calibration controls. Historical journals retain their original replay semantics. No cloud transport or database changes.
-
-- Continues the accepted BB2 cloud/UI candidate `daab92d57ede34538fb411da3927b7de947ec752`.
-- Adds the EN/JA Bodybuilding 2 programme explanation to programme selection, setup and Info, using existing typography. Describes the four-day schedule, muscle/strength purpose, exercise choices, guided progression, optional recovery sessions and 32 qualifying workouts.
-- Candidate title, header, `BVOM_BUILD`, service-worker registration, worker `BUILD` and cache use **2.9.22**. Test packaging derives its version and isolated source-specific cache from those markers.
-- BB2 cloud integration, programme prescriptions and persisted data formats are unchanged. No merge, deployment or production database change is authorized by this candidate.
-- **Live approved production remains v2.9.21**, recorded below. Physical acceptance and release approval are still required before publishing v2.9.22.
-
-## Current approved release — v2.9.21
+## Currently deployed release — v2.9.21
 
 - **GitHub application baseline:** merged `main` application commit `4f31e590e2849580e47d672e32aa1d0e23a18e96` (1 November 2026). Later documentation-only commits may advance `main` without changing deployable application files.
 - **App version:** `v2.9.21` in the title/header and `BVOM_BUILD`; service worker `BUILD = '2.9.21'` with production cache `bvom-2.9.21`.

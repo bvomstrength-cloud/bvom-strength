@@ -16,10 +16,12 @@ The production application is primarily a single HTML application:
 - `admin.html` — small administration surface for granting complimentary access through the BVOM backend
 - `i18n/en.js` and `i18n/ja.js` — English and Japanese localisation resources
 - `sw.js` — service worker and application-shell caching
-- `manifest.json` — PWA manifest
+- `manifest.json` — PWA manifest (installed-app identity remains stable across release version bumps)
+- `vendor/supabase-js-2.117.3.js` — pinned same-origin Supabase client
+- `bb2/browser-core.mjs`, `browser-host.mjs`, `app-session.mjs`, `cloud-sidecar.mjs`, `cloud-coordinator.mjs` — approved BB2 engine, session and revision-protected cloud adapters
 - icons, social artwork, and theme SVGs — static presentation assets
 
-There is no application build framework, package manager dependency tree, or compile step in the repository. The shipped files are the application.
+There is no application build framework, package manager dependency tree, or compile step in the repository. The shipped files are the application. v3.0.0 ships 18 files; `scripts/package-production.cjs` extracts only that surface from the exact release commit, without test markers or package notes.
 
 That simplicity is intentional. Do not introduce a framework, bundler, dependency layer, or architectural rewrite as incidental cleanup.
 
