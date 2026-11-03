@@ -182,11 +182,14 @@ const server=http.createServer((req,res)=>{
   await page.locator('#workout [data-bb2-next-workout]').click();
   await page.waitForSelector('#setup [data-bb2-start]');
   await page.locator('#setup [data-bb2-day="upper_b"]').click();
-  for(const el of await page.locator('#setup [data-bb2-load]').all())await el.fill('60');
+  const inheritedCurl=page.locator('#setup .review').filter({hasText:'Dumbbell Curl'}).last().locator('[data-bb2-load]');
+  assert.equal(await inheritedCurl.isDisabled(),true,'compatible Upper A curl load is inherited');
+  assert.equal(await inheritedCurl.inputValue(),'60','12 reps holds the shared 10–15 prescription');
+  for(const el of await page.locator('#setup [data-bb2-load]:not([disabled])').all())await el.fill('60');
   for(const el of await page.locator('#setup [data-bb2-inc]').all())await el.fill('1');
   await page.locator('#setup [data-bb2-start]').click();
   await page.waitForSelector('#workout [data-bb2-set]');
-  assert.equal(await page.locator('#workout [data-bb2-set]').count(),15,'Upper B optional curls remain independent');
+  assert.equal(await page.locator('#workout [data-bb2-set]').count(),15,'Upper B optional curls remain independently enabled');
   for(const key of ['5|0','5|1'])await recordBB2Set(page,key,12);
   await page.evaluate(()=>bvomBb2End('INCOMPLETE'));
   await page.reload();await page.waitForSelector('#app:not(.hidden)');
@@ -318,20 +321,20 @@ const server=http.createServer((req,res)=>{
   await page.locator('.bvomModalOverlay [data-save]').click();
   assert.equal(await page.locator('.bvomModalOverlay').count(),1,
    'blank actual load refuses recording without closing the dialog');
-  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.events.length),1,
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.events.filter(e=>e.type!=='PROGRESSION_SHARED').length),1,
    'invalid actual load cannot create a recorded working set');
   await page.locator('.bvomModalOverlay [data-bb2-actual="0|0"]').fill('60');
   await recordBB2Set(page,'0|0',8,{opened:true});
   await page.waitForSelector('#workout [data-bb2-set="0|0"].done');
   const logged=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
-  assert.equal(logged.bb2.events[1].type,'SET_RECORDED');
-  assert.equal(logged.bb2.events[1].actualG,60000);
+  assert.equal(logged.bb2.events.find(e=>e.type==='SET_RECORDED').type,'SET_RECORDED');
+  assert.equal(logged.bb2.events.find(e=>e.type==='SET_RECORDED').actualG,60000);
   assert.ok(logged.timerStart>0,'durably recorded working set starts the BVOM rest clock');
   assert.equal(await page.locator('#timerbar.idle').count(),0,'rest timer becomes visible after save');
   assert.equal(await page.evaluate(()=>!!bvomCloudPayload().bb2),false);
   await page.reload();
   await page.waitForSelector('#workout [data-bb2-set="0|0"].done');
-  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.events.length),2);
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.events.filter(e=>e.type!=='PROGRESSION_SHARED').length),2);
   // This is the first eligible exposure. A between-set trial must remain
   // session-scoped, survive reload and preserve the earlier 60 kg actual.
   // Historical calibration-stream compatibility fixture; no calibration UI is shipped.
@@ -385,11 +388,11 @@ const server=http.createServer((req,res)=>{
   assert.equal(discarded.bb2.activeSessionId,null);
   assert.equal(discarded.timerStart,null,'Discard atomically stops the working-set rest timer');
   assert.equal(discarded.bb2.events.find(e=>e.type==='TOMBSTONE').type,'TOMBSTONE');
-  assert.equal(discarded.bb2.events[1].type,'TOMBSTONE');
-  assert.equal(discarded.bb2.events[2].type,'TOMBSTONE','Discard removes session-only calibration trial');
-  assert.equal(discarded.bb2.events[4].type,'VARIATION_EDITED','Discard retains explicit future bodyweight identity');
-  assert.equal(discarded.bb2.events[5].type,'PRESCRIPTION_EDITED','Discard retains explicit future BW+load');
-  assert.equal(discarded.bb2.events[6].type,'TOMBSTONE','Discard removes bodyweight actual while keeping legacy History');
+  assert.equal(discarded.bb2.events.filter(e=>e.type!=='PROGRESSION_SHARED')[1].type,'TOMBSTONE');
+  assert.equal(discarded.bb2.events.filter(e=>e.type!=='PROGRESSION_SHARED')[2].type,'TOMBSTONE','Discard removes session-only calibration trial');
+  assert.equal(discarded.bb2.events.filter(e=>e.type!=='PROGRESSION_SHARED')[4].type,'VARIATION_EDITED','Discard retains explicit future bodyweight identity');
+  assert.equal(discarded.bb2.events.filter(e=>e.type!=='PROGRESSION_SHARED')[5].type,'PRESCRIPTION_EDITED','Discard retains explicit future BW+load');
+  assert.equal(discarded.bb2.events.filter(e=>e.type!=='PROGRESSION_SHARED')[6].type,'TOMBSTONE','Discard removes bodyweight actual while keeping legacy History');
   assert.equal(discarded.history.length,fixture.history.length);
   assert.equal(discarded.bb2.selectedProgram,true,'Discard keeps BB2 selected');
   await page.waitForSelector('#workout [data-bb2-next-workout]');

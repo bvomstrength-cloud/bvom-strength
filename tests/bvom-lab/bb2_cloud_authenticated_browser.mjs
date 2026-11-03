@@ -648,7 +648,11 @@ try {
         await page.locator('[data-bb2-curls-a]').check();await page.locator('[data-bb2-curls]').check();
         for(const d of ['upper_a','upper_b'])await page.locator('[data-bb2-role="'+d+'|biceps_curl"]').selectOption('dumbbell_curl');
         await page.locator('[data-bb2-save]').click();
-        await page.waitForFunction(()=>state.bb2.cloudSync?.baseline?.snapshot?.setup?.optionalUpperACurls===true);
+        assert.equal(await page.evaluate(()=>state.bb2.setup.optionalUpperACurls),true,'both-day configuration saves locally');
+        await page.evaluate(()=>bvomBb2ValidatePortableJournal(state.bb2,state.bb2.opening.ownerId));
+        try{await page.waitForFunction(()=>state.bb2.cloudSync?.baseline?.snapshot?.setup?.optionalUpperACurls===true);}
+        catch(error){console.error('Shared setup sync diagnostic',await page.evaluate(()=>({status:bvomBb2AccountStatus(),upload:bvomBb2AccountBinding?.lastUpload,download:bvomBb2AccountBinding?.lastDownload,active:bvomAnyWorkoutActive(),setup:state.bb2.setup,baselineSetup:state.bb2.cloudSync?.baseline?.snapshot?.setup})));throw error;}
+
       }
       await page.locator('[data-bb2-day="'+day+'"]').click();
       const curl=page.locator('#setup .review').filter({hasText:'Dumbbell Curl'}).last();
