@@ -6,7 +6,7 @@ Previewing only reads canonical data. Start Workout checks the exact opening/jou
 
 ## Which decisions need input?
 
-Ordinary on-plan barbell/dumbbell results use the unchanged automatic progression rules and increments. There is no extra confirmation for those results. A genuinely off-plan loaded result retains the existing explicit actual-versus-planned choice. Bodyweight top-of-range results retain the existing explicit difficulty choice; HOLD is always explicit, and assistance, variation and added weight are never selected automatically.
+Ordinary on-plan barbell/dumbbell results use the unchanged automatic progression rules and increments. There is no extra confirmation for those results. A genuinely off-plan loaded result retains the existing explicit actual-versus-planned choice before Start, directly on its Workout card. Bodyweight top-of-range results retain the existing explicit difficulty choice; HOLD is always explicit, and assistance, variation and added weight are never selected automatically.
 
 Bodyweight decisions appear on the affected Workout card. HOLD is immediately accessible; Change difficulty expands the existing responsive fields. Other exercises can be trained first. Recording, warm-up locking and prescription edits for the deferred exercise remain blocked until the choice is resolved. The old programme options remain available for exercise swaps, optional work and recovery, without being required for the normal next-workout flow.
 

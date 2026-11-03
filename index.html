@@ -5920,7 +5920,7 @@ function bvomBb2PendingChoices(projection,onlyKey=null,inline=false){
    '<button class="secondary" data-bb2-choice-hold="'+i+'" onclick="bvomBb2ResolveChoice('+i+',\'HOLD\')">'+hlmTxt('HOLD CURRENT PLAN','現在の設定を維持')+'</button>';
   if(inline){
    const hold='<button class="secondary" data-bb2-choice-hold="'+i+'" onclick="bvomBb2ResolveChoice('+i+',\'HOLD\')">'+hlmTxt('HOLD CURRENT PLAN','現在の設定を維持')+'</button>';
-   const note='<p class="small">'+hlmTxt('Choose explicitly before recording this exercise. Other exercises can be completed first.','この種目を記録する前に選択してください。他の種目は先に行えます。')+'</p>';
+   const note='<p class="small">'+(numeric?hlmTxt('Confirm the next working weight before Start. No change is automatic.','開始前に次回のワーキング重量を確認してください。自動では変更しません。'):hlmTxt('Choose explicitly before recording this exercise. Other exercises can be completed first.','この種目を記録する前に選択してください。他の種目は先に行えます。'))+'</p>';
    return '<div data-bb2-pending="'+i+'">'+note+(numeric?'<div class="bb2BodyweightPlanFields">'+controls+'</div>':
     hold+'<details class="bb2BodyweightPlan"><summary>'+hlmTxt('Change difficulty','難易度を変更')+'</summary><div class="bb2BodyweightPlanFields">'+controls.replace(hold,'')+'</div></details>')+'</div>';
   }
@@ -6131,9 +6131,9 @@ function bvomBb2Begin(inline=false){
    key===bvomBb2Day+'|'+s.roleSlotId+'|'+s.exerciseId||m.BB2_BROWSER_MODULES.ledger.sharedPendingFor(before,bvomBb2Day+'|'+s.roleSlotId+'|'+s.exerciseId,s)===before.pending[key]));
   if(pending&&(!allowInline||pending[1].kind!=='DIFFICULTY')){
    const index=Object.keys(before.pending).indexOf(pending[0]);
-   return bvomBb2ValidationNotice(hlmTxt('Resolve the pending decision for ', '次の種目の保留中の判断を確定してください：')+
+   return bvomBb2ValidationNotice(inline?hlmTxt('Confirm the weight plan on the affected Workout card before Start.','開始前に該当種目のワークアウトカードで重量プランを確認してください。'):hlmTxt('Resolve the pending decision for ', '次の種目の保留中の判断を確定してください：')+
     bvomBb2PreviewLabel(pending[0].split('|')[2])+hlmTxt(' in BB2 Decisions to Review before starting this workout.','（BB2の判断を確認）。'),
-    '#setup [data-bb2-choice-keep="'+index+'"], #setup [data-bb2-choice-hold="'+index+'"]');
+    (inline?'#workout':'#setup')+' [data-bb2-choice-keep="'+index+'"]');
   }
   if(prepared.blocked&&!allowInline)return bvomBb2ValidationNotice(hlmTxt('Resolve existing BB2 decisions before enabling shared progression.','進行を共有する前に、既存のBB2の判断を確定してください。'));
   const scope=inline?'#workout':'#setup';
