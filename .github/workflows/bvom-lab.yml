@@ -16,7 +16,9 @@ jobs:
   full-regression-gate:
     name: v15.2 full regression gate
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # The full gate includes both the existing application block and the
+    # focused shared-progression seal/carry fixture; retain all mutation checks.
+    timeout-minutes: 15
 
     steps:
       - name: Check out repository
