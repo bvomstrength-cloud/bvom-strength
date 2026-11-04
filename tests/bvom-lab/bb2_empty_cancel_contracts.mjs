@@ -31,7 +31,7 @@ test('extra-set event also rejects cancellation internally before planning',()=>
  const h=fixture();const b=h.S().bb2;b.events.push({type:'EXTRA_SET_RECORDED',sessionId:b.activeSessionId,reps:0});const raw=h.ls.getItem('bvom_data');assert.equal(h.ctx.bvomBb2Discard(),false);assert.equal(h.ls.getItem('bvom_data'),raw);
 });
 test('changed account/raw/marker/lock/memory and prior-workout tokens all fail closed',()=>{
- for(const change of ['account','auth','owner','raw','marker','lock','memory','session','stored-actual']){
+ for(const change of ['account','auth','owner','raw','marker','lock','memory','session','stored-actual','ledger-owner']){
   const h=fixture(),token=h.ctx.bvomBb2CancelToken();
   if(change==='account')h.ev("bvomCloud.user={id:'other'}");
   if(change==='auth')h.ev("window.__bvomAuthUserId='other'");
@@ -41,6 +41,9 @@ test('changed account/raw/marker/lock/memory and prior-workout tokens all fail c
   if(change==='lock')h.ev('bvomWindowLockOwned=false');
   if(change==='memory')h.S().bb2.events.push({type:'NOTE_EDITED',sessionId:h.S().bb2.activeSessionId,text:'new'});
   if(change==='session')token.sessionId='old-session';
+  if(change==='ledger-owner'){
+   h.S().bb2.opening.ownerId='foreign-ledger-owner';const next=JSON.stringify(h.S());h.ls.setItem('bvom_data',next);h.ctx.__savedRaw=next;h.ev('bvomLastPersistedRaw=__savedRaw');token.raw=next;
+  }
   if(change==='stored-actual'){
    const d=JSON.parse(h.ls.getItem('bvom_data'));d.freeTrainingSession={Squat:{sets:[],single:{reps:0,load:60}}};
    h.ls.setItem('bvom_data',JSON.stringify(d));h.ctx.__savedRaw=JSON.stringify(d);h.ev('bvomLastPersistedRaw=__savedRaw');token.raw=JSON.stringify(d);
