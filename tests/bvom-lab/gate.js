@@ -15,6 +15,7 @@ steps.splice(-1,0,['BB2 CATALOGUE V3 SCREENS','bb2_catalogue_v3_screen_contracts
 steps.splice(-1,0,['BB2 CATALOGUE V4 PRESERVATION','bb2_catalogue_v4_preservation_contracts.mjs',[]]);
 steps.splice(-1,0,['BB2 CATALOGUE V4 HISTORICAL SCREENS','bb2_catalogue_v3_screen_contracts.mjs',['--legacy-v4']]);
 steps.splice(-1,0,['BB2 V5 CLOUD ACTIVATION','bb2_cloud_activation_contracts.mjs',[]]);
+steps.splice(-1,0,['BB2 EMPTY CANCEL','bb2_empty_cancel_contracts.mjs',[]]);
 steps.splice(-1,0,['BB2 SHARED WORKOUT LIFECYCLE','bb2_workout_lifecycle_contracts.mjs',[]]);
 steps.splice(-1,0,['BB2 BODYWEIGHT METADATA AUDIT','bb2_bodyweight_audit_contracts.mjs',[]]);
 steps.splice(-1,0,['BB2 SHARED INTERFACE ADAPTER','bb2_shared_interface_contracts.mjs',[]]);

@@ -26,6 +26,19 @@ async function recordBB2Set(page,key,reps,{opened=false,actual}={}){
  await page.locator('.bvomModalOverlay [data-save]').click();
  await page.locator('.bvomModalOverlay').waitFor({state:'detached'});
 }
+// Compatibility fixture only: older backups may contain discarded actuals.
+// The user-facing v3.0.1 Cancel must reject these; frozen ledger replay stays supported.
+async function historicalDiscard(page){
+ const before=await page.evaluate(()=>localStorage.getItem('bvom_data'));
+ assert.equal(await page.evaluate(()=>bvomBb2Discard()),false);
+ assert.equal(await page.evaluate(()=>localStorage.getItem('bvom_data')),before);
+ assert.equal(await page.evaluate(()=>{
+  const b=state.bb2,m=bvomBb2PreviewModule,events=m.BB2_BROWSER_MODULES.ledger.discardBB2Session(b.events,b.activeSessionId);
+  m.foldBB2Block(b.opening,events);state.timerStart=null;
+  if(!bvomBb2Commit({...b,events,activeSessionId:null,selectedProgram:true}))return false;
+  bvomBb2StopCommittedRestClock();renderAll();return true;
+ }),true);
+}
 async function expandHistory(page){await page.evaluate(()=>activateTab('history'));const summary=page.locator('#history [data-bb2-history] .histSummary[aria-expanded="false"]').first();if(await summary.count())await summary.click()}
 async function editHistorySets(page){if(!await page.locator('[data-history-correction]').count()){await expandHistory(page);await page.locator('#history [onclick="bvomBb2HistoryEditSets(0)"]').click()}}
 async function assertMobileCorrectionLayout(page,language){
@@ -91,9 +104,9 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>{showSetup();showSetup()});
   assert.equal(await page.locator('#setup [data-bb2-preview]').count(),1,'one BB2 button in the standard program chooser');
   assert.equal(await page.locator('#setup [data-bb-program]').count(),1,'BB1 chooser remains available');
-  assert.equal(await page.title(),'BVOM Strength v3.0.0');
-  assert.match(await page.locator('header').textContent(),/v3\.0\.0/);
-  assert.equal(await page.evaluate(()=>BVOM_BUILD),'3.0.0');
+  assert.equal(await page.title(),'BVOM Strength v3.0.1');
+  assert.match(await page.locator('header').textContent(),/v3\.0\.1/);
+  assert.equal(await page.evaluate(()=>BVOM_BUILD),'3.0.1');
   fs.mkdirSync(screenshots,{recursive:true});
   for(const lang of ['en','ja']){
    await page.evaluate(lang=>{changeLanguage(lang);showSetup();showSetup()},lang);
@@ -133,7 +146,7 @@ const server=http.createServer((req,res)=>{
    await page.locator('#setup [data-bb2-back]').click();
   }
   await page.evaluate(()=>{changeLanguage('en');showSetup()});
-  console.log('PASS v3.0.0 mobile EN/JA programme chooser, setup and Info explanation with matching typography');
+  console.log('PASS v3.0.1 mobile EN/JA programme chooser, setup and Info explanation with matching typography');
   await page.evaluate(()=>{changeLanguage('ja');showSetup()});
   assert.match(await page.locator('#setup [data-bb2-preview]').textContent(),
    /ボディビルディング2/,'BB2 programme entry follows Japanese locale');
@@ -383,7 +396,7 @@ const server=http.createServer((req,res)=>{
    return e.type==='SET_RECORDED'&&e.variation==='assisted pullup'&&
     e.assistance==='light band'&&e.actualG===2500&&e.actualOrigin.unit==='kg';
   }),true,'real BVOM saves explicit bodyweight variation, assistance and added mass');
-  await page.evaluate(()=>bvomBb2Discard());
+  await historicalDiscard(page);
   const discarded=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
   assert.equal(discarded.bb2.activeSessionId,null);
   assert.equal(discarded.timerStart,null,'Discard atomically stops the working-set rest timer');
@@ -665,7 +678,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('#workout [data-bb2-edit-save="0"]').isDisabled(),true);
   assert.equal(await page.locator('#workout [data-bb2-trial-save="0"]').count(),0,
    'historical correction does not reintroduce calibration controls');
-  await page.evaluate(()=>bvomBb2Discard());
+  await historicalDiscard(page);
   assert.equal(await page.evaluate(()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
    return !b.activeSessionId&&b.events.some(e=>e.type==='PRESCRIPTION_EDITED'&&e.loadG===65000);

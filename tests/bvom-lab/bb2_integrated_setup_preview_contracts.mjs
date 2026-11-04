@@ -19,6 +19,9 @@ function fixture({ls}={}){
  const h=H.boot(H.loadBuild(root),ls?{ls}:{});if(!ls)H.configureLP(h);
  h.ctx.__bb2PortableCatalogueForTest={validateBB2PortableCatalogue,
   validateBB2PortableGenesis};
+ // Cancel now requires the same authenticated local owner as real app use.
+ const owner=h.ls.getItem('bvom_data_owner')||'bb2-test-owner';
+ h.ctx.__cancelOwner=owner;h.ev('bvomCloud.user={id:__cancelOwner};window.__bvomAuthUserId=__cancelOwner;bvomSetLocalOwnerId(__cancelOwner)');
  const before=h.ls.getItem('bvom_data');
  const document=h.ctx.document,query=document.querySelector;
  const row={children:[],appendChild(el){this.children.push(el);return el},
@@ -38,6 +41,20 @@ function fixture({ls}={}){
   return query(selector);
  };
  return {h,before,row};
+}
+
+// Historical v3.0.0 backups can contain discarded recorded sessions. Keep testing
+// their frozen ledger replay; v3.0.1's app Cancel itself must reject these sessions.
+function historicalDiscard(h){
+ const raw=h.ls.getItem('bvom_data');
+ assert.equal(h.ctx.bvomBb2Discard(),false,'app Cancel refuses recorded sessions');
+ assert.equal(h.ls.getItem('bvom_data'),raw,'refusal preserves exact stored work');
+ const b=h.S().bb2,events=catalogue.BB2_BROWSER_MODULES.ledger.discardBB2Session(b.events,b.activeSessionId);
+ catalogue.foldBB2Block(b.opening,events);
+ h.S().timerStart=null;
+ const committed=h.ctx.bvomBb2Commit({...b,events,activeSessionId:null,selectedProgram:true});
+ if(committed){h.ctx.bvomBb2StopCommittedRestClock();h.ctx.renderAll()}
+ return committed;
 }
 
 function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
@@ -466,7 +483,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ctx.bvomBb2Log(0,1),false,'no work can save without owning document');
  assert.equal(h.ls.getItem('bvom_data'),written,'lock refusal leaves disk intact');
  h.ev('bvomWindowLockOwned=true');
- h.ev('delete state.bb2.selectedProgram'); // Older developer sessions predate program selection.
+ h.ev('delete state.bb2.selectedProgram;save({durable:true})'); // Older developer sessions predate program selection.
  const restarted=fixture({ls:h.ls});
  assert.equal(restarted.h.S().bb2.activeSessionId,active,'reload retains active BB2 session');
  assert.equal(trainingEvents(restarted.h.S().bb2.events).length,2);
@@ -478,7 +495,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  restarted.h.ev('bvomBb2PreviewModule=__bb2CatalogueForTest');
  assert.equal(restarted.h.ctx.bvomBb2Discard(),false,'a second simulated tab cannot take over original workout ownership');
  assert.equal(trainingEvents(restarted.h.S().bb2.events).length,2,'rejected secondary Discard preserves records');
- assert.equal(h.ctx.bvomBb2Discard(),true,'original owner can Discard with ledger tombstones');
+ assert.equal(historicalDiscard(h),true,'historical discarded actuals retain ledger tombstone compatibility');
  assert.equal(h.S().bb2.activeSessionId,null);
  assert.equal(h.S().timerStart,null,'Discard stops the rest timer in the same transaction');
  assert.equal(JSON.parse(h.ls.getItem('bvom_data')).timerStart,null,
@@ -721,7 +738,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   assert.equal(h.ctx.bvomBb2Log(slot,set),true,'recorded required set '+slot+'/'+set);
  }
  assert.match(h.ctx.document.querySelector('#workout').innerHTML,/9\/12 prescribed sets recorded/);
- h.ev('delete state.bb2.selectedProgram'); // Finishing a pre-upgrade BB2 session also selects BB2.
+ h.ev('delete state.bb2.selectedProgram;save({durable:true})'); // Finishing a pre-upgrade BB2 session also selects BB2.
  assert.equal(h.ctx.bvomBb2End('FINISH'),true,'70% Finish succeeds with credit transaction');
  const state=h.S(),bb=state.bb2;
  assert.equal(bb.activeSessionId,null,'active BB2 session closed');
@@ -994,7 +1011,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  const set=h.S().bb2.events.find(e=>e.type==='SET_RECORDED');
  assert.equal(set.actualG,65000,'working set inherits edited canonical load');
  assert.equal(h.ctx.bvomBb2EditWorkingLoad(0),false,'recorded work locks ordinary edit');
- assert.equal(h.ctx.bvomBb2Discard(),true);
+ assert.equal(historicalDiscard(h),true);
  assert.ok(h.S().bb2.events.some(e=>e.type==='PRESCRIPTION_EDITED'&&e.loadG===65000),
   'independent global edit survives discarded session');
  assert.ok(h.S().bb2.events.some(e=>e.type==='INCREMENT_EDITED'&&e.incrementG===1000),
@@ -1370,7 +1387,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(actual.actualG,2500);assert.equal(actual.variation,'assisted pullup');
  assert.equal(actual.assistance,'light band');
  assert.equal(h.ctx.bvomBb2EditBodyweightPlan(i),false,'recorded set locks BW future prescription');
- assert.equal(h.ctx.bvomBb2Discard(),true);
+ assert.equal(historicalDiscard(h),true);
  ev=h.S().bb2.events;
  assert.equal(trainingEvents(ev)[0].type,'TOMBSTONE','discard removes Start');
  assert.equal(trainingEvents(ev)[1].type,'VARIATION_EDITED');assert.equal(trainingEvents(ev)[2].type,'PRESCRIPTION_EDITED');

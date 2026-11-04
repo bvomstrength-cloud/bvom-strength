@@ -30,6 +30,7 @@ require('./bodyweight_stage2_contracts')({test,ok,H,build});
 require('./bodyweight_extra_sets_contracts')({test,ok,H,build});
 require('./monkey019_durable_finish_contracts')({test,ok,H,build});
 require('./recovery_contracts')({test,ok,H,build});
+require('./lifecycle_repair_contracts')({test,ok,H,build});
 require('./starting_setup_contracts')({test,ok,H,build});
 require('./bb_warmup_stage_a_contracts')({test,ok,H,build});
 require('./bb_warmup_stage_b_contracts')({test,ok,H,build});

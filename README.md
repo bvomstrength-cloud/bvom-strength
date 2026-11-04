@@ -1,5 +1,12 @@
 # BVOM Strength
 
+## v3.0.1 lifecycle repair — HOLD test candidate
+
+- Development candidate only; no merge, release or production deployment approval.
+- Repairs verified empty timestamp remnants under existing ownership fences; Custom/BB1 final-set removal and cleanup use one durable write. Genuine work, pending decisions, legacy archive rules and restore guards stay protected.
+- Adds confirmed Cancel Workout for empty explicitly started BB2 sessions, with internal recorded-set rejection and stale-context rechecks. No ledger-engine, prescription, progression, storage-format or Supabase change.
+- `scripts/package-lifecycle-hold.cjs` creates the visibly labelled HOLD ZIP with a separate test cache and committed-source hashes. Use a separate test site. See [implementation and field-test notes](docs/v3.0.1-lifecycle-hold.md).
+
 Production source repository for BVOM Strength.
 
 ## Owner-approved release — v3.0.0 (manual deployment pending)
