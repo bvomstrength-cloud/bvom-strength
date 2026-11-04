@@ -29,6 +29,19 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Check out exact v3.0.1 for extra-set feature provenance
+        uses: actions/checkout@v4
+        with:
+          ref: b990d8385e2e4dc57ceea859994f11c9b7d756fa
+          path: .bvom-extra-baseline
+      - name: Prove six extra-set contracts fail on the unchanged production baseline
+        run: |
+          if node tests/bvom-lab/behaviour_guard.js .bvom-extra-baseline --only=CORE-EXTRAS-PROGRESSION,CORE-EXTRAS-DECISION-BRANCHES,CORE-EXTRAS-LIFECYCLE,CORE-EXTRAS-SAFETY,CORE-EXTRAS-RECOVERY-UNITS,CORE-EXTRAS-PENDING-DRIVER --json > /tmp/bvom-extra-red.json; then
+            echo "ERROR: production baseline unexpectedly passed the new feature contracts"
+            exit 1
+          fi
+          node -e "const a=require('node:assert/strict'),r=require('/tmp/bvom-extra-red.json');a.equal(r.length,6);a.ok(r.every(t=>!t.pass));console.log('PASS: 6/6 new extra-set contracts RED on exact v3.0.1')"
+
       - name: Stage production candidate
         shell: bash
         run: |

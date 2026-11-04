@@ -1,5 +1,9 @@
 # BVOM Strength
 
+## v3.0.2 development candidate — extra working sets
+
+Optional extra working sets for LP/RPT, HLM and 4-Day Split. Recorded actuals contribute to volume and History while prescribed sets alone determine progression. See [implementation and verification notes](docs/v3.0.2-extra-working-sets.md). Based on v3.0.1; draft review and separate test ZIP only. No merge, release or production deployment.
+
 ## v3.0.1 production release — manual upload pending
 
 - Owner authorized completion and merge of PR #82 after passing release gates, and preparation of the clean production ZIP. Netlify deployment is not authorized; the owner will upload the ZIP.
