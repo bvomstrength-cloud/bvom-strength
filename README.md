@@ -1,8 +1,17 @@
 # BVOM Strength
 
+## v3.0.1 production release — manual upload pending
+
+- Owner authorized completion and merge of PR #82 after passing release gates, and preparation of the clean production ZIP. Netlify deployment is not authorized; the owner will upload the ZIP.
+- Baseline: v3.0.0 main `31d5f7155537b235ae873aec3056ade5600cd049`; approved lifecycle test head `465709fcc7e20168c9ffd32064b78aaf7492c263`. Current deployed version is v3.0.0 per the owner's release instruction; v3.0.1 is not deployed by this workflow.
+- Repairs verified empty timestamp remnants under existing ownership fences; Custom/BB1 final-set removal and cleanup use one durable write. Genuine work, pending decisions, legacy archive rules and restore guards stay protected.
+- Adds confirmed Cancel Workout for empty explicitly started BB2 sessions, with internal recorded-set rejection and stale-context rechecks. BB2 Start, all prescription/progression/ledger modules, storage/backup formats and Supabase configuration remain unchanged.
+- Title, header, `BVOM_BUILD`, first-install worker URL and worker `BUILD` identify v3.0.1; production cache is `bvom-3.0.1`.
+- `scripts/package-production.cjs` packages exactly 18 committed production assets from the verified merged source. No HOLD/test markers, instructions, fixtures or documentation are included. See [lifecycle repair notes](docs/v3.0.1-lifecycle-hold.md).
+
 Production source repository for BVOM Strength.
 
-## Owner-approved release — v3.0.0 (manual deployment pending)
+## Previous approved release — v3.0.0
 
 - **Approval:** The owner approved BB2 integration at `de34b476c38b9874ce65fb4cf880f12754282539` for production. PR #73 was squash-merged as `1bd75e2f219ffe9ca19901112a8178dcb87c309c`; all four approved-head workflows passed.
 - **Version:** v3.0.0 replaces the proposed v2.9.22 production release. Title, header, `BVOM_BUILD`, first-install worker URL, worker `BUILD` and cache identify v3.0.0. Existing worker registrations and manifest app identity remain stable during upgrades.
@@ -11,7 +20,7 @@ Production source repository for BVOM Strength.
 - **Packaging:** `scripts/package-production.cjs` produces `BVOM-v3.0.0-PRODUCTION.zip` from the final Git commit's 18 required production files. It includes no test marker, test cache, notes, fixtures or documentation. Verification and the complete SHA-256 accompany the handoff ZIP.
 - **Deployment:** Owner approved source promotion and release preparation, not an automated hosting deployment. **Live hosting remains v2.9.21 until the owner manually uploads the verified v3.0.0 ZIP.** Retain the verified v2.9.21 package for rollback. Physical installed-PWA acceptance after upload remains an owner check.
 
-## Currently deployed release — v2.9.21
+## Historical deployed release — v2.9.21
 
 - **GitHub application baseline:** merged `main` application commit `4f31e590e2849580e47d672e32aa1d0e23a18e96` (1 November 2026). Later documentation-only commits may advance `main` without changing deployable application files.
 - **App version:** `v2.9.21` in the title/header and `BVOM_BUILD`; service worker `BUILD = '2.9.21'` with production cache `bvom-2.9.21`.

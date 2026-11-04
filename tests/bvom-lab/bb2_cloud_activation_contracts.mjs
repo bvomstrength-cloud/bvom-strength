@@ -132,7 +132,7 @@ console.log('PASS unified BVOM Cloud card, errors, conflict actions and existing
 // Candidate release markers and shared EN/JA programme information.
 {
  const info=H.boot(H.loadBuild(root));H.configureLP(info);
- assert.equal(info.ev('BVOM_BUILD'),'3.0.0');
+ assert.equal(info.ev('BVOM_BUILD'),'3.0.1');
  for(const lang of ['en','ja']){
   info.ctx.__lang=lang;info.ev('state.language=__lang;renderInfo()');
   const copy=info.ctx.bvomBb2ProgrammeInfo();
@@ -147,4 +147,4 @@ console.log('PASS unified BVOM Cloud card, errors, conflict actions and existing
   if(lang==='en'){assert.match(copy.body,/Monday, Tuesday, Thursday and Friday/);assert.match(copy.body,/Wednesday for recovery/);assert.match(copy.body,/32 qualifying workouts/);}
  }
 }
-console.log('PASS v3.0.0 candidate and consistent EN/JA programme help/setup copy');
+console.log('PASS v3.0.1 candidate and consistent EN/JA programme help/setup copy');

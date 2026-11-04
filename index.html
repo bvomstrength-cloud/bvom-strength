@@ -8,7 +8,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="BVOM">
 <meta name="twitter:description" content="Best Version Of Myself — strength training and progression.">
-<title>BVOM Strength v3.0.0</title><link rel="manifest" href="manifest.json">
+<title>BVOM Strength v3.0.1</title><link rel="manifest" href="manifest.json">
 <style>
 :root{--bg:#f4f4f4;--card:#fff;--ink:#111;--muted:#737373;--accent:#d91e18;--line:#ddd}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
@@ -256,7 +256,7 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
 <div id="authgate" class="setup hidden"></div>
 <div id="setup" class="setup hidden"></div>
 <div id="app" class="hidden">
-<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v3.0.0</div></header>
+<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v3.0.1</div></header>
 <div class="tabs"><div class="tab on" data-tab="workout">WORKOUT</div><div class="tab" data-tab="warmup">WARM-UP</div><div class="tab" data-tab="history">HISTORY</div><div class="tab" data-tab="info">INFO</div><div class="tab" data-tab="settings">SETTINGS</div></div>
 <main><section id="workout"></section><section id="warmup" class="hidden"></section><section id="history" class="hidden"></section><section id="info" class="hidden"></section><section id="settings" class="hidden"></section></main>
 <div class="timer idle" id="timerbar"><div class="timerin"><div><div class="clock" id="clock">0:00</div><div class="marks">DINGS 3 · 5 · 10</div></div><button class="cancel" onclick="if(bvomWorkoutActionAllowed())cancelTimer()">CANCEL</button><button class="finish" onclick="finishWorkout()">FINISH</button></div></div>
@@ -265,7 +265,7 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
 <script src="./i18n/ja.js?v=2c5d1ff918c6"></script>
 <script src="./vendor/supabase-js-2.117.3.js"></script>
 <script>
-const BVOM_BUILD='3.0.0';
+const BVOM_BUILD='3.0.1';
 const programs={A:[["Squat",3,5],["Bench Press",3,5],["Prone Row",3,5]],B:[["Squat",3,5],["Overhead Press",5,5],["Deadlift",1,5]]};
 function liftLabel(n){return n==='Prone Row'?(isHLM()?'Prone Row':'Row'):n==='Overhead Press'?'Press':n;}
 const inc={Squat:2.5,"Bench Press":2.5,"Prone Row":2.5,"Overhead Press":2.5,Deadlift:5};
@@ -3658,9 +3658,9 @@ function bvomFtBuilder(lift=null){if(!bvomWorkoutActionAllowed())return;
  function draw(){const n=liftEl.value,st=styleEl.value,defDrop=(n==='Squat'||n==='Deadlift')?10:5;let h=`<label>${hlmTxt('Top / working weight','トップ／ワーク重量')} (${unitLabel()})<input data-weight type="number" min="0.25" step=".25" value="${c.weight??''}" placeholder="${hlmTxt('Set weight','重量を入力')}"></label>`;if(st==='straight')h+=`<label>${hlmTxt('Sets','セット')}<input data-sets type="number" min="1" max="20" step="1" value="${c.sets||3}"></label><label>${hlmTxt('Reps','回数')}<input data-reps type="number" min="1" max="50" step="1" value="${c.reps||5}"></label>`;else h+=`<label>${hlmTxt('Rep pattern','回数パターン')}<select data-level>${(st==='rpt3'?RPT3:PRESS_RPT).map((r,i)=>`<option value="${i}" ${i===Number(c.rptLevel||0)?'selected':''}>${r.join(' / ')}</option>`).join('')}</select></label><label>${hlmTxt('Drop %','ドロップ率 %')}<input data-drop type="number" min="0" max="50" step=".5" value="${c.dropPct??defDrop}"></label>`;fields.innerHTML=h;const sr=o.querySelector('[data-single-row]'),si=o.querySelector('[data-single]'),ok=['Squat','Bench Press','Deadlift'].includes(n);if(sr)sr.style.display=ok?'flex':'none';if(si&&!ok)si.checked=false}
  liftEl.onchange=()=>{c.lift=liftEl.value;c.dropPct=(c.lift==='Squat'||c.lift==='Deadlift')?10:5;draw()};styleEl.onchange=()=>{c.style=styleEl.value;draw()};draw();o.querySelector('[data-c]').onclick=()=>o.remove();o.querySelector('[data-s]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;const n=liftEl.value,st=styleEl.value,w=Number(fields.querySelector('[data-weight]')?.value);if(!Number.isFinite(w)||w<=0){bvomBeeModal(hlmTxt('SET A WORKING WEIGHT','ワーク重量を設定してください'),hlmTxt('Enter the working/top weight before adding this compound.','この種目を追加する前に、ワーク／トップ重量を入力してください。'));return}const next={lift:n,style:st,weight:roundFor(n,w),sets:st==='straight'?Math.max(1,Number(fields.querySelector('[data-sets]')?.value)||3):null,reps:st==='straight'?Math.max(1,Number(fields.querySelector('[data-reps]')?.value)||5):null,rptLevel:st==='straight'?0:Math.max(0,Math.min(4,Number(fields.querySelector('[data-level]')?.value)||0)),dropPct:st==='straight'?((n==='Squat'||n==='Deadlift')?10:5):Math.max(0,Math.min(50,Number(fields.querySelector('[data-drop]')?.value)||((n==='Squat'||n==='Deadlift')?10:5))),optionalSingle:!!o.querySelector('[data-single]')?.checked};const a=bvomFtEditCompounds(),i=a.findIndex(x=>x.lift===n);if(i>=0)a[i]=next;else a.push(next);bvomFtSetCurrent(a);state.warmupPlans={};state.warmupDone={};o.remove();save();renderAll()};
 }
-function bvomFtSetModal(lift,index,isSingle=false){if(!bvomWorkoutActionAllowed())return;const c=bvomFtCurrent(lift);if(!c)return;const plan=bvomFtPlan(c),single=bvomFtSinglePlan(c),q=isSingle?single:(plan[index]||{target:(plan.at(-1)?.target??Number(c.reps)??5),load:(plan.at(-1)?.load??Number(c.weight)??0)}),obj=state.freeTrainingSession[lift]||(state.freeTrainingSession[lift]={sets:[]}),existing=isSingle?obj.single:obj.sets[index],o=document.createElement('div');let reps=Math.max(0,Math.floor(Number(existing?.reps??q.target)||0)),rpe=Number(existing?.rpe??8);if(!Number.isFinite(rpe))rpe=8;rpe=Math.max(6,Math.min(10,Math.round(rpe*2)/2));o.className='bvomModalOverlay';o.innerHTML=`<div class="bvomModal"><h3>${bvomEsc(liftLabel(lift))} · ${isSingle?hlmTxt('Optional Single','任意のシングル'):hlmTxt('Set ','セット ')+(index+1)}</h3><div class="sub">${hlmTxt('Planned:','予定:')} <b>${fmt(q.load)} ${unitLabel()} × ${q.target}</b></div><label>${hlmTxt('Actual weight','実際の重量')} (${unitLabel()})<input data-load type="number" min="0.25" step=".25" value="${fmt(existing?.load??q.load)}"></label><div style="text-align:center;font-weight:800">${hlmTxt('Reps completed','完了回数')}</div><div class="repRow"><button class="repBtn" data-m>−</button><div class="repValue" data-v>${reps}</div><button class="repBtn" data-p>+</button></div><div style="text-align:center;font-weight:800;margin-top:14px">RPE</div><div class="repRow"><button class="repBtn" data-rm>−</button><div class="repValue" data-rv>${rpe}</div><button class="repBtn" data-rp>+</button></div><div class="modalActions">${existing?`<button data-r>${hlmTxt('REMOVE SET','セットを削除')}</button>`:''}<button data-c>${hlmTxt('CANCEL','キャンセル')}</button><button class="primary" data-s>${hlmTxt('RECORD','記録')}</button></div></div>`;document.body.appendChild(o);const show=()=>o.querySelector('[data-v]').textContent=reps,showRpe=()=>o.querySelector('[data-rv]').textContent=Number.isInteger(rpe)?String(rpe):rpe.toFixed(1);o.querySelector('[data-m]').onclick=()=>{reps=Math.max(0,reps-1);show()};o.querySelector('[data-p]').onclick=()=>{reps++;show()};o.querySelector('[data-rm]').onclick=()=>{rpe=Math.max(6,rpe-.5);showRpe()};o.querySelector('[data-rp]').onclick=()=>{rpe=Math.min(10,rpe+.5);showRpe()};showRpe();o.querySelector('[data-c]').onclick=()=>o.remove();if(existing&&o.querySelector('[data-r]'))o.querySelector('[data-r]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;if(isSingle)obj.single=null;else obj.sets[index]=null;o.remove();save();renderWorkout()};o.querySelector('[data-s]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;const load=Number(o.querySelector('[data-load]').value);if(!Number.isFinite(load)||load<=0)return;if(!state.workoutStartedAt)state.workoutStartedAt=Date.now();bvomMarkThisTabAsWorkoutOwner();bvomFtEnsureDraft();const rec={load:roundFor(lift,load),reps,rpe,target:q.target,plannedLoad:q.load,optional:!!isSingle};if(isSingle)obj.single=rec;else obj.sets[index]=rec;o.remove();save();startTimer();renderWorkout();bvomSyncWorkoutControls()}}
+function bvomFtSetModal(lift,index,isSingle=false){if(!bvomWorkoutActionAllowed())return;const c=bvomFtCurrent(lift);if(!c)return;const plan=bvomFtPlan(c),single=bvomFtSinglePlan(c),q=isSingle?single:(plan[index]||{target:(plan.at(-1)?.target??Number(c.reps)??5),load:(plan.at(-1)?.load??Number(c.weight)??0)}),obj=state.freeTrainingSession[lift]||(state.freeTrainingSession[lift]={sets:[]}),existing=isSingle?obj.single:obj.sets[index],o=document.createElement('div');let reps=Math.max(0,Math.floor(Number(existing?.reps??q.target)||0)),rpe=Number(existing?.rpe??8);if(!Number.isFinite(rpe))rpe=8;rpe=Math.max(6,Math.min(10,Math.round(rpe*2)/2));o.className='bvomModalOverlay';o.innerHTML=`<div class="bvomModal"><h3>${bvomEsc(liftLabel(lift))} · ${isSingle?hlmTxt('Optional Single','任意のシングル'):hlmTxt('Set ','セット ')+(index+1)}</h3><div class="sub">${hlmTxt('Planned:','予定:')} <b>${fmt(q.load)} ${unitLabel()} × ${q.target}</b></div><label>${hlmTxt('Actual weight','実際の重量')} (${unitLabel()})<input data-load type="number" min="0.25" step=".25" value="${fmt(existing?.load??q.load)}"></label><div style="text-align:center;font-weight:800">${hlmTxt('Reps completed','完了回数')}</div><div class="repRow"><button class="repBtn" data-m>−</button><div class="repValue" data-v>${reps}</div><button class="repBtn" data-p>+</button></div><div style="text-align:center;font-weight:800;margin-top:14px">RPE</div><div class="repRow"><button class="repBtn" data-rm>−</button><div class="repValue" data-rv>${rpe}</div><button class="repBtn" data-rp>+</button></div><div class="modalActions">${existing?`<button data-r>${hlmTxt('REMOVE SET','セットを削除')}</button>`:''}<button data-c>${hlmTxt('CANCEL','キャンセル')}</button><button class="primary" data-s>${hlmTxt('RECORD','記録')}</button></div></div>`;document.body.appendChild(o);const show=()=>o.querySelector('[data-v]').textContent=reps,showRpe=()=>o.querySelector('[data-rv]').textContent=Number.isInteger(rpe)?String(rpe):rpe.toFixed(1);o.querySelector('[data-m]').onclick=()=>{reps=Math.max(0,reps-1);show()};o.querySelector('[data-p]').onclick=()=>{reps++;show()};o.querySelector('[data-rm]').onclick=()=>{rpe=Math.max(6,rpe-.5);showRpe()};o.querySelector('[data-rp]').onclick=()=>{rpe=Math.min(10,rpe+.5);showRpe()};showRpe();o.querySelector('[data-c]').onclick=()=>o.remove();if(existing&&o.querySelector('[data-r]'))o.querySelector('[data-r]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;if(!bvomRemoveSetDurably(()=>{if(isSingle)obj.single=null;else obj.sets[index]=null}))return;o.remove();renderWorkout();bvomSyncWorkoutControls()};o.querySelector('[data-s]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;const load=Number(o.querySelector('[data-load]').value);if(!Number.isFinite(load)||load<=0)return;if(!state.workoutStartedAt)state.workoutStartedAt=Date.now();bvomMarkThisTabAsWorkoutOwner();bvomFtEnsureDraft();const rec={load:roundFor(lift,load),reps,rpe,target:q.target,plannedLoad:q.load,optional:!!isSingle};if(isSingle)obj.single=rec;else obj.sets[index]=rec;o.remove();save();startTimer();renderWorkout();bvomSyncWorkoutControls()}}
 function bvomFtAddExtraSet(lift){if(!bvomWorkoutActionAllowed())return;const c=bvomFtCurrent(lift);if(!c)return;const obj=state.freeTrainingSession[lift]||(state.freeTrainingSession[lift]={sets:[]}),planned=bvomFtPlan(c).length,i=Math.max(planned,obj.sets.length);bvomFtSetModal(lift,i,false)}
-function bvomFtRemoveActual(lift,index,isSingle=false){if(!bvomWorkoutActionAllowed())return;const obj=state.freeTrainingSession?.[lift];if(!obj)return;if(isSingle)obj.single=null;else if(obj.sets)obj.sets[index]=null;save();renderWorkout()}
+function bvomFtRemoveActual(lift,index,isSingle=false){if(!bvomWorkoutActionAllowed())return;const obj=state.freeTrainingSession?.[lift];if(!obj)return;if(!bvomRemoveSetDurably(()=>{if(isSingle)obj.single=null;else if(obj.sets)obj.sets[index]=null}))return;renderWorkout();bvomSyncWorkoutControls()}
 function bvomFtRecordForHistory(){const out={};for(const c of bvomFtCurrentCompounds()){const x=state.freeTrainingSession?.[c.lift];if(!x)continue;const rows={};(x.sets||[]).forEach((r,i)=>{if(r&&r.reps!==undefined)rows[i]=r});if(x.single&&x.single.reps!==undefined)rows['single']=x.single;if(Object.keys(rows).length)out[c.lift]=rows}for(const [lift,x] of Object.entries(state.freeTrainingSession||{})){if(out[lift]||!BVOM_FT_LIFTS.includes(lift))continue;const rows={};(x.sets||[]).forEach((r,i)=>{if(r&&r.reps!==undefined)rows[i]=r});if(x.single&&x.single.reps!==undefined)rows['single']=x.single;if(Object.keys(rows).length)out[lift]=rows}return out}
 function bvomFtVolume(){let total=0;for(const obj of Object.values(bvomFtRecordForHistory()))for(const r of Object.values(obj)){const load=Number(r.load),reps=Number(r.reps);if(load>0&&reps>0)total+=load*reps}for(const [key,obj] of Object.entries(state.session||{})){if(!key.startsWith('ACC:'))continue;const id=key.slice(4),a=(state.accessoryList||[]).find(x=>x.id===id),mult=a?.equipment==='dumbbell'?2:1;for(const r of Object.values(obj||{})){total+=bvomSetVolume(r,mult)}}return Math.round(total*100)/100}
 function bvomFtPBs(session){state.pbs=state.pbs||{};const msgs=[];for(const [lift,obj] of Object.entries(session||{})){let best=null;for(const r of Object.values(obj||{})){if(!r||r.reps===undefined)continue;const x={load:Number(r.load)||0,reps:Number(r.reps)||0};if(x.load<=0||x.reps<=0)continue;if(!best||x.load>best.load||(x.load===best.load&&x.reps>best.reps))best=x}if(!best)continue;const old=state.pbs[lift]||{load:0,reps:0};if(best.load>Number(old.load)||(best.load===Number(old.load)&&best.reps>Number(old.reps))){state.pbs[lift]={load:best.load,reps:best.reps,date:new Date().toISOString()};msgs.push(`${liftLabel(lift)}: ${fmt(best.load)} × ${best.reps}`)}}return msgs}
@@ -4175,7 +4175,7 @@ function bvomBbSetModal(id,i){if(!bvomWorkoutActionAllowed())return;
    hlmTxt('Resolve the earned bodyweight difficulty change above this exercise before recording its next working set.','この種目の次のセットを記録する前に、上の難易度変更を選択してください。'));
   return;
  }
- const x=BVOM_BB_EXERCISES[id],rx=bvomBbPrescription(id),n=bvomBbSetCount(rx),extra=Number.isInteger(i)&&i>=n; if(!x||!rx||!n||!bvomBbSlotsForDay(bvomBbDay()).some(slot=>state.bodybuilding?.selections?.[slot]===id))return; const key=bvomBbSessionKey(id),ss=state.session[key]||{},existing=ss[i]; if(extra&&(bvomBbOnRampActive()||(!existing?.extra&&(i!==bvomBbNextExtraIndex(id,rx,ss)||bvomBbExtraIndices(id,rx,ss).length>=30))))return; const q=extra?rx.sets[n-1]:rx.sets[i];if(!q)return; const defaultReps=existing?.reps??q.maxReps??x.repRange?.[0]??8;const entryUnit=unitLabel();const o=document.createElement('div');o.className='bvomModalOverlay';const numeric=bvomBbNumericExercise(id);o.innerHTML=`<div class="bvomModal"><h3>${bvomEsc(x.name)} · ${extra?hlmTxt('EXTRA SET','追加セット'):hlmTxt('Set','セット')} ${extra?i-n+1:i+1}</h3><div class="sub">Target: ${bvomBbSetTarget(rx,i)} reps · stop with about two good reps left</div>${numeric?`<label>Actual load (${unitLabel()})<input data-load type="number" min="0.25" step=".25" value="${existing?.load??(extra?ss[i-1]?.load:null)??q.load??bvomBbProgress(id).load??''}"></label>`:(x.equipment==='bodyweight'?bvomBwFields(existing?.load??bvomBbProgress(id).recordingLoad??0,existing?.resistance??bvomBbProgress(id).resistance??bvomBbProgress(id).resistance,existing?.bodyweight===true?existing.approximateBodyweight:bvomBbProgress(id).approximateBodyweight,'data-bw-estimate',existing?(existing.actualBodyweightKg??null):bvomActualBodyweightDefault())+bvomBwIncrementField(bvomBbProgress(id).addedWeightIncrement):`<label>Resistance / variation<input data-res type="text" maxlength="80" value="${bvomEsc(existing?.resistance??bvomBbProgress(id).resistance??'')}"></label>`)}<label>Reps<input data-reps type="number" min="0" step="1" value="${defaultReps}"></label><label style="display:flex;gap:10px;align-items:center;margin-top:12px"><input data-hard type="checkbox" ${existing?.harderThanIntended?'checked':''}> Harder than intended / fewer than ~2 good reps left</label>${!bvomBbProgress(id).calibrated&&i===0?`<label>First-exposure check<select data-cal><option value="about_right">About right</option><option value="too_easy">Too easy</option><option value="too_hard">Too hard</option></select></label>`:''}<div class="bvomBbValidationNotice" data-bb-validation role="alert" aria-live="polite" hidden></div><div class="modalActions">${existing?'<button data-remove>REMOVE</button>':''}<button data-cancel>CANCEL</button><button class="primary" data-save>RECORD</button></div></div>`;document.body.appendChild(o);o.querySelector('[data-cancel]').onclick=()=>o.remove();if(existing)o.querySelector('[data-remove]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;if(extra){const before=JSON.parse(JSON.stringify(state));delete ss[i];if(!save({durable:true})){state=before;return}o.remove();renderWorkout();bvomSyncWorkoutControls();return}delete ss[i];o.remove();save();renderWorkout()};o.querySelector('[data-save]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;if(x.equipment==='bodyweight'&&unitLabel()!==entryUnit){bvomBbInputNotice(o,bvomT('bodyweight.changed'),'[data-load]');return}const bw=x.equipment==='bodyweight'?bvomBwRead(o,(message,field)=>bvomBbInputNotice(o,message,field)):null;if(x.equipment==='bodyweight'&&!bw)return;const bwIncrement=bw?bvomBwIncrementRead(o,(message,field)=>bvomBbInputNotice(o,message,field)):null;if(bw&&bwIncrement===null)return;const before=(bw||extra)?JSON.parse(JSON.stringify(state)):null;if(bw&&(o.querySelector('[data-reps]').value===''||!Number.isInteger(Number(o.querySelector('[data-reps]').value))||Number(o.querySelector('[data-reps]').value)<0)){bvomBbInputNotice(o,bvomT('bodyweight.invalid'),'[data-reps]');return}const reps=Math.max(0,Math.floor(Number(o.querySelector('[data-reps]').value)||0)),hard=!!o.querySelector('[data-hard]').checked,rec={reps,harderThanIntended:hard,target:q.maxReps,index:i};if(numeric){const load=Number(o.querySelector('[data-load]').value);if(!(load>0)){bvomBbInputNotice(o,'Enter the load used.','[data-load]');return}rec.load=load;const p=bvomBbProgress(id);if(!(Number(p.load)>0)){p.load=load;p.topLoad=load}}else{if(bw){Object.assign(rec,bw);const p=bvomBbProgress(id);p.recordingLoad=bw.load;p.approximateBodyweight=bw.approximateBodyweight;p.addedWeightIncrement=bwIncrement}else rec.load=0;rec.resistance=String(o.querySelector('[data-res]').value||'').trim();const p=bvomBbProgress(id);if(rec.resistance)p.resistance=rec.resistance}const cal=o.querySelector('[data-cal]');if(cal)rec.calibrationFeedback=cal.value;state.session[key]=ss;if(extra)rec.extra=true;ss[i]=rec;if(!state.workoutStartedAt)state.workoutStartedAt=Date.now();bvomMarkThisTabAsWorkoutOwner();if(!save({durable:true})&&(bw||extra)){state=before;return}o.remove();startTimer();renderWorkout();bvomSyncWorkoutControls()}}
+ const x=BVOM_BB_EXERCISES[id],rx=bvomBbPrescription(id),n=bvomBbSetCount(rx),extra=Number.isInteger(i)&&i>=n; if(!x||!rx||!n||!bvomBbSlotsForDay(bvomBbDay()).some(slot=>state.bodybuilding?.selections?.[slot]===id))return; const key=bvomBbSessionKey(id),ss=state.session[key]||{},existing=ss[i]; if(extra&&(bvomBbOnRampActive()||(!existing?.extra&&(i!==bvomBbNextExtraIndex(id,rx,ss)||bvomBbExtraIndices(id,rx,ss).length>=30))))return; const q=extra?rx.sets[n-1]:rx.sets[i];if(!q)return; const defaultReps=existing?.reps??q.maxReps??x.repRange?.[0]??8;const entryUnit=unitLabel();const o=document.createElement('div');o.className='bvomModalOverlay';const numeric=bvomBbNumericExercise(id);o.innerHTML=`<div class="bvomModal"><h3>${bvomEsc(x.name)} · ${extra?hlmTxt('EXTRA SET','追加セット'):hlmTxt('Set','セット')} ${extra?i-n+1:i+1}</h3><div class="sub">Target: ${bvomBbSetTarget(rx,i)} reps · stop with about two good reps left</div>${numeric?`<label>Actual load (${unitLabel()})<input data-load type="number" min="0.25" step=".25" value="${existing?.load??(extra?ss[i-1]?.load:null)??q.load??bvomBbProgress(id).load??''}"></label>`:(x.equipment==='bodyweight'?bvomBwFields(existing?.load??bvomBbProgress(id).recordingLoad??0,existing?.resistance??bvomBbProgress(id).resistance??bvomBbProgress(id).resistance,existing?.bodyweight===true?existing.approximateBodyweight:bvomBbProgress(id).approximateBodyweight,'data-bw-estimate',existing?(existing.actualBodyweightKg??null):bvomActualBodyweightDefault())+bvomBwIncrementField(bvomBbProgress(id).addedWeightIncrement):`<label>Resistance / variation<input data-res type="text" maxlength="80" value="${bvomEsc(existing?.resistance??bvomBbProgress(id).resistance??'')}"></label>`)}<label>Reps<input data-reps type="number" min="0" step="1" value="${defaultReps}"></label><label style="display:flex;gap:10px;align-items:center;margin-top:12px"><input data-hard type="checkbox" ${existing?.harderThanIntended?'checked':''}> Harder than intended / fewer than ~2 good reps left</label>${!bvomBbProgress(id).calibrated&&i===0?`<label>First-exposure check<select data-cal><option value="about_right">About right</option><option value="too_easy">Too easy</option><option value="too_hard">Too hard</option></select></label>`:''}<div class="bvomBbValidationNotice" data-bb-validation role="alert" aria-live="polite" hidden></div><div class="modalActions">${existing?'<button data-remove>REMOVE</button>':''}<button data-cancel>CANCEL</button><button class="primary" data-save>RECORD</button></div></div>`;document.body.appendChild(o);o.querySelector('[data-cancel]').onclick=()=>o.remove();if(existing)o.querySelector('[data-remove]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;if(!bvomRemoveSetDurably(()=>{delete ss[i]}))return;o.remove();renderWorkout();bvomSyncWorkoutControls()};o.querySelector('[data-save]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;if(x.equipment==='bodyweight'&&unitLabel()!==entryUnit){bvomBbInputNotice(o,bvomT('bodyweight.changed'),'[data-load]');return}const bw=x.equipment==='bodyweight'?bvomBwRead(o,(message,field)=>bvomBbInputNotice(o,message,field)):null;if(x.equipment==='bodyweight'&&!bw)return;const bwIncrement=bw?bvomBwIncrementRead(o,(message,field)=>bvomBbInputNotice(o,message,field)):null;if(bw&&bwIncrement===null)return;const before=(bw||extra)?JSON.parse(JSON.stringify(state)):null;if(bw&&(o.querySelector('[data-reps]').value===''||!Number.isInteger(Number(o.querySelector('[data-reps]').value))||Number(o.querySelector('[data-reps]').value)<0)){bvomBbInputNotice(o,bvomT('bodyweight.invalid'),'[data-reps]');return}const reps=Math.max(0,Math.floor(Number(o.querySelector('[data-reps]').value)||0)),hard=!!o.querySelector('[data-hard]').checked,rec={reps,harderThanIntended:hard,target:q.maxReps,index:i};if(numeric){const load=Number(o.querySelector('[data-load]').value);if(!(load>0)){bvomBbInputNotice(o,'Enter the load used.','[data-load]');return}rec.load=load;const p=bvomBbProgress(id);if(!(Number(p.load)>0)){p.load=load;p.topLoad=load}}else{if(bw){Object.assign(rec,bw);const p=bvomBbProgress(id);p.recordingLoad=bw.load;p.approximateBodyweight=bw.approximateBodyweight;p.addedWeightIncrement=bwIncrement}else rec.load=0;rec.resistance=String(o.querySelector('[data-res]').value||'').trim();const p=bvomBbProgress(id);if(rec.resistance)p.resistance=rec.resistance}const cal=o.querySelector('[data-cal]');if(cal)rec.calibrationFeedback=cal.value;state.session[key]=ss;if(extra)rec.extra=true;ss[i]=rec;if(!state.workoutStartedAt)state.workoutStartedAt=Date.now();bvomMarkThisTabAsWorkoutOwner();if(!save({durable:true})&&(bw||extra)){state=before;return}o.remove();startTimer();renderWorkout();bvomSyncWorkoutControls()}}
 function bvomBbExerciseComplete(id){const rx=bvomBbPrescription(id),ss=state.session[bvomBbSessionKey(id)]||{};return Array.from({length:bvomBbSetCount(rx)},(_,i)=>ss[i]&&ss[i].reps!==undefined).every(Boolean)}
 function bvomBbFinish(approvedIncomplete=false){if(!bvomWorkoutActionAllowed())return;if(window.__bvomFinishBusy||!bvomSessionHasActivity())return;const day=bvomBbDay(),ids=bvomBbSlotsForDay(day).map(s=>state.bodybuilding.selections[s]),complete=ids.every(bvomBbExerciseComplete);if(!complete&&!approvedIncomplete){bvomBbUiModal('INCOMPLETE BODYBUILDING WORKOUT','This Bodybuilding workout is incomplete. Save it without advancing to the next workout?',null,()=>bvomBbFinish(true),'SAVE WORKOUT');return;}window.__bvomFinishBusy=true;const duration=bvomDuration(),volume=bvomWorkoutVolume();bvomSessionNoteModal('',note=>{if(!bvomWorkoutActionAllowed()){window.__bvomFinishBusy=false;bvomSyncWorkoutControls();return}const before=JSON.parse(JSON.stringify(state)),oldDefer=bvomCloud.deferWorkoutCommit;let committed=false;try{const decisions=[],working=JSON.parse(JSON.stringify(state));bvomBbEnsure(working);if(complete){for(const id of ids){const key=bvomBbSessionKey(id),sets=bvomBbPrescription(id,working).sets.map((_,i)=>state.session[key]?.[i]).filter(v=>v?.reps!==undefined),p=bvomBbProgress(id,working),load=Number(sets[0]?.load??p.load);const drop=bvomBbNumericExercise(id)&&Number.isFinite(load)&&load>0?bvomBbPerformanceDrop(id,load,sets[0]?.reps,working):null;const wasCalibrated=!!p.calibrated;if(wasCalibrated&&bvomBbNumericExercise(id)&&Number.isFinite(load)&&load>0){const prescribed=Number(p.load??p.topLoad);if(!Number.isFinite(prescribed)||Math.abs(load-prescribed)>1e-9){p.load=load;p.topLoad=load;delete p.previousSuccessfulLoad}}const d=wasCalibrated?bvomBbDecide(id,sets,working):bvomBbCalibrationDecision(id,sets[0]?.calibrationFeedback||'about_right',{load:Number.isFinite(load)&&load>0?load:null,reps:sets[0]?.reps,resistance:sets[0]?.resistance},working);decisions.push({id,decision:d,drop,calibration:!wasCalibrated});bvomBbApplyDecision(id,d,working);if(bvomBbNumericExercise(id)&&Number.isFinite(load)&&load>0)bvomBbRecordPerformanceRef(id,load,sets[0]?.reps,working)}}state.bodybuilding=working.bodybuilding;const gpp=bvomGppResultSnapshot(),historySession=JSON.parse(JSON.stringify(state.session));state.history.push({date:new Date().toISOString(),...bvomHistoryExportMeta(historySession,duration),unit:unitLabel(),program:'bodybuilding',day,incomplete:!complete,session:historySession,gpp,note:note||'',duration,volume:Number.isFinite(volume)?volume:null,bodybuilding:{workoutNumber:state.bodybuilding.completedSessions+1,decisions}});if(complete){state.bodybuilding.completedSessions=Math.min(24,state.bodybuilding.completedSessions+1);state.bodybuilding.status=state.bodybuilding.completedSessions>=24?'completed':'active'}state.backupWorkoutCount=(state.backupWorkoutCount||0)+1;state.session={};state.gppSession={};state.sessionOverrides={};state.processed={};state.processedSnapshots={};state.warmupDone={};state.warmupPlans={};state.workoutStartedAt=null;state.day=bvomBbDay();if(window.__bvomCloudBooted)bvomCloud.deferWorkoutCommit=true;
  if(!save({durable:true})){state=before;bvomCloud.deferWorkoutCommit=oldDefer;return}
@@ -4806,6 +4806,62 @@ function bvomLegacyArchiveCommit(){
   return false;
  }
 }
+// v3.0.1: an orphan timestamp is repairable only in these known-empty shapes.
+// Unknown rows/metadata fail closed. Never infer emptiness from age or truthiness of reps.
+function bvomEmptyTimestampSession(s){
+ try{
+ const object=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
+ const empty=x=>x==null||(object(x)&&Object.keys(x).length===0);
+ if(!s||s.workoutOwnershipVersion!==1||typeof s.workoutStartedAt!=='number'||
+    !Number.isFinite(s.workoutStartedAt)||s.workoutStartedAt<=0||
+    !['lprpt','hlm','fourday','free','bodybuilding'].includes(s.programMode))return false;
+ if(!empty(s.session)&&(!object(s.session)||!Object.values(s.session).every(rows=>
+    object(rows)&&Object.values(rows).every(row=>row===null))))return false;
+ if(!empty(s.freeTrainingSession)){
+  if(!object(s.freeTrainingSession)||!Object.entries(s.freeTrainingSession).every(([lift,x])=>
+     BVOM_FT_LIFTS.includes(lift)&&object(x)&&Object.keys(x).every(k=>['sets','single'].includes(k))&&
+     (x.sets===undefined||(Array.isArray(x.sets)&&x.sets.every(r=>r===null)))&&
+     (x.single===undefined||x.single===null)))return false;
+ }
+ if(!empty(s.gppSession)||!empty(s.processed)||!empty(s.processedSnapshots)||
+    !empty(s.sessionOverrides)||!empty(s.warmupDone)||!empty(s.hlmActiveWorkoutSettings)||
+    s.pendingCloseMissChoice!=null||s.hlm?.pendingRepChoice!=null||s.setupAfterFinish!=null||
+    (s.workoutNote!=null&&s.workoutNote!==''))return false;
+ if(s.hlm?.skippedSingles&&!Object.values(s.hlm.skippedSingles).every(x=>x===false))return false;
+ if(Object.values(s.bodybuilding?.progression||{}).some(p=>p?.pendingDifficulty!=null)||
+    Object.values(s.bodybuilding?.onramp?.exercises||{}).some(p=>p?.pendingDifficulty!=null)||
+    [...(s.accessoryList||[]),...(s.gppList||[])].some(x=>x?._bvomFtDeleteAfterFinish))return false;
+ if(s.freeTrainingDraft!=null){
+  const ft=s.freeTraining,day=ft?.days?.[Number(ft.selectedDay)-1];
+  if(!Array.isArray(s.freeTrainingDraft)||!Array.isArray(day?.compounds)||
+     bvomCloudStable(s.freeTrainingDraft)!==bvomCloudStable(day.compounds))return false;
+ }
+ if(s.bb2!=null){
+  if(!object(s.bb2)||s.bb2.activeSessionId||
+     (s.bb2.events!==undefined&&!Array.isArray(s.bb2.events)))return false;
+  const events=s.bb2.events||[];
+  if(events.some(e=>!object(e))||events.some(e=>e.type==='WORKOUT_STARTED'&&
+     !events.some(end=>end.sessionId===e.sessionId&&
+      ['WORKOUT_FINISHED','WORKOUT_INCOMPLETE','WORKOUT_DISCARDED'].includes(end.type))))return false;
+ }
+ return true;
+ }catch(e){return false}
+}
+function bvomClearEmptyTimestamp(){
+ if(!bvomEmptyTimestampSession(state))return false;
+ state.workoutStartedAt=null;state.timerStart=null;
+ delete state.workoutLastActivityAt;delete state.workoutOwnershipVersion;
+ return true;
+}
+// Removing an actual and clearing its orphan lifecycle are one durable mutation.
+function bvomRemoveSetDurably(remove){
+ if(!bvomWorkoutActionAllowed())return false;
+ const before=JSON.parse(JSON.stringify(state));
+ remove();const cleared=bvomClearEmptyTimestamp();
+ if(!save({durable:true})){state=before;return false}
+ if(cleared&&!bvomPersistenceBlocked())bvomBb2StopCommittedRestClock();
+ return true;
+}
 function bvomRecoveryHold(){
  if(state.pendingCloseMissChoice||state.hlm?.pendingRepChoice)return 'choice';
  if(bvomGppActiveTimed())return 'gpp';
@@ -4833,6 +4889,19 @@ function bvomRecoveryCheck(){
   const persisted=raw?JSON.parse(raw):null;
   // Never finish a merely in-memory edit that is not represented by the same durable activity.
   if(!persisted||bvomRecordedActivityChanged(persisted,state))return false;
+  // Current-protocol empty remnants need no expiry and must never create History.
+  // Both copies must prove empty; a stale memory edit cannot erase durable work.
+  if(bvomEmptyTimestampSession(persisted)&&bvomEmptyTimestampSession(state)&&
+     !bvomRecoveryHold()&&bvomCloudComparableFingerprint(state)===bvomCloudComparableFingerprint(persisted)){
+   const before=JSON.parse(JSON.stringify(state));rollback=before;bvomRecoveryBusy=true;
+   bvomClearEmptyTimestamp();
+   if(!bvomWorkoutActionAllowed()||localStorage.getItem(BVOM_DATA_KEY)!==raw||
+      localStorage.getItem(BVOM_WORKOUT_TAB_OWNER_KEY)!==bvomTabId()||!save({durable:true,recovery:true})){
+    state=before;return false;
+   }
+   committed=true;if(!bvomPersistenceBlocked())bvomBb2StopCommittedRestClock();
+   return true;
+  }
   const now=Date.now(),last=persisted.workoutLastActivityAt;
   if(!Number.isFinite(now)||now<=0)return false;
   // Missing/invalid/future/rolled-back clocks get a durable fresh grace period, never instant expiry.
@@ -6752,6 +6821,7 @@ function bvomBb2Workout(){
   (!active?'<div class="small" style="display:flex;justify-content:flex-end;margin:6px 0 12px"><button type="button" class="secondary" data-bb2-start-next '+(capped?'disabled aria-describedby="bb2-day-cap" ':'')+'data-bb2-preview-token="'+bvomBb2NextToken()+'" onclick="bvomBb2StartNext('+bvomEsc(JSON.stringify(bvomBb2NextToken()))+')">'+hlmTxt('START WORKOUT','ワークアウトを開始')+'</button></div>':
    '<div class="small">'+done+'/'+count+' '+hlmTxt('prescribed sets recorded','予定セットを記録済み')+'</div>')+
   (capped?'<div class="small" id="bb2-day-cap"><p>'+hlmTxt('This workout day has earned all 8/8 block credits. Choose another day, or use the existing Extra Workout option to train this day without another block credit.','この日は8/8のブロッククレジットを獲得済みです。別の日を選ぶか、追加ワークアウトでこの日をトレーニングできます。追加のブロッククレジットは獲得しません。')+'</p><button type="button" class="secondary" data-bb2-open-extra onclick="bvomBb2OpenExtraWorkout('+bvomEsc(JSON.stringify(bvomBb2NextToken()))+')">'+hlmTxt('EXTRA WORKOUT','追加ワークアウト')+'</button></div>':'')+html;
+ if(active&&!bvomBb2SessionHasSets(b))el.innerHTML+='<button type="button" class="secondary wide" data-bb2-cancel-workout onclick="bvomBb2CancelWorkout()">'+hlmTxt('CANCEL WORKOUT','ワークアウトを中止')+'</button>';
  if(!active)el.innerHTML+='<button type="button" class="secondary wide" data-bb2-next-workout onclick="bvomBb2OpenPreview()">'+hlmTxt('PROGRAMME OPTIONS / RECOVERY','プログラム設定／回復')+'</button>';
  bvomSyncWorkoutControls();
  if(active)bvomOrderApply('workout');
@@ -6848,12 +6918,57 @@ function bvomBb2StopCommittedRestClock(){
  const clock=document.querySelector('#clock');if(clock)clock.textContent='0:00';
  const bar=document.querySelector('#timerbar');if(bar)bar.classList.add('idle');
 }
-function bvomBb2Discard(){
- if(!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomWorkoutActionAllowed()||!bvomBb2PreviewModule)return false;
+function bvomBb2SessionHasSets(b=state.bb2){
+ return !Array.isArray(b?.events)||b.events.some(e=>e.sessionId===b.activeSessionId&&
+  ['SET_RECORDED','EXTRA_SET_RECORDED'].includes(e.type));
+}
+function bvomBb2CancelToken(){
+ return {...bvomRestoreToken(),tab:bvomTabId(),sessionId:state.bb2?.activeSessionId};
+}
+function bvomBb2CancelAllowed(token){
+ if(!token||!bvomBb2PreviewEnabled()||!bvomBb2Active()||!bvomBb2PreviewModule||
+    !bvomWorkoutActionAllowed()||window.__bvomFinishBusy||
+    token.tab!==bvomTabId()||token.sessionId!==state.bb2.activeSessionId||
+    token.raw!==bvomLastPersistedRaw||token.owner!==bvomLocalOwnerId()||
+    !token.owner||token.owner!==token.auth||token.auth!==(window.__bvomAuthUserId||null)||
+    token.user!==token.auth||token.user!==bvomCloud.user?.id||bvomCloud.accountSwitchDeferred||
+    bvomWorkoutTabOwnerId()!==bvomTabId()||bvomBb2SessionHasSets()||
+    bvomSessionHasActivity())return false;
+ try{
+  const raw=localStorage.getItem(BVOM_DATA_KEY),stored=JSON.parse(raw);
+  if(raw!==token.raw||bvomCloudStable(stored.bb2)!==bvomCloudStable(state.bb2)||
+     bvomStrengthSessionHasActivity(stored)||bvomGppSessionHasActivity(stored))return false;
+  const b=state.bb2,m=bvomBb2PreviewModule;
+  if(b.opening?.ownerId!==token.owner)return false;
+  m.foldBB2Block(b.opening,b.events);
+  return b.events.some(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId)&&
+   !b.events.some(e=>e.sessionId===b.activeSessionId&&
+    ['WORKOUT_FINISHED','WORKOUT_INCOMPLETE','WORKOUT_DISCARDED'].includes(e.type));
+ }catch(e){return false}
+}
+let bvomBb2CancelOpen=false;
+function bvomBb2CancelWorkout(){
+ if(!bvomWorkoutActionAllowed())return false;
+ const token=bvomBb2CancelToken();
+ if(bvomBb2CancelOpen||document.querySelector('.bvomModalOverlay')||!bvomBb2CancelAllowed(token))return false;
+ bvomBb2CancelOpen=true;
+ bvomChoiceModal(hlmTxt('CANCEL WORKOUT?','ワークアウトを中止しますか？'),
+  hlmTxt('No sets have been recorded. Cancel this workout? The same workout will remain available to start again.',
+   'セットは記録されていません。このワークアウトを中止しますか？同じワークアウトを再び開始できます。'),
+  hlmTxt('KEEP WORKOUT','ワークアウトを続ける'),hlmTxt('CANCEL WORKOUT','ワークアウトを中止'),
+  ()=>{bvomBb2CancelOpen=false},()=>{bvomBb2CancelOpen=false;return bvomBb2Discard(token)});
+ return true;
+}
+function bvomBb2Discard(token){
+ if(!bvomWorkoutActionAllowed())return false;
+ token=token||bvomBb2CancelToken();
+ // Internal fence: a stale caller/confirmation must never discard recorded work.
+ if(!bvomBb2CancelAllowed(token))return false;
  const b=state.bb2,m=bvomBb2PreviewModule;
  try{
   const events=m.BB2_BROWSER_MODULES.ledger.discardBB2Session(b.events,b.activeSessionId);
   m.foldBB2Block(b.opening,events);
+  if(!bvomBb2CancelAllowed(token))return false;
   const priorTimer=state.timerStart;state.timerStart=null;
   if(!bvomBb2Commit({...b,events,activeSessionId:null,selectedProgram:true})){
    state.timerStart=priorTimer;return false;
@@ -7595,7 +7710,7 @@ bvomHideMainSurfaces();if("serviceWorker" in navigator){
        // Re-registering with a new ?v= every release installs a second worker.
        // Only first-time installations register a new versioned URL.
        const reg = await navigator.serviceWorker.getRegistration("./") ||
-         await navigator.serviceWorker.register("./sw.js?v=3.0.0",{updateViaCache:"none"});
+         await navigator.serviceWorker.register("./sw.js?v=3.0.1",{updateViaCache:"none"});
       bvomWatchServiceWorkerUpdate(reg);
       navigator.serviceWorker.addEventListener("controllerchange", ()=>{
         bvomSwFinishRequestedReload();

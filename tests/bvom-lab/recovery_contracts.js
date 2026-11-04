@@ -38,10 +38,10 @@ module.exports=({test,ok,H,build})=>{
   h.ls.setItem=(k,v)=>{if(k==='bvom_data')throw Error('synthetic quota');put(k,v)};const finished=expire(h,c);h.ls.setItem=put;
   return ok(!finished&&h.ls.getItem('bvom_data')===raw&&JSON.stringify(h.S())===JSON.stringify(before)&&read(h).history.length===0,'exact rollback');
  }));
- test('F75-LEGACY-AND-CLOCK-GRACE','DEFECT','Missing/invalid/backwards timestamps receive durable grace; zero recorded work never creates History',()=>H.withClock(c=>{
+ test('F75-LEGACY-AND-CLOCK-GRACE','DEFECT','Missing/invalid/backwards activity clocks receive grace; owned empty timestamp remnants clear without History',()=>H.withClock(c=>{
   const out=[];for(const value of [undefined,null,'bad',NaN,c.now()+900000]){const h=boot();h.ctx.tapSet('Squat',0);h.S().workoutLastActivityAt=value;h.ev('save({recovery:true})');open(h);out.push(read(h).history.length===0&&read(h).workoutLastActivityAt===c.now());}
   const h=boot();open(h);h.ctx.tapSet('Squat',0);c.advance(-300000);h.ctx.bvomRecoveryCheck();out.push(read(h).history.length===0&&read(h).workoutLastActivityAt===c.now());
-  const z=boot();z.S().workoutStartedAt=c.now();z.S().workoutLastActivityAt=c.now();z.ev('save({recovery:true})');open(z);expire(z,c);out.push(read(z).history.length===0&&!!read(z).workoutStartedAt);
+  const z=boot();z.S().workoutStartedAt=c.now();z.S().workoutLastActivityAt=c.now();z.ev('save({recovery:true})');open(z);expire(z,c);out.push(read(z).history.length===0&&!read(z).workoutStartedAt);
   return ok(out.every(Boolean),JSON.stringify(out));
  }));
  test('F76-UNCOORDINATED-LEGACY-FAIL-CLOSED','DEFECT','Unknown old-version ownership cannot be upgraded on age or matching duplicated tab ID; live metadata excluded from cloud',()=>{
