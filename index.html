@@ -6936,7 +6936,8 @@ function bvomBb2CancelAllowed(token){
     bvomSessionHasActivity())return false;
  try{
   const raw=localStorage.getItem(BVOM_DATA_KEY),stored=JSON.parse(raw);
-  if(raw!==token.raw||bvomCloudStable(stored.bb2)!==bvomCloudStable(state.bb2))return false;
+  if(raw!==token.raw||bvomCloudStable(stored.bb2)!==bvomCloudStable(state.bb2)||
+     bvomStrengthSessionHasActivity(stored)||bvomGppSessionHasActivity(stored))return false;
   const b=state.bb2,m=bvomBb2PreviewModule;
   m.foldBB2Block(b.opening,b.events);
   return b.events.some(e=>e.type==='WORKOUT_STARTED'&&e.sessionId===b.activeSessionId)&&
