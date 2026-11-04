@@ -1,4 +1,4 @@
-// BVOM Strength v3.0.1 lifecycle repair candidate — HOLD test build only.
+// BVOM Strength v3.0.1 production release — owner uploads the verified ZIP manually.
 const CACHE = 'bvom-3.0.1';
 const BUILD = '3.0.1';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './og-image.png', './i18n/en.js?v=6090d2f48f09', './i18n/ja.js?v=2c5d1ff918c6',
