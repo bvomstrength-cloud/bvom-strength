@@ -13,6 +13,16 @@ module.exports=({test,ok,H,build})=>{
    assert.deepEqual(progression(b),progression(a));H.finish(a);H.finish(b);assert.deepEqual(progression(b),progression(a));assert.equal(b.S().history.length,a.S().history.length);for(const n of lifts)assert.equal(b.ctx.bvomCoreExtraKeys(n).length,0);count++;
   }return ok(true,count+' paired full-workout journeys including success/failure/close-miss and third-failure boundaries');
  });
+ test('CORE-EXTRAS-DECISION-BRANCHES','CONTROL','Both third-failure/close-miss choices, terminal RPT reset and HLM doubles are isolated',()=>{
+  let count=0;
+  for(const mode of ['lprpt','hlm','fourday'])for(const level of mode==='lprpt'?[-1,0,4]:[5,2])for(const pick of ['L','R']){
+   const a=boot(mode),b=boot(mode),n='Squat';
+   for(const h of [a,b]){h.S().attempts[n]=2;h.S().core[n].mode=level===-1?'straight':'rpt';h.S().core[n].rptLevel=mode==='lprpt'?Math.max(0,level):0;if(mode!=='lprpt'){h.S().hlm.rep[n]=level;h.S().hlm.failCount[n]=2;}h.choices=Array(30).fill(pick);h.ctx.bvomWeightModal=(_name,_weight,save)=>save(80);h.ev('save()')}
+   extra(b,n);record(a,n,'fail');record(b,n,'fail');assert.deepEqual(progression(b),progression(a));assert.deepEqual(clone(b.ctx.getSetPlan(n)),clone(a.ctx.getSetPlan(n)));assert.deepEqual(b.log.filter(x=>x[0]==='choice'),a.log.filter(x=>x[0]==='choice'));count++;
+  }
+  for(const pick of ['L','R']){const a=boot(),b=boot();for(const h of [a,b]){h.S().core.Squat.mode='rpt';h.S().attempts.Squat=1;h.choices=Array(30).fill(pick);h.ev('save()')}extra(b);record(a,'Squat','close');record(b,'Squat','close');assert.deepEqual(progression(b),progression(a));count++}
+  return ok(true,count+' paired explicit decisions, including user-selected terminal weight reset');
+ });
  test('CORE-EXTRAS-LIFECYCLE','CONTROL','Multiple extras edit/remove, volume, incomplete Finish, History, reload and completed cloud payload',()=>{
   for(const mode of ['lprpt','hlm','fourday']){
    let h=boot(mode);const before=progression(h);extra(h,'Squat',83.75,7);extra(h,'Squat',91,3);assert.deepEqual(progression(h),before);assert.equal(h.ctx.bvomWorkoutVolume(),859.25);assert.equal(h.ctx.coreResult('Squat').complete,false);
