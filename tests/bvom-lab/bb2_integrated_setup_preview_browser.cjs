@@ -104,9 +104,9 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>{showSetup();showSetup()});
   assert.equal(await page.locator('#setup [data-bb2-preview]').count(),1,'one BB2 button in the standard program chooser');
   assert.equal(await page.locator('#setup [data-bb-program]').count(),1,'BB1 chooser remains available');
-  assert.equal(await page.title(),'BVOM Strength v3.0.2');
-  assert.match(await page.locator('header').textContent(),/v3\.0\.2/);
-  assert.equal(await page.evaluate(()=>BVOM_BUILD),'3.0.2');
+  assert.equal(await page.title(),'BVOM Strength v3.0.3');
+  assert.match(await page.locator('header').textContent(),/v3\.0\.3/);
+  assert.equal(await page.evaluate(()=>BVOM_BUILD),'3.0.3');
   fs.mkdirSync(screenshots,{recursive:true});
   for(const lang of ['en','ja']){
    await page.evaluate(lang=>{changeLanguage(lang);showSetup();showSetup()},lang);
@@ -146,7 +146,7 @@ const server=http.createServer((req,res)=>{
    await page.locator('#setup [data-bb2-back]').click();
   }
   await page.evaluate(()=>{changeLanguage('en');showSetup()});
-  console.log('PASS v3.0.2 mobile EN/JA programme chooser, setup and Info explanation with matching typography');
+  console.log('PASS v3.0.3 mobile EN/JA programme chooser, setup and Info explanation with matching typography');
   await page.evaluate(()=>{changeLanguage('ja');showSetup()});
   assert.match(await page.locator('#setup [data-bb2-preview]').textContent(),
    /ボディビルディング2/,'BB2 programme entry follows Japanese locale');

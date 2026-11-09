@@ -8,7 +8,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="BVOM">
 <meta name="twitter:description" content="Best Version Of Myself — strength training and progression.">
-<title>BVOM Strength v3.0.2</title><link rel="manifest" href="manifest.json">
+<title>BVOM Strength v3.0.3</title><link rel="manifest" href="manifest.json">
 <style>
 :root{--bg:#f4f4f4;--card:#fff;--ink:#111;--muted:#737373;--accent:#d91e18;--line:#ddd}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
@@ -256,7 +256,7 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
 <div id="authgate" class="setup hidden"></div>
 <div id="setup" class="setup hidden"></div>
 <div id="app" class="hidden">
-<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v3.0.2</div></header>
+<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v3.0.3</div></header>
 <div class="tabs"><div class="tab on" data-tab="workout">WORKOUT</div><div class="tab" data-tab="warmup">WARM-UP</div><div class="tab" data-tab="history">HISTORY</div><div class="tab" data-tab="info">INFO</div><div class="tab" data-tab="settings">SETTINGS</div></div>
 <main><section id="workout"></section><section id="warmup" class="hidden"></section><section id="history" class="hidden"></section><section id="info" class="hidden"></section><section id="settings" class="hidden"></section></main>
 <div class="timer idle" id="timerbar"><div class="timerin"><div><div class="clock" id="clock">0:00</div><div class="marks">DINGS 3 · 5 · 10</div></div><button class="cancel" onclick="if(bvomWorkoutActionAllowed())cancelTimer()">CANCEL</button><button class="finish" onclick="finishWorkout()">FINISH</button></div></div>
@@ -265,7 +265,7 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
 <script src="./i18n/ja.js?v=2c5d1ff918c6"></script>
 <script src="./vendor/supabase-js-2.117.3.js"></script>
 <script>
-const BVOM_BUILD='3.0.2';
+const BVOM_BUILD='3.0.3';
 const programs={A:[["Squat",3,5],["Bench Press",3,5],["Prone Row",3,5]],B:[["Squat",3,5],["Overhead Press",5,5],["Deadlift",1,5]]};
 function liftLabel(n){return n==='Prone Row'?(isHLM()?'Prone Row':'Row'):n==='Overhead Press'?'Press':n;}
 const inc={Squat:2.5,"Bench Press":2.5,"Prone Row":2.5,"Overhead Press":2.5,Deadlift:5};
@@ -2547,7 +2547,7 @@ function bvomApplyWeightEdit(n,v){
  state.attempts[n]=0;
 }
 function editWeight(n){
- const current=(isIntermediate()&&isDriverExposure(n))?hlmHeavyTarget(n):(hlmOverride(n)||corePrescription(n).loads?.[0]||state.weights[n]);
+ const current=bvomCoreCardWeight(n);
  bvomWeightModal(n,current,(v)=>{
   state.processed=state.processed||{};const wasProcessed=!!state.processed[n],snap=state.processedSnapshots?.[n],postComplete=wasProcessed||snap?.postEditWeight!=null;
   bvomApplyWeightEdit(n,v);
@@ -2581,11 +2581,39 @@ function preserveWarmupState(fn){
 function bvomWorkoutDayChoices(days,selected,handler,locked){
  return '<div class="choiceRow">'+days.map(d=>'<button class="choice '+(selected===d?'on':'')+'" onclick="'+handler+'(\''+d+'\')" '+(locked?'disabled':'')+'>'+d+'</button>').join('')+'</div>';
 }
+// Card presentation only: earned progression belongs to the next exposure.
+// Reuse the durable pre-progression snapshot; never alter the live prescription engine.
+function bvomCoreCardWeight(n,p=corePrescription(n)){
+ const live=hlmOverride(n)||p.loads?.[p.topIndex]||state.weights[n];
+ const snap=state.processedSnapshots?.[n];
+ if(!snap||!bvomCoreSessionHasActivity(n))return Number(live);
+ if(snap.livePrescriptionLock)return Number(live);
+ if(snap.postEditWeight!=null)return Number(snap.postEditWeight);
+ if(p.kind==='hlmHeavy')return bvomDerivedCoreLoad(n,snap.hlm?.driver?.[n]??snap.weight??live);
+ if(p.kind==='hlmLight'||p.kind==='hlmMedium')return Number(live);
+ return snap.cfg?.mode==='rpt'&&n==='Overhead Press'?bvomDerivedCoreLoad(n,snap.weight):Number(snap.weight??live);
+}
+function bvomCoreCardNextWeight(n,p,current){
+ const snap=state.processedSnapshots?.[n];
+ if(!state.processed?.[n]||!snap||!bvomCoreSessionHasActivity(n)||snap.postEditWeight!=null||snap.postEditCfg||
+    state.pendingCloseMissChoice?.lift===n||state.hlm?.pendingRepChoice?.lift===n||state.setupAfterFinish||Number(state.attempts[n])>=3)return '';
+ let next,label;
+ if(p.kind==='hlmHeavy'){
+  next=state.hlm.nextHeavy[n];
+  label=isFourDay()?hlmTxt('Next workout '+(n==='Squat'?'2':'1'),'次のワークアウト '+(n==='Squat'?'2':'1')):hlmTxt('Next Heavy workout','次のHeavyワークアウト');
+ }else{
+  // Light/Medium are derived session loads, not independently progressing weights.
+  if(p.kind==='hlmLight'||p.kind==='hlmMedium')return '';
+  next=state.weights[n];label=hlmTxt('Next workout','次のワークアウト');
+ }
+ if(next==null||!Number.isFinite(Number(next))||Number(next)<=0||Number(next)===Number(current))return '';
+ return `<div class="small" data-next-workout-weight>${label}: ${fmt(next)} ${unitLabel()}</div>`;
+}
 function renderWorkout(){
  const title=isFourDay()?'4-Day Split':isHLM()?'HLM RPT':'LP / RPT',sub=isFourDay()?hlmTxt('Upper / Lower · recommended Mon / Tue / Thu / Fri. Workouts simply continue 1 → 2 → 3 → 4.','上半身 / 下半身 · 月 / 火 / 木 / 金を推奨。トレーニング日は1 → 2 → 3 → 4の順に進みます。'):isHLM()?hlmTxt('Heavy · Light · Medium. H is the progression driver. Choose the session that suits your recovery.','Heavy · Light · Medium。Hが進行の基準です。回復状態に合わせてセッションを選べます。'):hlmTxt('A · B · A is suggested. Choose A or B whenever needed.','A・B・Aがおすすめです。必要に応じてAまたはBを選べます。');
  const days=isFourDay()?['1','2','3','4']:isHLM()?['H','L','M']:['A','B'];let h=`<div class="toprow"><div><b>${title}</b><div class="small">${sub}</div></div>${bvomWorkoutDayChoices(days,state.day,'switchDay',bvomWorkoutDayLocked())}</div>`;
  let ns=ratioNotices();if(ns.length)h+=`<div class="notice">${ns.join('<br>')}</div>`;
- program().forEach(([n])=>{let p=corePrescription(n),ss=state.session[n]||{},plan=getSetPlan(n),w=(p.kind==='hlmHeavy'?hlmHeavyTarget(n):(hlmOverride(n)||p.loads?.[p.topIndex]||state.weights[n])),mode=p.kind==='hlmHeavy'?'HLM RPT':p.kind==='hlmLight'?hlmTxt('ACTIVE RECOVERY','アクティブリカバリー'):p.kind==='hlmMedium'?hlmTxt('INTENSITY','高強度'):bvomCoreCfgForSession(n).mode==='rpt'?'RPT':bvomT('workout.straight');h+=`<div class="exercise" id="work-${n.replace(/\W/g,'')}"><div class="exhead"><div><div class="exname">${liftLabel(n)}</div><div class="small">${mode} · ${p.targets.join(' / ')}</div></div><div class="weight" onclick="editWeight('${n}')">${fmt(w)} ${unitLabel()}</div></div><div class="sets">`;plan.forEach((q,i)=>{let log=ss[i],cl=log?(log.reps>=q.target?'done':'fail'):'';const shownLoad=log&&Number.isFinite(Number(log.load))?Number(log.load):q.load;h+=`<div class="setwrap"><button class="set ${cl}" onclick="tapSet('${n}',${i})">${log?log.reps:'✓'}</button><div class="setload">${fmt(shownLoad)}×${q.target}${q.amrap?'+':''}${log&&Number.isFinite(Number(log.rpe))?` · RPE ${Number(log.rpe)}`:''}</div>${q.optional?`<div class="extraLabel">${hlmTxt('OPTIONAL','任意')}</div>`:q.drop?'<div class="extraLabel">RPT</div>':''}</div>`});if(plan.some(q=>q.optional)&&!state.hlm.skippedSingles[state.day+'|'+n])h+=`<div style="width:100%;margin-top:8px"><button class="secondary wide" onclick="skipOptionalSingle('${n}')">${hlmTxt('SKIP OPTIONAL SINGLE','任意のシングルを省略')}</button></div>`;for(const key of bvomCoreExtraKeys(n)){const log=ss[key];h+=bvomWorkoutSetMarkup(log,`${fmt(log.load)} ${unitLabel()} × ${log.reps}`,`bvomCoreExtraSetModal('${n}','${key}')`,{extra:true,attributes:`data-core-extra="${key}"`})}h+=`</div><button type="button" class="secondary" style="margin-top:8px" data-core-add-extra="${n}" onclick="bvomCoreAddExtraSet('${n}')">+ ${hlmTxt('ADD EXTRA SET','追加セットを記録')}</button></div>`});h+=renderAccessories17();h+=renderGpp17();document.querySelector('#workout').innerHTML=h;bvomSyncWorkoutControls();bvomSyncGppTimerbar();
+ program().forEach(([n])=>{let p=corePrescription(n),ss=state.session[n]||{},plan=getSetPlan(n),w=bvomCoreCardWeight(n,p),mode=p.kind==='hlmHeavy'?'HLM RPT':p.kind==='hlmLight'?hlmTxt('ACTIVE RECOVERY','アクティブリカバリー'):p.kind==='hlmMedium'?hlmTxt('INTENSITY','高強度'):bvomCoreCfgForSession(n).mode==='rpt'?'RPT':bvomT('workout.straight');h+=`<div class="exercise" id="work-${n.replace(/\W/g,'')}"><div class="exhead"><div><div class="exname">${liftLabel(n)}</div><div class="small">${mode} · ${p.targets.join(' / ')}</div></div><div class="weight" onclick="editWeight('${n}')">${fmt(w)} ${unitLabel()}</div></div>${bvomCoreCardNextWeight(n,p,w)}<div class="sets">`;plan.forEach((q,i)=>{let log=ss[i],cl=log?(log.reps>=q.target?'done':'fail'):'';const shownLoad=log&&Number.isFinite(Number(log.load))?Number(log.load):q.load;h+=`<div class="setwrap"><button class="set ${cl}" onclick="tapSet('${n}',${i})">${log?log.reps:'✓'}</button><div class="setload">${fmt(shownLoad)}×${q.target}${q.amrap?'+':''}${log&&Number.isFinite(Number(log.rpe))?` · RPE ${Number(log.rpe)}`:''}</div>${q.optional?`<div class="extraLabel">${hlmTxt('OPTIONAL','任意')}</div>`:q.drop?'<div class="extraLabel">RPT</div>':''}</div>`});if(plan.some(q=>q.optional)&&!state.hlm.skippedSingles[state.day+'|'+n])h+=`<div style="width:100%;margin-top:8px"><button class="secondary wide" onclick="skipOptionalSingle('${n}')">${hlmTxt('SKIP OPTIONAL SINGLE','任意のシングルを省略')}</button></div>`;for(const key of bvomCoreExtraKeys(n)){const log=ss[key];h+=bvomWorkoutSetMarkup(log,`${fmt(log.load)} ${unitLabel()} × ${log.reps}`,`bvomCoreExtraSetModal('${n}','${key}')`,{extra:true,attributes:`data-core-extra="${key}"`})}h+=`</div><button type="button" class="secondary" style="margin-top:8px" data-core-add-extra="${n}" onclick="bvomCoreAddExtraSet('${n}')">+ ${hlmTxt('ADD EXTRA SET','追加セットを記録')}</button></div>`});h+=renderAccessories17();h+=renderGpp17();document.querySelector('#workout').innerHTML=h;bvomSyncWorkoutControls();bvomSyncGppTimerbar();
 }
 function warmupTarget(n){let p=corePrescription(n);if(isIntermediate()&&p.kind==='hlmHeavy')return p.loads[0];if(isIntermediate()&&p.kind==='hlmMedium')return p.loads[0];if(isHLM()&&p.kind==='hlmLight')return p.loads[0];return(p.kind==='rpt5')?p.loads[0]:state.weights[n]}
 function renderWarm(){const days=isFourDay()?['1','2','3','4']:isHLM()?['H','L','M']:['A','B'];let h=`<div class="toprow"><div><b>${bvomT('warmup.title')}</b><div class="small">${bvomT('warmup.help')}</div></div>${bvomWorkoutDayChoices(days,state.day,'switchDay',bvomWorkoutDayLocked())}</div>`;program().forEach(([n])=>{let wp=getWarmupPlan(n),w=wp.target,a=wp.sets;h+=`<div class="exercise" id="warm-${n.replace(/\W/g,'')}"><div class="exhead"><div class="exname">${liftLabel(n)}</div><div class="weight">${fmt(w)} ${unitLabel()}</div></div>`;if(!a.length)h+=`<p class="small">${bvomT('warmup.none')}</p>`;a.forEach(([x,r],i)=>{let wd=(state.warmupDone||{})[state.day+'|'+n]||{};h+=`<div class="warmrow"><button class="set ${wd[i]?'done':''}" onclick="completeWarmup('${n}',${i},${a.length},this)">✓</button><b>${fmt(x)}×${r}</b><span class="plates">${plateTextFor(n,x)}</span></div>`});h+=`<div class="warmrow"><span></span><b style="color:var(--accent)">${fmt(w)} ${unitLabel()}</b><span class="plates">${bvomT('warmup.workingTop')} · ${plateTextFor(n,w)}</span></div></div>`});document.querySelector('#warmup').innerHTML=h}
@@ -7747,7 +7775,7 @@ bvomHideMainSurfaces();if("serviceWorker" in navigator){
        // Re-registering with a new ?v= every release installs a second worker.
        // Only first-time installations register a new versioned URL.
        const reg = await navigator.serviceWorker.getRegistration("./") ||
-         await navigator.serviceWorker.register("./sw.js?v=3.0.2",{updateViaCache:"none"});
+         await navigator.serviceWorker.register("./sw.js?v=3.0.3",{updateViaCache:"none"});
       bvomWatchServiceWorkerUpdate(reg);
       navigator.serviceWorker.addEventListener("controllerchange", ()=>{
         bvomSwFinishRequestedReload();

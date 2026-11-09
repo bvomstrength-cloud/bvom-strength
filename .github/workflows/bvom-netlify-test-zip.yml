@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Check out PR candidate
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Assemble exact static candidate
         shell: bash
@@ -30,6 +32,9 @@ jobs:
           ZIP="BVOM-v${BUILD}-PR${PR_NUMBER}-TEST.zip"
           if [ "$PR_NUMBER" = '73' ]; then
             node scripts/package-bb2-test.cjs --source-sha "$SOURCE_SHA" \
+              --output .bvom-netlify-test --zip "$ZIP"
+          elif [ "$BUILD" = '3.0.3' ]; then
+            node scripts/package-working-weight-test.cjs --source-sha "$SOURCE_SHA" \
               --output .bvom-netlify-test --zip "$ZIP"
           else
           mkdir -p .bvom-netlify-test/i18n .bvom-netlify-test/vendor .bvom-netlify-test/bb2
@@ -71,7 +76,7 @@ jobs:
           test -s .bvom-netlify-test/i18n/ja.js
           test -s .bvom-netlify-test/bb2/browser-core.mjs
           test -s .bvom-netlify-test/bb2/cloud-coordinator.mjs
-          if [ "$PR_NUMBER" != '73' ]; then
+          if [ "$PR_NUMBER" != '73' ] && [ "$BUILD" != '3.0.3' ]; then
             (cd .bvom-netlify-test && zip -q -r "../${ZIP}" .)
           fi
           unzip -t "$ZIP" | tail -2

@@ -42,6 +42,20 @@ jobs:
           fi
           node -e "const a=require('node:assert/strict'),r=require('/tmp/bvom-extra-red.json');a.equal(r.length,6);a.ok(r.every(t=>!t.pass));console.log('PASS: 6/6 new extra-set contracts RED on exact v3.0.1')"
 
+      - name: Check out exact v3.0.2 for display and progression comparison
+        uses: actions/checkout@v4
+        with:
+          ref: 2e93b4dbb098bba4a4e8bba23b9451449a9e20f9
+          path: .bvom-weight-baseline
+      - name: Prove display contracts fail on v3.0.2
+        run: |
+          if node tests/bvom-lab/behaviour_guard.js .bvom-weight-baseline --only=WORKING-WEIGHT-LP-RPT,WORKING-WEIGHT-INTERMEDIATE,WORKING-WEIGHT-FAIL-DECISION,WORKING-WEIGHT-MANUAL-EXTRAS --json > /tmp/bvom-weight-red.json; then
+            exit 1
+          fi
+          node -e "const a=require('node:assert/strict'),r=require('/tmp/bvom-weight-red.json');a.equal(r.length,4);a.ok(r.every(t=>!t.pass))"
+      - name: Compare progression and History to exact v3.0.2
+        run: node tests/bvom-lab/working_weight_baseline.cjs .bvom-weight-baseline
+
       - name: Stage production candidate
         shell: bash
         run: |

@@ -187,6 +187,9 @@ jobs:
           path: ${{ runner.temp }}/bb2-android-acceptance
           if-no-files-found: ignore
 
+      - name: Verify current versus future working weights in EN/JA mobile layouts
+        run: node tests/bvom-lab/working_weight_display_browser.cjs
+
       - name: Verify packaged BB2 test-site entry and both optional curl days
         run: node tests/bvom-lab/bb2_test_package_browser.cjs
       - name: Preserve mobile BB1/BB2 Edit Weight comparison screenshots
