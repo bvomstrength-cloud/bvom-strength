@@ -10,7 +10,7 @@ module.exports=({test,ok,H,build})=>{
   return ok(true,'straight, RPT3, RPT5 and deadlift; reload and correction');
  });
  test('WORKING-WEIGHT-INTERMEDIATE','DEFECT','All HLM and four Split days keep session loads separate from Heavy drivers',()=>{
-  for(const [mode,days]of [['hlm',['H','L','M']],['fourday',['1','2','3','4']]])for(const day of days){const h=boot(mode,day);for(const [n]of h.ctx.program()){const p=h.ctx.corePrescription(n),w=p.kind==='hlmHeavy'?h.ctx.hlmHeavyTarget(n):p.loads[p.topIndex];record(h,n);main(h,n,w);if(['hlmMedium','hlmLight'].includes(p.kind))a.doesNotMatch(card(h,n),/data-next-workout-weight/);if(p.kind==='hlmHeavy')a.match(card(h,n),mode==='hlm'?/Next Heavy workout/:/Next workout [12]/);}}
+  for(const [mode,days]of [['hlm',['H','L','M']],['fourday',['1','2','3','4']]])for(const day of days)for(const driver of [100,106]){const h=boot(mode,day);h.S().hlm.driver.Squat=driver;h.S().hlm.driver['Bench Press']=driver;for(const [n]of h.ctx.program()){const p=h.ctx.corePrescription(n),w=p.loads[p.topIndex];record(h,n);main(h,n,w);if(['hlmMedium','hlmLight'].includes(p.kind))a.doesNotMatch(card(h,n),/data-next-workout-weight/);if(p.kind==='hlmHeavy')a.match(card(h,n),mode==='hlm'?/Next Heavy workout/:/Next workout [12]/);}}
   return ok(true,'all seven session destinations');
  });
  test('WORKING-WEIGHT-FAIL-DECISION','DEFECT','Failure, terminal reset and unresolved close miss retain the current weight without predictions',()=>{

@@ -2584,12 +2584,12 @@ function bvomWorkoutDayChoices(days,selected,handler,locked){
 // Card presentation only: earned progression belongs to the next exposure.
 // Reuse the durable pre-progression snapshot; never alter the live prescription engine.
 function bvomCoreCardWeight(n,p=corePrescription(n)){
- const live=p.kind==='hlmHeavy'?hlmHeavyTarget(n):(hlmOverride(n)||p.loads?.[p.topIndex]||state.weights[n]);
+ const live=hlmOverride(n)||p.loads?.[p.topIndex]||state.weights[n];
  const snap=state.processedSnapshots?.[n];
  if(!snap||!bvomCoreSessionHasActivity(n))return Number(live);
  if(snap.livePrescriptionLock)return Number(live);
  if(snap.postEditWeight!=null)return Number(snap.postEditWeight);
- if(p.kind==='hlmHeavy')return Number(snap.hlm?.driver?.[n]??snap.weight??live);
+ if(p.kind==='hlmHeavy')return bvomDerivedCoreLoad(n,snap.hlm?.driver?.[n]??snap.weight??live);
  if(p.kind==='hlmLight'||p.kind==='hlmMedium')return Number(live);
  return snap.cfg?.mode==='rpt'&&n==='Overhead Press'?bvomDerivedCoreLoad(n,snap.weight):Number(snap.weight??live);
 }
