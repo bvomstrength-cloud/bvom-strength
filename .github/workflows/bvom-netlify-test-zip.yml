@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Check out PR candidate
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Assemble exact static candidate
         shell: bash
