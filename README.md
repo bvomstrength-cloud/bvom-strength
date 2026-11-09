@@ -1,5 +1,9 @@
 # BVOM Strength
 
+## v3.0.3 development candidate — working weight display
+
+Keeps current LP/RPT, HLM and 4-Day working/top weights on workout cards after progression, with a separate confirmed future-load label. Presentation only; progression and stored-data formats are unchanged. Based on verified v3.0.2 main `2e93b4d`. See [audit and verification notes](docs/v3.0.3-working-weight-display.md). Draft PR and separate Netlify test ZIP only; no merge or production deployment.
+
 ## v3.0.2 development candidate — extra working sets
 
 Optional extra working sets for LP/RPT, HLM and 4-Day Split. Recorded actuals contribute to volume and History while prescribed sets alone determine progression. See [implementation and verification notes](docs/v3.0.2-extra-working-sets.md). Based on v3.0.1; draft review and separate test ZIP only. No merge, release or production deployment.

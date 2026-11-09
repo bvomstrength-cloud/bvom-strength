@@ -35,6 +35,7 @@ require('./starting_setup_contracts')({test,ok,H,build});
 require('./bb_warmup_stage_a_contracts')({test,ok,H,build});
 require('./bb_warmup_stage_b_contracts')({test,ok,H,build});
 require('./monkey022_fix_contracts')({test,ok,H,build});
+require('./working_weight_display_contracts.cjs')({test,ok,H,build});
 require('./core_extra_sets_contracts.cjs')({test,ok,H,build});
 require('./bb_extra_sets_contracts')({test,ok,H,build});
 require('./bb_manual_load_contracts')({test,ok,H,build});
