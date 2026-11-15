@@ -6,7 +6,7 @@ let count=0;const check=(x,label)=>{a.ok(x,label);count++};
 try{
  function make(name,extra={}){return packageMonkeyTest({root,sourceSha,output:path.join(temp,name),zipFile:path.join(temp,name+'.zip'),...extra})}
  const first=make('a'),repeat=make('b');check(first.zipSha256===repeat.zipSha256,'deterministic committed-source ZIP');check(first.sourceSha===sourceSha,'exact source identity');check(!first.cloudConfigured&&first.status.startsWith('HOLD'),'unconfigured cloud is explicitly HOLD');
- for(const file of FILES){const packaged=fs.readFileSync(path.join(first.zipFile.replace('.zip',''),file));if(!['index.html','admin.html','sw.js'].includes(file))check(packaged.equals(cp.execFileSync('git',['show',sourceSha+':'+file],{cwd:root})),'unchanged committed asset '+file)}
+ for(const file of FILES){const packaged=fs.readFileSync(path.join(first.zipFile.replace('.zip',''),file));if(!['index.html','admin.html','sw.js'].includes(file))check(packaged.equals(cp.execFileSync('git',['show',sourceSha+':'+file],{cwd:root,maxBuffer:32*1024*1024})),'unchanged committed asset '+file)}
  for(const file of ['index.html','admin.html']){const text=fs.readFileSync(path.join(temp,'a',file),'utf8');check(!text.includes('hkteienxwdsjncchuvnz.supabase.co'),'production endpoint removed '+file);check(text.includes('https://isolated-monkey-backend.invalid'),'unconfigured endpoint fails closed '+file)}
  check(fs.readFileSync(path.join(temp,'a/sw.js'),'utf8').includes(first.cache),'commit-specific test cache');
  check(first.manifestIdentityUnchanged,'PWA manifest identity retained');
