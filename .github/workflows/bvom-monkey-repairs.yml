@@ -1,0 +1,44 @@
+name: v3.0.4 monkey repair replay
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  six-monkeys:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      BVOM_MONKEY_OUT: ${{ runner.temp }}/monkey-v304
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install pinned test browser
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Target every repaired local defect and mutation controls
+        run: |
+          node tests/monkey-v304/repair-contracts.cjs
+          node tests/monkey-v304/repair-mutations.cjs
+          node tests/monkey-v304/repair-browser.cjs
+      - name: All 215 baseline sessions and 72 weekly reconciliations
+        run: node tests/monkey-v304/monkeys.cjs
+      - name: Real backup export restore reload at all 72 checkpoints
+        run: node tests/monkey-v304/weekly-portability.cjs
+      - name: Adversarial actions and final six-programme portability
+        run: node tests/monkey-v304/adversarial.cjs
+      - name: Mobile matrix and localized balance guidance
+        run: |
+          node tests/monkey-v304/mobile.cjs
+          node tests/monkey-v304/localization.cjs
+      - name: Retain fictional action logs and comparisons
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BVOM-v3.0.4-monkey-replay
+          path: ${{ runner.temp }}/monkey-v304
+          retention-days: 14

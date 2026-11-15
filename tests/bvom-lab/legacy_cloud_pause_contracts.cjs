@@ -7,12 +7,12 @@ const builds=[['candidate',path.resolve(__dirname,'../..')],...(process.argv[2]?
 let passed=0;
 function setup(build){
  const remote={data:null,writes:0};
- const client={from(){let incoming;const q={select(){return q},eq(){return q},order(){return q},
-  async limit(){return {data:remote.data?[{id:'audit-row',data:copy(remote.data)}]:[],error:null}},
+ const client={rpc:async(name,p)=>{assert.equal(name,'bvom_legacy_cloud_commit_v1');assert.equal(p.p_expected_revision,remote.writes+1);remote.writes++;remote.data=copy(p.p_data);return {data:{status:'committed',id:1,revision:remote.writes+1},error:null}},from(){let incoming;const q={select(){return q},eq(){return q},order(){return q},
+  async limit(){return {data:remote.data?[{id:1,legacy_revision:remote.writes+1,data:copy(remote.data)}]:[],error:null}},
   update(v){incoming=v;return q},insert(v){incoming=v;return q},async single(){remote.writes++;remote.data=copy(incoming.data);return {data:{id:'audit-row'},error:null}}};return q}};
  const h=H.boot(build,{supabase:{createClient:()=>client}});H.configureLP(h);
  h.ev("bvomCloud.user={id:'guard-audit'};bvomCloud.offlineLocalAccess=false;bvomCloud.startupState='VERIFIED';bvomCloud.accountSwitchDeferred=false");
- remote.data=copy(h.ctx.bvomCloudPayload());return {h,remote};
+ h.ls.setItem('bvom_data_owner','guard-audit');remote.data=copy(h.ctx.bvomCloudPayload());return {h,remote};
 }
 async function check(label,fn){await fn();passed++;console.log('PASS LEGACY GUARD '+label)}
 (async()=>{

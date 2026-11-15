@@ -1,5 +1,18 @@
 # BVOM Strength
 
+## v3.0.4 repair candidate — monkey audit
+
+Repairs A01–A07 from the independent v3.0.3 audit, fixing unchanged set saves,
+legacy cloud races, recorded-weight precision, input validation and Japanese
+balance guidance. Fixes forward from the owner-confirmed production commit
+`6c51e612cd5e6aa532766e5ce80f2d226eb950c0`. Dedicated repair branch only;
+no merge, deployment or production data/schema change is authorized.
+
+Cloud production rollout is **HOLD** pending approval of the old-client write
+cutover and isolated hosted/physical PWA acceptance. See the [cloud rollout
+sequence](docs/v3.0.4-cloud-rollout.md) and [reproduction tests](tests/monkey-v304/README.md).
+The test packager never points the review ZIP at production Supabase.
+
 ## v3.0.3 development candidate — working weight display
 
 Keeps current LP/RPT, HLM and 4-Day working/top weights on workout cards after progression, with a separate confirmed future-load label. Presentation only; progression and stored-data formats are unchanged. Based on verified v3.0.2 main `2e93b4d`. See [audit and verification notes](docs/v3.0.3-working-weight-display.md). Draft PR and separate Netlify test ZIP only; no merge or production deployment.
