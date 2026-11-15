@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
-      BVOM_MONKEY_OUT: ${{ runner.temp }}/monkey-v304
+      BVOM_MONKEY_OUT: /tmp/bvom304-monkey-replay
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,5 +40,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: BVOM-v3.0.4-monkey-replay
-          path: ${{ runner.temp }}/monkey-v304
+          path: /tmp/bvom304-monkey-replay
           retention-days: 14
