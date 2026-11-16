@@ -100,9 +100,26 @@ module.exports=({test,ok,H,build})=>{
   savedOffer(h);const completed=read(h),payload=h.ctx.bvomCloudPayload(),prior=clone(payload);prior.history.pop();
   const fp=x=>h.ctx.bvomCloudComparableFingerprint(x),reconnect=fp(payload)===fp(completed)&&fp(prior)!==fp(completed)&&payload.history.length===12&&!payload.setupAfterFinish;
   await Promise.resolve();await Promise.resolve();
-  let mockRemote=clone(prior),uploads=0,revision=1;
-  h.ctx.bvomCloudLatest=async()=>({data:{id:1,legacy_revision:revision,data:clone(mockRemote)},error:null});
-  h.ctx.bvomCloudClient=()=>({rpc:async(name,p)=>{a.equal(name,'bvom_legacy_cloud_commit_v1');a.equal(p.p_expected_revision,revision);mockRemote=clone(p.p_data);uploads++;revision++;return {data:{status:'committed',id:1,revision},error:null}}});
+  let mockRemote=clone(prior),uploads=0;
+  h.ctx.bvomCloudLatest=async()=>({data:{id:1,data:clone(mockRemote)},error:null});
+  // Match the existing v3.0.3 table transport, not the abandoned revision RPC.
+  // Preserve ownership and row targeting checks before accepting any write.
+  h.ctx.bvomCloudClient=()=>({from(table){
+    a.equal(table,'bvom_data');
+    let incoming=null,filters=[];
+    const q={
+      update(value){incoming=value;return q},
+      eq(key,value){filters.push([key,value]);return q},
+      select(columns){a.equal(columns,'id');return q},
+      async single(){
+        a.deepEqual(filters,[['id',1],['user_id',h.ctx.bvomCloud.user.id]]);
+        a.deepEqual(Object.keys(incoming),['data']);
+        mockRemote=clone(incoming.data);uploads++;
+        return {data:{id:1},error:null};
+      }
+    };
+    return q;
+  }});
   h.ctx.__bvomCloudBooted=true;h.ev('bvomCloud.offlineLocalAccess=false;bvomCloud.deferWorkoutCommit=false');h.ev('bvomCloud.workoutBaselineFingerprint='+JSON.stringify(fp(prior)));
   await h.ctx.bvomCloudAssessSync();const reconciled=h.ev('bvomCloud.syncReady&&!bvomCloud.conflict');await h.ctx.bvomCloudAutoSave();
   const uploaded=uploads===1&&mockRemote.history.length===12&&!mockRemote.setupAfterFinish&&JSON.stringify(read(h).history)===JSON.stringify(completed.history);
