@@ -1,0 +1,367 @@
+{
+  "configured": true,
+  "setupMode": "guided",
+  "profile": "male",
+  "balance": true,
+  "tolerance": 0.2,
+  "day": "A",
+  "weights": {
+    "Squat": 130,
+    "Bench Press": 90,
+    "Prone Row": 90,
+    "Overhead Press": 65,
+    "Deadlift": 175,
+    "Supine Row": 55
+  },
+  "bar": 45,
+  "enabledStandard": [
+    45,
+    35,
+    25,
+    10,
+    5,
+    2.5
+  ],
+  "enabledMicro": [],
+  "attempts": {},
+  "history": [],
+  "session": {
+    "Squat": {
+      "EXTRA:0": {
+        "load": 140,
+        "reps": 4,
+        "extra": true,
+        "_unitLoadOrigins": {
+          "load": {
+            "unit": "kg",
+            "value": 63.75,
+            "convertedUnit": "lb",
+            "converted": 140
+          }
+        }
+      }
+    },
+    "Bench Press": {},
+    "Prone Row": {}
+  },
+  "timerStart": 1794778831642,
+  "theme": "bee",
+  "unit": "lb",
+  "core": {
+    "Squat": {
+      "mode": "straight",
+      "increment": 5,
+      "drop": 10,
+      "rptLevel": 0,
+      "_unitIncrementOrigin": {
+        "unit": "kg",
+        "value": 2.5,
+        "convertedUnit": "lb",
+        "converted": 5
+      }
+    },
+    "Bench Press": {
+      "mode": "rpt",
+      "increment": 5,
+      "drop": 5,
+      "rptLevel": 0,
+      "_unitIncrementOrigin": {
+        "unit": "kg",
+        "value": 2.5,
+        "convertedUnit": "lb",
+        "converted": 5
+      }
+    },
+    "Prone Row": {
+      "mode": "straight",
+      "increment": 5,
+      "drop": 5,
+      "rptLevel": 0,
+      "_unitIncrementOrigin": {
+        "unit": "kg",
+        "value": 2.5,
+        "convertedUnit": "lb",
+        "converted": 5
+      }
+    },
+    "Overhead Press": {
+      "mode": "rpt",
+      "increment": 5,
+      "drop": 5,
+      "rptLevel": 0,
+      "_unitIncrementOrigin": {
+        "unit": "kg",
+        "value": 2.5,
+        "convertedUnit": "lb",
+        "converted": 5
+      }
+    },
+    "Deadlift": {
+      "mode": "straight",
+      "increment": 10,
+      "drop": 10,
+      "rptLevel": 0,
+      "_unitIncrementOrigin": {
+        "unit": "kg",
+        "value": 5,
+        "convertedUnit": "lb",
+        "converted": 10
+      }
+    },
+    "Supine Row": {
+      "mode": "straight",
+      "increment": 5,
+      "drop": 5,
+      "rptLevel": 0,
+      "_unitIncrementOrigin": {
+        "unit": "kg",
+        "value": 2.5,
+        "convertedUnit": "lb",
+        "converted": 5
+      }
+    }
+  },
+  "barByLift": {
+    "Squat": 45,
+    "Bench Press": 45,
+    "Prone Row": 45,
+    "Overhead Press": 45,
+    "Deadlift": 45,
+    "Supine Row": 45
+  },
+  "backupWorkoutCount": 0,
+  "warmupDone": {},
+  "warmupPlans": {
+    "A|Squat": {
+      "target": 130,
+      "sets": [
+        [
+          45,
+          5
+        ],
+        [
+          45,
+          5
+        ],
+        [
+          95,
+          5
+        ],
+        [
+          120,
+          2
+        ]
+      ]
+    },
+    "A|Bench Press": {
+      "target": 90,
+      "sets": [
+        [
+          45,
+          5
+        ],
+        [
+          45,
+          5
+        ],
+        [
+          65,
+          5
+        ],
+        [
+          80,
+          2
+        ]
+      ]
+    },
+    "A|Prone Row": {
+      "target": 90,
+      "sets": []
+    }
+  },
+  "preRestoreBackup": null,
+  "accessories": {
+    "A": [],
+    "B": []
+  },
+  "accessoryProgress": {},
+  "accessoryList": [],
+  "gppList": [],
+  "gppSession": {},
+  "plateMode": {
+    "Squat": "standard",
+    "Bench Press": "standard",
+    "Prone Row": "standard",
+    "Supine Row": "standard",
+    "Overhead Press": "standard",
+    "Deadlift": "standard"
+  },
+  "programMode": "lprpt",
+  "hlm": {
+    "driverInitialized": false,
+    "lightPct": 20,
+    "squatMediumPct": 10,
+    "benchMediumPct": 5,
+    "singlePct": {
+      "Squat": 10,
+      "Bench Press": 5,
+      "Deadlift": 10
+    },
+    "optionalSingles": true,
+    "rep": {
+      "Squat": 5,
+      "Bench Press": 5
+    },
+    "failCount": {
+      "Squat": 0,
+      "Bench Press": 0
+    },
+    "driver": {
+      "Squat": 90,
+      "Bench Press": 65
+    },
+    "nextHeavy": {
+      "Squat": null,
+      "Bench Press": null
+    },
+    "skippedSingles": {}
+  },
+  "sessionOverrides": {},
+  "freeTraining": {
+    "selectedDay": 1,
+    "days": [
+      {
+        "id": "ft1",
+        "compounds": []
+      }
+    ],
+    "nextDayId": 2
+  },
+  "freeTrainingSession": {},
+  "bodybuilding": {
+    "schema": 2,
+    "status": "not_started",
+    "startedAt": null,
+    "completedSessions": 0,
+    "selections": {
+      "A1": "machine_chest_press",
+      "A2": "hack_squat",
+      "A3": "chest_supported_row",
+      "A4": "seated_leg_curl",
+      "A5": "cable_lateral_raise",
+      "A6": "cable_pushdown",
+      "B1": "lat_pulldown",
+      "B2": "romanian_deadlift",
+      "B3": "incline_dumbbell_press",
+      "B4": "leg_extension",
+      "B5": "reverse_pec_deck",
+      "B6": "cable_curl"
+    },
+    "progression": {},
+    "supplemental": {
+      "calves": {
+        "completed": 0
+      },
+      "trunk": {
+        "completed": 0
+      }
+    },
+    "performanceRefs": {}
+  },
+  "language": "en",
+  "workoutStartedAt": 1794778831640,
+  "workoutLastActivityAt": 1794778831823,
+  "workoutOwnershipVersion": 1,
+  "_unitLoadOrigins": {
+    "weights.Squat": {
+      "unit": "kg",
+      "value": 60,
+      "convertedUnit": "lb",
+      "converted": 130
+    },
+    "weights.Bench Press": {
+      "unit": "kg",
+      "value": 40,
+      "convertedUnit": "lb",
+      "converted": 90
+    },
+    "weights.Prone Row": {
+      "unit": "kg",
+      "value": 40,
+      "convertedUnit": "lb",
+      "converted": 90
+    },
+    "weights.Overhead Press": {
+      "unit": "kg",
+      "value": 30,
+      "convertedUnit": "lb",
+      "converted": 65
+    },
+    "weights.Deadlift": {
+      "unit": "kg",
+      "value": 80,
+      "convertedUnit": "lb",
+      "converted": 175
+    },
+    "weights.Supine Row": {
+      "unit": "kg",
+      "value": 25,
+      "convertedUnit": "lb",
+      "converted": 55
+    },
+    "hlm.driver.Squat": {
+      "unit": "kg",
+      "value": 40,
+      "convertedUnit": "lb",
+      "converted": 90
+    },
+    "hlm.driver.Bench Press": {
+      "unit": "kg",
+      "value": 30,
+      "convertedUnit": "lb",
+      "converted": 65
+    },
+    "bar": {
+      "unit": "kg",
+      "value": 20,
+      "convertedUnit": "lb",
+      "converted": 45
+    },
+    "barByLift.Squat": {
+      "unit": "kg",
+      "value": 20,
+      "convertedUnit": "lb",
+      "converted": 45
+    },
+    "barByLift.Bench Press": {
+      "unit": "kg",
+      "value": 20,
+      "convertedUnit": "lb",
+      "converted": 45
+    },
+    "barByLift.Prone Row": {
+      "unit": "kg",
+      "value": 20,
+      "convertedUnit": "lb",
+      "converted": 45
+    },
+    "barByLift.Overhead Press": {
+      "unit": "kg",
+      "value": 20,
+      "convertedUnit": "lb",
+      "converted": 45
+    },
+    "barByLift.Deadlift": {
+      "unit": "kg",
+      "value": 20,
+      "convertedUnit": "lb",
+      "converted": 45
+    },
+    "barByLift.Supine Row": {
+      "unit": "kg",
+      "value": 20,
+      "convertedUnit": "lb",
+      "converted": 45
+    }
+  }
+}

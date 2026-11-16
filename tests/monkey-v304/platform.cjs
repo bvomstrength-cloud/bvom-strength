@@ -38,6 +38,7 @@ async function start(){
    Object.defineProperty(navigator,'onLine',{get:()=>false});
    const NativeDate=Date;class AuditDate extends NativeDate{constructor(...args){super(...(args.length?args:[AuditDate.now()]));}static now(){const t=Number(sessionStorage.getItem('audit-now'));return t||NativeDate.now();}}window.Date=AuditDate;
   });
+  if(Number.isFinite(profile.now))await context.addInitScript(t=>sessionStorage.setItem('audit-now',String(t)),profile.now);
   const page=await context.newPage();const owner=explicitOwner||'fictional-'+profile.name.toLowerCase();
   await page.goto(origin+'/seed');await page.evaluate(({data,owner})=>{localStorage.setItem('bvom_data',JSON.stringify(data));localStorage.setItem('bvom_data_owner',owner);localStorage.setItem('bvom_entitlement_cache_'+owner,JSON.stringify({userId:owner,verifiedAt:new Date().toISOString(),record:{user_id:owner,status:'complimentary'}}));},{data,owner});
   await page.goto(origin+'/index.html');await ready(page);

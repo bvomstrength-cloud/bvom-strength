@@ -70,6 +70,16 @@ for(const mode of ['lprpt','hlm','fourday','bodybuilding','free']){
  eq('A05 known origin recoverable without guessing',h.ctx.bvomActualLoad({load:140,_unitLoadOrigins:{load:{unit:'kg',value:63.75,convertedUnit:'lb',converted:140}}},'lb'),63.75*2.2046226218);
  eq('A05 unrecoverable legacy actual stays as stored',h.ctx.bvomActualLoad({load:140},'lb'),140);
 }
+for(const mode of ['lprpt','hlm','fourday']){
+ const h=boot(mode,mode==='hlm'?'H':mode==='fourday'?'1':'A');
+ h.S().accessoryList=[{id:'a1',name:'Lat Pulldown',category:'Upper',assignment:'Both',hlmAssignment:'H',fourDayAssignment:'1',equipment:'machine',plateMode:'standard',style:'straight',sets:3,reps:8,weight:30,increment:2.5,drop:5}];h.S().accessoryProgress={a1:{weight:30,attempts:0}};
+ for(let i=0;i<3;i++)h.ctx.tapAccessory('a1',i);
+ const before=copy(h.S()),raw=h.ls.getItem('bvom_data');eq('A01 accessory earned progression '+mode,h.S().accessoryList[0].weight,32.5);
+ for(let i=0;i<3;i++){h.ctx.tapAccessory('a1',i);eq('A01 accessory unchanged whole state '+mode+'/'+i,h.S(),before);eq('A01 accessory unchanged durable bytes',h.ls.getItem('bvom_data'),raw)}
+ if(mode!=='lprpt'){h.ctx.bvomRepModal=(_t,_w,_target,initial,save)=>save(initial,9);h.ctx.tapAccessory('a1',0);const effort=copy(before);effort.session['ACC:a1'][0].rpe=9;eq('A01 accessory RPE-only isolation '+mode,h.S(),effort)}
+ h.ctx.bvomRepModal=(_t,_w,_target,initial,save)=>save(initial+1,8);h.ctx.tapAccessory('a1',0);eq('A01 genuine accessory correction removes dependent sets',Object.keys(h.S().session['ACC:a1']),['0']);eq('A01 genuine correction rolls back old result',h.S().accessoryList[0].weight,30);
+ for(let i=1;i<3;i++)h.ctx.tapAccessory('a1',i);eq('A01 genuine corrected success increments once',h.S().accessoryList[0].weight,32.5);
+}
 const output=path.resolve(process.env.BVOM_MONKEY_OUT||path.join(root,'artifacts/monkey-v304'));fs.mkdirSync(output,{recursive:true});
 // An interrupted v3.0.3 RPT top set can carry an exact origin even though its
 // displayed-unit field was rounded. Read that evidence for a newly earned PB;

@@ -91,3 +91,29 @@ Both index and admin cloud endpoints are replaced. Without an explicitly
 configured isolated hosted backend, the ZIP is **HOLD** and fresh authenticated
 setup is unavailable. Production and the unrelated LEAKwise project are refused.
 No script merges, deploys or applies a production migration.
+
+## Residual findings from the independent cold review
+
+The review found additional instances of A01/A05 in numeric accessories, legacy
+rep corrections, GPP Finish, Custom accessory Finish and prior PB comparison.
+`fixtures/legacy-actuals/PROVENANCE.json` hashes the genuine v3.0.3 UI-generated
+snapshots used by `legacy-actual-regressions.cjs`; no conversion origin was
+invented. `gpp-actual-upgrade.cjs --seed` also generates genuine baseline records
+before candidate replay in both units and both GPP recording modes. Replay clocks
+use the recorded activity time so expected 60-minute recovery does not replace
+the active-session scenario after an overnight test interruption.
+
+The accessory no-op tests now also submit real changed reps. Existing F26/F29
+success controls use a changed successful count (9 versus the original 8), and
+unchanged 8 is separately covered as a whole-state no-op. A new F24 meaningful
+post-conversion HLM/Split correction checks revocation, failure count and extras.
+The A01 mutation is scoped to its function now that accessories have the same
+guard. No original oracle, scenario or mutation was removed.
+
+`native-pwa-upgrade.cjs` uses actual Chromium PWA installation and standalone
+launch in an isolated persistent profile, performs real training, proves a pending
+update stays deferred while active, then updates after Finish and verifies
+relaunch/offline persistence. It uninstalls the disposable app afterward. This
+covers a Linux installed PWA; physical Android/iOS upgrades remain a separate
+acceptance gate. Early harness assumptions about CDP target ids and update-button
+visibility were corrected; the failed attempts are retained as harness evidence.
