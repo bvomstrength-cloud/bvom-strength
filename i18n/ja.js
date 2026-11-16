@@ -3,6 +3,8 @@ globalThis.BVOM_LOCALES = globalThis.BVOM_LOCALES || {};
 globalThis.BVOM_LOCALES.ja = {
   meta:{code:'ja',name:'日本語',htmlLang:'ja',dateLocale:'ja-JP'},
   language:{title:'言語'},
+  validation:{wholeReps:'回数は0以上の整数で入力してください。',positiveLoad:'実際の重量は有限の正の数で入力してください。',sets:'セット数は1～20の整数で入力してください。',plannedReps:'予定回数は1～50の整数で入力してください。'},
+  balance:{below:'{lift}：{profile}の開始比率より{percent}%低くなっています。見直しを検討してください。',above:'{lift}：{profile}の開始比率より{percent}%高くなっています。見直しを検討してください。',male:'男性',female:'女性'},
   shell:{workout:'ワークアウト',warmup:'ウォームアップ',history:'履歴',info:'情報',settings:'設定',cancel:'キャンセル',finish:'終了',dings:'タイマー 3 · 5 · 10'},
   lifts:{Squat:'スクワット','Bench Press':'ベンチプレス','Prone Row':'ロウ','Prone Row HLM':'プローンロウ','Supine Row':'スパインロウ','Overhead Press':'プレス',Deadlift:'デッドリフト'},
   bb2:{labels:{

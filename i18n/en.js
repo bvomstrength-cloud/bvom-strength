@@ -4,6 +4,8 @@ globalThis.BVOM_LOCALES = globalThis.BVOM_LOCALES || {};
 globalThis.BVOM_LOCALES.en = {
   meta:{code:'en',name:'English',htmlLang:'en',dateLocale:'en-AU'},
   language:{title:'Language'},
+  validation:{wholeReps:'Enter a whole number of reps (0 or more).',positiveLoad:'Enter a finite positive actual weight.',sets:'Enter a whole number of sets from 1 to 20.',plannedReps:'Enter a whole number of reps from 1 to 50.'},
+  balance:{below:'{lift}: {percent}% below the {profile} starting relationship. Consider reviewing it.',above:'{lift}: {percent}% above the {profile} starting relationship. Consider reviewing it.',male:'male',female:'female'},
   shell:{workout:'WORKOUT',warmup:'WARM-UP',history:'HISTORY',info:'INFO',settings:'SETTINGS',cancel:'CANCEL',finish:'FINISH',dings:'DINGS 3 · 5 · 10'},
   lifts:{Squat:'Squat','Bench Press':'Bench Press','Prone Row':'Row','Prone Row HLM':'Prone Row','Supine Row':'Supine Row','Overhead Press':'Press',Deadlift:'Deadlift'},
   common:{ok:'OK',save:'SAVE',add:'ADD',edit:'edit',remove:'remove',repeat:'REPEAT',progressAnyway:'PROGRESS ANYWAY',moveToRpt:'MOVE TO RPT',workingTopWeight:'working/top weight',accessory:'Accessory'},
