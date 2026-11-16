@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   ephemeral-supabase:
-    name: Isolated Auth / RLS / concurrent revision writes
+    name: Isolated Auth / RLS / existing cloud restore
     runs-on: ubuntu-24.04
     timeout-minutes: 45
 
@@ -38,7 +38,7 @@ jobs:
       - name: Start disposable local Supabase services
         run: |
           supabase init --yes
-          # The existing-table fixture precedes the reviewed cutover. Do not
+          # The existing-table fixture is loaded separately. Do not
           # auto-apply that migration before bvom_data exists in this empty DB.
           python3 - <<'PY'
           from pathlib import Path
@@ -95,14 +95,8 @@ jobs:
           path: ${{ runner.temp }}/bvom-legacy-production-audit
           if-no-files-found: warn
 
-      - name: Apply reviewed legacy CAS cutover to the ephemeral database only
-        env:
-          PGPASSWORD: postgres
+      - name: Prepare disposable existing-table backend (no migration)
         run: |
-          psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 \
-            -f tests/monkey-v304/legacy-production-grants.sql
-          psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 \
-            -f supabase/migrations/20261115203345_legacy_history_compare_and_swap.sql
           supabase status -o json > /tmp/bvom-audit-local-status.json
           chmod 600 /tmp/bvom-audit-local-status.json
 
@@ -112,21 +106,8 @@ jobs:
       - name: Verify two authenticated BVOM mobile browser devices
         run: node tests/bvom-lab/bb2_cloud_authenticated_browser.mjs
 
-      - name: Challenge legacy CAS with real authenticated completed workouts
-        env:
-          BVOM_MONKEY_OUT: ${{ runner.temp }}/bvom-legacy-cas
-        run: |
-          node tests/monkey-v304/cloud-server.cjs
-          node tests/monkey-v304/cloud-race.cjs
-          node tests/monkey-v304/more-chaos.cjs
-
-      - name: Preserve new conflict proofs without credentials
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: BVOM-v3.0.4-legacy-CAS-proof
-          path: ${{ runner.temp }}/bvom-legacy-cas
-          retention-days: 14
+      - name: Verify unchanged legacy cloud protocol and conflict guards
+        run: node tests/monkey-v304/existing-cloud-contracts.cjs
 
       - name: Run both seeded five-programme workout journeys
         if: github.event_name == 'workflow_dispatch' && inputs.run_endurance
