@@ -167,7 +167,7 @@ async function main() {
   await check('actual shared legacy manual upload cannot modify separate cloud-state record', async () => {
     await h.ctx.bvomCloudSaveNow();
     assert.equal(db.server.stateRow.state.requestId, 'test-request-1');
-    assert.deepEqual(db.server.writes.at(-1), { table: 'bvom_data', columns: ['data'], transport:'revision-rpc' });
+    assert.deepEqual(db.server.writes.at(-1), { table: 'bvom_data', columns: ['data'] });
   });
 
   await check('actual shared legacy auto upload cannot remove concurrent cloud-state write', async () => {
@@ -182,7 +182,7 @@ async function main() {
     await h.ctx.bvomCloudAutoSave();
     db.server.beforeWrite = null;
     assert.equal(db.server.stateRow.state.extraProofOfConcurrentChange, true);
-    assert.deepEqual(db.server.writes.at(-1), { table: 'bvom_data', columns: ['data'], transport:'revision-rpc' });
+    assert.deepEqual(db.server.writes.at(-1), { table: 'bvom_data', columns: ['data'] });
     delete db.server.stateRow.state.extraProofOfConcurrentChange;
   });
 
