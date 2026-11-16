@@ -112,7 +112,7 @@ module.exports=({test,ok,H,build})=>{
       eq(key,value){filters.push([key,value]);return q},
       select(columns){a.equal(columns,'id');return q},
       async single(){
-        a.deepEqual(filters,[['id',1],['user_id',h.ctx.bvomCloud.user.id]]);
+        a.deepEqual(filters,[['id',1],['user_id',h.ev('bvomCloud.user.id')]]);
         a.deepEqual(Object.keys(incoming),['data']);
         mockRemote=clone(incoming.data);uploads++;
         return {data:{id:1},error:null};
