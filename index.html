@@ -3123,7 +3123,7 @@ function bvomCloudMaybeScheduleFromSave(){if(bvomCloudWorkoutActive()){if(!bvomC
 function bvomCloudValidData(d){return !!(d&&typeof d==='object'&&d.weights&&Array.isArray(d.history))}
 async function bvomCloudLatest(){
  const c=bvomCloudClient(),u=bvomCloud.user;if(!c||!u)return {data:null,error:new Error('Not signed in')};
- const r=await c.from('bvom_data').select('id,data,created_at,legacy_revision').eq('user_id',u.id).order('created_at',{ascending:false}).order('id',{ascending:false}).limit(1);
+ const r=await c.from('bvom_data').select('id,data,created_at').eq('user_id',u.id).order('created_at',{ascending:false}).order('id',{ascending:false}).limit(1);
  if(r.error)return {data:null,error:r.error};return {data:r.data?.[0]||null,error:null};
 }
 async function bvomCloudAssessSync(){
@@ -3175,22 +3175,13 @@ function bvomLegacyCloudContext(owner,raw){
   !bvomCloudWorkoutActive()&&!bvomCloud.deferWorkoutCommit&&
   localStorage.getItem(BVOM_DATA_KEY)===raw;
 }
+// Existing local-first cloud writer: check the remote fingerprint before upload.
+// This deliberately preserves the v3.0.3 Supabase table protocol; no migration.
 async function bvomLegacyCloudCommit(c,owner,row,payload){
- const revision=row?Number(row.legacy_revision):0;
- if(!Number.isSafeInteger(revision)||(row&&revision<1)||
-    (row&&!Number.isSafeInteger(Number(row.id))))
-  throw new Error(hlmTxt('Cloud backup needs the v3.0.4 server update. Your local data is unchanged; export a backup.','クラウドにはv3.0.4のサーバー更新が必要です。端末のデータは保持されています。バックアップを書き出してください。'));
- // The server locks the owner's document and checks this revision atomically.
- // No unconditional table write or fallback to the v3.0.3 writer is safe.
- const r=await c.rpc('bvom_legacy_cloud_commit_v1',{p_owner_id:owner,
-  p_expected_id:row?row.id:null,p_expected_revision:revision,p_data:payload,
-  p_request_id:crypto.randomUUID()});
- if(r.error){
-  if(['PGRST202','42883','42501'].includes(r.error.code))throw new Error(hlmTxt('Cloud backup is paused. Update BVOM and its cloud service; local workouts and backup export remain available.','クラウドバックアップは一時停止しています。BVOMとクラウドサービスを更新してください。端末での記録とバックアップ書き出しは利用できます。'));
-  throw r.error;
- }
- if(r.data?.status==='conflict')return false;
- if(r.data?.status!=='committed'||!Number.isSafeInteger(Number(r.data.revision))||Number(r.data.revision)<1)throw new Error('Cloud commit was not confirmed. Your local data is unchanged.');
+ const r=row
+  ?await c.from('bvom_data').update({data:payload}).eq('id',row.id).eq('user_id',owner).select('id').single()
+  :await c.from('bvom_data').insert({user_id:owner,data:payload}).select('id').single();
+ if(r.error)throw r.error;
  return true;
 }
 async function bvomCloudAutoSave(){
@@ -3243,7 +3234,7 @@ async function bvomCloudRestore(){
  if(bvomCloud.accountSwitchDeferred){bvomCloud.message=hlmTxt('Finish or exit the current workout, then reload BVOM before restoring cloud data.','現在のワークアウトを終了または中止してからBVOMを再読み込みし、クラウドデータを復元してください。');bvomCloud.error=false;renderSettings();return}
  bvomCloud.busy=true;bvomCloud.message=hlmTxt('Checking BVOM Cloud…','BVOM Cloudを確認しています…');bvomCloud.error=false;renderSettings();
  try{
-  const result=await c.from('bvom_data').select('id,data,created_at,legacy_revision').eq('user_id',u.id).order('created_at',{ascending:false}).order('id',{ascending:false}).limit(1);
+  const result=await c.from('bvom_data').select('id,data,created_at').eq('user_id',u.id).order('created_at',{ascending:false}).order('id',{ascending:false}).limit(1);
   if(result.error)throw result.error;
   if(!result.data?.length){bvomCloud.busy=false;bvomCloud.message=hlmTxt('No cloud backup exists for this account yet.','このアカウントにはまだクラウドバックアップがありません。');bvomCloud.error=false;renderSettings();return}
   const d=result.data[0].data;
