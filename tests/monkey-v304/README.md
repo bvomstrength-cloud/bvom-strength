@@ -38,29 +38,23 @@ Metrics compare the 18 actual assets to committed HEAD; run them after committin
 `run-existing.cjs` driver uses system Chromium with normal process isolation;
 the repository's original CI workflows use Playwright's pinned browser.
 
-## Real cloud tests (disposable environment only)
+## Cloud tests (existing backup workflow)
 
-Use fresh local `supabase start` services on `http://127.0.0.1:54321`. Disable
-automatic migrations while bootstrapping the empty fixture database, as the
-cutover migration deliberately expects the existing `bvom_data` table. Apply,
-in order, `tests/bvom-lab/fixtures/bb2_cloud_state.sql`, the production-metadata
-grant fixture here, and the separately reviewed migration. The cloud CI workflow
-contains the exact order and retains the previous-version probes before cutover.
+v3.0.4 retains the v3.0.3 owner-scoped `bvom_data` read/update/insert
+protocol, cloud/device fingerprint comparison and explicit restore choice.
+No production database migration or CAS RPC is part of this release.
 
-```sh
-supabase status -o json > /tmp/bvom-audit-local-status.json
-chmod 600 /tmp/bvom-audit-local-status.json
-node tests/monkey-v304/cloud-server.cjs
-node tests/monkey-v304/cloud-race.cjs
-node tests/monkey-v304/cloud-legacy.cjs
-node tests/monkey-v304/more-chaos.cjs
-```
+Run `node tests/monkey-v304/existing-cloud-contracts.cjs` for static
+protocol checks. The isolated BB2 cloud workflow continues to test real
+GoTrue/PostgREST and BB2 revision writes on a disposable local backend.
+Those tests are not a substitute for an authenticated hosted
+phone → tablet → phone restore acceptance check.
 
-The status file contains disposable credentials and must never be published.
-The proof scripts reject hosted endpoints and use only fictional test accounts.
-`cloud-gateway.cjs` is an optional loopback path proxy for standalone real Auth,
-REST and PostgreSQL services; it does not manufacture responses or identities.
-It is unnecessary with the normal Supabase CLI gateway.
+The earlier `cloud-race.cjs`, `cloud-legacy.cjs` and `more-chaos.cjs`
+are retained as historical A02 research fixtures, **not** release gates;
+they require the deliberately removed CAS migration and must not be run
+against production. Precisely simultaneous uploads remain an unsupported
+edge case of the existing legacy cloud protocol.
 
 ## Review of expectation changes
 
@@ -77,10 +71,8 @@ meaningful corrections so rollback mutations remain exercised. BW/F32/F41
 mutation anchors follow the repaired code and retain their original fault
 semantics. No mutant, failing scenario or behavioural contract was removed.
 
-Cloud mocks now implement the conditional RPC with numeric row ids/revisions;
-real Auth/PostgREST/PostgreSQL proofs establish server behavior independently.
-The old delayed-read scenario now observes conditional RPCs and requires one
-commit plus one conflict, replacing its obsolete two-unconditional-PATCH check.
+Cloud test expectations for this branch preserve the existing cloud/device
+conflict workflow instead of the abandoned conditional RPC.
 Version-only expectations in the integrated chooser/activation suites are 3.0.4.
 
 ## Test packaging
