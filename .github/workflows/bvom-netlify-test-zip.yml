@@ -30,9 +30,43 @@ jobs:
           PR_NUMBER="${{ github.event.pull_request.number }}"
           SOURCE_SHA="${{ github.event.pull_request.head.sha }}"
           ZIP="BVOM-v${BUILD}-PR${PR_NUMBER}-TEST.zip"
+          export ZIP SOURCE_SHA
           if [ "$PR_NUMBER" = '73' ]; then
             node scripts/package-bb2-test.cjs --source-sha "$SOURCE_SHA" \
               --output .bvom-netlify-test --zip "$ZIP"
+          elif [ "$BUILD" = '3.0.4' ]; then
+            # Real-device acceptance needs the same public cloud configuration as
+            # the working release. The isolated monkey packager intentionally
+            # disables sign-in and must NEVER be used for this artifact.
+            node scripts/package-production.cjs --source-sha "$SOURCE_SHA" \
+              --output .bvom-netlify-test --zip "$ZIP"
+            export TEST_CACHE="bvom-${BUILD}-pr${PR_NUMBER}-${SOURCE_SHA:0:12}"
+            python3 - <<'PY'
+          import os,pathlib,re,zipfile
+          root=pathlib.Path('.bvom-netlify-test')
+          sw=root/'sw.js'
+          original=sw.read_text()
+          updated,n=re.subn(r"(?m)^const CACHE = '[^']+';$",
+            "const CACHE = '"+os.environ['TEST_CACHE']+"';",original,count=1)
+          assert n==1 and updated!=original
+          sw.write_text(updated)
+          (root/'NETLIFY-TEST-BUILD.txt').write_text(
+            'BVOM v3.0.4 REAL-DEVICE ACCEPTANCE — NOT PRODUCTION\\n'
+            'Uses the existing BVOM cloud backend. Use disposable test account/data only.\\n'
+            'Source: '+os.environ['SOURCE_SHA']+'\\n'
+            'Cache: '+os.environ['TEST_CACHE']+'\\n')
+          with zipfile.ZipFile(os.environ['ZIP'],'w',zipfile.ZIP_DEFLATED) as z:
+            for p in sorted(root.rglob('*')):
+              if p.is_file():z.write(p,p.relative_to(root).as_posix())
+          with zipfile.ZipFile(os.environ['ZIP']) as z:
+            assert z.testzip() is None
+            html=z.read('index.html').decode()
+            assert 'hkteienxwdsjncchuvnz.supabase.co' in html
+            assert 'isolated-monkey-backend.invalid' not in html
+            assert 'BEST VERSION OF MYSELF · v3.0.4' in html
+            assert os.environ['TEST_CACHE'] in z.read('sw.js').decode()
+            assert 'index.html' in z.namelist()
+          PY
           elif [ "$BUILD" = '3.0.3' ]; then
             node scripts/package-working-weight-test.cjs --source-sha "$SOURCE_SHA" \
               --output .bvom-netlify-test --zip "$ZIP"
@@ -76,7 +110,7 @@ jobs:
           test -s .bvom-netlify-test/i18n/ja.js
           test -s .bvom-netlify-test/bb2/browser-core.mjs
           test -s .bvom-netlify-test/bb2/cloud-coordinator.mjs
-          if [ "$PR_NUMBER" != '73' ] && [ "$BUILD" != '3.0.3' ]; then
+          if [ "$PR_NUMBER" != '73' ] && [ "$BUILD" != '3.0.3' ] && [ "$BUILD" != '3.0.4' ]; then
             (cd .bvom-netlify-test && zip -q -r "../${ZIP}" .)
           fi
           unzip -t "$ZIP" | tail -2

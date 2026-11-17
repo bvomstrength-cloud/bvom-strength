@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   ephemeral-supabase:
-    name: Isolated Auth / RLS / concurrent revision writes
+    name: Isolated Auth / RLS / existing cloud restore
     runs-on: ubuntu-24.04
     timeout-minutes: 45
 
@@ -38,6 +38,15 @@ jobs:
       - name: Start disposable local Supabase services
         run: |
           supabase init --yes
+          # The existing-table fixture is loaded separately. Do not
+          # auto-apply that migration before bvom_data exists in this empty DB.
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('supabase/config.toml')
+          s=p.read_text();a=s.index('[db.migrations]');b=s.index('[',a+1)
+          section=s[a:b];assert 'enabled = true' in section
+          p.write_text(s[:a]+section.replace('enabled = true','enabled = false',1)+s[b:])
+          PY
           # Auth + PostgREST + Postgres + gateway only; no unrelated services.
           supabase start -x realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor,mailpit
 
@@ -52,12 +61,6 @@ jobs:
         run: |
           npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund @supabase/supabase-js@2.117.3 playwright@1.56.1
           npx playwright install --with-deps chromium
-
-      - name: Verify authenticated two-device transport and database conflicts
-        run: node tests/bvom-lab/bb2_cloud_authenticated_local.mjs
-
-      - name: Verify two authenticated BVOM mobile browser devices
-        run: node tests/bvom-lab/bb2_cloud_authenticated_browser.mjs
 
       - name: Check out exact production v2.9.21 source for isolated comparison
         uses: actions/checkout@v4
@@ -91,6 +94,20 @@ jobs:
           name: BVOM-Legacy-Production-Cloud-Audit
           path: ${{ runner.temp }}/bvom-legacy-production-audit
           if-no-files-found: warn
+
+      - name: Prepare disposable existing-table backend (no migration)
+        run: |
+          supabase status -o json > /tmp/bvom-audit-local-status.json
+          chmod 600 /tmp/bvom-audit-local-status.json
+
+      - name: Verify authenticated two-device transport and database conflicts
+        run: node tests/bvom-lab/bb2_cloud_authenticated_local.mjs
+
+      - name: Verify two authenticated BVOM mobile browser devices
+        run: node tests/bvom-lab/bb2_cloud_authenticated_browser.mjs
+
+      - name: Verify unchanged legacy cloud protocol and conflict guards
+        run: node tests/monkey-v304/existing-cloud-contracts.cjs
 
       - name: Run both seeded five-programme workout journeys
         if: github.event_name == 'workflow_dispatch' && inputs.run_endurance
