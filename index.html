@@ -1269,7 +1269,7 @@ function advanceAfterExercise(n){
 }
 
 function offerThreeFailureChoice(n){
- const c=cfg(n),fixed=corePrescription(n).fixed?bvomFixedPrescription(n):null;
+ const c=cfg(n),fixed=bvomFixedEligible(n)?bvomFixedPrescription(n):null;
  if(c.mode==='straight'){
   const nextWeight=roundWork(state.weights[n]+c.increment);
   const preview=fixed?fmt(nextWeight)+' '+unitLabel()+' · '+fixed.sets+' × '+fixed.reps:rptPreview(n,c,nextWeight,0);
@@ -2871,7 +2871,7 @@ function saveHlmSettings(){if(!bvomWorkoutActionAllowed())return;ensureHLM();if(
 function saveLiftSettings(n){if(!bvomWorkoutActionAllowed())return;
  ensurePlateModes();
  const active=bvomWorkoutDayLocked(),hasRecorded=bvomCoreSessionHasActivity(n);
- let id=n.replace(/\W/g,''),c=cfg(n);
+ let id=n.replace(/\W/g,'');
  const form=document.querySelector(`[data-core-lift-settings="${id}"]`);
  const eligible=bvomFixedEligible(n),hasFields=eligible&&form?.querySelector('[data-fixed-sets]')?.tagName==='INPUT';
  const previous=eligible?bvomDefaultFixedFields(n):null,requested=hasFields?bvomReadFixedFields(form):null;
@@ -2879,6 +2879,7 @@ function saveLiftSettings(n){if(!bvomWorkoutActionAllowed())return;
  const changeFixed=!!(requested&&bvomFixedEligible(n,document.getElementById('mode'+id)?.value)&&
   (requested.sets!==previous.sets||requested.reps!==previous.reps));
  const before=changeFixed?JSON.parse(JSON.stringify(state)):null;
+ const c=cfg(n);
  const beforeSettings=JSON.stringify({plateMode:state.plateMode?.[n]||'standard',mode:c.mode,increment:c.increment,drop:c.drop,rptLevel:c.rptLevel,weight:state.weights?.[n],bar:state.barByLift?.[n],hlm:isIntermediate()&&(n==='Squat'||n==='Bench Press')?{driver:state.hlm?.driver?.[n],rep:state.hlm?.rep?.[n]}:null});
  const preEditSnap=active&&hasRecorded&&!state.processedSnapshots?.[n]?bvomMakeProcessedSnapshot(n):null;
  const pm=document.getElementById('plateMode'+id);if(pm)state.plateMode[n]=pm.value;
