@@ -2469,9 +2469,9 @@ function bvomFixedUnavailable(){
 function bvomLiftFixedSettings(n){
  return bvomFixedEligible(n)?bvomFixedFields(bvomDefaultFixedFields(n)):bvomFixedUnavailable();
 }
-function corePrescription(n){
+function corePrescription(n,useFixed=true){
  let c=bvomCoreCfgForSession(n),w=bvomCoreWeightForSession(n);
- const fixed=bvomFixedEligible(n,c.mode)&&bvomFixedPrescription(n);
+ const fixed=useFixed&&bvomFixedEligible(n,c.mode)&&bvomFixedPrescription(n);
  if(fixed){
   const targets=Array(fixed.sets).fill(fixed.reps);
   if(c.mode==='straight')return {kind:'straight',fixed:true,targets,loads:Array(fixed.sets).fill(w),topIndex:0};
@@ -2551,19 +2551,18 @@ function genericSetPlan(n,p,ss){
  }));
  const nextDrop=(q,done)=>{
   const load=Number(done?.load)>0?Number(done.load):q.load;
-  return bvomDerivedCoreLoad(n,p.kind==='rptFixed'?load*(100-dropPercent)/100:q.load*(1-dropPct));
+  return bvomDerivedCoreLoad(n,p.fixed?load*(100-dropPercent)/100:q.load*(1-dropPct));
  };
  let out=[],rescue=false,nextLoad=null,rescueBase=0,rescueStep=0,rescueTotal=0;
  for(let i=0;i<planned.length;i++){
   const q=planned[i];if(!rescue){out.push(q);const done=ss[i];if(done&&done.reps<q.target){rescue=true;nextLoad=nextDrop(q,done);rescueBase=Math.max(1,Number(done.reps)+1);rescueStep=0;rescueTotal=planned.length-i-1;}}
   else{let offset=0;if(rescueTotal>=3)offset=rescueStep===0?0:(rescueStep===1?1:3);else if(rescueTotal===2)offset=rescueStep===0?0:2;const rq={load:nextLoad,target:p.fixed?Math.max(1,rescueBase+offset):rescueBase+offset,drop:true,amrap:i===planned.length-1,top:false};out.push(rq);const done=ss[i];nextLoad=nextDrop(rq,done);if(done&&done.reps<rq.target)rescueBase-=1;rescueStep++;}
  }
- if(p.kind==='straight'&&planned.length){const last=planned.length-1,done=ss[last],q=planned[last];if(done&&done.reps<q.target&&out.length===planned.length)out.push({load:bvomDerivedCoreLoad(n,q.load*(1-dropPct)),target:q.target,drop:true,amrap:true,top:false});}
+ if(p.kind==='straight'&&planned.length){const last=planned.length-1,done=ss[last],q=planned[last];if(done&&done.reps<q.target&&out.length===planned.length)out.push({load:nextDrop(q,done),target:q.target,drop:true,amrap:true,top:false});}
  return out;
 }
 function getSetPlan(n){
  const p=corePrescription(n),ss=state.session[n]||(state.session[n]={});
- if(p.fixed&&p.kind==='straight')return p.targets.map((target,i)=>({target,load:p.loads[i],top:i===0,amrap:false,drop:false}));
  if(isIntermediate()&&p.kind==='hlmHeavy')return hlmHeavyPlan(n,p,ss);
  if(isHLM()&&p.kind==='hlmLight')return p.targets.map((target,i)=>({target,load:p.loads[i],top:false,drop:false,amrap:false}));
  if(isIntermediate()&&p.kind==='hlmMedium'){
@@ -2680,10 +2679,16 @@ function bvomRollbackFixedResult(n){
 function bvomChangeFixedPrescription(n,fixed,weight,before){
  bvomRollbackFixedResult(n);
  delete state.processedSnapshots?.[n];
+ const original=corePrescription(n,false);
+ if(original.kind==='straight'&&!bvomCoreSessionHasActivity(n)&&
+    original.targets.length===fixed.sets&&original.targets.every(target=>target===fixed.reps)){
+  delete state.fixedWorkingSets?.[state.programMode]?.[n];
+ }else{
   if(!state.fixedWorkingSets||typeof state.fixedWorkingSets!=='object'||Array.isArray(state.fixedWorkingSets))state.fixedWorkingSets={};
- const scope=state.fixedWorkingSets[state.programMode];
- if(!scope||typeof scope!=='object'||Array.isArray(scope))state.fixedWorkingSets[state.programMode]={};
- state.fixedWorkingSets[state.programMode][n]=fixed;
+  const scope=state.fixedWorkingSets[state.programMode];
+  if(!scope||typeof scope!=='object'||Array.isArray(scope))state.fixedWorkingSets[state.programMode]={};
+  state.fixedWorkingSets[state.programMode][n]=fixed;
+ }
  if(weight!==null){
   bvomApplyWeightEdit(n,weight);
   const key=state.day+'|'+n;

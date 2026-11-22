@@ -48,7 +48,7 @@ if (mode !== 'edges') {
       const spec={sets:roll(1,20),reps:roll(1,50),load:grid*roll(23,120),bar:20,grid,
         drop:roll(1,25),rpt:n%4!==0,actual:[]};
       configure(app,spec);
-      for(let i=0;i<=spec.sets;i++) {
+      for(let i=0;;i++) {
         const expected=O.prescription(spec);
         const actual=Array.from(app.ctx.getSetPlan(lift),({target,load})=>({target,load}));
         assert.deepEqual(actual,expected,`seed ${seed}, case ${n}, prefix ${i}`);
@@ -56,7 +56,7 @@ if (mode !== 'edges') {
         const outcome=result.incomplete?'open':result.failed?'failure':result.close?'close':'success';
         assert.equal(outcome,O.outcome(spec));
         cases.oracleChecks+=2;
-        if(i===spec.sets)break;
+        if(i===expected.length)break;
         const row={...expected[i],reps:Math.max(0,expected[i].target+roll(-5,4))};
         spec.actual.push(row);
         app.S().session[lift][i]=row;

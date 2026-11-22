@@ -14,7 +14,6 @@ function random(seed) {
 function prescription({ sets, reps, load, drop, grid, bar, actual, rpt }) {
   const round = weight => Math.max(bar, Math.round(weight / grid) * grid);
   const rows = Array.from({ length: sets }, () => ({ target: reps, load }));
-  if (!rpt) return rows;
   const miss = actual.findIndex(row => row && row.reps < reps);
   if (miss < 0) return rows;
   const remaining = sets - 1 - miss;
@@ -30,10 +29,15 @@ function prescription({ sets, reps, load, drop, grid, bar, actual, rpt }) {
     if (recorded && recorded.reps < target) base--;
     previousLoad = recorded ? recorded.load : weight;
   }
+  if (!rpt && actual[sets - 1] && actual[sets - 1].reps < reps) {
+    rows.push({ target: reps, load: round(actual[sets - 1].load * (100 - drop) / 100) });
+  }
   return rows;
 }
 
-function outcome({ sets, reps, rpt, actual }) {
+function outcome(spec) {
+  const {sets,reps,rpt,actual}=spec;
+  if(actual.length<prescription(spec).length)return 'open';
   const counted = actual.slice(0, sets);
   if (counted.length < sets || Array.from(counted).some(row => !row)) return 'open';
   const miss = counted.findIndex(row => row.reps < reps);

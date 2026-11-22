@@ -8,6 +8,7 @@ const {spawnSync}=require('node:child_process');
 const root=process.argv[2]||'.';
 const source=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const mutants=[
+ ['skip-straight-recovery'," let out=genericSetPlan(n,p,ss);"," if(p.fixed&&p.kind==='straight')return p.targets.map((target,i)=>({target,load:p.loads[i]}));\n let out=genericSetPlan(n,p,ss);",'genericSetPlan','oracle'],
  ['preset-seed','rescueBase=Math.max(1,Number(done.reps)+1)','rescueBase=Math.max(1,Number(q.target)+1)','genericSetPlan','oracle'],
  ['ignore-recovery-miss','if(done&&done.reps<rq.target)rescueBase-=1;','', 'genericSetPlan','oracle'],
  ['zero-rep-rescue','target:p.fixed?Math.max(1,rescueBase+offset):rescueBase+offset','target:rescueBase+offset','genericSetPlan','oracle'],
