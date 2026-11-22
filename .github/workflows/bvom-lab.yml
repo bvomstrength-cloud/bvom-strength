@@ -92,6 +92,8 @@ jobs:
           node tests/audit-v310/straight-recovery.cjs .bvom-candidate
           node tests/audit-v310/isolation-cloud.cjs .bvom-candidate
           node tests/audit-v310/mutations.cjs .bvom-candidate
+          node tests/audit-v310-e2e/historical.cjs .bvom-candidate
+          node tests/audit-v310-e2e/transitions.cjs .bvom-candidate
 
       - name: Run BVOM Lab v15.2 gate
         run: |

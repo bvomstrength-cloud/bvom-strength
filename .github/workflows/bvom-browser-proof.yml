@@ -207,6 +207,8 @@ jobs:
           node tests/bvom-lab/issue_89_browser.cjs
           node tests/audit-v310/browser.cjs
           node tests/audit-v310/straight-recovery-browser.cjs
+          node tests/audit-v310-e2e/browser.cjs
+          node tests/audit-v310-e2e/mutations.cjs .
 
       - name: Run isolated deferred Starting Setup interactions
         run: node tests/bvom-lab/starting_setup_browser.cjs

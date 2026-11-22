@@ -2832,8 +2832,10 @@ function bvomApplyWeightEdit(n,v){
 function editWeight(n){
  const current=bvomCoreCardWeight(n),mode=state.programMode,day=state.day,unit=unitLabel();
  const fixed=bvomFixedEligible(n)&&bvomFixedEligible(n,cfg(n).mode)?bvomDefaultFixedFields(n):null;
+ const persistedAtOpen=bvomLastPersistedRaw;
  bvomWeightModal(n,current,(v,requested,rawWeight=v)=>{
   if(!bvomWorkoutActionAllowed()||state.programMode!==mode||state.day!==day||unitLabel()!==unit)return;
+  if(fixed&&bvomLastPersistedRaw!==persistedAtOpen)return;
   const changed=!!(requested&&fixed&&(requested.sets!==fixed.sets||requested.reps!==fixed.reps));
   if(fixed&&(changed||bvomFixedPrescription(n))){
    if(changed||rawWeight!==current)bvomChangeFixedPrescription(n,requested||fixed,rawWeight===current?null:v,JSON.parse(JSON.stringify(state)));
