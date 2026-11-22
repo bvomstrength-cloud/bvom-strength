@@ -5,6 +5,7 @@ on:
   pull_request:
     branches:
       - main
+      - codex/v3.1.0-issue-89
 
 permissions:
   contents: read
@@ -210,6 +211,18 @@ jobs:
           node tests/audit-v310/straight-recovery-browser.cjs
           node tests/audit-v310-e2e/browser.cjs
           node tests/audit-v310-e2e/mutations.cjs .
+
+      - name: Check Japanese repair in Chromium
+        run: node tests/audit-v311/browser.cjs
+
+      - name: Check out the locked Japanese localisation baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 67bf4b7068e11a1b3b6d013ceb0fbe5f4e81e900
+          path: .bvom-ja-baseline
+
+      - name: Compare locale and training behaviour against v3.1.0
+        run: node tests/audit-v311/parity.cjs .bvom-ja-baseline .
 
       - name: Run isolated deferred Starting Setup interactions
         run: node tests/bvom-lab/starting_setup_browser.cjs

@@ -3,10 +3,34 @@ globalThis.BVOM_LOCALES = globalThis.BVOM_LOCALES || {};
 globalThis.BVOM_LOCALES.ja = {
   meta:{code:'ja',name:'日本語',htmlLang:'ja',dateLocale:'ja-JP'},
   language:{title:'言語'},
-  validation:{wholeReps:'回数は0以上の整数で入力してください。',positiveLoad:'実際の重量は有限の正の数で入力してください。',sets:'セット数は1～20の整数で入力してください。',plannedReps:'予定回数は1～50の整数で入力してください。'},
+  validation:{wholeReps:'回数は0以上の整数で入力してください。',positiveLoad:'実際に使った重量を0より大きい数値で入力してください。',sets:'セット数は1～20の整数で入力してください。',plannedReps:'目標回数は1～50の整数で入力してください。'},
   balance:{below:'{lift}：{profile}の開始比率より{percent}%低くなっています。見直しを検討してください。',above:'{lift}：{profile}の開始比率より{percent}%高くなっています。見直しを検討してください。',male:'男性',female:'女性'},
   shell:{workout:'ワークアウト',warmup:'ウォームアップ',history:'履歴',info:'情報',settings:'設定',cancel:'キャンセル',finish:'終了',dings:'タイマー 3 · 5 · 10'},
-  lifts:{Squat:'スクワット','Bench Press':'ベンチプレス','Prone Row':'ロウ','Prone Row HLM':'プローンロウ','Supine Row':'スパインロウ','Overhead Press':'プレス',Deadlift:'デッドリフト'},
+  lifts:{Squat:'スクワット','Bench Press':'ベンチプレス','Prone Row':'ロウ','Prone Row HLM':'プローンロウ','Supine Row':'スパインロウ','Overhead Press':'オーバーヘッドプレス',Deadlift:'デッドリフト'},
+  accessoryPresets:{
+    'Lat Pulldown':'ラットプルダウン','Incline Bench Press':'インクラインベンチプレス','Dumbbell Bench Press':'ダンベルベンチプレス',
+    'Dumbbell Row':'ダンベルロウ','Cable Row':'ケーブルロウ','Biceps Curl':'アームカール','Triceps Pushdown':'トライセプスプッシュダウン',
+    'Lateral Raise':'サイドレイズ','Face Pull':'フェイスプル','Romanian Deadlift':'ルーマニアンデッドリフト','Leg Press':'レッグプレス',
+    'Leg Curl':'レッグカール','Leg Extension':'レッグエクステンション','Calf Raise':'カーフレイズ','Hip Thrust':'ヒップスラスト',
+    'Split Squat':'スプリットスクワット','Lunge':'ランジ','Back Extension':'バックエクステンション'
+  },
+  bb1:{
+    slots:{A1:'胸のプレス種目',A2:'大腿四頭筋の複合種目',A3:'水平方向の引く種目',A4:'レッグカール',A5:'三角筋中部',A6:'上腕三頭筋',B1:'垂直方向の引く種目',B2:'体の後面',B3:'インクライン／胸の補助種目',B4:'大腿四頭筋の補助種目',B5:'三角筋後部／背中上部',B6:'上腕二頭筋'},
+    methods:{stable_primary:'安定した主力種目',demanding_primary:'負担の大きい主力種目',double_progression:'回数と重量を段階的に増やす',double_progression_3set:'回数と重量を段階的に増やす',bodyweight_assistance:'自重・補助'},
+    labels:{
+      smith_bench_press:'スミスマシンベンチプレス',dumbbell_bench_press:'ダンベルベンチプレス',barbell_bench_press:'バーベルベンチプレス',
+      smith_squat:'スミスマシンスクワット',heel_elevated_barbell_squat:'かかとを上げたバーベルスクワット',seated_cable_row:'シーテッドケーブルロウ',
+      machine_row:'マシンロウ',landmine_row:'ランドマインロウ',chest_supported_dumbbell_row:'チェストサポート・ダンベルロウ',
+      seated_leg_curl:'シーテッドレッグカール',band_leg_curl:'バンドレッグカール',band_lateral_raise:'バンドサイドレイズ',
+      cable_pushdown:'ケーブルプッシュダウン',cable_overhead_extension:'ケーブル・オーバーヘッドエクステンション',
+      lying_dumbbell_triceps_extension:'ライイング・ダンベル・トライセプスエクステンション',band_pushdown:'バンドプッシュダウン',
+      machine_vertical_pull:'マシン・プルダウン',machine_hip_hinge:'マシン・ヒップヒンジ',good_morning:'グッドモーニング',
+      back_extension_45:'45度バックエクステンション',incline_smith_press:'インクライン・スミスマシンプレス',leg_extension:'レッグエクステンション',
+      split_squat:'スプリットスクワット',reverse_pec_deck:'リバースペックデック',cable_rear_delt_fly:'ケーブル・リアデルトフライ',
+      dumbbell_rear_delt_raise:'ダンベル・リアレイズ',band_rear_delt_fly:'バンド・リアデルトフライ',rear_delt_row:'リアデルトロウ',
+      preacher_machine_curl:'プリーチャーカール／マシンカール'
+    }
+  },
   bb2:{labels:{
     upper_a:'上半身A',lower_a:'下半身A',upper_b:'上半身B',lower_b:'下半身B',
     flat_press:'水平プレス',bench_press:'ベンチプレス',dumbbell_flat_press:'ダンベル・フラットプレス',machine_chest_press:'マシン・チェストプレス',
@@ -15,7 +39,7 @@ globalThis.BVOM_LOCALES.ja = {
     vertical_pull:'垂直プル',pullup:'プルアップ',chinup:'チンアップ',lat_pulldown:'ラットプルダウン',
     triceps_extension:'上腕三頭筋エクステンション',lying_barbell_triceps_extension:'ライイング・バーベル・トライセプスエクステンション',dumbbell_triceps_extension:'ダンベル・トライセプスエクステンション',cable_triceps_pushdown:'ケーブル・トライセプスプッシュダウン',
     squat:'スクワット',high_bar_squat:'ハイバースクワット',front_squat:'フロントスクワット',goblet_squat:'ゴブレットスクワット',leg_press:'レッグプレス',
-    unilateral_quad:'片脚大腿四頭筋',bulgarian_split_squat:'ブルガリアン・スプリットスクワット',walking_lunge:'ウォーキングランジ',supported_split_squat:'サポート付きスプリットスクワット',
+    unilateral_quad:'片脚の大腿四頭筋種目',bulgarian_split_squat:'ブルガリアン・スプリットスクワット',walking_lunge:'ウォーキングランジ',supported_split_squat:'サポート付きスプリットスクワット',
     hamstring_curl:'ハムストリングカール',lying_leg_curl:'ライイング・レッグカール',nordic_curl:'ノルディックカール',assisted_nordic_curl:'アシスト・ノルディックカール',slider_leg_curl:'スライダー・レッグカール',
     calf_raise:'カーフレイズ',standing_calf_raise:'スタンディング・カーフレイズ',seated_calf_raise:'シーテッド・カーフレイズ',bodyweight_calf_raise:'自重カーフレイズ',
     abdominal:'腹筋',weighted_crunch:'加重クランチ',hanging_knee_raise:'ハンギング・ニーレイズ',cable_crunch:'ケーブルクランチ',
@@ -25,7 +49,7 @@ globalThis.BVOM_LOCALES.ja = {
     biceps_curl:'上腕二頭筋カール',barbell_curl:'バーベルカール',dumbbell_curl:'ダンベルカール',cable_curl:'ケーブルカール',
     hip_hinge:'ヒップヒンジ',romanian_deadlift:'ルーマニアンデッドリフト',conventional_deadlift:'コンベンショナルデッドリフト',quad:'大腿四頭筋',hack_squat:'ハックスクワット'
   }},
-  common:{ok:'OK',save:'保存',add:'追加',edit:'編集',remove:'削除',repeat:'もう一度',progressAnyway:'このまま進む',moveToRpt:'RPTへ移行',workingTopWeight:'ワーク重量／トップ重量',accessory:'補助種目'},
+  common:{ok:'OK',save:'保存',add:'追加',edit:'編集',remove:'削除',repeat:'同じ重量で再挑戦',progressAnyway:'このまま進む',moveToRpt:'RPTに切り替える',workingTopWeight:'ワーク重量／トップ重量',accessory:'補助種目'},
   setup:{unitsTitle:'使用する重量単位は？',kg:'キログラム (kg)',lb:'ポンド (lb)',startTitle:'開始方法を選んでください',guided:'ガイド付き',manual:'手動',guidedHelp:'無理なくできるスクワット重量を1つ設定すると、選択した比率を基に他の開始重量をBVOMが提案します。',manualHelp:'各リフトの開始重量を自分で入力します。比率から自動設定はしません。',balance:'筋力バランスガイド',balanceHelp:'参考値です。開始時の比率から20%以上離れた場合に知らせます。',startProgram:'プログラム開始',ratioProfile:'比率プロファイル',male:'男性',female:'女性',noIdea:'おまかせで重量を設定',comfortableSquat:'3×5で無理なくできるスクワット開始重量',suggested:'開始重量の提案です。開始前に自由に変更できます。',startingWeights:'開始重量',independent:'各リフトは独立して進みます。'},
   workout:{title:'初心者 ABA',help:'A・B・Aがおすすめです。必要に応じてAまたはBを選べます。',straight:'ストレートセット'},
   warmup:{title:'ウォームアップ',help:'目安です。必要に応じて変更・省略してください。',none:'この重量ではウォームアップ不要です。',firstRpt:'最初のRPTワークセット',workingTop:'ワーク重量／トップ重量',emptyBar:'バーのみ',belowBar:'バー重量未満',notLoadable:'選択中のプレートでは作れません',perSide:'片側'},
@@ -33,12 +57,12 @@ globalThis.BVOM_LOCALES.ja = {
   settings:{units:'重量単位',guidance:'ガイド',balance:'筋力バランスガイド',advisory:'(±20%、参考値)',equipment:'器具',standardPlates:'片側の標準プレート',microplates:'片側のマイクロプレート',advanced:'リフト詳細設定',advancedHelp:'通常は閉じています。BVOMは提案しますが、決めるのはあなたです。',backup:'バックアップと復元',backupHelp:'履歴、重量、進行状況、設定を含みます。',exportBackup:'バックアップを書き出す',restoreBackup:'バックアップを復元',rerun:'開始設定をやり直す',erase:'BVOMデータをすべて削除',mode:'モード',straightSets:'ストレートセット',rpt:'RPT',weight:'ワーク重量／トップ重量',increment:'増加幅',rptLevel:'RPTレップレベル',rptDrop:'RPT減量率 %',barWeight:'このリフトのバー重量'},
   bodyweight:{changed:'種目または単位が変更されたため保存されませんでした。閉じてセットを開き直してください。',equipment:'自重',added:'追加する外部重量',assistance:'補助 / バリエーション',approximate:'動かす重量の推定値（任意）',estimateHelp:'1回ごとに動かす体重の量を推定してください。懸垂はおおよそ体重全体、腕立て伏せやノルディックカールは動かす部分を見積もります。不明な場合は空欄のままで構いません。トレーニングボリュームの推定のみに使用し、重量や難易度の進行には影響しません。',estimateShort:'推定負荷',noEstimate:'推定値なし',increment:'追加重量の増分',incrementHelp:'追加したい重量の増加幅を設定します。いつ増やすかは自分で決められます。',recordingOnly:'各セットを記録しましょう',invalid:'追加重量は0以上、増分は正の値、回数/RPEは有効な値、任意の推定重量は正の値を入力してください。',locked:'自重種目の設定を編集する前にワークアウトを終了してください。',legacyHelp:'自重種目を編集する前に他の端末もBVOMを更新してください。旧版はこのデータを誤って解釈する場合があります。',set:'セット',record:'記録'},
   accessories:{title:'補助種目',help:'任意 · A / B / 両方 · 筋力バランスには影響しません',add:'+ 追加',upperLower:'上半身または下半身',exercise:'種目',customExercise:'カスタム種目',workout:'ワークアウト',equipment:'器具',barbell:'バーベル',dumbbell:'ダンベル',machine:'マシン',barWeight:'バー重量',barHint:'バーベルはプレート計算を表示します。',dbHint:'重量はダンベル1個あたりです。',machineHint:'マシンに表示される数字を使ってください。',progression:'進行方法',straightSets:'ストレートセット',sets:'セット',reps:'回数',topReps:'トップセット回数',topWeight:'トップ／ワーク重量',increment:'増加幅',save:'保存',addAction:'追加',cancel:'キャンセル',editTitle:'補助種目を編集',addTitle:'補助種目を追加',chooseExercise:'種目を選ぶか入力してください。',duplicate:'同じ補助種目がすでにあります。別プログラムにしたい場合は別名で追加してください。',removeConfirm:'現在のプログラムからこの補助種目を削除しますか？履歴は残ります。',perDumbbell:'ダンベル1個あたり',rpt5:'5セットRPT',rpt3:'3セットRPT',category:{upper:'上半身',lower:'下半身'},assignment:{a:'A',b:'B',both:'両方'}},
-  modals:{target:'目標',reps:'回',repsCompleted:'完了した回数',workoutSaved:'ワークアウトを保存しました！',duration:'時間',volume:'ボリューム',exercises:'種目数',incompleteTitle:'ワークアウト未完了',incompleteSub:'まだコア種目のセットが残っています。',finishQuestion:'本当に終了しますか？',goBack:'戻る',finishAnyway:'このまま終了',incompleteSaved:'未完了ワークアウトを保存しました',unfinishedNeutral:'未実施の種目は失敗として数えません。',workingWeight:'ワーク重量',unitsTitle:'重量単位を変更しますか？',unitsBody:'現在のトレーニング重量、バー重量、増加幅を変換します。履歴には記録時の単位が残ります。',plateSet:'プレート設定は標準の{unit}セットに切り替わります。',change:'変更',pounds:'ポンド',kilograms:'キログラム',setupTitle:'開始設定をやり直しますか？',setupBody:'開始設定に戻ります。ワークアウト履歴は残ります。',runSetup:'設定をやり直す',eraseTitle:'BVOMデータをすべて削除しますか？',eraseBody:'この端末の履歴、重量、設定、補助種目、進行状況を完全に削除し、この端末をBVOM Cloudからサインアウトします。BVOM Cloudに保存済みのバックアップは削除されません。',eraseType:'確認のため RESET と入力してください。',eraseEverything:'すべて削除',niceWork:'ナイス！',niceRecovery:'いい立て直し！',dontStress:'気にしない。',strongFinish:'いい締めでした。次回はメインセットを取れます。',badWorkout:'調子の悪い日はあります。次回また取りましょう。',roadTitle:'ここまで来たか…！🐝',roadBody:'{lift}はBVOMのシンプルな進行で伸ばせる範囲をほぼ使い切りました。このリフトをリセットして積み直すか、次に進むためのプログラムを確認できます。',resetLift:'このリフトをリセット',learnIntermediate:'プログラムを見る',intermediateTitle:'次はどうする？',intermediateBody:'HLM RPT と 4-Day Split は、ワークアウトごとの進歩が安定しなくなったリフター向けに現在利用できます。筋肥大を優先したい場合は Bodybuilding も選べます。準備ができたら Starting Setup から次のプログラムを選んでください。'},
+  modals:{target:'目標',reps:'回',repsCompleted:'実施した回数',workoutSaved:'ワークアウトを保存しました！',duration:'時間',volume:'ボリューム',exercises:'種目数',incompleteTitle:'ワークアウト未完了',incompleteSub:'まだコア種目のセットが残っています。',finishQuestion:'本当に終了しますか？',goBack:'戻る',finishAnyway:'このまま終了',incompleteSaved:'未完了ワークアウトを保存しました',unfinishedNeutral:'未実施の種目は失敗として数えません。',workingWeight:'ワーク重量',unitsTitle:'重量単位を変更しますか？',unitsBody:'現在のトレーニング重量、バー重量、増加幅を変換します。履歴には記録時の単位が残ります。',plateSet:'プレート設定は標準の{unit}セットに切り替わります。',change:'変更',pounds:'ポンド',kilograms:'キログラム',setupTitle:'開始設定をやり直しますか？',setupBody:'開始設定に戻ります。ワークアウト履歴は残ります。',runSetup:'設定をやり直す',eraseTitle:'BVOMデータをすべて削除しますか？',eraseBody:'この端末の履歴、重量、設定、補助種目、進行状況を完全に削除し、この端末をBVOM Cloudからサインアウトします。BVOM Cloudに保存済みのバックアップは削除されません。',eraseType:'確認のため RESET と入力してください。',eraseEverything:'すべて削除',niceWork:'ナイス！',niceRecovery:'いい立て直し！',dontStress:'気にしない。',strongFinish:'いい締めでした。次回はメインセットの目標達成を目指しましょう。',badWorkout:'調子の悪い日もあります。次回また挑戦しましょう。',roadTitle:'ここまで来たか…！🐝',roadBody:'{lift}はBVOMのシンプルな進行で伸ばせる範囲をほぼ使い切りました。このリフトをリセットして積み直すか、次に進むためのプログラムを確認できます。',resetLift:'このリフトをリセット',learnIntermediate:'プログラムを見る',intermediateTitle:'次はどうする？',intermediateBody:'HLM RPT と 4-Day Split は、ワークアウトごとの進歩が安定しなくなったリフター向けに現在利用できます。筋肥大を優先したい場合は Bodybuilding も選べます。準備ができたら 初期設定から次のプログラムを選んでください。'},
   sharing:{copied:'ワークアウト内容をクリップボードにコピーしました。',copyPrompt:'ワークアウト概要をコピー:',failed:'ワークアウトを共有できませんでした。'},
   backup:{restoreConfirm:'バックアップを復元しますか？\n\nこの端末の現在のBVOMデータは置き換えられます。\n\nOKを押すと復元します。',invalid:'有効なBVOMバックアップではないようです。',settingsSaved:'{lift} の設定を保存しました。'},
   praise:['追加の1回！ナイス！🐝','まだ余力あったね 😏','いいぞ。💪','目標クリア。強い！','Power Beeも満足。🐝','見せつけるね 😂'],
   notes:{title:'セッションメモ',optional:'任意 · このワークアウトと一緒に保存されます',placeholder:'今日のセッションはどうだった？',none:'メモなし',save:'保存'},
-  progress:{closeMiss:'{lift}: あと少し',closeBody:'惜しかったです。同じ重量をもう一度やるか、このまま進みますか？',threeStraight:'{lift}: 3回連続で未達',threeStraightBody:'もう一度この重量に挑戦するか、このリフトをRPTへ移行しますか？<br><br><b>次のRPT:</b> {preview}',repeatStraight:'ストレートを再挑戦',movedRpt:'{lift}をRPTへ移行します。',nextTarget:'次の目標: {preview}',threeRpt:'{lift}: RPTで3回連続未達',threeRptBody:'もう一度この重量に挑戦するか、次の低回数ターゲットへ進みますか？<br><br><b>次:</b> {preview}',keepProgressing:'このまま進む',movingOn:'{lift}は次へ進みます。'},
+  progress:{closeMiss:'{lift}: あと少し',closeBody:'惜しかったです。同じ重量をもう一度やるか、このまま進みますか？',threeStraight:'{lift}: 3回連続で目標未達',threeStraightBody:'もう一度この重量に挑戦するか、このリフトをRPTへ移行しますか？<br><br><b>次のRPT:</b> {preview}',repeatStraight:'同じ重量で再挑戦',movedRpt:'{lift}をRPTへ移行します。',nextTarget:'次の目標: {preview}',threeRpt:'{lift}: RPTで3回連続で目標未達',threeRptBody:'もう一度この重量に挑戦するか、次の低回数ターゲットへ進みますか？<br><br><b>次回の設定:</b> {preview}',keepProgressing:'次の回数設定へ進む',movingOn:'{lift}は次へ進みます。'},
   layoff:{close:'閉じる',title:'おかえり！',week:'前回のワークアウトから1週間以上空いています。',dontJump:'前回の重量にいきなり戻さないでください。',setup:'<b>開始設定</b>でスクワット重量を約<b>10%</b>下げ、他のリフトをBVOMに再計算させる方法もあります。',longer:'もっと長く空いた場合は<b>20%以上</b>下げる必要があるかもしれません。',punch:'軽めから始めて積み直しましょう。',joke:'もちろん無視して筋肉痛になるのも自由です。😂'},
   pb:{newPb:'自己ベスト更新！',backupReminder:'バックアップのお知らせ',backupBody:'そろそろバックアップしてもいい頃です。'},
   infoHtml(ctx){
