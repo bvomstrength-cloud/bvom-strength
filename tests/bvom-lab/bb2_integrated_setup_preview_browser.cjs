@@ -105,7 +105,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('#setup [data-bb2-preview]').count(),1,'one BB2 button in the standard program chooser');
   assert.equal(await page.locator('#setup [data-bb-program]').count(),1,'BB1 chooser remains available');
   assert.equal(await page.title(),'BVOM Strength v3.0.5');
-  assert.match(await page.locator('header').textContent(),/v3\.0\.4/);
+  assert.match(await page.locator('header').textContent(),/v3\.0\.5/);
   assert.equal(await page.evaluate(()=>BVOM_BUILD),'3.0.5');
   fs.mkdirSync(screenshots,{recursive:true});
   for(const lang of ['en','ja']){
