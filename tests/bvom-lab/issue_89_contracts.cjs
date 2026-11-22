@@ -115,6 +115,22 @@ for (const [reps,progresses] of [[[7,7,7,7],true],[[5,6,7,9],false]]) {
   assert.equal(rpt.S().pendingCloseMissChoice,undefined);
 }
 
+// The established third-failure decision can accept the next RPT level.
+const failing=H.boot(build);
+H.configureLP(failing);
+failing.ev("cfg('Squat').mode='rpt';cfg('Squat').drop=10;save()");
+edit(failing,'Squat',4,7);
+failing.S().attempts.Squat=2;
+failing.choices.push('R');
+failing.reps.push(5,6,7,9);
+[0,1,2,3].forEach(i=>failing.ctx.tapSet('Squat',i));
+assert.equal(failing.S().core.Squat.rptLevel,1);
+assert.equal(failing.S().weights.Squat,102.5);
+assert.deepEqual(copy(failing.S().fixedWorkingSets.lprpt.Squat),{sets:4,reps:6});
+assert.equal(failing.ctx.corePrescription('Squat').targets[0],7,'the loaded workout retains its original target');
+H.finish(failing);
+assert.deepEqual(plan(failing,'Squat'),[6,6,6,6]);
+
 // Retain the five-slot Press load shape and the linked programme prescriptions.
 const press=H.boot(build);
 H.configureLP(press);

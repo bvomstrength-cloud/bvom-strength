@@ -1269,10 +1269,10 @@ function advanceAfterExercise(n){
 }
 
 function offerThreeFailureChoice(n){
- const c=cfg(n);
+ const c=cfg(n),fixed=corePrescription(n).fixed?bvomFixedPrescription(n):null;
  if(c.mode==='straight'){
   const nextWeight=roundWork(state.weights[n]+c.increment);
-  const preview=rptPreview(n,c,nextWeight,0);
+  const preview=fixed?fmt(nextWeight)+' '+unitLabel()+' · '+fixed.sets+' × '+fixed.reps:rptPreview(n,c,nextWeight,0);
   bvomChoiceModal(`${n}: three failed attempts`,
    `Another crack at this weight, or move this lift to RPT?<br><br><b>Next RPT:</b> ${preview}`,
    'REPEAT STRAIGHT','MOVE TO RPT',
@@ -1286,14 +1286,19 @@ function offerThreeFailureChoice(n){
  }
 
  const maxLevel=n==='Deadlift'?3:4;
- if((c.rptLevel||0)<maxLevel){
+ if((c.rptLevel||0)<maxLevel&&(!fixed||fixed.reps>1)){
   const nextLevel=(c.rptLevel||0)+1,nextWeight=roundWork(state.weights[n]+c.increment);
-  const preview=rptPreview(n,c,nextWeight,nextLevel);
+  const preview=fixed?fmt(nextWeight)+' '+unitLabel()+' · '+fixed.sets+' × '+(fixed.reps-1):rptPreview(n,c,nextWeight,nextLevel);
   bvomChoiceModal(`${n}: three failed RPT attempts`,
    `Another crack at this weight, or keep progressing with the next lower-rep target?<br><br><b>Next:</b> ${preview}`,
    'REPEAT','KEEP PROGRESSING',
    ()=>{if(!bvomWorkoutActionAllowed())return;state.attempts[n]=0;save()},
    ()=>{if(!bvomWorkoutActionAllowed())return;
+    if(fixed){
+     const snapshot=state.processedSnapshots?.[n];
+     if(snapshot)snapshot.fixedPrescription={...fixed};
+     state.fixedWorkingSets[state.programMode][n]={sets:fixed.sets,reps:fixed.reps-1};
+    }
     c.rptLevel=nextLevel;state.weights[n]=nextWeight;state.attempts[n]=0;
     save();renderAll();bvomBeeModal(`${n} is moving on.`,`Next target: ${preview}`);
    }
@@ -2437,7 +2442,7 @@ function bvomFixedEligible(n,mode=bvomCoreCfgForSession(n).mode){
   !(mode==='straight'&&n==='Deadlift'&&((isHLM()&&state.day==='L')||(isFourDay()&&state.day==='4')));
 }
 function bvomFixedPrescription(n){
- const fixed=state.fixedWorkingSets?.[state.programMode]?.[n];
+ const fixed=bvomCoreLiveLock(n)?.fixedPrescription??state.fixedWorkingSets?.[state.programMode]?.[n];
  return Number.isInteger(fixed?.sets)&&fixed.sets>=1&&fixed.sets<=20&&
   Number.isInteger(fixed.reps)&&fixed.reps>=1&&fixed.reps<=50?fixed:null;
 }
