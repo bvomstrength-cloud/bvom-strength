@@ -2174,7 +2174,10 @@ function bvomInstallAccessibility(){
  const regions=[document.querySelector('#workout'),document.querySelector('#warmup')].filter(Boolean);
  const overlays='.bvomModalOverlay,.beeCoachOverlay';
  const tracked=new Map();
- let nextTitle=0;
+ let nextTitle=0,focusBeforeOverlay=document.activeElement;
+ document.addEventListener('focusin',event=>{
+  if(!event.target.closest?.(overlays))focusBeforeOverlay=event.target;
+ });
  const focusable='button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),a[href],[tabindex="0"]';
  const visible=node=>!!node.getClientRects().length;
  function labelSets(region){
@@ -2199,7 +2202,8 @@ function bvomInstallAccessibility(){
    const dialog=root.querySelector('.bvomModal,.beeCoach,.accBuilder');
    const title=dialog?.querySelector('h2,h3');
    if(!title)continue;
-   tracked.set(root,document.activeElement);
+   const active=document.activeElement;
+   tracked.set(root,root.contains(active)?focusBeforeOverlay:active);
    if(!dialog.hasAttribute('role'))dialog.setAttribute('role','dialog');
    dialog.setAttribute('aria-modal','true');
    if(!title.id)title.id='bvom-dialog-title-'+(++nextTitle);
@@ -3591,12 +3595,18 @@ async function bvomCloudRestore(){
   if(result.error)throw result.error;
   if(!result.data?.length){bvomCloud.busy=false;bvomCloud.message=hlmTxt('No cloud backup exists for this account yet.','このアカウントにはまだクラウドバックアップがありません。');bvomCloud.error=false;renderSettings();return}
   const d=result.data[0].data;
-  if(!bvomCloudValidData(d))throw new Error(hlmTxt('The cloud copy does not look like valid BVOM data. Nothing was restored.','クラウドのデータは有効なBVOMデータではないようです。復元は行われませんでした。'));
+  if(!bvomCloudValidData(d))throw Object.assign(new Error('Invalid BVOM backup'),{code:'bvom_invalid_backup'});
   const restored=await bvomBb2PrepareCloudRestore(d,u.id);
   if(!bvomRestoreCommitAllowed(token,true)){bvomCloud.busy=false;renderSettings();return}
   bvomCloud.busy=false;bvomCloud.message='';bvomCloud.error=false;renderSettings();
   bvomChoiceModal(hlmTxt('RESTORE FROM BVOM CLOUD?','BVOM Cloudから復元しますか？'),bvomBb2CloudRestoreMessage(),hlmTxt('CANCEL','キャンセル'),hlmTxt('RESTORE','復元'),()=>{},()=>{if(!bvomRestoreCommitAllowed(token,true))return false;try{localStorage.setItem('bvom_pre_cloud_restore',JSON.stringify(state));localStorage.setItem('bvom_cloud_restore_baseline',bvomCloudComparableFingerprint(d));if(!bvomRestoreCommitAllowed(token,true)){localStorage.removeItem('bvom_cloud_restore_baseline');return false}localStorage.setItem(BVOM_DATA_KEY,JSON.stringify(restored));location.reload()}catch(e){localStorage.removeItem('bvom_cloud_restore_baseline');bvomBeeModal(hlmTxt('RESTORE FAILED','復元できませんでした'),bvomCloudErrorText(e,'The restore could not be completed. Reload BVOM and check your data.','復元を完了できませんでした。BVOMを再読み込みしてデータを確認してください。'))}});
- }catch(e){bvomCloud.busy=false;bvomCloud.message=bvomCloudErrorText(e,'Cloud backup could not be loaded.','クラウドバックアップを読み込めませんでした。');bvomCloud.error=true;renderSettings()}
+ }catch(e){
+  bvomCloud.busy=false;
+  if(e?.code==='bvom_invalid_backup')bvomCloud.message=hlmTxt('The cloud copy does not look like valid BVOM data. Nothing was restored.','クラウドバックアップの形式を確認できなかったため、復元は行われませんでした。');
+  else if(e?.code==='bvom_incompatible_bb2_backup')bvomCloud.message=hlmTxt('Cloud restore stopped: this cloud copy contains incompatible BB2 data. Your device has not been changed.','互換性のないBB2データが含まれるため、復元を停止しました。端末のデータは変更されていません。');
+  else bvomCloud.message=bvomCloudErrorText(e,'Cloud backup could not be loaded.','クラウドバックアップを読み込めませんでした。');
+  bvomCloud.error=true;renderSettings();
+ }
 }
 async function bvomCloudSignOut(){bvomBb2AccountDisconnect();const signedOutUser=bvomCloud.user?.id||bvomLocalOwnerId();bvomEntitlementCacheClear(signedOutUser);const c=bvomCloudClient();let error=null;if(c){bvomCloud.busy=true;renderSettings();try{const result=await c.auth.signOut({scope:'local'});error=result?.error||null}catch(e){error=e}}bvomCloud.busy=false;bvomCloud.user=null;bvomCloud.offlineLocalAccess=false;window.__bvomAuthUserId=null;bvomCloud.codeSent=false;bvomCloud.syncReady=false;bvomCloud.conflict=false;bvomCloud.remoteFingerprint=null;bvomCloud.message=error?(bvomCloudErrorText(error,'Cloud sign-out could not be confirmed.','クラウド側のサインアウトを確認できませんでした。')):hlmTxt('Signed out on this device.','この端末でサインアウトしました。');bvomCloud.error=!!error;bvomShowAuthGate()}
 async function bvomCloudInit(){
@@ -4487,7 +4497,7 @@ function bvomBbFindPerformanceRef(id,load,target=state){const refs=target?.bodyb
 function bvomBbPerformanceRefResetPending(id,load,target=state){const p=bvomBbProgress(id,target),reset=Number(p.performanceRefResetLoad);return Number.isFinite(reset)&&reset>0&&bvomBbComparableKey(id,reset,target)===bvomBbComparableKey(id,load,target)}
 function bvomBbRecordPerformanceRef(id,load,reps,target=state){bvomBbEnsure(target);const b=target.bodybuilding,key=bvomBbComparableKey(id,load,target),p=bvomBbProgress(id,target),r=Math.max(0,Math.floor(Number(reps)||0)),reset=bvomBbPerformanceRefResetPending(id,load,target);if(!b.performanceRefs[id]||typeof b.performanceRefs[id]!=='object')b.performanceRefs[id]={};const refs=b.performanceRefs[id],canonical={};for(const ref of Object.values(refs)){if(!ref||!Number.isFinite(Number(ref.load)))continue;const k=bvomBbComparableKey(id,ref.load,target);if(!canonical[k]||Number(ref.reps)>Number(canonical[k].reps))canonical[k]=ref}for(const k of Object.keys(refs))delete refs[k];Object.assign(refs,canonical);const old=refs[key],next=reset||!old||r>Number(old.reps||0)?{load:Number(load),reps:r,updatedAt:new Date().toISOString()}:{...old,load:Number(load)};refs[key]=next;if(reset)delete p.performanceRefResetLoad;return next}
 function bvomBbPerformanceDrop(id,load,reps,target=state){if(bvomBbPerformanceRefResetPending(id,load,target))return null;const found=bvomBbFindPerformanceRef(id,load,target),ref=found?.ref;if(!ref||!(Number(ref.reps)>0))return null;const drop=(Number(ref.reps)-Number(reps))/Number(ref.reps);return drop>=0.30?{triggered:true,drop,referenceReps:Number(ref.reps),currentReps:Number(reps),convertedEquivalent:!!found.convertedEquivalent}:{triggered:false,drop}}
-function bvomBbPerformanceDropNotice(decisions){const hits=(decisions||[]).filter(x=>x?.drop?.triggered);if(!hits.length)return'';const rows=hits.map(x=>{const name=BVOM_BB_EXERCISES[x.id]?.name||String(x.id||'Exercise'),pct=Math.max(30,Math.round((Number(x.drop.drop)||0)*100));return `<div style="margin-top:6px"><strong>${name}</strong>: ${pct}% ${x.drop.convertedEquivalent?hlmTxt('below your previous performance at the equivalent load before changing units.','単位変更前の対応する重量での以前のパフォーマンスを下回りました。'):hlmTxt('below your previous performance at the same load.','同じ重量での以前のパフォーマンスを下回りました。')}</div>`}).join('');return `<div style="margin-top:14px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;text-align:left"><div style="font-weight:900">${hlmTxt('PERFORMANCE DROP','パフォーマンス低下')}</div>${rows}<div class="small" style="margin-top:8px">${hlmTxt('BVOM has flagged this for your attention. Your normal progression decision has not been changed by the warning.','BVOMが注意喚起として表示しています。この警告によって通常の進行判定は変更されていません。')}</div></div>`}
+function bvomBbPerformanceDropNotice(decisions){const hits=(decisions||[]).filter(x=>x?.drop?.triggered);if(!hits.length)return'';const rows=hits.map(x=>{const name=x.id?bvomBbExerciseLabel(x.id):hlmTxt('Exercise','種目'),pct=Math.max(30,Math.round((Number(x.drop.drop)||0)*100));return `<div style="margin-top:6px"><strong>${name}</strong>: ${pct}% ${x.drop.convertedEquivalent?hlmTxt('below your previous performance at the equivalent load before changing units.','単位変更前の対応する重量での以前のパフォーマンスを下回りました。'):hlmTxt('below your previous performance at the same load.','同じ重量での以前のパフォーマンスを下回りました。')}</div>`}).join('');return `<div style="margin-top:14px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;text-align:left"><div style="font-weight:900">${hlmTxt('PERFORMANCE DROP','パフォーマンス低下')}</div>${rows}<div class="small" style="margin-top:8px">${hlmTxt('BVOM has flagged this for your attention. Your normal progression decision has not been changed by the warning.','BVOMが注意喚起として表示しています。この警告によって通常の進行判定は変更されていません。')}</div></div>`}
 /* ===== END BODYBUILDING DEV2 ENGINE ===== */
 
 const bvomBbBaseShowSetup=showSetup;showSetup=function(){if(isBodybuilding())return bvomBbRenderFoundationSetup();bvomBbBaseShowSetup();bvomBbInjectProgramChoice()};
@@ -6221,9 +6231,8 @@ async function bvomBb2ValidatePortableJournal(local,ownerId){
  return true;
 }
 async function bvomBb2PrepareCloudRestore(remote,ownerId){
- if(Object.prototype.hasOwnProperty.call(remote,'bb2'))throw new Error(hlmTxt(
-  'Cloud restore stopped: this cloud copy contains incompatible BB2 data. Your device has not been changed.',
-  'クラウド復元を停止しました。クラウドのBB2データに互換性がありません。端末のデータは変更されていません。'));
+ if(Object.prototype.hasOwnProperty.call(remote,'bb2'))
+  throw Object.assign(new Error('Cloud restore stopped: this cloud copy contains incompatible BB2 data. Your device has not been changed.'),{code:'bvom_incompatible_bb2_backup'});
  const local=state.bb2;
  if(local===undefined)return remote;
  if(!ownerId||ownerId!==window.__bvomAuthUserId||ownerId!==bvomLocalOwnerId())
