@@ -2473,7 +2473,7 @@ function corePrescription(n){
   if(n==='Overhead Press'){
    const drop=Number(c.drop||5)/100;
    for(let i=0;i<topIndex;i++)loads[i]=bvomDerivedCoreLoad(n,w*(1-drop*(topIndex-i)));
-   for(let i=topIndex+1;i<loads.length;i++)loads[i]=bvomDerivedCoreLoad(n,loads[i-1]*(1-drop));
+   for(let i=topIndex+1;i<loads.length;i++)loads[i]=bvomDerivedCoreLoad(n,w*(1-drop*(i-topIndex)));
   }
   return {kind:'rptFixed',fixed:true,targets,loads,topIndex};
  }

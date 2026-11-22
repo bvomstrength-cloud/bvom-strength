@@ -115,6 +115,26 @@ for (const [reps,progresses] of [[[7,7,7,7],true],[[5,6,7,9],false]]) {
   assert.equal(rpt.S().pendingCloseMissChoice,undefined);
 }
 
+// Retain the five-slot Press load shape and the linked programme prescriptions.
+const press=H.boot(build);
+H.configureLP(press);
+press.ev("state.day='B';cfg('Overhead Press').mode='rpt';cfg('Overhead Press').drop=12;state.weights['Overhead Press']=100;save()");
+const pressLoads=Array.from(press.ctx.corePrescription('Overhead Press').loads);
+edit(press,'Overhead Press',5,9);
+assert.deepEqual(Array.from(press.ctx.corePrescription('Overhead Press').loads),pressLoads);
+for (const [mode, day] of [['hlm','H'],['fourday','1']]) {
+  const linked=H.boot(build);
+  H.configureLP(linked);
+  linked.ev(`state.programMode='${mode}';state.day='${day}';cfg('Prone Row').mode='rpt';save()`);
+  const driver=copy(linked.ctx.corePrescription('Bench Press'));
+  edit(linked,'Prone Row',4,7);
+  linked.reps.push(7,5);
+  linked.ctx.tapSet('Prone Row',0);
+  linked.ctx.tapSet('Prone Row',1);
+  assert.deepEqual(plan(linked,'Prone Row').slice(0,3),[7,7,6]);
+  assert.deepEqual(copy(linked.ctx.corePrescription('Bench Press')),driver);
+}
+
 async function cloudAndHistory() {
   const net = { online: true };
   const supabase = H.mockSupabase({ net, session: true });
