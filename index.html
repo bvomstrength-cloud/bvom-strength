@@ -1278,6 +1278,7 @@ function offerThreeFailureChoice(n){
    'REPEAT STRAIGHT','MOVE TO RPT',
    ()=>{if(!bvomWorkoutActionAllowed())return;state.attempts[n]=0;save()},
    ()=>{if(!bvomWorkoutActionAllowed())return;
+    if(fixed&&state.processedSnapshots?.[n])state.processedSnapshots[n].fixedFailureTransition={mode:'rpt',level:0};
     c.mode='rpt';c.rptLevel=0;state.weights[n]=nextWeight;state.attempts[n]=0;
     save();renderAll();
     bvomBeeModal(`${n} is moving to RPT.`,`Next target: ${preview}`);
@@ -1296,7 +1297,10 @@ function offerThreeFailureChoice(n){
    ()=>{if(!bvomWorkoutActionAllowed())return;
     if(fixed){
      const snapshot=state.processedSnapshots?.[n];
-     if(snapshot)snapshot.fixedPrescription={...fixed};
+     if(snapshot){
+      snapshot.fixedPrescription={...fixed};
+      snapshot.fixedFailureTransition={mode:'rpt',level:nextLevel};
+     }
      state.fixedWorkingSets[state.programMode][n]={sets:fixed.sets,reps:fixed.reps-1};
     }
     c.rptLevel=nextLevel;state.weights[n]=nextWeight;state.attempts[n]=0;
@@ -2589,8 +2593,24 @@ function restoreProcessedSnapshot(n){
  if(snap.hlm&&state.hlm){for(const k of ['driver','nextHeavy','rep','failCount']){const src=snap.hlm[k];if(src&&Object.prototype.hasOwnProperty.call(src,n)){state.hlm[k]=state.hlm[k]||{};state.hlm[k][n]=JSON.parse(JSON.stringify(src[n]));}}}
  if(snap.postEditWeight==null&&snap.postEditCfg==null)delete state.processedSnapshots[n];state.processed[n]=false;
 }
+function bvomRollbackFixedFailureTransition(n,snap){
+ // Older fixed snapshots record the old reps for an accepted RPT level.
+ const previousPrescription=snap?.fixedPrescription;
+ const next=snap?.fixedFailureTransition??(previousPrescription?{mode:'rpt',level:Number(snap.cfg.rptLevel||0)+1}:null);
+ if(!next)return;
+ const c=cfg(n);
+ if(!snap.postEditCfg&&c.mode===next.mode&&c.rptLevel===next.level){
+  c.mode=snap.cfg.mode;
+  c.rptLevel=snap.cfg.rptLevel;
+ }
+ const scope=state.fixedWorkingSets?.[state.programMode],fixed=scope?.[n];
+ if(previousPrescription&&fixed?.sets===previousPrescription.sets&&fixed.reps===previousPrescription.reps-1)scope[n]={...previousPrescription};
+ delete snap.fixedFailureTransition;
+ delete snap.fixedPrescription;
+}
 function bvomRollbackLockedEarnedStateForCorrection(n,snap){
  if(!snap)return;
+ bvomRollbackFixedFailureTransition(n,snap);
  state.attempts[n]=Number(snap.attempts||0);
  // No explicit future weight edit: revoke the previously earned automatic load change
  // before recalculating the corrected workout. The live prescription itself stays
@@ -2650,6 +2670,7 @@ function bvomRollbackFixedResult(n){
  if(!state.processed?.[n])return;
  const snap=state.processedSnapshots?.[n];
  if(snap){
+  bvomRollbackFixedFailureTransition(n,snap);
   state.weights[n]=snap.weight;
   state.attempts[n]=snap.attempts||0;
  }

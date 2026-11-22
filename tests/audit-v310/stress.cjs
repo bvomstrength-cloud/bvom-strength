@@ -133,6 +133,23 @@ if(mode!=='oracle') {
     assert.equal(app.S().weights[lift],120);
     assert.equal(Boolean(app.S().processed[lift]),false);
   });
+  edge('undo reverses the entire accepted third-failure transition',()=>{
+    for(const rpt of [false,true]){
+      const app=H.boot(build);H.configureLP(app);
+      configure(app,{sets:2,reps:7,rpt});app.S().attempts[lift]=2;app.ev('save()');
+      app.choices.push('R');
+      open(app,0).record(5);
+      open(app,1).record(rpt?6:7);
+      assert.equal(app.S().weights[lift],102.5);
+      assert.equal(app.S().core[lift].mode,'rpt');
+      assert.equal(open(app,1).cancel(),true);
+      assert.equal(app.S().weights[lift],100);
+      assert.equal(app.S().attempts[lift],2);
+      assert.equal(app.S().core[lift].mode,rpt?'rpt':'straight');
+      assert.equal(app.S().core[lift].rptLevel,0);
+      assert.equal(app.S().fixedWorkingSets.lprpt[lift].reps,7);
+    }
+  });
   edge('RPT half-grid drop rounds to the upper load',()=>{
     const app=H.boot(build);H.configureLP(app);
     configure(app,{sets:2,reps:8,load:250,drop:7,grid:5,rpt:true});app.ev('save()');
