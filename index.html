@@ -5774,7 +5774,7 @@ function bvomOrderEntries(){
   const day=bvomBbOnRampActive()?bvomBbOnRampDay():bvomBbDay();
   if(!day)return [];
   const slots=bvomBbOnRampActive()?bvomBbOnRampSlots(day):bvomBbSlotsForDay(day);
-  return slots.map(slot=>({key:slot,label:BVOM_BB_EXERCISES[state.bodybuilding.selections[slot]]?.name||''}));
+  return slots.map(slot=>({key:slot,label:bvomBbExerciseLabel(state.bodybuilding.selections[slot])}));
  }
  return program().map(([name])=>({key:name,label:liftLabel(name)}));
 }
@@ -5874,7 +5874,9 @@ function bvomOrderApply(view){
  const cards=[...host.querySelectorAll(':scope > .exercise')].slice(0,entries.length);
  if(cards.length!==entries.length)return;
  // Never rearrange unidentified content, even if a future renderer changes.
- if(cards.some((card,i)=>card.querySelector('.exname')?.textContent?.trim()!==entries[i].label))return;
+ const bb1=scope.startsWith('bodybuilding:'),prefix=view==='warmup'?'warm-bb-':'work-bb-';
+ if(cards.some((card,i)=>bb1?card.id!==prefix+entries[i].key:
+  card.querySelector('.exname')?.textContent?.trim()!==entries[i].label))return;
  const byKey=new Map(entries.map((e,i)=>[e.key,cards[i]])),ordered=bvomOrderEffective(entries,scope);
  const afterLast=cards[cards.length-1].nextSibling;
  for(const key of ordered)host.insertBefore(byKey.get(key),afterLast);
@@ -5885,7 +5887,8 @@ function bvomOrderApply(view){
   const controls=document.createElement('div');controls.className='bvomOrderControls';
   for(const [delta,arrow,label] of [[-1,'↑','up'],[1,'↓','down']]){
    const button=document.createElement('button');button.type='button';button.className='bvomOrderArrow';
-   button.textContent=arrow;button.title='Move '+entries.find(x=>x.key===key).label+' '+label;
+   const name=entries.find(x=>x.key===key).label;
+   button.textContent=arrow;button.title=hlmTxt('Move '+name+' '+label,name+'を'+(delta<0?'上':'下')+'へ移動');
    button.setAttribute('aria-label',button.title);button.disabled=i+delta<0||i+delta>=ordered.length;
    button.onclick=()=>bvomOrderChange(key,delta);controls.appendChild(button);
   }
