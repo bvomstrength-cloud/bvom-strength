@@ -97,6 +97,33 @@ Object.assign(fixture,{day:'B',language:'ja',history:[legacy,newer]});
   for(const share of shares)assert.match(share,/オーバーヘッドプレス[\s\S]*デッドリフト/);
   assert.match(shares[1],/Lat Pulldown/);
   await tab('settings');
+  const dataBeforeRestore=await raw();
+  await page.evaluate(()=>{
+   bvomCloud.offlineLocalAccess=false;
+   bvomCloud.client={from(){
+    const query={select:()=>query,eq:()=>query,order:()=>query,
+     limit:async()=>({error:{message:'Invalid API key',code:'audit_error'}})};
+    return query;
+   }};
+  });
+  await page.evaluate(()=>bvomCloudRestore());
+  assert.match(await page.locator('#settings').innerText(),/クラウドバックアップを読み込めませんでした。/);
+  assert.doesNotMatch(await page.locator('#settings').innerText(),/Invalid API key/);
+  assert.equal(await raw(),dataBeforeRestore);
+  await page.evaluate(()=>{
+   const saved=bvomCloudPayload();
+   bvomCloud.client={from(){
+    const query={select:()=>query,eq:()=>query,order:()=>query,
+     limit:async()=>({data:[{data:saved}]})};
+    return query;
+   }};
+  });
+  await page.evaluate(()=>bvomCloudRestore());
+  const restore=page.getByRole('dialog',{name:'BVOM Cloudから復元しますか？'});
+  await restore.getByRole('button',{name:'キャンセル',exact:true}).click();
+  assert.equal(await raw(),dataBeforeRestore);
+  await page.evaluate(()=>{bvomCloud.offlineLocalAccess=true;});
+  console.log('PASS sanitized Japanese restore failure and named restore confirmation with cancelled write');
   await page.evaluate(()=>bvomShowServiceWorkerUpdate({waiting:{}}));
   const banner=page.locator('#bvomUpdateBanner');
   assert.match(await banner.innerText(),/更新して再読み込み/);
