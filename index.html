@@ -2556,6 +2556,10 @@ function tapSet(n,i){if(!bvomWorkoutActionAllowed({training:true}))return;
     else restoreProcessedSnapshot(n);
    }
    delete ss[i];
+   if(!bvomCoreSessionHasActivity(n)&&!state.processedSnapshots?.[n]){
+    delete state.processed?.[n];
+    delete state.hlm?.skippedSingles?.[state.day+'|'+n];
+   }
   }))return false;
   renderWorkout();bvomSyncWorkoutControls();return true;
  });

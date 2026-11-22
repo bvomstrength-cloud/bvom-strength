@@ -27,6 +27,26 @@ for (const [mode, day] of [['lprpt', 'A'], ['hlm', 'H'], ['fourday', '1']]) {
 }
 console.log('Issue 87 warm-up weight edit and reload contracts passed');
 
+function verifyFinalSetUndo() {
+  const app = boot(build);
+  configureLP(app);
+  app.ev("state.programMode='hlm';state.day='M';ensureHLM();state.hlm.optionalSingles=false;save()");
+  const lift = app.ev("program().find(([name]) => corePrescription(name).kind==='hlmMedium')[0]");
+  app.ctx.tapSet(lift, 0);
+  assert.equal(app.S().processed[lift], true);
+  app.ctx.bvomRepModal = (_title, _load, _target, _initial, _save, _rpe, cancel) => {
+    assert.equal(cancel(), true);
+  };
+  app.ctx.tapSet(lift, 0);
+  assert.equal(app.S().session[lift][0], undefined);
+  assert.equal(app.S().workoutStartedAt, null);
+  assert.equal(app.S().processed[lift], undefined);
+  assert.equal(app.S().processedSnapshots[lift], undefined);
+  console.log('Issue 87 cancelling the final recorded set clears the empty workout');
+}
+
+verifyFinalSetUndo();
+
 async function verifyCloudRoundTrip() {
   const { finish, launch, memStore, mockSupabase } = require('./lib/bvom_harness');
   const net = { online: true };
