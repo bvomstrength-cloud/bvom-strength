@@ -199,6 +199,11 @@ jobs:
           name: bb1-bb2-edit-weight-mobile-parity
           path: ${{ runner.temp }}/bb2-ui-parity/*.png
           if-no-files-found: ignore
+      - name: Verify set Cancel and programme selection on mobile Chromium
+        env:
+          BVOM_MONKEY_OUT: ${{ runner.temp }}/bvom-issue-87
+        run: node tests/bvom-lab/issue_87_browser.cjs
+
       - name: Run isolated deferred Starting Setup interactions
         run: node tests/bvom-lab/starting_setup_browser.cjs
 

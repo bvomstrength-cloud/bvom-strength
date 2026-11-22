@@ -11,6 +11,8 @@ permissions:
 
 jobs:
   package-manual-test-site:
+    # Issue 87 requires completed acceptance before an owner-facing package.
+    if: github.head_ref != 'codex/v3.0.5-issue-87'
     name: Package PR candidate for manual Netlify Drop
     runs-on: ubuntu-latest
     timeout-minutes: 5

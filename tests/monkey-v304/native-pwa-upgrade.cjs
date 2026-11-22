@@ -4,6 +4,7 @@
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),os=require('node:os'),a=require('node:assert/strict');
 const {chromium}=require('playwright'),P=require('./platform.cjs');
 const roots=[path.resolve(process.env.BVOM_SW_BASELINE_ROOT||'/workspace/bvom-v303-audit'),P.root],profile=fs.mkdtempSync(path.join(os.tmpdir(),'bvom-installed-pwa-'));
+const builds=roots.map(root=>fs.readFileSync(path.join(root,'index.html'),'utf8').match(/const BVOM_BUILD='([^']+)'/)[1]);
 const checks=[],actions=[];let context,control,version=0,server,origin,manifestId,app;
 const eq=(label,actual,expected)=>{a.deepEqual(actual,expected,label);checks.push({label,actual,expected,pass:true})};
 const click=(p,fn)=>p.locator('[onclick='+JSON.stringify(fn)+']').first().evaluate(e=>e.click());
@@ -32,19 +33,19 @@ async function main(){
   await seed.goto(origin+'/seed');await seed.evaluate(({data,owner})=>{localStorage.setItem('bvom_data',JSON.stringify(data));localStorage.setItem('bvom_data_owner',owner);localStorage.setItem('bvom_entitlement_cache_'+owner,JSON.stringify({userId:owner,verifiedAt:new Date().toISOString(),record:{user_id:owner,status:'complimentary'}}))},{data,owner});
   await seed.goto(origin+'/index.html');await P.ready(seed);await seed.evaluate(()=>navigator.serviceWorker.ready);
   const pageControl=await context.newCDPSession(seed);await pageControl.send('PWA.install',{manifestId,installUrl:origin+'/index.html'});await pageControl.send('PWA.changeAppUserSettings',{manifestId,displayMode:'standalone'});actions.push({type:'actual-native-install',manifestId,osState:await control.send('PWA.getOsAppState',{manifestId})});await seed.goto(origin+'/seed');
-  await launch();eq('Installed baseline build',await app.evaluate(()=>BVOM_BUILD),'3.0.3');let sets=0;
+  await launch();eq('Installed baseline build',await app.evaluate(()=>BVOM_BUILD),builds[0]);let sets=0;
   const names=await app.evaluate(()=>program().map(x=>x[0]));
   for(const n of names)for(let i=0;i<await app.evaluate(n=>getSetPlan(n).length,n);i++){const q=await app.evaluate(({n,i})=>getSetPlan(n)[i],{n,i});await click(app,"tapSet('"+n+"',"+i+")");await P.rep(app,q.target);await P.settle(app);sets++;actions.push({type:'baseline-prescribed-set',n,index:i,load:q.load,reps:q.target})}
-  await P.finish(app,'Native installed v303 completed workout');eq('Baseline completed History count',(await stored(app)).history.length,1);eq('Baseline prescribed sets actually recorded',sets,9);
+  await P.finish(app,'Native installed baseline completed workout');eq('Baseline completed History count',(await stored(app)).history.length,1);eq('Baseline prescribed sets actually recorded',sets,9);
   await P.tab(app,'workout');await click(app,"tapSet('Squat',0)");await P.rep(app,5);eq('Interrupted next workout actual load',(await stored(app)).session.Squat[0].load,62.5);const interrupted=await stored(app);
   version=1;await app.evaluate(async()=>{await (await navigator.serviceWorker.getRegistration()).update()});await app.waitForFunction(async()=>!!(await navigator.serviceWorker.getRegistration()).waiting);eq('Active workout defers the update control',await app.locator('#bvomUpdateBanner [data-bvom-update]').isVisible(),false);
-  eq('Active-workout update is refused',await app.evaluate(()=>BVOM_BUILD),'3.0.3');eq('Refused update keeps actuals',(await stored(app)).session,interrupted.session);eq('Refused update keeps History',(await stored(app)).history,interrupted.history);
-  await P.finish(app,'Native installed v303 interrupted workout',{incomplete:true});const before=await stored(app);eq('Interrupted workout saved explicitly',before.history.at(-1).incomplete,true);
-  await app.locator('#bvomUpdateBanner [data-bvom-update]').waitFor();await app.locator('#bvomUpdateBanner [data-bvom-update]').click();await app.waitForFunction(()=>BVOM_BUILD==='3.0.4');await P.ready(app);
+  eq('Active-workout update is refused',await app.evaluate(()=>BVOM_BUILD),builds[0]);eq('Refused update keeps actuals',(await stored(app)).session,interrupted.session);eq('Refused update keeps History',(await stored(app)).history,interrupted.history);
+  await P.finish(app,'Native installed baseline interrupted workout',{incomplete:true});const before=await stored(app);eq('Interrupted workout saved explicitly',before.history.at(-1).incomplete,true);
+  await app.locator('#bvomUpdateBanner [data-bvom-update]').waitFor();await app.locator('#bvomUpdateBanner [data-bvom-update]').click();await app.waitForFunction(build=>BVOM_BUILD===build,builds[1]);await P.ready(app);
   const after=await stored(app);for(const k of ['history','weights','core','attempts','processed','processedSnapshots','pbs','unit','programMode','hlm'])eq('Native update preserves '+k,after[k],before[k]);
   eq('Single service-worker scope after native upgrade',await app.evaluate(async()=>(await navigator.serviceWorker.getRegistrations()).length),1);eq('No second waiting worker',await app.evaluate(async()=>!!(await navigator.serviceWorker.getRegistration()).waiting),false);eq('Still standalone after upgrade',await app.evaluate(()=>matchMedia('(display-mode:standalone)').matches),true);
-  await app.screenshot({path:path.join(P.out,'screenshots','installed-pwa-v304.png'),fullPage:true});await context.close();context=null;
-  await openContext();await launch();eq('Persistent installed app launches updated build',await app.evaluate(()=>BVOM_BUILD),'3.0.4');eq('Native relaunch keeps both History records',(await stored(app)).history,before.history);
+  await app.screenshot({path:path.join(P.out,'screenshots','installed-pwa-updated.png'),fullPage:true});await context.close();context=null;
+  await openContext();await launch();eq('Persistent installed app launches updated build',await app.evaluate(()=>BVOM_BUILD),builds[1]);eq('Native relaunch keeps both History records',(await stored(app)).history,before.history);
   await context.setOffline(true);await P.tab(app,'workout');await click(app,"tapSet('Squat',0)");await P.rep(app,5);const offline=await stored(app);await app.reload();await P.ready(app);eq('Installed offline reload preserves actuals',(await stored(app)).session,offline.session);eq('Offline relaunch creates no duplicate History',(await stored(app)).history,before.history);await context.setOffline(false);
   actions.push({type:'native-upgrade-and-relaunch',manifestId,savedSessions:2,savedSets:10,additionalActiveSets:1,osState:await control.send('PWA.getOsAppState',{manifestId})});console.log('PASS',checks.length,'actual installed Chromium PWA upgrade assertions; 2 saved sessions, 11 set saves');
  }catch(error){if(app&&!app.isClosed())await app.screenshot({path:path.join(P.out,'screenshots','native-pwa-failure.png'),fullPage:true}).catch(()=>{});throw error}
