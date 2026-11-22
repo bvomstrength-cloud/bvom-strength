@@ -260,7 +260,7 @@ const MUTATIONS=[
  {id:'F42-HLM-PENDING-DECISION-RENDER-RESUME-REMOVED',why:'the persisted HLM third-failure decision is not re-presented after reload, leaving a processed lift with an unresolved progression choice hidden',targets:['F42-HLM-THIRD-FAILURE-DECISION-PERSISTS'],
   apply:inRegion('function renderAll(){bvomApplyShell();',"bvomPresentPendingHlmRepChoice();","")},
  {id:'F43-LP-PENDING-CLOSE-MISS-STATE-REMOVED',why:'the LP/RPT close-miss choice is shown transiently but no persisted decision exists to recover after reload',targets:['F43-LP-CLOSE-MISS-DECISION-PERSISTS'],
-  apply:inRegion('function offerCloseMissChoice(n,baseWeight,increment){',"if(bvomPersistPendingChoice('lp',{lift:n,nextWeight:bvomRoundForSession(n,Number(baseWeight)+Number(increment))})){bvomPresentPendingCloseMissChoice();return true}return false","save();bvomPresentPendingCloseMissChoice()")},
+  apply:inRegion('function offerCloseMissChoice(n,baseWeight,increment){',"if(bvomPersistPendingChoice('lp',bvomCloseMissChoiceData(n,baseWeight,increment))){bvomPresentPendingCloseMissChoice();return true}return false","save();bvomPresentPendingCloseMissChoice()")},
  {id:'F43-LP-PENDING-CLOSE-MISS-RENDER-RESUME-REMOVED',why:'the persisted LP/RPT close-miss choice is not re-presented after reload, silently leaving neither REPEAT nor PROGRESS ANYWAY committed',targets:['F43-LP-CLOSE-MISS-DECISION-PERSISTS'],
   apply:inRegion('function renderAll(){bvomApplyShell();',"bvomPresentPendingCloseMissChoice();","")},
 ];

@@ -59,7 +59,7 @@ H.configureLP(app);
 assert.deepEqual(plan(app, 'Deadlift'), [5]);
 assert.deepEqual(plan(app, 'Overhead Press'), [5, 5, 5, 5, 5]);
 app.ev("cfg('Squat').mode='rpt'");
-assert.equal(app.ctx.bvomFixedEligible('Squat'), false);
+assert.equal(app.ctx.bvomFixedEligible('Squat'), true);
 app.ev("state.programMode='hlm';state.day='H';cfg('Squat').mode='straight'");
 assert.equal(app.ctx.bvomFixedEligible('Squat'), false);
 assert.equal(app.ctx.corePrescription('Squat').topIndex, 2);
@@ -67,6 +67,53 @@ app.ev("state.programMode='fourday';state.day='4'");
 assert.equal(app.ctx.bvomFixedEligible('Squat'), false);
 assert.equal(app.ctx.bvomFixedEligible('Deadlift'), false);
 console.log('Issue 89 fixed-prescription contracts passed');
+
+
+function rptRecovery(target, firstMiss, recoveryReps, nextTarget) {
+  const app = H.boot(build);
+  H.configureLP(app);
+  app.ev("cfg('Squat').mode='rpt';cfg('Squat').drop=10;save()");
+  edit(app, 'Squat', 4, target, 100);
+  app.reps.push(target, firstMiss);
+  app.ctx.tapSet('Squat', 0);
+  app.ctx.tapSet('Squat', 1);
+  const before = copy(app.S().session.Squat);
+  const reload = H.boot(build, { ls: app.ls, ss: H.memStore({ bvom_tab_id: app.ctx.bvomTabId() }) });
+  assert.deepEqual(copy(reload.S().session.Squat), before);
+  const beforeRecovery = Array.from(reload.ctx.getSetPlan('Squat'), ({target,load})=>[target,load]);
+  assert.deepEqual(beforeRecovery.slice(0,3), [[target,100],[target,100],[firstMiss+1,90]]);
+  reload.reps.push(recoveryReps);
+  reload.ctx.tapSet('Squat',2);
+  assert.deepEqual(plan(reload,'Squat'),[target,target,firstMiss+1,nextTarget]);
+  assert.equal(reload.ctx.getSetPlan('Squat')[3].load,80);
+  reload.ctx.bvomChoiceModal=()=>{};
+  reload.reps.push(nextTarget);
+  reload.ctx.tapSet('Squat',3);
+  assert.equal(reload.S().pendingCloseMissChoice.lift,'Squat');
+  assert.equal(reload.S().weights.Squat,100,'a backoff miss still requires a decision');
+  const actuals=copy(reload.S().session.Squat);
+  edit(reload,'Squat',1,target);
+  assert.deepEqual(copy(reload.S().session.Squat),actuals,'reducing the plan retains all rescue actuals');
+  assert.equal(reload.S().pendingCloseMissChoice,undefined);
+  assert.equal(reload.S().weights.Squat,102.5,'the shortened prescription completed at target');
+  H.finish(reload);
+  assert.equal(reload.S().history.at(-1).session.Squat[2].target,firstMiss+1);
+  assert.equal(reload.S().history.at(-1).session.Squat[3].load,80);
+}
+rptRecovery(9, 8, 9, 11);
+rptRecovery(7, 5, 6, 8);
+rptRecovery(7, 5, 4, 7);
+for (const [reps,progresses] of [[[7,7,7,7],true],[[5,6,7,9],false]]) {
+  const rpt=H.boot(build);
+  H.configureLP(rpt);
+  rpt.ev("cfg('Squat').mode='rpt';cfg('Squat').drop=10;save()");
+  edit(rpt,'Squat',4,7);
+  rpt.reps.push(...reps);
+  reps.forEach((_,i)=>rpt.ctx.tapSet('Squat',i));
+  assert.equal(rpt.S().weights.Squat,progresses?102.5:100);
+  assert.equal(rpt.S().attempts.Squat,progresses?0:1);
+  assert.equal(rpt.S().pendingCloseMissChoice,undefined);
+}
 
 async function cloudAndHistory() {
   const net = { online: true };

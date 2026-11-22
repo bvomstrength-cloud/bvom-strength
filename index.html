@@ -1569,7 +1569,7 @@ function getSetPlan(n){
    let offset=0;
    if(rescueTotal>=3) offset=rescueStep===0?0:(rescueStep===1?1:3);
    else if(rescueTotal===2) offset=rescueStep===0?0:2;
-   const rq={load:nextLoad,target:rescueBase+offset,drop:true,amrap:i===planned.length-1,top:false};
+   const rq={load:nextLoad,target:p.fixed?Math.max(1,rescueBase+offset):rescueBase+offset,drop:true,amrap:i===planned.length-1,top:false};
    out.push(rq);
    const done=ss[i];
    nextLoad=bvomDerivedCoreLoad(n,rq.load*(1-dropPct));
@@ -2432,9 +2432,9 @@ function bvomDerivedCoreLoad(n,x){const bar=bvomCoreBarForSession(n);return Math
 // Fixed prescriptions are scoped to the programme and lift. A missing or invalid
 // entry keeps the original engine plan, including existing in-progress workouts.
 function bvomFixedEligible(n,mode=bvomCoreCfgForSession(n).mode){
- return ['lprpt','hlm','fourday'].includes(state.programMode)&&!bvomBb2Selected()&&mode==='straight'&&
+ return ['lprpt','hlm','fourday'].includes(state.programMode)&&!bvomBb2Selected()&&['straight','rpt'].includes(mode)&&
   !(isIntermediate()&&['Squat','Bench Press'].includes(n))&&
-  !(n==='Deadlift'&&((isHLM()&&state.day==='L')||(isFourDay()&&state.day==='4')));
+  !(mode==='straight'&&n==='Deadlift'&&((isHLM()&&state.day==='L')||(isFourDay()&&state.day==='4')));
 }
 function bvomFixedPrescription(n){
  const fixed=state.fixedWorkingSets?.[state.programMode]?.[n];
@@ -2455,7 +2455,7 @@ function bvomDefaultFixedFields(n){
  return {sets:p.targets.length,reps:p.targets[0]};
 }
 function bvomFixedUnavailable(){
- return `<p class="small">${hlmTxt('Fixed sets and reps are available for straight sets. This prescription uses programme-specific targets or set roles.','固定セット数と回数はストレートセットで使用できます。この処方にはプログラム固有の目標回数またはセットの役割があります。')}</p>`;
+ return `<p class="small">${hlmTxt('This prescription uses programme-specific set roles.','この処方にはプログラム固有のセットの役割があります。')}</p>`;
 }
 function bvomLiftFixedSettings(n){
  return bvomFixedEligible(n)?bvomFixedFields(bvomDefaultFixedFields(n)):bvomFixedUnavailable();
@@ -2463,7 +2463,20 @@ function bvomLiftFixedSettings(n){
 function corePrescription(n){
  let c=bvomCoreCfgForSession(n),w=bvomCoreWeightForSession(n);
  const fixed=bvomFixedEligible(n,c.mode)&&bvomFixedPrescription(n);
- if(fixed)return {kind:'straight',fixed:true,targets:Array(fixed.sets).fill(fixed.reps),loads:Array(fixed.sets).fill(w),topIndex:0};
+ if(fixed){
+  const targets=Array(fixed.sets).fill(fixed.reps);
+  if(c.mode==='straight')return {kind:'straight',fixed:true,targets,loads:Array(fixed.sets).fill(w),topIndex:0};
+  // A fixed RPT starts from the same working load until a miss. Press retains
+  // its ramp and backoff roles, with its top set as early as the count requires.
+  const topIndex=n==='Overhead Press'?Math.min(2,fixed.sets-1):0;
+  const loads=Array(fixed.sets).fill(w);
+  if(n==='Overhead Press'){
+   const drop=Number(c.drop||5)/100;
+   for(let i=0;i<topIndex;i++)loads[i]=bvomDerivedCoreLoad(n,w*(1-drop*(topIndex-i)));
+   for(let i=topIndex+1;i<loads.length;i++)loads[i]=bvomDerivedCoreLoad(n,loads[i-1]*(1-drop));
+  }
+  return {kind:'rptFixed',fixed:true,targets,loads,topIndex};
+ }
  if(isIntermediate()){
   ensureHLM();
   if(isDriverExposure(n)){
@@ -2521,18 +2534,25 @@ function hlmHeavyPlan(n,p,ss){
 }
 function genericSetPlan(n,p,ss){
  const c=bvomCoreCfgForSession(n),dropPct=Number(c.drop||((n==='Squat'||n==='Deadlift')?10:5))/100;
- const planned=p.targets.map((target,i)=>({target:Number(target),load:Number(p.loads[i]),top:i===p.topIndex,amrap:(p.kind==='rpt3'&&i===2)||(p.kind==='rpt5'&&i===4)||(p.kind==='rptDL'&&i===1),drop:p.kind!=='straight'&&i>p.topIndex}));
+ const planned=p.targets.map((target,i)=>({
+  target:Number(target),load:Number(p.loads[i]),top:i===p.topIndex,
+  amrap:(p.kind==='rpt3'&&i===2)||(p.kind==='rpt5'&&i===4)||(p.kind==='rptDL'&&i===1)||
+   (p.kind==='rptFixed'&&i===p.targets.length-1),
+  drop:i>p.topIndex&&p.kind!=='straight'&&(p.kind!=='rptFixed'||p.topIndex>0)
+ }));
+ const nextDrop=(q,done)=>bvomDerivedCoreLoad(n,
+  (p.kind==='rptFixed'&&Number(done?.load)>0?Number(done.load):q.load)*(1-dropPct));
  let out=[],rescue=false,nextLoad=null,rescueBase=0,rescueStep=0,rescueTotal=0;
  for(let i=0;i<planned.length;i++){
-  const q=planned[i];if(!rescue){out.push(q);const done=ss[i];if(done&&done.reps<q.target){rescue=true;nextLoad=bvomDerivedCoreLoad(n,q.load*(1-dropPct));rescueBase=Math.max(1,Number(done.reps)+1);rescueStep=0;rescueTotal=planned.length-i-1;}}
-  else{let offset=0;if(rescueTotal>=3)offset=rescueStep===0?0:(rescueStep===1?1:3);else if(rescueTotal===2)offset=rescueStep===0?0:2;const rq={load:nextLoad,target:rescueBase+offset,drop:true,amrap:i===planned.length-1,top:false};out.push(rq);const done=ss[i];nextLoad=bvomDerivedCoreLoad(n,rq.load*(1-dropPct));if(done&&done.reps<rq.target)rescueBase-=1;rescueStep++;}
+  const q=planned[i];if(!rescue){out.push(q);const done=ss[i];if(done&&done.reps<q.target){rescue=true;nextLoad=nextDrop(q,done);rescueBase=Math.max(1,Number(done.reps)+1);rescueStep=0;rescueTotal=planned.length-i-1;}}
+  else{let offset=0;if(rescueTotal>=3)offset=rescueStep===0?0:(rescueStep===1?1:3);else if(rescueTotal===2)offset=rescueStep===0?0:2;const rq={load:nextLoad,target:rescueBase+offset,drop:true,amrap:i===planned.length-1,top:false};out.push(rq);const done=ss[i];nextLoad=nextDrop(rq,done);if(done&&done.reps<rq.target)rescueBase-=1;rescueStep++;}
  }
  if(p.kind==='straight'&&planned.length){const last=planned.length-1,done=ss[last],q=planned[last];if(done&&done.reps<q.target&&out.length===planned.length)out.push({load:bvomDerivedCoreLoad(n,q.load*(1-dropPct)),target:q.target,drop:true,amrap:true,top:false});}
  return out;
 }
 function getSetPlan(n){
  const p=corePrescription(n),ss=state.session[n]||(state.session[n]={});
- if(p.fixed)return p.targets.map((target,i)=>({target,load:p.loads[i],top:i===0,amrap:false,drop:false}));
+ if(p.fixed&&p.kind==='straight')return p.targets.map((target,i)=>({target,load:p.loads[i],top:i===0,amrap:false,drop:false}));
  if(isIntermediate()&&p.kind==='hlmHeavy')return hlmHeavyPlan(n,p,ss);
  if(isHLM()&&p.kind==='hlmLight')return p.targets.map((target,i)=>({target,load:p.loads[i],top:false,drop:false,amrap:false}));
  if(isIntermediate()&&p.kind==='hlmMedium'){
@@ -2601,7 +2621,9 @@ function bvomApplyFixedResult(n){
  snap.livePrescriptionLock=true;
  state.processed[n]=true;
  if(snap.postEditWeight!=null){state.weights[n]=snap.postEditWeight;return null}
- if(result.failed)state.attempts[n]=(state.attempts[n]||0)+1;
+ if(result.close){
+  state.pendingCloseMissChoice=bvomCloseMissChoiceData(n,bvomCoreWeightForSession(n),bvomCoreCfgForSession(n).increment);
+ }else if(result.failed)state.attempts[n]=(state.attempts[n]||0)+1;
  else{
   state.weights[n]=bvomRoundForSession(n,bvomCoreWeightForSession(n)+bvomCoreCfgForSession(n).increment);
   state.attempts[n]=0;
@@ -2609,9 +2631,13 @@ function bvomApplyFixedResult(n){
  return result;
 }
 function bvomFixedResultFeedback(n,result){
- if(!result?.failed)return;
- if(state.attempts[n]>=3)offerThreeFailureChoice(n);
- else bvomRecovery(false);
+ if(!result)return;
+ if(result.amrapExceeded){if(result.failed)bvomRecovery(true);else bvomPraise()}
+ if(result.close)bvomPresentPendingCloseMissChoice();
+ else if(result.failed){
+  if(state.attempts[n]>=3)offerThreeFailureChoice(n);
+  else if(!result.strongRescue)bvomRecovery(false);
+ }
 }
 function bvomRollbackFixedResult(n){
  if(!state.processed?.[n])return;
@@ -2645,7 +2671,7 @@ function bvomChangeFixedPrescription(n,fixed,weight,before){
 function bvomRecordFixedSet(n,i,existing,reps,rpe,q){
  const before=JSON.parse(JSON.stringify(state));
  bvomRollbackFixedResult(n);
- const actual=existing?{...existing,reps}:{reps,load:q.load,target:q.target,top:q.top,amrap:false,drop:false,index:i};
+ const actual=existing?{...existing,reps}:{reps,load:q.load,target:q.target,top:q.top,amrap:q.amrap,drop:q.drop,index:i};
  if(isIntermediate())actual.rpe=Number(rpe??8);
  state.session[n][i]=actual;
  if(!state.workoutStartedAt)state.workoutStartedAt=Date.now();
@@ -2726,7 +2752,10 @@ function bvomPresentPendingCloseMissChoice(){
  const close=()=>{window.__bvomCloseMissChoiceOpen=false};
  bvomChoiceModal(`${n}: ${hlmTxt('close miss','あと少し')}`,hlmTxt('You were close. Repeat this weight, or progress anyway?','あと少しでした。この重量をもう一度行いますか？それとも次へ進みますか？'),hlmTxt('REPEAT','もう一度'),hlmTxt('PROGRESS ANYWAY','次へ進む'),()=>{if(!bvomCommitPendingChoice('lp',p,()=>{bvomClearPendingCloseMissChoice(n);state.attempts[n]=(state.attempts[n]||0)+1}))return false;close();if(state.attempts[n]>=3)offerThreeFailureChoice(n);return true},()=>{if(!bvomCommitPendingChoice('lp',p,()=>{bvomClearPendingCloseMissChoice(n);if(Number.isFinite(nextWeight))state.weights[n]=nextWeight;state.attempts[n]=0}))return false;close();renderAll();return true},true);
 }
-function offerCloseMissChoice(n,baseWeight,increment){if(bvomPersistPendingChoice('lp',{lift:n,nextWeight:bvomRoundForSession(n,Number(baseWeight)+Number(increment))})){bvomPresentPendingCloseMissChoice();return true}return false}
+function bvomCloseMissChoiceData(n,baseWeight,increment){
+ return {lift:n,nextWeight:bvomRoundForSession(n,Number(baseWeight)+Number(increment))};
+}
+function offerCloseMissChoice(n,baseWeight,increment){if(bvomPersistPendingChoice('lp',bvomCloseMissChoiceData(n,baseWeight,increment))){bvomPresentPendingCloseMissChoice();return true}return false}
 function advanceAfterExercise(n){
  if(isIntermediate()){
   const p=corePrescription(n),r=coreResult(n);
@@ -2755,7 +2784,7 @@ function bvomApplyWeightEdit(n,v){
 }
 function editWeight(n){
  const current=bvomCoreCardWeight(n),mode=state.programMode,day=state.day,unit=unitLabel();
- const fixed=bvomFixedEligible(n)&&cfg(n).mode==='straight'?bvomDefaultFixedFields(n):null;
+ const fixed=bvomFixedEligible(n)&&bvomFixedEligible(n,cfg(n).mode)?bvomDefaultFixedFields(n):null;
  bvomWeightModal(n,current,(v,requested,rawWeight=v)=>{
   if(!bvomWorkoutActionAllowed()||state.programMode!==mode||state.day!==day||unitLabel()!==unit)return;
   const changed=!!(requested&&fixed&&(requested.sets!==fixed.sets||requested.reps!==fixed.reps));
@@ -2842,7 +2871,7 @@ function saveLiftSettings(n){if(!bvomWorkoutActionAllowed())return;
  const eligible=bvomFixedEligible(n),hasFields=eligible&&form?.querySelector('[data-fixed-sets]')?.tagName==='INPUT';
  const previous=eligible?bvomDefaultFixedFields(n):null,requested=hasFields?bvomReadFixedFields(form):null;
  if(hasFields&&!requested)return;
- const changeFixed=!!(requested&&document.getElementById('mode'+id)?.value==='straight'&&
+ const changeFixed=!!(requested&&bvomFixedEligible(n,document.getElementById('mode'+id)?.value)&&
   (requested.sets!==previous.sets||requested.reps!==previous.reps));
  const before=changeFixed?JSON.parse(JSON.stringify(state)):null;
  const beforeSettings=JSON.stringify({plateMode:state.plateMode?.[n]||'standard',mode:c.mode,increment:c.increment,drop:c.drop,rptLevel:c.rptLevel,weight:state.weights?.[n],bar:state.barByLift?.[n],hlm:isIntermediate()&&(n==='Squat'||n==='Bench Press')?{driver:state.hlm?.driver?.[n],rep:state.hlm?.rep?.[n]}:null});

@@ -73,6 +73,37 @@ async function main() {
         await context.close();
       }
     }
+    const {page,context}=await server.device({name:'RPT',mode:'lprpt',width:390});
+    try{
+      await page.evaluate(()=>{cfg('Squat').mode='rpt';cfg('Squat').drop=10;save();renderAll()});
+      await P.tab(page,'workout');
+      await page.locator('#work-Squat .weight').click();
+      const modal=page.locator('.bvomModalOverlay').last();
+      await modal.locator('[data-fixed-sets]').fill('4');
+      await modal.locator('[data-fixed-reps]').fill('7');
+      await modal.locator('[data-w]').fill('100');
+      await modal.locator('[data-s]').click();
+      const set=i=>page.locator(`#work-Squat button[onclick="tapSet('Squat',${i})"]`);
+      for(const [i,reps] of [[0,7],[1,5]]){
+        await set(i).click();
+        await P.rep(page,reps);
+      }
+      await page.reload();
+      await P.ready(page);
+      await P.tab(page,'workout');
+      await set(2).click();
+      assert.match(await modal.locator('.sub').textContent(),/90 kg.*6/);
+      await P.rep(page,6);
+      await set(3).click();
+      assert.match(await modal.locator('.sub').textContent(),/80 kg.*8/);
+      await P.rep(page,8);
+      assert.match(await modal.textContent(),/close miss/i);
+      const actual=(await P.stored(page)).session.Squat[2];
+      assert.deepEqual([actual.load,actual.reps,actual.target],[90,6,6]);
+      console.log('PASS RPT mobile 4×7 actual-derived recovery, reload and close-miss decision');
+    }finally{
+      await context.close();
+    }
   } finally {
     await server.close();
   }
