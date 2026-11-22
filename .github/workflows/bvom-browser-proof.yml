@@ -205,6 +205,7 @@ jobs:
         run: |
           node tests/bvom-lab/issue_87_browser.cjs
           node tests/bvom-lab/issue_89_browser.cjs
+          node tests/bvom-lab/accessory_cancel_browser.cjs
           node tests/audit-v310/browser.cjs
           node tests/audit-v310/straight-recovery-browser.cjs
           node tests/audit-v310-e2e/browser.cjs

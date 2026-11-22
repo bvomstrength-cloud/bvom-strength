@@ -88,6 +88,7 @@ jobs:
         run: |
           node tests/bvom-lab/issue_87_contracts.cjs .bvom-candidate
           node tests/bvom-lab/issue_89_contracts.cjs .bvom-candidate
+          node tests/bvom-lab/accessory_cancel_contracts.cjs .bvom-candidate
           node tests/audit-v310/stress.cjs .bvom-candidate
           node tests/audit-v310/straight-recovery.cjs .bvom-candidate
           node tests/audit-v310/isolation-cloud.cjs .bvom-candidate
