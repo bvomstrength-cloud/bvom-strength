@@ -9,7 +9,7 @@ globalThis.BVOM_LOCALES.ja = {
   lifts:{Squat:'スクワット','Bench Press':'ベンチプレス','Prone Row':'ロウ','Prone Row HLM':'プローンロウ','Supine Row':'スパインロウ','Overhead Press':'オーバーヘッドプレス',Deadlift:'デッドリフト'},
   accessoryPresets:{
     'Lat Pulldown':'ラットプルダウン','Incline Bench Press':'インクラインベンチプレス','Dumbbell Bench Press':'ダンベルベンチプレス',
-    'Dumbbell Row':'ダンベルロウ','Cable Row':'ケーブルロウ','Biceps Curl':'アームカール','Triceps Pushdown':'トライセプスプッシュダウン',
+    'Dumbbell Row':'ダンベルロウ','Cable Row':'ケーブルロウ','Biceps Curl':'バイセップスカール','Triceps Pushdown':'トライセプスプッシュダウン',
     'Lateral Raise':'サイドレイズ','Face Pull':'フェイスプル','Romanian Deadlift':'ルーマニアンデッドリフト','Leg Press':'レッグプレス',
     'Leg Curl':'レッグカール','Leg Extension':'レッグエクステンション','Calf Raise':'カーフレイズ','Hip Thrust':'ヒップスラスト',
     'Split Squat':'スプリットスクワット','Lunge':'ランジ','Back Extension':'バックエクステンション'

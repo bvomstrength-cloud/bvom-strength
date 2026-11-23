@@ -214,6 +214,8 @@ jobs:
 
       - name: Check Japanese repair in Chromium
         run: node tests/audit-v311/browser.cjs
+      - name: Verify accessory preset provenance and legacy names
+        run: node tests/audit-v311/accessory-presets.cjs
 
       - name: Check out the locked Japanese localisation baseline
         uses: actions/checkout@v4
