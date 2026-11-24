@@ -1,6 +1,6 @@
-// BVOM Strength v3.1.2 UI/UX candidate — no production deployment.
-const CACHE = 'bvom-3.1.2';
-const BUILD = '3.1.2';
+// BVOM Strength v3.1.3 UI/UX candidate — no production deployment.
+const CACHE = 'bvom-3.1.3';
+const BUILD = '3.1.3';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './og-image.png', './i18n/en.js?v=0db2ad9df3e0', './i18n/ja.js?v=629060285d86',
   './theme-bee-v23c.svg',
   './theme-cherry-v23f.svg',

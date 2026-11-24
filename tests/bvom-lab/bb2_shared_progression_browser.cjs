@@ -15,7 +15,10 @@ async function log(i,j,{extra=false,reps=8,load}={}){if(extra)await page.locator
 async function finish(note,incomplete=false){await page.locator('#timerbar .finish').click();if(incomplete)await page.locator('.bvomModalOverlay [data-r]').click();await page.locator('.bvomModalOverlay [data-note]').fill(note);await page.evaluate(()=>document.querySelector('#timerbar .finish').click());assert.equal(await page.locator('.bvomModalOverlay [data-note]').count(),1);await page.locator('.bvomModalOverlay [data-save]').click();const volume=await page.locator('.savedStats .num').nth(1).textContent();await page.locator('.bvomModalOverlay [data-ok]').click();return volume;}
 async function prepare(day,{first=false}={}){
  await tab('workout');await page.locator('[data-bb2-next-workout]').click();
- if(first){await page.locator('[data-bb2-curls-a]').check();await page.locator('[data-bb2-curls]').check();await page.locator('[data-bb2-role="upper_a|biceps_curl"]').selectOption('dumbbell_curl');await page.locator('[data-bb2-role="upper_b|biceps_curl"]').selectOption('dumbbell_curl');await page.locator('[data-bb2-save]').click()}
+ if(first){
+  const catalogue=page.locator('#setup [data-bb2-catalogue]');
+  if(await catalogue.count()&&await catalogue.getAttribute('open')===null)await catalogue.locator('summary').click();
+  await page.locator('[data-bb2-curls-a]').check();await page.locator('[data-bb2-curls]').check();await page.locator('[data-bb2-role="upper_a|biceps_curl"]').selectOption('dumbbell_curl');await page.locator('[data-bb2-role="upper_b|biceps_curl"]').selectOption('dumbbell_curl');await page.locator('[data-bb2-save]').click()}
  await page.locator('[data-bb2-day="'+day+'"]').click();
 }
 async function begin(day,{first=false}={}){

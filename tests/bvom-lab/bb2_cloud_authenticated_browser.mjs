@@ -339,6 +339,8 @@ try {
     assert.equal(await accountTablet.evaluate(() =>
       state.bb2.events.filter(e => e.type === 'CREDIT_GRANTED').length), 1);
     await accountTablet.evaluate(() => bvomBb2OpenPreview());
+    const catalogue = accountTablet.locator('#setup [data-bb2-catalogue]:not([open]) > summary');
+    if (await catalogue.count()) await catalogue.click();
     await accountTablet.locator('#setup [data-bb2-curls]').click();
     await accountTablet.locator('#setup [data-bb2-save]').click();
     await accountTablet.locator('#setup [data-bb2-back]').click();
@@ -416,6 +418,8 @@ try {
     for(const [page,exercise]of [[accountPhone,'dumbbell_flat_press'],[peer,'machine_chest_press']]){
       page.context().bb2Offline=true;
       await page.evaluate(()=>bvomBb2OpenPreview());
+      const catalogue = page.locator('#setup [data-bb2-catalogue]:not([open]) > summary');
+      if (await catalogue.count()) await catalogue.click();
       await page.locator('#setup [data-bb2-role="upper_a|flat_press"]').selectOption(exercise);
       await page.locator('#setup [data-bb2-save]').click();
       await page.locator('#setup [data-bb2-back]').click();
@@ -613,6 +617,8 @@ try {
     await a.locator('.tab[data-tab="workout"]').click();await a.locator('[data-bb2-next-workout]').click();await a.locator('[data-bb2-day="upper_b"]').click();
     for(const field of await a.locator('#setup [data-bb2-load]:not([disabled])').all())if(!(await field.inputValue()))await field.fill('60');
     for(const field of await a.locator('#setup [data-bb2-inc]').all())if(!(await field.inputValue()))await field.fill('2.5');
+    const bodyweight=a.locator('#setup [data-bb2-exercise]:not([open])').filter({has:a.locator('[data-actual-bodyweight-kg]')});
+    if(await bodyweight.count())await bodyweight.locator('summary').click();
     await a.locator('#setup [data-actual-bodyweight-kg]').fill('84.25');
     await a.locator('[data-bb2-start]').click();await a.waitForSelector('[data-bb2-extra-add="0"]');
     assert.equal(await a.locator('[data-bb2-set].done').count(),0);
@@ -650,6 +656,8 @@ try {
         await page.evaluate(()=>showSetup());await page.locator('#setup [data-bb2-preview]').click();
       }
       if(first){
+        const catalogue = page.locator('#setup [data-bb2-catalogue]:not([open]) > summary');
+        if (await catalogue.count()) await catalogue.click();
         await page.locator('[data-bb2-curls-a]').check();await page.locator('[data-bb2-curls]').check();
         for(const d of ['upper_a','upper_b'])await page.locator('[data-bb2-role="'+d+'|biceps_curl"]').selectOption('dumbbell_curl');
         await page.locator('[data-bb2-save]').click();

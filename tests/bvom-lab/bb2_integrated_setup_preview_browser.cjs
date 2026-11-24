@@ -796,6 +796,7 @@ const server=http.createServer((req,res)=>{
   assert.match(await page.locator('#setup').textContent(),/BODYBUILDING · 24 WORKOUTS/,
    'BB1 keeps its original setup editor');
   await page.locator('#setup [data-bb2-preview]').click();
+  await page.locator('#setup [data-bb2-catalogue] > summary').click();
   await page.waitForSelector('#setup [data-bb2-template]');
   assert.equal(await page.locator('#setup [data-bb2-template]').count(),4,
    'BB2 is selectable directly from the BB1 setup editor');

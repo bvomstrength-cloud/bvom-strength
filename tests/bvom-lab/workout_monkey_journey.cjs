@@ -225,6 +225,8 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
  async function swapBB2(){
   await tab(p,'workout');await p.locator('#workout [data-bb2-next-workout]').click();
   const before=await p.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events)),old=(await stored(p)).bb2.setup.selections['upper_a|horizontal_row'];
+  const catalogue=p.locator('#setup [data-bb2-catalogue]:not([open]) > summary');
+  if(await catalogue.count())await catalogue.click();
   await p.locator('#setup [data-bb2-role="upper_a|horizontal_row"]').selectOption('dumbbell_row');await p.locator('#setup [data-bb2-save]').click();
   const after=await p.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events));assert.deepEqual(after.history,before.history);assert.equal(after.progress['upper_a|horizontal_row|'+old].loadG,before.progress['upper_a|horizontal_row|'+old].loadG);
   pass('mid-block exercise substitution preserves prior History and per-exercise working weight');
@@ -249,6 +251,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   const plan=await p.evaluate(()=>bvomBb2PreviewModule.getBB2TemplatePrescription(state.bb2.setup,bvomBb2Day).slots);
   for(const el of await p.locator('#setup [data-bb2-load]:not([disabled])').all())if(!(await el.inputValue()))await el.fill(String(knownLoad(profile,plan[Number(await el.getAttribute('data-bb2-load'))].exerciseId)));
   for(const el of await p.locator('#setup [data-bb2-inc]').all())if(!(await el.inputValue()))await el.fill(String(profile.increment));
+  for(const disclosure of await p.locator('#setup [data-bb2-exercise]:not([open])').filter({has:p.locator('[data-bb2-assist]')}).all())await disclosure.locator('summary').click();
   for(const input of await p.locator('#setup [data-bb2-assist]').all())await input.fill(kind==='RECOVERY'?'strong band recovery':profile.name==='Female'?'green band':'none');
   if(kind==='RECOVERY')for(const input of await p.locator('#setup [data-bb2-bw-variation]').all())await input.fill('easier supported recovery');
   await p.locator('#setup [data-bb2-start]').click();await p.waitForSelector('#workout [data-bb2-set]');assert.equal(await p.locator('[data-bb2-trial-save]').count(),0);
