@@ -127,12 +127,12 @@ test('old v2.9 workout is read-only until explicit archive; cancel leaves exact 
  const {context,a}=await setup(old);a.on('console',m=>{if(m.type()==='warning')console.log('ARCHIVE CONSOLE',m.text())});try{
   await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').waitFor();
   const before=await raw(a);
-  a.once('dialog',d=>d.dismiss());
   await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
+  await a.locator('[data-bvom-confirm] [data-l]').click();
   assert.equal(await raw(a),before);
   assert.equal(await a.evaluate(()=>localStorage.getItem('bvom_legacy_workout_before_archive')),null);
-  a.once('dialog',d=>d.accept());
   await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
+  await a.locator('[data-bvom-confirm] [data-r]').click();
   const after=await saved(a);if(after.history.length!==1)console.log('ARCHIVE DEBUG 1',await a.evaluate(()=>({snapshot:localStorage.getItem('bvom_legacy_workout_before_archive')?.length,owner:localStorage.getItem('bvom_workout_tab_owner'),lock:bvomWindowLockOwned,legacy:bvomRecoveryLegacyBlocked,account:bvomRecoveryAccount,auth:window.__bvomAuthUserId,cloud:bvomCloud.user?.id,overlays:Array.from(document.querySelectorAll('.bvomModalOverlay')).map(x=>x.textContent.slice(0,400))})));
   assert.equal(after.history.length,1);
   assert.equal(after.history[0].incomplete,true);
@@ -158,16 +158,16 @@ test('legacy pending decision and active GPP are archived undecided, with exact 
   const before=await raw(a);
   // Competing old writer changing the owner marker between lock acquisition and confirmation.
   await a.evaluate(()=>localStorage.setItem('bvom_workout_tab_owner','changed-owner'));
-  a.once('dialog',d=>d.accept());
   await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
+  await a.locator('[data-bvom-confirm] [data-r]').click();
   assert.equal(await raw(a),before);
   assert.equal(await a.evaluate(()=>localStorage.getItem('bvom_legacy_workout_before_archive')),null);
   // Restore old-marker snapshot only in this synthetic test; new document gets it at lock acquisition.
   await a.evaluate(()=>localStorage.removeItem('bvom_workout_tab_owner'));
   await a.reload();await a.waitForSelector('#app:not(.hidden)');
   await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').waitFor();
-  a.once('dialog',d=>d.accept());
   await a.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
+  await a.locator('[data-bvom-confirm] [data-r]').click();
   const after=await saved(a);if(after.history.length!==1)console.log('ARCHIVE DEBUG 2',await a.evaluate(()=>({snapshot:localStorage.getItem('bvom_legacy_workout_before_archive')?.length,owner:localStorage.getItem('bvom_workout_tab_owner'),lock:bvomWindowLockOwned,legacy:bvomRecoveryLegacyBlocked,account:bvomRecoveryAccount,auth:window.__bvomAuthUserId,cloud:bvomCloud.user?.id,overlays:Array.from(document.querySelectorAll('.bvomModalOverlay')).map(x=>x.textContent.slice(0,400))})));assert.equal(after.history.length,1);
   const h=after.history[0];
   assert.equal(h.incomplete,true);assert.equal(h.legacyPendingChoices.lp.weight,45);
@@ -190,8 +190,8 @@ test('real v2.9.0 source workout can be archived after upgrade without changing 
   const upgraded=await open(context);
   await upgraded.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').waitFor();
   const exactBefore=await raw(upgraded);
-  upgraded.once('dialog',d=>d.accept());
   await upgraded.locator('#bvomWorkoutReadOnlyOverlay [data-legacy-archive]').click();
+  await upgraded.locator('[data-bvom-confirm] [data-r]').click();
   const after=await saved(upgraded);
   assert.equal(after.history.length,oldSaved.history.length+1);
   assert.equal(after.history.at(-1).incomplete,true);

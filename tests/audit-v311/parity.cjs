@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const H = require('../bvom-lab/lib/bvom_harness');
 const baseline = H.loadBuild(process.argv[2]);
 const candidate = H.loadBuild(process.argv[3] || '.');
-assert.match(baseline.html,/const BVOM_BUILD='3\.1\.0'/);
+const expected=process.argv[4]||'3.1.0';
+assert.ok(baseline.html.includes("const BVOM_BUILD='"+expected+"'"),'unexpected comparison baseline');
 
 function inspect(build, language, programMode, day, lift, style, choice){
  const app=H.boot(build);
@@ -30,7 +31,7 @@ function inspect(build, language, programMode, day, lift, style, choice){
   let called=false;
   app.ctx.bvomChoiceModal=(title,body,left,right,onLeft,onRight)=>{
    called=true;
-   if(build===candidate&&language==='ja'){
+   if(language==='ja'&&(build===candidate||expected==='3.1.1')){
     assert.match(title,/目標未達/);
     assert.match(body,/×/);
     assert.equal(left,'同じ重量で再挑戦');

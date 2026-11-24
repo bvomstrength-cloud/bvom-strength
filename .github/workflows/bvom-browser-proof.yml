@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - codex/v3.1.0-issue-89
+      - fix/v3.1.1-ja
 
 permissions:
   contents: read
@@ -225,6 +226,18 @@ jobs:
 
       - name: Compare locale and training behaviour against v3.1.0
         run: node tests/audit-v311/parity.cjs .bvom-ja-baseline .
+
+      - name: Verify optional forms, order and canonical labels on mobile
+        run: node tests/audit-v312/browser.cjs
+
+      - name: Check out the owner-approved v3.1.1 training baseline
+        uses: actions/checkout@v4
+        with:
+          ref: bde051b503a69e11e6b1336457a281a16952f850
+          path: .bvom-v311-baseline
+
+      - name: Compare candidate training decisions against v3.1.1
+        run: node tests/audit-v311/parity.cjs .bvom-v311-baseline . 3.1.1
 
       - name: Run isolated deferred Starting Setup interactions
         run: node tests/bvom-lab/starting_setup_browser.cjs

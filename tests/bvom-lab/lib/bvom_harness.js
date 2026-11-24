@@ -44,7 +44,7 @@ function boot(build,{ls=memStore(),ss=memStore(),supabase='inert',online=true,lo
   let firstUuid=true;const platformCrypto={randomUUID:()=>{if(firstUuid){firstUuid=false;return ss.getItem('bvom_tab_id')}return nodeCrypto.randomUUID()}};
   const log=[],timers=[];
   const document={body:mkEl('body'),documentElement:mkEl('html'),head:mkEl('head'),visibilityState:'visible',title:'',
-    getElementById:id=>els['#'+id]||(els['#'+id]=mkEl()),querySelector:s=>s==='.bvomModalOverlay'?(document.body.children.find(e=>e.className==='bvomModalOverlay'&&!e.removed)||null):(els[s]||(els[s]=mkEl())),querySelectorAll:()=>[],
+    getElementById:id=>els['#'+id]||(els['#'+id]=mkEl()),querySelector:s=>['.bvomModalOverlay','.beeCoachOverlay'].includes(s)?(document.body.children.find(e=>'.'+e.className===s&&!e.removed)||null):(els[s]||(els[s]=mkEl())),querySelectorAll:()=>[],
     createElement:t=>mkEl(t),createTextNode:t=>({nodeValue:t}),addEventListener(){}};
   const ctx={console:{log(){},warn(){},error(){},info(){},debug(){}},localStorage:ls,sessionStorage:ss,document,
     // Default synchronous lock stub keeps historical callback contracts deterministic.
@@ -76,6 +76,7 @@ function boot(build,{ls=memStore(),ss=memStore(),supabase='inert',online=true,lo
   // Scripted answers for BVOM's rep and choice modals (the dialog wrappers only).
   ctx.bvomRepModal=(title,w,target,initial,onSave)=>onSave(h.reps.length?h.reps.shift():initial,8);
   ctx.bvomChoiceModal=(title,body,l,r,onL,onR)=>{const pick=h.choices.length?h.choices.shift():'L';log.push(['choice',String(title),pick]);const f=pick==='R'?onR:onL;f&&f()};
+  if(ctx.bvomConfirmAction)ctx.bvomConfirmAction=()=>Promise.resolve(true);
   ctx.bvomSessionNoteModal=(initial,onSave)=>onSave('');
   ctx.bvomIncompleteConfirm=(onFinish)=>{log.push(['incompleteConfirm']);onFinish()};
   return h;

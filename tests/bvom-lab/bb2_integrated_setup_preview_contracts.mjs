@@ -1455,7 +1455,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   assert.equal(h.ctx.bvomBb2Log(i,j),true);
  }
  // F1: exporting cannot produce an unrestorable active-session backup.
- let downloads=0,notice='';h.ctx.alert=message=>{notice=message};
+ let downloads=0,notice='';h.ctx.bvomNotice=message=>{notice=message};
  h.ctx.Blob=function(){downloads++};h.ctx.URL.createObjectURL=()=>'blob:audit-test';h.ctx.URL.revokeObjectURL=()=>{};
  const interrupted=JSON.stringify(h.S()),interruptedRaw=h.ls.getItem('bvom_data');
  assert.equal(h.ctx.exportBackup(),false);
@@ -1564,19 +1564,19 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ctx.bvomBb2Begin(),true);
  for(const [i,j] of [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[3,0]])
   assert.equal(h.ctx.bvomBb2Log(i,j),true);
- assert.equal(h.ctx.bvomBb2VoidSet(0,8),false,'cannot void an active workout set');
+ assert.equal(await h.ctx.bvomBb2VoidSet(0,8),false,'cannot void an active workout set');
  assert.equal(h.ctx.bvomBb2End('FINISH'),true);
  openHistory(h);assert.match(h.ctx.document.querySelector('#history').innerHTML,/EDIT SETS/);
  const beforeVoid=h.ls.getItem('bvom_data'),events=h.S().bb2.events;
- h.ctx.confirm=()=>false;
- assert.equal(h.ctx.bvomBb2VoidSet(0,8),false,'cancelled destructive action does not write');
+ h.ctx.bvomConfirmAction=()=>false;
+ assert.equal(await h.ctx.bvomBb2VoidSet(0,8),false,'cancelled destructive action does not write');
  assert.equal(h.ls.getItem('bvom_data'),beforeVoid);
- h.ctx.confirm=()=>true;
+ h.ctx.bvomConfirmAction=()=>true;
  h.ev('bvomWindowLockOwned=false');
- assert.equal(h.ctx.bvomBb2VoidSet(0,8),false,'non-owner cannot void credit-bearing set');
+ assert.equal(await h.ctx.bvomBb2VoidSet(0,8),false,'non-owner cannot void credit-bearing set');
  assert.equal(h.ls.getItem('bvom_data'),beforeVoid);
  h.ev('bvomWindowLockOwned=true');
- assert.equal(h.ctx.bvomBb2VoidSet(0,8),true,'void and revoke in a single durable transaction');
+ assert.equal(await h.ctx.bvomBb2VoidSet(0,8),true,'void and revoke in a single durable transaction');
  const bb=h.S().bb2,projection=catalogue.foldBB2Block(bb.opening,bb.events);
  assert.equal(bb.events.length,events.length+2,'void and credit revoke are paired');
  assert.deepEqual(bb.events.slice(-2).map(e=>e.type),['SET_VOIDED','CREDIT_REVOKED']);
@@ -1589,13 +1589,13 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  const first=events.find(e=>e.type==='WORKOUT_STARTED').slots[0];
  assert.equal(projection.progress['upper_a|'+first.roleSlotId+'|'+first.exerciseId]?.calibrated??false,false,
   'credit-revoking correction also retracts its progression and calibration evidence');
- assert.equal(h.ctx.bvomBb2VoidSet(0,8),false,'removed set cannot be voided twice');
+ assert.equal(await h.ctx.bvomBb2VoidSet(0,8),false,'removed set cannot be voided twice');
  openHistory(h);
  assert.match(h.ctx.document.querySelector('#history').innerHTML,/8\/12 prescribed sets/);
  assert.doesNotMatch(h.ctx.document.querySelector('#history').innerHTML,/Credit awarded/);
  const persisted=h.ls.getItem('bvom_data'),setItem=h.ls.setItem;
  h.ls.setItem=(k,v)=>{if(k==='bvom_data')throw Error('simulated failed History write');return setItem(k,v)};
- assert.equal(h.ctx.bvomBb2VoidSet(0,7),false,'failed subsequent void leaves the ledger intact');
+ assert.equal(await h.ctx.bvomBb2VoidSet(0,7),false,'failed subsequent void leaves the ledger intact');
  h.ls.setItem=setItem;
  assert.equal(h.ls.getItem('bvom_data'),persisted);
  assert.equal(h.S().bb2.events.length,bb.events.length);
@@ -1626,7 +1626,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   assert.equal(h.ctx.bvomBb2Log(i,j),true);
  assert.equal(h.ctx.bvomBb2End('FINISH'),true);
  const initial=h.S().bb2.events.length;
- assert.equal(h.ctx.bvomBb2VoidSet(0,9),true,'void above 70% is allowed without credit revocation');
+ assert.equal(await h.ctx.bvomBb2VoidSet(0,9),true,'void above 70% is allowed without credit revocation');
  const b=h.S().bb2,p=catalogue.foldBB2Block(b.opening,b.events);
  assert.equal(b.events.length,initial+1);
  assert.equal(b.events.at(-1).type,'SET_VOIDED');
@@ -1654,19 +1654,19 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ctx.bvomBb2Begin(),true);
  for(const [i,j] of [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[3,0]])
   assert.equal(h.ctx.bvomBb2Log(i,j),true);
- assert.equal(h.ctx.bvomBb2VoidSession(0),false,'cannot retrospectively void while a workout is active');
+ assert.equal(await h.ctx.bvomBb2VoidSession(0),false,'cannot retrospectively void while a workout is active');
  assert.equal(h.ctx.bvomBb2End('FINISH'),true);
  openHistory(h);assert.match(h.ctx.document.querySelector('#history').innerHTML,/DELETE WORKOUT/);
  const original=h.S().bb2,raw=h.ls.getItem('bvom_data');
- h.ctx.confirm=()=>false;
- assert.equal(h.ctx.bvomBb2VoidSession(0),false,'cancelled workout removal writes nothing');
+ h.ctx.bvomConfirmAction=()=>false;
+ assert.equal(await h.ctx.bvomBb2VoidSession(0),false,'cancelled workout removal writes nothing');
  assert.equal(h.ls.getItem('bvom_data'),raw);
- h.ctx.confirm=()=>{h.ev('bvomWindowLockOwned=false');return true};
- assert.equal(h.ctx.bvomBb2VoidSession(0),false,'window-owner change during confirmation aborts removal');
+ h.ctx.bvomConfirmAction=()=>{h.ev('bvomWindowLockOwned=false');return true};
+ assert.equal(await h.ctx.bvomBb2VoidSession(0),false,'window-owner change during confirmation aborts removal');
  h.ev('bvomWindowLockOwned=true');
  assert.equal(h.ls.getItem('bvom_data'),raw);
- h.ctx.confirm=()=>true;
- assert.equal(h.ctx.bvomBb2VoidSession(0),true,'credited workout removal atomically revokes its credit');
+ h.ctx.bvomConfirmAction=()=>true;
+ assert.equal(await h.ctx.bvomBb2VoidSession(0),true,'credited workout removal atomically revokes its credit');
  const bb=h.S().bb2,p=catalogue.foldBB2Block(bb.opening,bb.events);
  assert.deepEqual(bb.events.slice(-2).map(e=>e.type),['SESSION_VOIDED','CREDIT_REVOKED']);
  assert.equal(bb.events.at(-1).creditId,original.events.find(e=>e.type==='CREDIT_GRANTED').creditId);
@@ -1674,7 +1674,7 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(p.history[0].creditId,null);
  assert.equal(p.quotas.upper_a,0);
  assert.deepEqual(p.progress,{},'voided only qualifying workout retracts its progression evidence');
- assert.equal(h.ctx.bvomBb2VoidSession(0),false,'already removed session is not offered twice');
+ assert.equal(await h.ctx.bvomBb2VoidSession(0),false,'already removed session is not offered twice');
  assert.doesNotMatch(h.ctx.document.querySelector('#history').innerHTML,/data-bb2-history=/);
  const reboot=fixture({ls:h.ls}),replay=catalogue.foldBB2Block(reboot.h.S().bb2.opening,reboot.h.S().bb2.events);
  assert.equal(replay.history[0].status,'VOID');assert.equal(replay.quotas.upper_a,0);
@@ -1700,8 +1700,8 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ctx.bvomBb2Begin(),true);
  assert.equal(h.ctx.bvomBb2End('INCOMPLETE'),true);
  const initial=h.S().bb2.events.length;
- h.ctx.confirm=()=>true;
- assert.equal(h.ctx.bvomBb2VoidSession(0),true,'saved incomplete workout can be removed without a credit');
+ h.ctx.bvomConfirmAction=()=>true;
+ assert.equal(await h.ctx.bvomBb2VoidSession(0),true,'saved incomplete workout can be removed without a credit');
  assert.equal(h.S().bb2.events.length,initial+1);
  assert.equal(h.S().bb2.events.at(-1).type,'SESSION_VOIDED');
  const p=catalogue.foldBB2Block(h.S().bb2.opening,h.S().bb2.events);
@@ -1726,9 +1726,9 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ctx.bvomBb2Begin(),true);
  assert.equal(h.ctx.bvomBb2End('INCOMPLETE'),true);
  const old=h.S().bb2,raw=h.ls.getItem('bvom_data'),setItem=h.ls.setItem;
- h.ctx.confirm=()=>true;
+ h.ctx.bvomConfirmAction=()=>true;
  h.ls.setItem=(k,v)=>{if(k==='bvom_data')throw Error('simulated failed workout void');return setItem(k,v)};
- assert.equal(h.ctx.bvomBb2VoidSession(0),false,'failed local storage blocks historical workout void');
+ assert.equal(await h.ctx.bvomBb2VoidSession(0),false,'failed local storage blocks historical workout void');
  h.ls.setItem=setItem;
  assert.equal(h.ls.getItem('bvom_data'),raw,'persisted incomplete workout is untouched');
  assert.equal(h.S().bb2,old,'in-memory journal rolls back to the last durable BB2 state');
@@ -1910,9 +1910,9 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
  assert.equal(h.ls.getItem('bvom_data'),raw);
  assert.equal(h.ctx.bvomBb2NextBlock(),true);
  h.ctx.bvomBb2PreviewChoose('upper_a','shoulder_press','log_push_press');
- let swapNotice='';h.ctx.alert=message=>{swapNotice=message};
+ let swapNotice='';h.ctx.bvomBb2ValidationNotice=message=>{swapNotice=message;return false};
  const beforeInvalidSwap=h.ls.getItem('bvom_data');
- assert.equal(h.ctx.bvomBb2CommitNextBlock(),false,'F4 swapped exercise requires starting fields');
+ assert.equal(await h.ctx.bvomBb2CommitNextBlock(),false,'F4 swapped exercise requires starting fields');
  assert.match(swapNotice,/Log Push Press.*starting load/i);
  assert.match(swapNotice,/Log Push Press.*increase/i);
  assert.equal(h.ls.getItem('bvom_data'),beforeInvalidSwap);
@@ -1927,21 +1927,21 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   assert.equal(h.ctx.bvomBb2NextBlockChange(identity,'increment',
    identity==='upper_a|flat_press|bench_press'?'5':'2.5'),true);
  }
- h.ctx.confirm=()=>false;
- assert.equal(h.ctx.bvomBb2CommitNextBlock(),false,'cancel confirmation retains old evidence');
+ h.ctx.bvomConfirmAction=()=>false;
+ assert.equal(await h.ctx.bvomBb2CommitNextBlock(),false,'cancel confirmation retains old evidence');
  assert.equal(h.ls.getItem('bvom_data'),raw);
  assert.equal(h.S().bb2.sealedBlocks?.length||0,0);
- h.ctx.confirm=()=>true;
+ h.ctx.bvomConfirmAction=()=>true;
  assert.equal(h.ctx.bvomBb2NextBlockChange('upper_a|flat_press|bench_press','load',''),true);
- let validation='';h.ctx.alert=message=>{validation=message};
- assert.equal(h.ctx.bvomBb2CommitNextBlock(),false,'required next load cannot be omitted');
+ let validation='';h.ctx.bvomBb2ValidationNotice=message=>{validation=message;return false};
+ assert.equal(await h.ctx.bvomBb2CommitNextBlock(),false,'required next load cannot be omitted');
  assert.match(validation,/Upper A.*Bench Press.*starting load/i,'F4 identifies the invalid exercise and field');
  assert.equal(h.S().bb2.sealedBlocks?.length||0,0);
  assert.deepEqual(Object.values(catalogue.foldBB2Block(h.S().bb2.opening,h.S().bb2.events).quotas),[8,8,8,8]);
  assert.equal(h.ls.getItem('bvom_data'),raw);
  h.ctx.bvomBb2NextBlockChange('upper_a|flat_press|bench_press','load','65');
  const beforeCommit=JSON.parse(JSON.stringify(h.S().bb2));
- assert.equal(h.ctx.bvomBb2CommitNextBlock(),true,'one confirmed save seals and begins next block');
+ assert.equal(await h.ctx.bvomBb2CommitNextBlock(),true,'one confirmed save seals and begins next block');
  const b=h.S().bb2,newProjection=catalogue.foldBB2Block(b.opening,b.events);
  assert.equal(b.sealedBlocks.length,1);
  assert.equal(catalogue.foldBB2Block(b.sealedBlocks[0].opening,b.sealedBlocks[0].events).sealed,true);
@@ -2004,14 +2004,14 @@ function recordBB2Dialog(h,i,j,{reps=8,extra=false,actual}={}){
   failed.ctx.bvomBb2NextBlockChange(id,'load','60');
   failed.ctx.bvomBb2NextBlockChange(id,'increment','2.5');
  }
- failed.ctx.confirm=()=>true;
+ failed.ctx.bvomConfirmAction=()=>true;
  const failedRaw=failed.ls.getItem('bvom_data'),write=failed.ls.setItem.bind(failed.ls);
  failed.ev('bvomWindowLockOwned=false');
- assert.equal(failed.ctx.bvomBb2CommitNextBlock(),false,'stale workout window cannot seal the block');
+ assert.equal(await failed.ctx.bvomBb2CommitNextBlock(),false,'stale workout window cannot seal the block');
  assert.equal(failed.ls.getItem('bvom_data'),failedRaw);
  failed.ev('bvomWindowLockOwned=true');
  failed.ls.setItem=(key,value)=>{if(key==='bvom_data')throw Error('simulated next-block save failure');return write(key,value)};
- assert.equal(failed.ctx.bvomBb2CommitNextBlock(),false,'failed next-block save cannot seal prior evidence');
+ assert.equal(await failed.ctx.bvomBb2CommitNextBlock(),false,'failed next-block save cannot seal prior evidence');
  assert.equal(failed.ls.getItem('bvom_data'),failedRaw);
  assert.equal(failed.S().bb2.sealedBlocks?.length||0,0);
  assert.equal(failed.S().bb2.opening.blockId,opening.blockId);

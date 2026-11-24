@@ -534,8 +534,8 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>activateTab('history'));
   await expandHistory(page);
   await editHistorySets(page);
-  page.once('dialog',dialog=>dialog.accept());
   await page.locator('[data-history-correction] [data-bb2-void-save="0|8"]').click();
+  await page.locator('[data-bvom-confirm] [data-r]').click();
   assert.equal(await page.evaluate(async()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
    const tail=b.events.slice(-2);

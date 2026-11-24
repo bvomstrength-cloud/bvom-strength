@@ -73,7 +73,8 @@ console.log('PASS v2 low-stress session follows approved ordering and half-volum
 // A real v2 block seals atomically and carries exact earned prescriptions.
 open(h);assert.equal(h.ctx.bvomBb2NextBlock(),true);
 const previousLoad=core.foldBB2Block(h.S().bb2.opening,h.S().bb2.events).progress['upper_a|flat_press|bench_press'].loadG;
-assert.equal(h.ctx.bvomBb2CommitNextBlock(),true);
+h.ctx.bvomConfirmAction=()=>true;
+assert.equal(await h.ctx.bvomBb2CommitNextBlock(),true);
 assert.equal(h.S().bb2.setup.catalogueVersion,5);
 assert.equal(h.S().bb2.sealedBlocks.length,1);
 assert.equal(core.foldBB2Block(h.S().bb2.opening,h.S().bb2.events).progress['upper_a|flat_press|bench_press'].loadG,previousLoad);

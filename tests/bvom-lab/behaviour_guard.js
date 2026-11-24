@@ -876,7 +876,7 @@ test('F17-POSTCOMPLETE-SETTINGS-SURVIVE-CORRECTION','DEFECT','Explicit Advanced 
 });
 function editAccessoryViaBuilder(h,a,newIncrement){
   h.ctx.openAccessoryBuilder(a.id);const o=h.lastOverlay();if(!o)return false;const q=s=>o.querySelector(s);
-  q('#accCat').value=a.category||'Upper';q('#accName').value=a.name;q('#accAssign').value=a.assignment||'A';q('#accEquipment').value=a.equipment||'machine';q('#accPlateMode').value=a.plateMode||'standard';q('#accStyle').value=a.style||'straight';q('#accSets').value=String(a.sets||3);q('#accReps').value=String(a.reps||8);q('#accTopReps').value=String(a.topReps||a.reps||8);q('#accWeight').value=String(a.weight);q('#accInc').value=String(newIncrement);q('#accBar').value=String(a.barWeight||20);q('#accSave').onclick();return true;
+  q('#accCat').value=a.category||'Upper';q('#accName').value=a.name;q('#accAssign').value=(a.bbAssignment||a.assignment||'A');q('#accEquipment').value=a.equipment||'machine';q('#accPlateMode').value=a.plateMode||'standard';q('#accStyle').value=a.style||'straight';q('#accSets').value=String(a.sets||3);q('#accReps').value=String(a.reps||8);q('#accTopReps').value=String(a.topReps||a.reps||8);q('#accLoadedWeight').value=String(a.weight);q('#accInc').value=String(newIncrement);q('#accBar').value=String(a.barWeight||20);q('#accSave').onclick();return true;
 }
 function accessoryFixture(id='a1',name='Lat Pulldown'){return{id,name,category:'Upper',assignment:'A',hlmAssignment:'Any',fourDayAssignment:'Any',freeAssignment:null,bbAssignment:null,equipment:'machine',plateMode:'standard',style:'straight',sets:3,reps:8,topReps:8,weight:30,increment:2.5,drop:5}}
 test('F18-ACTIVE-ACCESSORY-EDIT-PRESERVES-SESSION','DEFECT','Editing an accessory during an active workout preserves logged sets/processed state and cannot create a double-progression path; Bodybuilding logged accessory sets also survive',()=>{
@@ -1107,7 +1107,7 @@ test('F37-HLM-NEXT-WORKOUT-SETTINGS-DO-NOT-ALTER-PARTIAL-CURRENT-PRESCRIPTION','
 /* ======================= EIGHTH COLD-AUDIT / POST-RESULT MERGE FOLLOW-UPS: F38–F39 ======================= */
 function editAccessoryFutureFieldsViaBuilder(h,a,{weight=a.weight,increment=a.increment}={}){
   h.ctx.openAccessoryBuilder(a.id);const o=h.lastOverlay();if(!o)return false;const q=s=>o.querySelector(s);
-  q('#accCat').value=a.category||'Upper';q('#accName').value=a.name;q('#accAssign').value=a.assignment||'A';q('#accEquipment').value=a.equipment||'machine';q('#accPlateMode').value=a.plateMode||'standard';q('#accStyle').value=a.style||'straight';q('#accSets').value=String(a.sets||3);q('#accReps').value=String(a.reps||8);q('#accTopReps').value=String(a.topReps||a.reps||8);q('#accWeight').value=String(weight);q('#accInc').value=String(increment);q('#accBar').value=String(a.barWeight||20);q('#accSave').onclick();return true;
+  q('#accCat').value=a.category||'Upper';q('#accName').value=a.name;q('#accAssign').value=(a.bbAssignment||a.assignment||'A');q('#accEquipment').value=a.equipment||'machine';q('#accPlateMode').value=a.plateMode||'standard';q('#accStyle').value=a.style||'straight';q('#accSets').value=String(a.sets||3);q('#accReps').value=String(a.reps||8);q('#accTopReps').value=String(a.topReps||a.reps||8);q('#accLoadedWeight').value=String(weight);q('#accInc').value=String(increment);q('#accBar').value=String(a.barWeight||20);q('#accSave').onclick();return true;
 }
 function completeMissingCoreV14(h,n){
   let guard=0;

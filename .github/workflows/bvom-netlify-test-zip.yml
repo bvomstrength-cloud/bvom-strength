@@ -5,6 +5,7 @@ on:
   pull_request:
     branches:
       - main
+      - fix/v3.1.1-ja
 
 permissions:
   contents: read
@@ -116,6 +117,7 @@ jobs:
             (cd .bvom-netlify-test && zip -q -r "../${ZIP}" .)
           fi
           unzip -t "$ZIP" | tail -2
+          sha256sum "$ZIP" > "$ZIP.sha256"
           printf '%s\n' 'NETLIFY ZIP CONTENTS:'
           unzip -Z1 "$ZIP" | head -35
 
@@ -129,7 +131,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: BVOM-PR${{ github.event.pull_request.number }}-Netlify-Test-Site
-          path: BVOM-v*-PR*-TEST.zip
+          path: |
+            BVOM-v*-PR*-TEST.zip
+            BVOM-v*-PR*-TEST.zip.sha256
           if-no-files-found: error
           retention-days: 30
           compression-level: 0

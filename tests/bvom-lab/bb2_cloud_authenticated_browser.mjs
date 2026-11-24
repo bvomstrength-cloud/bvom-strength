@@ -703,6 +703,47 @@ try {
     await a.context().close();await b.context().close();
   });
 
+  await check('optional order survives authenticated cloud backup and restore with hidden items intact', async () => {
+    const login={email:'optional-order@example.invalid',password:'Isolated-Optional-Order-2026!'};
+    const made=await admin.auth.admin.createUser({...login,email_confirm:true});
+    if(made.error)throw made.error;
+    const userId=made.data.user.id;
+    const item=(id,assignment)=>({id,name:id,category:'Upper',assignment,equipment:'machine',
+      weight:20,increment:2.5,sets:3,reps:8,style:'straight',plateMode:'standard'});
+    const activity=(id,assignment)=>({id,name:id,assignment,metrics:{time:true},planned:{timeSeconds:300}});
+    const data={...fixture,day:'B',accessoryList:[item('acc-first','B'),item('acc-hidden','A'),item('acc-last','B')],
+      gppList:[activity('gpp-first','B'),activity('gpp-hidden','A'),activity('gpp-last','B')]};
+    const phone=await makeDevice('optional reorder phone',{userId,login,accountFlow:true,appData:data});
+    await phone.waitForFunction(()=>bvomCloud.syncReady&&!bvomCloud.assessing);
+    await phone.locator('[data-optional-id="acc-last"] [data-step="-1"]').click();
+    await phone.locator('[data-optional-id="gpp-last"] [data-step="-1"]').click();
+    const stored=await phone.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
+    assert.deepEqual(stored.accessoryList.map(x=>x.id),['acc-last','acc-hidden','acc-first']);
+    assert.deepEqual(stored.gppList.map(x=>x.id),['gpp-last','gpp-hidden','gpp-first']);
+    await phone.evaluate(async()=>{
+      clearTimeout(bvomCloud.autoTimer);
+      await bvomCloudSaveNow();
+    });
+    await phone.waitForFunction(async()=>{
+      const remote=await bvomCloudLatest();
+      return remote.data?.data?.accessoryList?.[0]?.id==='acc-last'&&remote.data?.data?.gppList?.[0]?.id==='gpp-last';
+    });
+    const tablet=await makeDevice('optional reorder tablet',{userId,login,accountFlow:true,appData:data});
+    await tablet.waitForFunction(()=>bvomCloud.conflict);
+    const warning=tablet.locator('#bvomCloudConflictOverlay [data-settings]');
+    if(await warning.count())await warning.click();
+    await tablet.evaluate(()=>bvomCloudRestore());
+    const confirm=tablet.locator('.bvomModalOverlay [data-r]').last();
+    await confirm.click();
+    await tablet.waitForFunction(()=>state.accessoryList[0]?.id==='acc-last'&&state.gppList[0]?.id==='gpp-last');
+    const restored=await tablet.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
+    assert.deepEqual(restored.accessoryList,stored.accessoryList);
+    assert.deepEqual(restored.gppList,stored.gppList);
+    assert.deepEqual(restored.history,stored.history);
+    await phone.context().close();
+    await tablet.context().close();
+  });
+
   console.log(`BB2 real app authenticated Chromium: ${passed}/${passed} PASS`);
 } finally {
   for (const context of contexts) await context.close().catch(() => {});
