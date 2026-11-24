@@ -13,6 +13,7 @@ const H=require('./lib/bvom_harness');
 
 const root=process.env.BVOM_APP_ROOT?path.resolve(process.env.BVOM_APP_ROOT):path.resolve(__dirname,'../..');
 const h=H.boot(H.loadBuild(root));
+const buildVersion=h.ev('BVOM_BUILD');
 H.configureLP(h);
 const fixture=JSON.parse(h.ls.getItem('bvom_data'));
 const bb1=H.boot(H.loadBuild(root));H.bbStart(bb1);
@@ -104,9 +105,9 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>{showSetup();showSetup()});
   assert.equal(await page.locator('#setup [data-bb2-preview]').count(),1,'one BB2 button in the standard program chooser');
   assert.equal(await page.locator('#setup [data-bb-program]').count(),1,'BB1 chooser remains available');
-  assert.equal(await page.title(),'BVOM Strength v3.0.3');
-  assert.match(await page.locator('header').textContent(),/v3\.0\.3/);
-  assert.equal(await page.evaluate(()=>BVOM_BUILD),'3.0.3');
+  assert.equal(await page.title(),'BVOM Strength v'+buildVersion);
+  assert.ok((await page.locator('header').textContent()).includes('v'+buildVersion));
+  assert.equal(await page.evaluate(()=>BVOM_BUILD),buildVersion);
   fs.mkdirSync(screenshots,{recursive:true});
   for(const lang of ['en','ja']){
    await page.evaluate(lang=>{changeLanguage(lang);showSetup();showSetup()},lang);
@@ -146,7 +147,7 @@ const server=http.createServer((req,res)=>{
    await page.locator('#setup [data-bb2-back]').click();
   }
   await page.evaluate(()=>{changeLanguage('en');showSetup()});
-  console.log('PASS v3.0.3 mobile EN/JA programme chooser, setup and Info explanation with matching typography');
+  console.log('PASS mobile EN/JA programme chooser, setup and Info explanation with matching typography');
   await page.evaluate(()=>{changeLanguage('ja');showSetup()});
   assert.match(await page.locator('#setup [data-bb2-preview]').textContent(),
    /ボディビルディング2/,'BB2 programme entry follows Japanese locale');
@@ -261,11 +262,10 @@ const server=http.createServer((req,res)=>{
   await page.waitForSelector('#workout [data-bb2-set="0|0"]');
   const started=await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
   assert.ok(started.bb2.activeSessionId);
-  const exportDialog=page.waitForEvent('dialog');
-  const exportAttempt=page.evaluate(()=>exportBackup());
-  const exportNotice=await exportDialog;
-  assert.match(exportNotice.message(),/active BB2 workout.*incomplete/);
-  await exportNotice.accept();assert.equal(await exportAttempt,false);
+  assert.equal(await page.evaluate(()=>exportBackup()),false);
+  const exportNotice=page.getByRole('dialog',{name:'BVOM'});
+  assert.match(await exportNotice.textContent(),/active BB2 workout.*incomplete/);
+  await exportNotice.locator('[data-ok]').click();
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')).bb2.activeSessionId),started.bb2.activeSessionId);
 
   assert.equal(started.bb2.events.find(e=>e.type==='WORKOUT_STARTED').type,'WORKOUT_STARTED');
@@ -482,10 +482,10 @@ const server=http.createServer((req,res)=>{
   const correction=page.locator('[data-history-correction] [data-bb2-correct-reps="0|0"]');
   await correction.fill('0');
   const invalidRaw=await page.evaluate(()=>localStorage.getItem('bvom_data'));
-  const invalidDialog=page.waitForEvent('dialog');
-  const invalidClick=page.locator('[data-history-correction] [data-bb2-correct-save="0|0"]').click();
-  const invalidNotice=await invalidDialog;
-  assert.match(invalidNotice.message(),/whole rep count of at least 1/);await invalidNotice.accept();await invalidClick;
+  await page.locator('[data-history-correction] [data-bb2-correct-save="0|0"]').click();
+  const invalidNotice=page.locator('[data-history-correction] [role="alert"]');
+  assert.match(await invalidNotice.textContent(),/whole rep count of at least 1/);
+  assert.equal(await correction.getAttribute('aria-invalid'),'true');
   assert.equal(await page.evaluate(()=>localStorage.getItem('bvom_data')),invalidRaw);
   await correction.fill('7');
   await page.locator('[data-history-correction] [data-bb2-correct-hard="0|0"]').check();
@@ -534,8 +534,8 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>activateTab('history'));
   await expandHistory(page);
   await editHistorySets(page);
-  page.once('dialog',dialog=>dialog.accept());
   await page.locator('[data-history-correction] [data-bb2-void-save="0|8"]').click();
+  await page.locator('[data-bvom-confirm] [data-r]').click();
   assert.equal(await page.evaluate(async()=>{
    const b=JSON.parse(localStorage.getItem('bvom_data')).bb2;
    const tail=b.events.slice(-2);

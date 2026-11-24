@@ -44,7 +44,7 @@ function boot(build,{ls=memStore(),ss=memStore(),supabase='inert',online=true,lo
   let firstUuid=true;const platformCrypto={randomUUID:()=>{if(firstUuid){firstUuid=false;return ss.getItem('bvom_tab_id')}return nodeCrypto.randomUUID()}};
   const log=[],timers=[];
   const document={body:mkEl('body'),documentElement:mkEl('html'),head:mkEl('head'),visibilityState:'visible',title:'',
-    getElementById:id=>els['#'+id]||(els['#'+id]=mkEl()),querySelector:s=>s==='.bvomModalOverlay'?(document.body.children.find(e=>e.className==='bvomModalOverlay'&&!e.removed)||null):(els[s]||(els[s]=mkEl())),querySelectorAll:()=>[],
+    getElementById:id=>els['#'+id]||(els['#'+id]=mkEl()),querySelector:s=>['.bvomModalOverlay','.beeCoachOverlay'].includes(s)?(document.body.children.find(e=>'.'+e.className===s&&!e.removed)||null):(els[s]||(els[s]=mkEl())),querySelectorAll:()=>[],
     createElement:t=>mkEl(t),createTextNode:t=>({nodeValue:t}),addEventListener(){}};
   const ctx={console:{log(){},warn(){},error(){},info(){},debug(){}},localStorage:ls,sessionStorage:ss,document,
     // Default synchronous lock stub keeps historical callback contracts deterministic.
@@ -76,6 +76,7 @@ function boot(build,{ls=memStore(),ss=memStore(),supabase='inert',online=true,lo
   // Scripted answers for BVOM's rep and choice modals (the dialog wrappers only).
   ctx.bvomRepModal=(title,w,target,initial,onSave)=>onSave(h.reps.length?h.reps.shift():initial,8);
   ctx.bvomChoiceModal=(title,body,l,r,onL,onR)=>{const pick=h.choices.length?h.choices.shift():'L';log.push(['choice',String(title),pick]);const f=pick==='R'?onR:onL;f&&f()};
+  if(ctx.bvomConfirmAction)ctx.bvomConfirmAction=()=>Promise.resolve(true);
   ctx.bvomSessionNoteModal=(initial,onSave)=>onSave('');
   ctx.bvomIncompleteConfirm=(onFinish)=>{log.push(['incompleteConfirm']);onFinish()};
   return h;
@@ -127,13 +128,18 @@ function mockSupabase({net,user={id:'user-1',email:'lifter@example.com'},entitle
   let resolveEntitlement;const deferredEntitlement=deferEntitlement?new Promise(r=>{resolveEntitlement=r}):null;
   const res=ok=>net.online?Promise.resolve(ok()):Promise.resolve(offline);
   const table=()=>{const q={op:'select'};const p=new Proxy({},{get(_,k){
-    if(k==='then')return(a,b)=>(q.op==='select'&&hangCloudSelect?never():res(()=>q.op==='select'?{data:row?[row]:[],error:null}:q.op==='insert'?(row={id:'r1',data:q.v.data,created_at:new Date().toISOString()},{data:{id:'r1'},error:null}):(row={...row,data:q.v.data},{data:{id:row.id},error:null}))).then(a,b);
+    if(k==='then')return(a,b)=>(q.op==='select'&&hangCloudSelect?never():res(()=>q.op==='select'?{data:row?[row]:[],error:null}:q.op==='insert'?(row={id:1,legacy_revision:1,data:q.v.data,created_at:new Date().toISOString()},{data:{id:1},error:null}):(row={...row,data:q.v.data,legacy_revision:row.legacy_revision+1},{data:{id:row.id},error:null}))).then(a,b);
     if(k==='insert'||k==='update')return v=>{q.op=k;q.v=v;return p};return()=>p}});return p};
   const client={auth:{
       getSession:async()=>{if(!session)return{data:{session:null},error:null};if(refreshImpossibleOffline&&!net.online)return{data:{session:null},error:{message:'AuthRetryableFetchError: Failed to fetch'}};return{data:{session:{user,access_token:'t'}},error:null}},
       onAuthStateChange:(cb)=>{authListeners.push(cb);return{data:{subscription:{unsubscribe(){}}}}},
       signOut:async()=>signOutFailsOffline&&!net.online?{error:{message:'AuthRetryableFetchError: Failed to fetch'}}:{error:null}},
-    rpc:()=>hangEntitlement?never():(deferEntitlement?deferredEntitlement:res(()=>({data:entitlement,error:null}))),from:()=>table()};
+    rpc:(name,p)=>name==='bvom_legacy_cloud_commit_v1'?res(()=>{
+      if(p.p_owner_id!==user.id)return {data:null,error:{code:'42501',message:'wrong owner'}};
+      if((row&&(p.p_expected_id!==row.id||p.p_expected_revision!==row.legacy_revision))||(!row&&(p.p_expected_id!==null||p.p_expected_revision!==0)))return {data:{status:'conflict'},error:null};
+      row={id:1,created_at:row?.created_at||new Date().toISOString(),legacy_revision:(row?.legacy_revision||0)+1,data:p.p_data};
+      return {data:{status:'committed',id:row.id,revision:row.legacy_revision},error:null};
+    }):hangEntitlement?never():(deferEntitlement?deferredEntitlement:res(()=>({data:entitlement,error:null}))),from:()=>table()};
   return {
     createClient:()=>client,
     _emitAuth(event,nextSession=null){for(const cb of authListeners)cb(event,nextSession)},

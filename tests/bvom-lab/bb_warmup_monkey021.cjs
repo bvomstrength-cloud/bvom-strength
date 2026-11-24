@@ -92,13 +92,14 @@ async function testMain(lang){
   pass(lang+' duplicate opening sets are distinct');
 
   await page.evaluate(()=>activateTab('workout'));
+  const squatName=lang==='ja'?/スクワット/:/Squat/,benchName=lang==='ja'?/ベンチプレス/:/Bench/;
   let ordered=await cardNames(page,'workout');
-  assert.match(ordered[0],/Squat/,'Workout A defaults to squat before bench');
-  assert.match(ordered[1],/Bench/,'bench follows squat');
+  assert.match(ordered[0],squatName,'Workout A defaults to squat before bench');
+  assert.match(ordered[1],benchName,'bench follows squat');
   await page.locator('#workout #work-bb-A2 .bvomOrderArrow').nth(1).click();
   ordered=await cardNames(page,'workout');
-  assert.match(ordered[0],/Bench/,'down-arrow moves squat below bench');
-  assert.match(ordered[1],/Squat/,'squat remains second after manual down-arrow');
+  assert.match(ordered[0],benchName,'down-arrow moves squat below bench');
+  assert.match(ordered[1],squatName,'squat remains second after manual down-arrow');
   await beginWarm(page);
   assert.deepEqual(await cardNames(page,'warmup'),ordered,'warm-up cards follow changed workout order');
   assert.equal(await page.locator('#warm-bb-A2 button.set.done').count(),2,'marks survive exercise reorder');

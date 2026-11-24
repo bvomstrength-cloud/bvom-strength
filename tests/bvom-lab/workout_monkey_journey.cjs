@@ -159,7 +159,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
  async function addAccessory(){
   await tab(p,'workout');await p.locator('#workout button[onclick="openAccessoryBuilder()"]').click();
   await p.locator('#accName').selectOption('Custom');await p.locator('#accCustom').fill('Monkey assisted chin-up');await p.locator('#accAssign').selectOption('Both');await p.locator('#accEquipment').selectOption('bodyweight');
-  await p.locator('#accSets').fill('2');await p.locator('#accReps').fill('8');await p.locator('#accWeight').fill('0');await p.locator('#accBwInc').fill(String(profile.small));await p.locator('#accBwEstimate').fill(String(profile.bodyweight));await p.locator('#accBwResistance').fill(profile.name==='Female'?'green band':'light band');await p.locator('#accSave').click();
+  await p.locator('#accSets').fill('2');await p.locator('#accReps').fill('8');const advanced=p.locator('.accBuilder details > summary');if(await advanced.count())await advanced.click();await p.locator('#accWeight').fill('0');if(await p.locator('#accBwInc').isVisible())await p.locator('#accBwInc').fill(String(profile.small));await p.locator('#accBwEstimate').fill(String(profile.bodyweight));await p.locator('#accBwResistance').fill(profile.name==='Female'?'green band':'light band');await p.locator('#accSave').click();
   accessoryId=(await stored(p)).accessoryList.find(a=>a.name==='Monkey assisted chin-up').id;pass('bodyweight and assistance configured through the normal builder');
  }
  async function accessorySets(n){
@@ -234,6 +234,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   for(let i=0;i<30;i++){const b=p.locator('#setup [data-bb2-choice-keep],#setup [data-bb2-choice-hold]').first();if(!await b.count())break;await b.click();}
   const before=await stored(p),old=before.bb2,history=await p.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events).history);
   await p.locator('#setup [data-bb2-next-block]').click();allowSeal=true;await p.locator('#setup [data-bb2-next-commit]').click();allowSeal=false;
+  const confirm=p.locator('[data-bvom-confirm] [data-r]');if(await confirm.count()){action('Explicitly confirm sealing the completed BB2 block');await confirm.click()}
   const after=await stored(p);assert.equal(after.bb2.sealedBlocks.length,(old.sealedBlocks?.length||0)+1);assert.equal(after.bb2.activeSessionId,null);assert.deepEqual(after.history,before.history);
   const folded=await p.evaluate(()=>{const b=state.bb2,last=b.sealedBlocks.at(-1);return {old:bvomBb2PreviewModule.foldBB2Block(last.opening,last.events),next:bvomBb2PreviewModule.foldBB2Block(b.opening,b.events)}});
   assert.equal(folded.old.sealed,true);assert.deepEqual(folded.old.history,history);assert.deepEqual(Object.values(folded.next.quotas),[0,0,0,0]);assert.equal(folded.next.history.length,0);

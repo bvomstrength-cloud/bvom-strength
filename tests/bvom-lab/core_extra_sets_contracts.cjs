@@ -29,7 +29,11 @@ module.exports=({test,ok,H,build})=>{
    const ls=h.ls,ss=h.ctx.sessionStorage;h=H.boot(build,{ls,ss,supabase:null,online:false});assert.equal(h.ctx.bvomCoreExtraKeys('Squat').length,2);assert.equal(h.ctx.bvomWorkoutVolume(),859.25);
    extra(h,'Squat',85,8,'EXTRA:0');h.ctx.bvomCoreExtraSetModal('Squat','EXTRA:1');h.lastOverlay().querySelector('[data-remove]').onclick();assert.equal(h.ctx.bvomWorkoutVolume(),680);
    // Correction of prescribed work must not remove extras or let extras fill holes.
-   h.ctx.tapSet('Squat',0);h.ctx.tapSet('Squat',0);assert.equal(h.ctx.bvomCoreExtraKeys('Squat').length,1);assert.equal(h.ctx.coreResult('Squat').complete,false);
+   h.ctx.tapSet('Squat',0);h.ctx.tapSet('Squat',0);assert.equal(h.ctx.bvomCoreExtraKeys('Squat').length,1);
+   // An unchanged save is a no-op in v3.0.4. Also exercise the actual rollback
+   // path with a meaningful correction, so the extra-deletion mutant is live.
+   h.reps.push(Math.max(0,h.S().session.Squat[0].reps-1));h.ctx.tapSet('Squat',0);
+   assert.equal(h.ctx.bvomCoreExtraKeys('Squat').length,1);assert.equal(h.ctx.coreResult('Squat').complete,false);
    H.finish(h);assert.equal(h.S().history.length,1);const rec=h.S().history[0];assert.equal(rec.incomplete,true);assert.equal(rec.session.Squat['EXTRA:0'].load,85);assert.equal(rec.session.Squat['EXTRA:0'].extra,true);assert.match(h.ctx.bvomHistorySetText(rec.session.Squat['EXTRA:0'],'kg'),/EXTRA SET/);
    const payload=clone(h.ctx.bvomCloudPayload());assert.deepEqual(payload.history,clone(h.S().history));assert.deepEqual(payload.session,{});const portable=JSON.parse(JSON.stringify({app:'BVOM',version:'3.0.1',data:payload}));assert.deepEqual(portable.data.history,payload.history);
   }return ok(true,'all three programmes preserve actuals without prescribed completion');

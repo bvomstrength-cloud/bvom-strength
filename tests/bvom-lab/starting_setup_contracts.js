@@ -1,5 +1,6 @@
 'use strict';
 module.exports=({test,ok,H,build})=>{
+ const a=require('node:assert/strict');
  const clone=x=>JSON.parse(JSON.stringify(x)),read=h=>JSON.parse(h.ls.getItem('bvom_data'));
  function open(h){h.ev("bvomCloud.user={id:'setup-dummy'};window.__bvomAuthUserId='setup-dummy';bvomEntitlement.record={status:'complimentary',user_id:'setup-dummy'}");h.ls.setItem('bvom_data_owner','setup-dummy');h.ctx.showApp();}
  function journey(mode='hlm',both=false){
@@ -100,8 +101,25 @@ module.exports=({test,ok,H,build})=>{
   const fp=x=>h.ctx.bvomCloudComparableFingerprint(x),reconnect=fp(payload)===fp(completed)&&fp(prior)!==fp(completed)&&payload.history.length===12&&!payload.setupAfterFinish;
   await Promise.resolve();await Promise.resolve();
   let mockRemote=clone(prior),uploads=0;
-  h.ctx.bvomCloudLatest=async()=>({data:{id:'mock-cloud-row',data:clone(mockRemote)},error:null});
-  h.ctx.bvomCloudClient=()=>({from:()=>({update:({data})=>{mockRemote=clone(data);uploads++;const query={eq:()=>query,select:()=>query,single:async()=>({data:{id:'mock-cloud-row'},error:null})};return query}})});
+  h.ctx.bvomCloudLatest=async()=>({data:{id:1,data:clone(mockRemote)},error:null});
+  // Match the existing v3.0.3 table transport, not the abandoned revision RPC.
+  // Preserve ownership and row targeting checks before accepting any write.
+  h.ctx.bvomCloudClient=()=>({from(table){
+    a.equal(table,'bvom_data');
+    let incoming=null,filters=[];
+    const q={
+      update(value){incoming=value;return q},
+      eq(key,value){filters.push([key,value]);return q},
+      select(columns){a.equal(columns,'id');return q},
+      async single(){
+        a.deepEqual(filters,[['id',1],['user_id',h.ev('bvomCloud.user.id')]]);
+        a.deepEqual(Object.keys(incoming),['data']);
+        mockRemote=clone(incoming.data);uploads++;
+        return {data:{id:1},error:null};
+      }
+    };
+    return q;
+  }});
   h.ctx.__bvomCloudBooted=true;h.ev('bvomCloud.offlineLocalAccess=false;bvomCloud.deferWorkoutCommit=false');h.ev('bvomCloud.workoutBaselineFingerprint='+JSON.stringify(fp(prior)));
   await h.ctx.bvomCloudAssessSync();const reconciled=h.ev('bvomCloud.syncReady&&!bvomCloud.conflict');await h.ctx.bvomCloudAutoSave();
   const uploaded=uploads===1&&mockRemote.history.length===12&&!mockRemote.setupAfterFinish&&JSON.stringify(read(h).history)===JSON.stringify(completed.history);

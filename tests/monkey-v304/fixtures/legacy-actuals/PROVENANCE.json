@@ -1,0 +1,38 @@
+{
+  "sourceCommit": "6c51e612cd5e6aa532766e5ce80f2d226eb950c0",
+  "method": "Genuine independent-review Chromium v3.0.3 recordings and kg-to-lb UI conversions; immutable bvom_data snapshots, no invented conversion origins",
+  "files": {
+    "core.json": {
+      "sha256": "9d70446cc1477ecbf1c02438ab6a8d0605cb581d2ffd16db612bb95c324a2d29",
+      "originalEvidence": "residual-legacy-seeds/core-seed.json"
+    },
+    "extra.json": {
+      "sha256": "99ed30638572e135f8c3491c956399012fae9280d52bfd286d9730777e42d318",
+      "originalEvidence": "residual-legacy-seeds/extra-seed.json"
+    },
+    "custom.json": {
+      "sha256": "8b273bb6c614641e1a03fdf55da41d0e421279ef2ad94cd047223e41e237daa5",
+      "originalEvidence": "residual-legacy-seeds/custom-seed.json"
+    },
+    "bb.json": {
+      "sha256": "e27879fd03bc73b7c73e6cf1574f749f373446da2614b36216da63ac1ac7ab3e",
+      "originalEvidence": "residual-legacy-seeds/bb-seed.json"
+    },
+    "pb.json": {
+      "sha256": "4e7c8982af89648be5bad0063501c61b663ada2fbbec3c37dd3f4b452077e179",
+      "originalEvidence": "legacy-sidepaths-seeds/pb-seed.json"
+    },
+    "customacc.json": {
+      "sha256": "4006109b7152edf020d5682a4dd04fd97cb9eb9574e5db1d57923dec3c5655b5",
+      "originalEvidence": "legacy-sidepaths-seeds/custom-accessory-seed.json"
+    },
+    "bbacc.json": {
+      "sha256": "12f07ff54990b5adac9df335b504d9b43fc6c6a464c47070b7c819b8027a4576",
+      "originalEvidence": "final-continuation/bbacc-baseline-seed/seed.json"
+    },
+    "onramp.json": {
+      "sha256": "595db705e8b21796b14a2e3afcf6c2c70e33ae3c760204337c2ee417e2d18d42",
+      "originalEvidence": "final-continuation/onramp-baseline-seed/seed.json"
+    }
+  }
+}

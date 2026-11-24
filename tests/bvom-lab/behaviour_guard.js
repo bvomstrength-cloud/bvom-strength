@@ -508,10 +508,10 @@ test('F101-SW-UPDATE-CRITICAL-GUARDS','DEFECT','Finish busy, save failure and wo
  const candidate={state:'installed',scriptURL:'sw.js?v=next',postMessage:()=>posts++};
  h.ctx.bvomShowServiceWorkerUpdate({waiting:candidate});
  const el=h.ctx.document.getElementById('bvomUpdateBanner'),btn=el.querySelector('[data-bvom-update]'),checks=[];
- for(const mode of ['busy','dialog','blocked']){
+ for(const mode of ['busy','dialog','accessory dialog','blocked']){
   h.ctx.__bvomFinishBusy=mode==='busy';
   h.ev("bvomLocalPersistenceFailureActive="+(mode==='blocked'));
-  const o=mode==='dialog'?h.ctx.document.createElement('div'):null;if(o){o.className='bvomModalOverlay';h.ctx.document.body.appendChild(o)}
+  const o=mode.endsWith('dialog')?h.ctx.document.createElement('div'):null;if(o){o.className=mode==='accessory dialog'?'beeCoachOverlay':'bvomModalOverlay';h.ctx.document.body.appendChild(o)}
   h.ctx.bvomSyncWorkoutControls();btn.onclick();
   h.ctx.sessionStorage.setItem('bvom-update-reload-requested','1');h.ctx.bvomSwFinishRequestedReload();
   checks.push(el.style.display==='none'&&posts===0&&reloads===0&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null);
@@ -805,16 +805,16 @@ test('F49-FASTBOOT-REVOCATION-ACTIVE-WORKOUT','DEFECT','A definitive live revoca
 
 
 /* ======================= COLD-AUDIT FOLLOW-UPS: F13–F16 ======================= */
-test('F13-BB-UNIT-CHANGE-ATOMIC','DEFECT','Active Bodybuilding unit change is atomic: rendered prescription, logged set and progression stay on the same physical/grid load',()=>{
+test('F13-BB-UNIT-CHANGE-ATOMIC','DEFECT','Active Bodybuilding unit change is atomic: logged actuals preserve physical mass while prescriptions and progression stay on their practical grid',()=>{
   const out=[];let pass=true;
   // Display path: 100 lb must not remain visibly "100 kg" after conversion.
   {const h=H.boot(build);h.ctx.changeUnits('lb',true);bbStart(h,{loads:{...H.BB_LOADS,machine_chest_press:100},incs:{machine_chest_press:5}});h.ctx.renderWorkout();h.ctx.changeUnits('kg',true);
    const p=h.S().bodybuilding.progression.machine_chest_press,ui=text(h.els['#workout'].innerHTML),i=ui.indexOf('Machine Chest Press'),seg=ui.slice(i,i+220),want=`${p.load} kg`;
    const good=i>=0&&seg.includes(want)&&!seg.includes('100 kg × 6–8');pass=pass&&good;out.push(`display next=${p.load}kg segment="${seg.slice(0,100)}"`)}
-  // State path: a logged 22 kg top set must convert to the same 47.5 lb prescription grid; finishing must match finish-then-convert (50 lb next).
+  // State path: a logged 22 kg top set keeps its physical mass; the prescription stays on its 47.5 lb grid; finishing must match finish-then-convert (50 lb next).
   {const h=H.boot(build);bbStart(h,{loads:{...H.BB_LOADS,machine_chest_press:22},incs:{machine_chest_press:1}});h.S().bodybuilding.progression.machine_chest_press.calibrated=true;bbSet(h,'machine_chest_press',0,{reps:8,load:22});h.ctx.changeUnits('lb',true);
    const p=h.S().bodybuilding.progression.machine_chest_press,logged=h.S().session['BB:machine_chest_press']?.[0]?.load,top=h.ctx.bvomBbPrescription('machine_chest_press').sets[0].load;
-   const aligned=logged===top&&top===p.load;pass=pass&&aligned;out.push(`active logged=${logged} rx=${top} prog=${p.load}`);
+   const aligned=logged===22*2.2046226218&&top===47.5&&top===p.load;pass=pass&&aligned;out.push(`active logged=${logged} rx=${top} prog=${p.load}`);
    for(const id of H.bbDayIds(h)){const rx=h.ctx.bvomBbPrescription(id);for(let j=0;j<rx.sets.length;j++){if(id==='machine_chest_press'&&j===0)continue;bbSet(h,id,j,{reps:rx.sets[j].type==='top'?7:rx.sets[j].maxReps})}}finish(h);
    const next=h.S().bodybuilding.progression.machine_chest_press.load;pass=pass&&next===50;out.push(`finish next=${next}`)}
   return ok(pass,out.join(' | '));
@@ -876,7 +876,7 @@ test('F17-POSTCOMPLETE-SETTINGS-SURVIVE-CORRECTION','DEFECT','Explicit Advanced 
 });
 function editAccessoryViaBuilder(h,a,newIncrement){
   h.ctx.openAccessoryBuilder(a.id);const o=h.lastOverlay();if(!o)return false;const q=s=>o.querySelector(s);
-  q('#accCat').value=a.category||'Upper';q('#accName').value=a.name;q('#accAssign').value=a.assignment||'A';q('#accEquipment').value=a.equipment||'machine';q('#accPlateMode').value=a.plateMode||'standard';q('#accStyle').value=a.style||'straight';q('#accSets').value=String(a.sets||3);q('#accReps').value=String(a.reps||8);q('#accTopReps').value=String(a.topReps||a.reps||8);q('#accWeight').value=String(a.weight);q('#accInc').value=String(newIncrement);q('#accBar').value=String(a.barWeight||20);q('#accSave').onclick();return true;
+  q('#accCat').value=a.category||'Upper';q('#accName').value=a.name;q('#accAssign').value=(a.bbAssignment||a.assignment||'A');q('#accEquipment').value=a.equipment||'machine';q('#accPlateMode').value=a.plateMode||'standard';q('#accStyle').value=a.style||'straight';q('#accSets').value=String(a.sets||3);q('#accReps').value=String(a.reps||8);q('#accTopReps').value=String(a.topReps||a.reps||8);q('#accLoadedWeight').value=String(a.weight);q('#accInc').value=String(newIncrement);q('#accBar').value=String(a.barWeight||20);q('#accSave').onclick();return true;
 }
 function accessoryFixture(id='a1',name='Lat Pulldown'){return{id,name,category:'Upper',assignment:'A',hlmAssignment:'Any',fourDayAssignment:'Any',freeAssignment:null,bbAssignment:null,equipment:'machine',plateMode:'standard',style:'straight',sets:3,reps:8,topReps:8,weight:30,increment:2.5,drop:5}}
 test('F18-ACTIVE-ACCESSORY-EDIT-PRESERVES-SESSION','DEFECT','Editing an accessory during an active workout preserves logged sets/processed state and cannot create a double-progression path; Bodybuilding logged accessory sets also survive',()=>{
@@ -965,16 +965,29 @@ function intermediateUnitCorrectionCase(mode){
   const h=H.boot(build);configureLP(h,{...H.LP_W,Squat:40,'Bench Press':40});const n=mode==='hlm'?'Squat':'Bench Press';h.S().core[n].increment=1.5;h.choices.push('R');h.ctx.chooseProgramMode(mode);
   if(mode==='fourday')h.ctx.switchDay('1');
   let plan=h.ctx.getSetPlan(n);for(let i=0;i<plan.length;i++){h.ctx.tapSet(n,i);plan=h.ctx.getSetPlan(n)}
-  const nextKg=h.S().hlm.nextHeavy[n],snapKg=h.S().processedSnapshots?.[n]?.hlm?.driver?.[n],snapIncKg=h.S().processedSnapshots?.[n]?.cfg?.increment;
+  const actualKg=Object.values(h.S().session[n]).filter(x=>x&&x.reps!==undefined).sort((a,b)=>a.index-b.index).map(x=>Number(x.load));const nextKg=h.S().hlm.nextHeavy[n],snapKg=h.S().processedSnapshots?.[n]?.hlm?.driver?.[n],snapIncKg=h.S().processedSnapshots?.[n]?.cfg?.increment;
   h.ctx.changeUnits('lb',true);const currentLb=h.S().hlm.driver[n],nextLb=h.S().hlm.nextHeavy[n],snapLb=h.S().processedSnapshots?.[n]?.hlm?.driver?.[n],snapIncLb=h.S().processedSnapshots?.[n]?.cfg?.increment,firstLb=Number(h.S().session[n]?.[0]?.load);
   h.ctx.changeUnits('kg',true);const currentBack=h.S().hlm.driver[n],nextBack=h.S().hlm.nextHeavy[n],snapBack=h.S().processedSnapshots?.[n]?.hlm?.driver?.[n],snapIncBack=h.S().processedSnapshots?.[n]?.cfg?.increment,liveIncBack=h.S().core[n].increment;
   h.ctx.changeUnits('lb',true);
   h.reps.push(h.S().session[n]?.[0]?.reps??5);h.ctx.tapSet(n,0);plan=h.ctx.getSetPlan(n);for(let i=1;i<plan.length;i++){if(!h.S().session[n]?.[i])h.ctx.tapSet(n,i);plan=h.ctx.getSetPlan(n)}
   const loads=Object.values(h.S().session[n]||{}).filter(x=>x&&x.reps!==undefined).sort((a,b)=>a.index-b.index).map(x=>Number(x.load)),finalPlan=h.ctx.getSetPlan(n).map(x=>Number(x.load));
-  return {n,nextKg,snapKg,snapIncKg,currentLb,nextLb,snapLb,snapIncLb,firstLb,currentBack,nextBack,snapBack,snapIncBack,liveIncBack,finalDriver:h.S().hlm.driver[n],finalNext:h.S().hlm.nextHeavy[n],finalInc:h.S().core[n].increment,loads,finalPlan};
+  return {n,actualLb:actualKg.map(x=>x*2.2046226218),nextKg,snapKg,snapIncKg,currentLb,nextLb,snapLb,snapIncLb,firstLb,currentBack,nextBack,snapBack,snapIncBack,liveIncBack,finalDriver:h.S().hlm.driver[n],finalNext:h.S().hlm.nextHeavy[n],finalInc:h.S().core[n].increment,loads,finalPlan};
 }
 test('F24-INTERMEDIATE-SNAPSHOT-UNIT-CONVERSION-ATOMIC','DEFECT','HLM/4-Day processed rollback snapshots must convert nested driver/nextHeavy state and reversible increments so post-conversion corrections remain coherent',()=>{
-  const out=[];let pass=true;for(const mode of ['hlm','fourday']){const r=intermediateUnitCorrectionCase(mode);const snapConverted=r.snapLb>=85&&r.snapLb<=95,roundTrip=r.currentBack===40&&r.snapBack===40&&r.liveIncBack===1.5&&r.snapIncBack===1.5,sessionCoherent=r.loads.length===r.finalPlan.length&&Math.abs(r.loads[0]-r.firstLb)<1e-9&&r.loads.slice(1).every((x,i)=>Math.abs(x-r.finalPlan[i+1])<1e-9),finalSane=r.finalDriver>=85&&r.finalNext>=90&&r.finalInc===2.5&&sessionCoherent;pass=pass&&r.nextKg>40&&r.snapKg===40&&r.snapIncKg===1.5&&r.currentLb>=85&&r.nextLb>=90&&snapConverted&&r.snapIncLb===2.5&&roundTrip&&finalSane;out.push(`${mode}/${r.n}: kg next=${r.nextKg} snap=${r.snapKg}/+${r.snapIncKg}; lb current=${r.currentLb} next=${r.nextLb} snap=${r.snapLb}/+${r.snapIncLb}; back live/snap=${r.currentBack}/${r.snapBack} inc=${r.liveIncBack}/${r.snapIncBack}; final=${r.finalDriver}/${r.finalNext}/+${r.finalInc} loads=${r.loads.join('/')} plan=${r.finalPlan.join('/')}`)}return ok(pass,out.join(' | '));
+  const out=[];let pass=true;for(const mode of ['hlm','fourday']){const r=intermediateUnitCorrectionCase(mode);const snapConverted=r.snapLb>=85&&r.snapLb<=95,roundTrip=r.currentBack===40&&r.snapBack===40&&r.liveIncBack===1.5&&r.snapIncBack===1.5,sessionCoherent=r.loads.length===r.finalPlan.length&&Math.abs(r.loads[0]-r.firstLb)<1e-9&&r.loads.every((x,i)=>Math.abs(x-r.actualLb[i])<1e-9),finalSane=r.finalDriver>=85&&r.finalNext>=90&&r.finalInc===2.5&&sessionCoherent;pass=pass&&r.nextKg>40&&r.snapKg===40&&r.snapIncKg===1.5&&r.currentLb>=85&&r.nextLb>=90&&snapConverted&&r.snapIncLb===2.5&&roundTrip&&finalSane;out.push(`${mode}/${r.n}: kg next=${r.nextKg} snap=${r.snapKg}/+${r.snapIncKg}; lb current=${r.currentLb} next=${r.nextLb} snap=${r.snapLb}/+${r.snapIncLb}; back live/snap=${r.currentBack}/${r.snapBack} inc=${r.liveIncBack}/${r.snapIncBack}; final=${r.finalDriver}/${r.finalNext}/+${r.finalInc} loads=${r.loads.join('/')} plan=${r.finalPlan.join('/')}`)}return ok(pass,out.join(' | '));
+});
+test('F24-INTERMEDIATE-MEANINGFUL-UNIT-CORRECTION','DEFECT','Meaningful HLM/Split corrections after conversion revoke progression, preserve actual mass and extras, and recompute failure once',()=>{
+ for(const mode of ['hlm','fourday']){
+  const h=H.boot(build);configureLP(h,{...H.LP_W,Squat:40,'Bench Press':40});const n=mode==='hlm'?'Squat':'Bench Press';h.S().core[n].increment=1.5;h.choices.push('R');h.ctx.chooseProgramMode(mode);if(mode==='fourday')h.ctx.switchDay('1');
+  for(let i=0;i<h.ctx.getSetPlan(n).length;i++)h.ctx.tapSet(n,i);
+  h.ctx.bvomCoreAddExtraSet(n);const o=h.lastOverlay();o.querySelector('[data-load]').value='63.75';o.querySelector('[data-reps]').value='4';o.querySelector('[data-save]').onclick();h.ctx.changeUnits('lb',true);
+  const before=JSON.stringify(h.S());h.reps.push(5);h.ctx.tapSet(n,0);if(JSON.stringify(h.S())!==before)return ok(false,'unchanged save mutated converted workout');
+  h.reps.push(4);h.ctx.tapSet(n,0);const ss=h.S().session[n];
+  if(Object.keys(ss).filter(k=>/^\d+$/.test(k)).join()!=='0'||ss[0].load!==35*2.2046226218||ss['EXTRA:0'].load!==63.75*2.2046226218||h.S().hlm.driver[n]!==90||h.S().hlm.nextHeavy[n]!==null||h.S().core[n].increment!==2.5)return ok(false,'partial correction lost actual/extra or retained earned progression');
+  for(let i=1;i<h.ctx.getSetPlan(n).length;i++)h.ctx.tapSet(n,i);
+  if(h.S().hlm.failCount[n]!==1||h.S().hlm.nextHeavy[n]!==null||ss['EXTRA:0'].load!==63.75*2.2046226218)return ok(false,'corrected failure or extra diverged');
+ }
+ return ok(true,'both converted intermediate programmes preserve mass and independent extras across real rollback');
 });
 function onRampRoundTripCase(inc){
   const h=H.boot(build);bbStart(h,{onramp:true});const S=h.S(),ids=Object.values(S.bodybuilding.selections);
@@ -988,7 +1001,7 @@ test('F25-ONRAMP-UNIT-ROUNDTRIP-HANDOFF-REVERSIBLE','DEFECT','On-Ramp equipment 
 });
 test('F26-ACCESSORY-CORRECTION-RECOMPUTES-PROGRESSION','DEFECT','Correcting a completed accessory must roll back and recompute the earned progression exactly once, for both corrected misses and corrected successes',()=>{
   const run=(correctedReps)=>{const h=H.boot(build);configureLP(h);const a={...accessoryFixture(),weight:20,increment:2.5};h.S().accessoryList=[a];h.S().accessoryProgress={a1:{weight:20,attempts:0}};for(let i=0;i<3;i++)h.ctx.tapAccessory('a1',i);const first=a.weight,processedBefore=!!h.S().processed?.['ACC:a1'];h.reps.push(correctedReps);h.ctx.tapAccessory('a1',0);const afterEdit={weight:a.weight,processed:!!h.S().processed?.['ACC:a1'],sets:Object.keys(h.S().session['ACC:a1']||{}).length};let plan=h.ctx.accessoryPlan17(a);for(let i=1;i<plan.length;i++){if(!h.S().session['ACC:a1']?.[i])h.ctx.tapAccessory('a1',i);plan=h.ctx.accessoryPlan17(a)}const ss=h.S().session['ACC:a1']||{},loads=Object.values(ss).filter(x=>x&&x.reps!==undefined).map(x=>Number(x.load)),finalPlan=h.ctx.accessoryPlan17(a);const coherent=finalPlan.every((q,i)=>!ss[i]||Math.abs(Number(ss[i].load)-Number(q.load))<1e-9);return{first,processedBefore,afterEdit,finalWeight:a.weight,attempts:Number(a.attempts||0),processed:!!h.S().processed?.['ACC:a1'],loads,plan:finalPlan.map(q=>Number(q.load)),coherent}};
-  const miss=run(5),success=run(8);const missGood=miss.first===22.5&&miss.processedBefore&&miss.afterEdit.weight===20&&!miss.afterEdit.processed&&miss.afterEdit.sets===1&&miss.finalWeight===20&&miss.attempts===1&&miss.processed&&miss.coherent&&!miss.loads.some(x=>x>20);const successGood=success.first===22.5&&success.afterEdit.weight===20&&!success.afterEdit.processed&&success.afterEdit.sets===1&&success.finalWeight===22.5&&success.attempts===0&&success.processed&&success.loads.length===3&&success.loads.every(x=>x===20);
+  const miss=run(5),success=run(9);const missGood=miss.first===22.5&&miss.processedBefore&&miss.afterEdit.weight===20&&!miss.afterEdit.processed&&miss.afterEdit.sets===1&&miss.finalWeight===20&&miss.attempts===1&&miss.processed&&miss.coherent&&!miss.loads.some(x=>x>20);const successGood=success.first===22.5&&success.afterEdit.weight===20&&!success.afterEdit.processed&&success.afterEdit.sets===1&&success.finalWeight===22.5&&success.attempts===0&&success.processed&&success.loads.length===3&&success.loads.every(x=>x===20);
   return ok(missGood&&successGood,`miss first=${miss.first} edit=${miss.afterEdit.weight}/${miss.afterEdit.sets} final=${miss.finalWeight} attempts=${miss.attempts} processed=${miss.processed} loads=${miss.loads.join('/')} plan=${miss.plan.join('/')} coherent=${miss.coherent} | success first=${success.first} edit=${success.afterEdit.weight}/${success.afterEdit.sets} final=${success.finalWeight} attempts=${success.attempts} processed=${success.processed} loads=${success.loads.join('/')} coherent=${success.coherent}`);
 });
 test('F27-RECORDED-OPTIONAL-WORK-REMOVAL-PRESERVES-LIVE-DATA','DEFECT','Recorded accessory/GPP work must block destructive template removal until the workout is resolved, while idle templates remain removable',()=>{
@@ -1003,11 +1016,11 @@ test('F27-RECORDED-OPTIONAL-WORK-REMOVAL-PRESERVES-LIVE-DATA','DEFECT','Recorded
 
 
 /* ======================= SIXTH COLD-AUDIT / TRANSACTION FOLLOW-UPS: F28–F33 ======================= */
-test('F28-CORE-POSTRESULT-INCREMENT-EDIT-PRESERVES-EARNED-PROGRESSION','DEFECT','Changing only a core progression increment after a completed lift must not move the already-earned next load when the recorded performance is later corrected unchanged',()=>{
+test('F28-CORE-POSTRESULT-INCREMENT-EDIT-PRESERVES-EARNED-PROGRESSION','DEFECT','Changing only a core progression increment after a completed lift must not move the already-earned next load when the recorded performance is saved unchanged and later corrected with a still-successful rep count',()=>{
   const ls=H.memStore(),h=H.boot(build,{ls});configureLP(h,{...H.LP_W,Squat:40});for(let i=0;i<3;i++)h.ctx.tapSet('Squat',i);
   const earned=h.S().weights.Squat,preSnap=JSON.parse(JSON.stringify(h.S().processedSnapshots?.Squat||null));
   setLiftSettingsFields(h,'Squat',{weight:earned,increment:5});h.ctx.saveLiftSettings('Squat');const saved=h.S().weights.Squat===42.5&&h.S().core.Squat.increment===5;
-  const r=H.boot(build,{ls,ss:h.ctx.sessionStorage});r.reps.push(5);r.ctx.tapSet('Squat',2);let plan=r.ctx.getSetPlan('Squat');for(let i=0;i<plan.length;i++){if(!r.S().session.Squat?.[i])r.ctx.tapSet('Squat',i);plan=r.ctx.getSetPlan('Squat')}
+  const r=H.boot(build,{ls,ss:h.ctx.sessionStorage});r.reps.push(5);r.ctx.tapSet('Squat',2);if(r.S().weights.Squat!==42.5||Object.keys(r.S().session.Squat).length!==3)return ok(false,'unchanged save lost earned work');r.reps.push(6);r.ctx.tapSet('Squat',2);let plan=r.ctx.getSetPlan('Squat');for(let i=0;i<plan.length;i++){if(!r.S().session.Squat?.[i])r.ctx.tapSet('Squat',i);plan=r.ctx.getSetPlan('Squat')}
   const loads=Object.values(r.S().session.Squat||{}).filter(x=>x&&x.reps!==undefined).map(x=>Number(x.load)),final=r.S().weights.Squat,incNow=r.S().core.Squat.increment;
   return ok(earned===42.5&&preSnap?.weight===40&&preSnap?.cfg?.increment===2.5&&saved&&final===42.5&&incNow===5&&loads.length===3&&loads.every(x=>x===40),`earned=${earned} snap=${preSnap?.weight}/+${preSnap?.cfg?.increment} saved=${saved} final=${final}/+${incNow} loads=${loads.join('/')}`);
 });
@@ -1015,7 +1028,7 @@ test('F28-CORE-POSTRESULT-INCREMENT-EDIT-PRESERVES-EARNED-PROGRESSION','DEFECT',
 test('F29-ACCESSORY-POSTRESULT-INCREMENT-EDIT-PRESERVES-EARNED-PROGRESSION','DEFECT','Changing only an accessory increment after earned progression must not retroactively recalculate that already-earned next load when the completed set is corrected unchanged',()=>{
   const a={...accessoryFixture(),weight:20,increment:2.5};const h=H.boot(build);configureLP(h);h.S().accessoryList=[a];h.S().accessoryProgress={a1:{weight:20,attempts:0}};for(let i=0;i<3;i++)h.ctx.tapAccessory('a1',i);
   const earned=a.weight,snap=JSON.parse(JSON.stringify(h.S().processedSnapshots?.['ACC:a1']||null));editAccessoryViaBuilder(h,a,5);const saved=a.weight===22.5&&a.increment===5;
-  h.reps.push(8);h.ctx.tapAccessory('a1',2);let plan=h.ctx.accessoryPlan17(a);for(let i=0;i<plan.length;i++){if(!h.S().session['ACC:a1']?.[i])h.ctx.tapAccessory('a1',i);plan=h.ctx.accessoryPlan17(a)}
+  h.reps.push(8);h.ctx.tapAccessory('a1',2);if(a.weight!==22.5||Object.keys(h.S().session['ACC:a1']).length!==3)return ok(false,'unchanged accessory save lost work');h.reps.push(9);h.ctx.tapAccessory('a1',2);let plan=h.ctx.accessoryPlan17(a);for(let i=0;i<plan.length;i++){if(!h.S().session['ACC:a1']?.[i])h.ctx.tapAccessory('a1',i);plan=h.ctx.accessoryPlan17(a)}
   const loads=Object.values(h.S().session['ACC:a1']||{}).filter(x=>x&&x.reps!==undefined).map(x=>Number(x.load));
   return ok(earned===22.5&&snap?.weight===20&&saved&&a.weight===22.5&&a.increment===5&&Number(a.attempts||0)===0&&loads.length===3&&loads.every(x=>x===20),`earned=${earned} snap=${snap?.weight} saved=${saved} final=${a.weight}/+${a.increment} attempts=${a.attempts||0} loads=${loads.join('/')}`);
 });
@@ -1074,8 +1087,8 @@ test('F34-ACTIVE-CORE-PRESCRIPTION-IMMUTABLE-AFTER-SETTINGS-EDIT','DEFECT','Afte
 });
 
 test('F35-POSTCOMPLETE-SETTINGS-WEIGHT-EDIT-CORRECTION-SAFE','DEFECT','A working-weight change saved through Advanced Settings after progression must survive later correction without repricing the completed session or progressing the edited future weight again',()=>{
-  const run=(withUnits)=>{const ls=H.memStore(),h=H.boot(build,{ls});configureLP(h,{...H.LP_W,Squat:100});for(let i=0;i<3;i++)h.ctx.tapSet('Squat',i);const earned=h.S().weights.Squat;setLiftSettingsFields(h,'Squat',{weight:110,increment:2.5,mode:'straight'});h.ctx.saveLiftSettings('Squat');if(withUnits)h.ctx.changeUnits('lb',true);const selected=h.S().weights.Squat;const originalSet=Number(h.S().session.Squat?.[0]?.load);const r=H.boot(build,{ls,ss:h.ctx.sessionStorage});r.reps.push(5);r.ctx.tapSet('Squat',0);let p=r.ctx.getSetPlan('Squat');for(let i=1;i<p.length;i++){if(!r.S().session.Squat?.[i])r.ctx.tapSet('Squat',i);p=r.ctx.getSetPlan('Squat')}const loads=Object.values(r.S().session.Squat||{}).filter(x=>x&&x.reps!==undefined).sort((a,b)=>a.index-b.index).map(x=>Number(x.load));return{earned,selected,originalSet,final:r.S().weights.Squat,loads,unit:r.S().unit}};
-  const kg=run(false),lb=run(true),kgGood=kg.earned===102.5&&kg.selected===110&&kg.final===110&&kg.loads.length===3&&kg.loads.every(x=>x===100),lbGood=lb.unit==='lb'&&lb.originalSet>=219&&lb.originalSet<=221&&lb.selected>=240&&lb.selected<=245&&lb.final===lb.selected&&lb.loads.every(x=>Math.abs(x-lb.originalSet)<1e-9);
+  const run=(withUnits)=>{const ls=H.memStore(),h=H.boot(build,{ls});configureLP(h,{...H.LP_W,Squat:100});for(let i=0;i<3;i++)h.ctx.tapSet('Squat',i);const earned=h.S().weights.Squat;setLiftSettingsFields(h,'Squat',{weight:110,increment:2.5,mode:'straight'});h.ctx.saveLiftSettings('Squat');if(withUnits)h.ctx.changeUnits('lb',true);const selected=h.S().weights.Squat;const originalSet=Number(h.S().session.Squat?.[0]?.load);const r=H.boot(build,{ls,ss:h.ctx.sessionStorage});r.reps.push(5);r.ctx.tapSet('Squat',0);r.reps.push(6);r.ctx.tapSet('Squat',0);let p=r.ctx.getSetPlan('Squat');for(let i=1;i<p.length;i++){if(!r.S().session.Squat?.[i])r.ctx.tapSet('Squat',i);p=r.ctx.getSetPlan('Squat')}const loads=Object.values(r.S().session.Squat||{}).filter(x=>x&&x.reps!==undefined).sort((a,b)=>a.index-b.index).map(x=>Number(x.load));return{earned,selected,originalSet,final:r.S().weights.Squat,loads,unit:r.S().unit}};
+  const kg=run(false),lb=run(true),kgGood=kg.earned===102.5&&kg.selected===110&&kg.final===110&&kg.loads.length===3&&kg.loads.every(x=>x===100),lbGood=lb.unit==='lb'&&lb.originalSet>=219&&lb.originalSet<=221&&lb.selected>=240&&lb.selected<=245&&lb.final===lb.selected&&Math.abs(lb.loads[0]-100*2.2046226218)<1e-9&&lb.loads.slice(1).every(x=>x===220);
   return ok(kgGood&&lbGood,`kg earned=${kg.earned} selected=${kg.selected} final=${kg.final} loads=${kg.loads.join('/')} | lb set=${lb.originalSet} selected=${lb.selected} final=${lb.final} loads=${lb.loads.join('/')}`);
 });
 
@@ -1094,7 +1107,7 @@ test('F37-HLM-NEXT-WORKOUT-SETTINGS-DO-NOT-ALTER-PARTIAL-CURRENT-PRESCRIPTION','
 /* ======================= EIGHTH COLD-AUDIT / POST-RESULT MERGE FOLLOW-UPS: F38–F39 ======================= */
 function editAccessoryFutureFieldsViaBuilder(h,a,{weight=a.weight,increment=a.increment}={}){
   h.ctx.openAccessoryBuilder(a.id);const o=h.lastOverlay();if(!o)return false;const q=s=>o.querySelector(s);
-  q('#accCat').value=a.category||'Upper';q('#accName').value=a.name;q('#accAssign').value=a.assignment||'A';q('#accEquipment').value=a.equipment||'machine';q('#accPlateMode').value=a.plateMode||'standard';q('#accStyle').value=a.style||'straight';q('#accSets').value=String(a.sets||3);q('#accReps').value=String(a.reps||8);q('#accTopReps').value=String(a.topReps||a.reps||8);q('#accWeight').value=String(weight);q('#accInc').value=String(increment);q('#accBar').value=String(a.barWeight||20);q('#accSave').onclick();return true;
+  q('#accCat').value=a.category||'Upper';q('#accName').value=a.name;q('#accAssign').value=(a.bbAssignment||a.assignment||'A');q('#accEquipment').value=a.equipment||'machine';q('#accPlateMode').value=a.plateMode||'standard';q('#accStyle').value=a.style||'straight';q('#accSets').value=String(a.sets||3);q('#accReps').value=String(a.reps||8);q('#accTopReps').value=String(a.topReps||a.reps||8);q('#accLoadedWeight').value=String(weight);q('#accInc').value=String(increment);q('#accBar').value=String(a.barWeight||20);q('#accSave').onclick();return true;
 }
 function completeMissingCoreV14(h,n){
   let guard=0;
@@ -1170,7 +1183,7 @@ function f41BbActualRoundTrip(onramp){
   bbStart(h,{loads:{...H.BB_LOADS,[id]:22.5},incs:{[id]:2.5}});h.S().bodybuilding.progression[id].calibrated=true;h.ev('save()');bbSet(h,id,0,{reps:8,load:24});const before={set:Number(h.S().session['BB:'+id]?.[0]?.load),rx:Number(h.S().bodybuilding.progression[id].load)};h.ctx.changeUnits('lb',true);const mid={set:Number(h.S().session['BB:'+id]?.[0]?.load),rx:Number(h.S().bodybuilding.progression[id].load)};h.ctx.changeUnits('kg',true);const after={set:Number(h.S().session['BB:'+id]?.[0]?.load),rx:Number(h.S().bodybuilding.progression[id].load)};const r=H.boot(build,{ls});return{onramp,before,mid,after,reload:{set:Number(r.S().session['BB:'+id]?.[0]?.load),rx:Number(r.S().bodybuilding.progression[id].load)}};
 }
 test('F41-BB-ACTUAL-LOAD-ROUNDTRIP-EXACT','DEFECT','A kg→lb→kg round-trip with no training must restore the exact actual load recorded through the real Bodybuilding and On-Ramp set-entry UI, including off-grid actuals',()=>{
-  const bb=f41BbActualRoundTrip(false),or=f41BbActualRoundTrip(true);const bbGood=bb.before.set===24&&bb.mid.set===55&&bb.after.set===24&&bb.reload.set===24&&bb.after.rx===22.5;const orGood=or.before.set===24&&or.mid.set===55&&or.after.set===24&&or.reload.set===24&&or.after.exercise===24&&or.reload.exercise===24;
+  const bb=f41BbActualRoundTrip(false),or=f41BbActualRoundTrip(true);const bbGood=bb.before.set===24&&bb.mid.set===24*2.2046226218&&bb.after.set===24&&bb.reload.set===24&&bb.after.rx===22.5;const orGood=or.before.set===24&&or.mid.set===24*2.2046226218&&or.after.set===24&&or.reload.set===24&&or.after.exercise===24&&or.reload.exercise===24;
   return ok(bbGood&&orGood,`BB set ${bb.before.set}->${bb.mid.set}->${bb.after.set}, reload=${bb.reload.set}, rx=${bb.after.rx} | OR set ${or.before.set}->${or.mid.set}->${or.after.set}, reload=${or.reload.set}, exercise=${or.after.exercise}/${or.reload.exercise}`);
 });
 

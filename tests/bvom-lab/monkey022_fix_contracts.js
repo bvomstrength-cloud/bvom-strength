@@ -449,17 +449,15 @@ module.exports=({test,ok,H,build})=>{
    'Bodyweight accessory builder shows localized volume-only explanation immediately after estimate field',()=>{
     const h=H.boot(build);h.S().language=lang;h.ev('save()');
     h.ctx.openAccessoryBuilder();
-    const o=h.lastOverlay(),html=o?.innerHTML||'',label=h.ctx.bvomT('bodyweight.estimateHelp');
+    const o=h.lastOverlay(),html=o?.innerHTML||'',label=h.ctx.bvomAccessoryEstimateHelp();
     const estimate=html.indexOf('id="accBwEstimate"'),help=html.indexOf(label),
      assistance=html.indexOf('id="accBwResistance"');
     const checks={
-     builder:estimate>=0&&assistance>estimate,
-     helperPresent:help>estimate&&help<assistance,
+     builder:estimate>=0&&assistance>=0&&assistance<estimate,
+     helperPresent:help>estimate&&help<html.indexOf('</details>',estimate),
      explanation:lang==='en'?
-      /chin-ups/i.test(label)&&/push-ups/i.test(label)&&/Nordic curls/i.test(label)&&
-       /volume/i.test(label)&&/progression/i.test(label)&&/blank/i.test(label):
-      /懸垂/.test(label)&&/腕立て/.test(label)&&/ノルディック/.test(label)&&
-       /ボリューム/.test(label)&&/進行/.test(label)&&/空欄/.test(label),
+      /only to estimate workout volume/i.test(label)&&/blank/i.test(label):
+      /総負荷を推定するためだけ/.test(label)&&/空欄/.test(label),
      once:html.split(label).length===2
     };
     return ok(Object.values(checks).every(Boolean),JSON.stringify(checks));

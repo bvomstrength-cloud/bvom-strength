@@ -129,7 +129,8 @@ module.exports=({test,ok,H,build})=>{
   h.S().session['ACC:ex52']=records;h.ctx.save();h.ctx.renderWorkout();
   const count=h.ctx.bvomBwExtraSetIndices(a,records).length,firstFree=h.ctx.bvomBwNextExtraSetIndex(a),before=JSON.stringify(records);
   h.ctx.bvomBwAddExtraSet(a.id);
-  const warned=h.log.some(x=>x[0]==='alert'&&x[1].includes('Maximum 30 extra sets'));
+  const notice=h.lastOverlay();const warned=notice?.innerHTML.includes('Maximum 30 extra sets');
+  notice?.remove();
   const blocked=!h.lastOverlay()||h.lastOverlay().removed;
   h.ctx.bvomBwAccessoryModal(a.id,3);
   const blockedDirect=!h.lastOverlay()||h.lastOverlay().removed;
@@ -150,7 +151,8 @@ module.exports=({test,ok,H,build})=>{
   const complete=ids.length===30&&ids.every((x,i)=>x===i+1);
   const before=JSON.stringify(h.S().session['ACC:ex52']||{});
   h.ctx.bvomBwAddExtraSet(a.id);
-  const refused=JSON.stringify(h.S().session['ACC:ex52']||{})===before&&h.ctx.bvomBwExtraSetIndices(a,h.S().session['ACC:ex52']).length===30&&(!h.lastOverlay()||h.lastOverlay().removed);
+  const refused=JSON.stringify(h.S().session['ACC:ex52']||{})===before&&h.ctx.bvomBwExtraSetIndices(a,h.S().session['ACC:ex52']).length===30&&h.lastOverlay()?.innerHTML.includes('Maximum 30 extra sets');
+  h.lastOverlay()?.remove();
   h.ctx.bvomBwAccessoryModal(a.id,13);const rm=h.lastOverlay();rm.querySelector('[data-remove]').onclick();
   const survivor=JSON.stringify(h.S().session['ACC:ex52'][32]),free=h.ctx.bvomBwNextExtraSetIndex(a);
   extra(h,{reps:42,load:0});

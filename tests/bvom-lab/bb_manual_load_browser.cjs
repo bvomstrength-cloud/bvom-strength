@@ -48,7 +48,7 @@ const server=http.createServer((req,res)=>{
    assert.equal(await btn.isEnabled(),true);
    await btn.click();
    const modal=page.locator('.bvomModalOverlay');
-   assert.match(await modal.textContent(),lang==='en'?/next working weight/i:/次回のワーキング重量/);
+   assert.match(await modal.textContent(),lang==='en'?/next working weight/i:/次回の使用重量/);
    assert.match(await modal.textContent(),lang==='en'?/progression increment/i:/進行時の増量幅/);
    assert.equal(await modal.locator('[data-bb-increment]').inputValue(),'2.5','existing step appears in Edit Weight');
    assert.match(await modal.textContent(),lang==='en'?/back-off sets/i:/バックオフセット/);

@@ -5,6 +5,8 @@ on:
   pull_request:
     branches:
       - main
+      - codex/v3.1.0-issue-89
+      - fix/v3.1.1-ja
 
 permissions:
   contents: read
@@ -112,7 +114,7 @@ jobs:
   bvom-recovery-browser:
     name: BVOM real application recovery checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -199,6 +201,44 @@ jobs:
           name: bb1-bb2-edit-weight-mobile-parity
           path: ${{ runner.temp }}/bb2-ui-parity/*.png
           if-no-files-found: ignore
+      - name: Verify set Cancel and programme selection on mobile Chromium
+        env:
+          BVOM_MONKEY_OUT: ${{ runner.temp }}/bvom-issue-87
+        run: |
+          node tests/bvom-lab/issue_87_browser.cjs
+          node tests/bvom-lab/issue_89_browser.cjs
+          node tests/bvom-lab/accessory_cancel_browser.cjs
+          node tests/audit-v310/browser.cjs
+          node tests/audit-v310/straight-recovery-browser.cjs
+          node tests/audit-v310-e2e/browser.cjs
+          node tests/audit-v310-e2e/mutations.cjs .
+
+      - name: Check Japanese repair in Chromium
+        run: node tests/audit-v311/browser.cjs
+      - name: Verify accessory preset provenance and legacy names
+        run: node tests/audit-v311/accessory-presets.cjs
+
+      - name: Check out the locked Japanese localisation baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 67bf4b7068e11a1b3b6d013ceb0fbe5f4e81e900
+          path: .bvom-ja-baseline
+
+      - name: Compare locale and training behaviour against v3.1.0
+        run: node tests/audit-v311/parity.cjs .bvom-ja-baseline .
+
+      - name: Verify optional forms, order and canonical labels on mobile
+        run: node tests/audit-v312/browser.cjs
+
+      - name: Check out the owner-approved v3.1.1 training baseline
+        uses: actions/checkout@v4
+        with:
+          ref: bde051b503a69e11e6b1336457a281a16952f850
+          path: .bvom-v311-baseline
+
+      - name: Compare candidate training decisions against v3.1.1
+        run: node tests/audit-v311/parity.cjs .bvom-v311-baseline . 3.1.1
+
       - name: Run isolated deferred Starting Setup interactions
         run: node tests/bvom-lab/starting_setup_browser.cjs
 

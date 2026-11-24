@@ -70,6 +70,15 @@ function fakeCloud() {
     };
     return q;
   } };
+  client.rpc=async(name,p)=>{
+    assert.equal(name,'bvom_legacy_cloud_commit_v1');assert.equal(p.p_owner_id,ownerId);
+    if(p.p_expected_id!==server.row?.id||p.p_expected_revision!==server.row?.legacy_revision)
+      return {data:{status:'conflict'},error:null};
+    if(server.beforeWrite)server.beforeWrite('bvom_data',server.row);
+    server.row={...server.row,data:copy(p.p_data),legacy_revision:server.row.legacy_revision+1};
+    server.writes.push({table:'bvom_data',columns:['data'],transport:'revision-rpc'});
+    return {data:{status:'committed',id:server.row.id,revision:server.row.legacy_revision},error:null};
+  };
   return { server, client, supabase: { createClient: () => client } };
 }
 
@@ -110,7 +119,9 @@ async function main() {
     'Overhead Press': 30, Deadlift: 75 });
   h.ev(`bvomCloud.user={id:'${ownerId}',email:'test@example.invalid'};
     bvomCloud.offlineLocalAccess=false; bvomCloud.accountSwitchDeferred=false;`);
-  db.server.row = { id: 'row-1', user_id: ownerId, data: copy(h.S()) };
+  h.ls.setItem('bvom_data_owner',ownerId);
+  db.server.row = { id: 1, legacy_revision:1, user_id: ownerId, data: copy(h.S()) };
+  h.ev('bvomCloud.cloudExists=true;bvomCloud.syncReady=true;bvomCloud.remoteFingerprint=bvomCloudComparableFingerprint(bvomCloudPayload())');
   const originalLegacy = copy(db.server.row.data);
   const bb2 = { setup: core.createBB2Setup({catalogueVersion:1}),
     opening: core.createBB2Opening({ ownerId, blockId: 'test-block' }), events: [],
@@ -153,13 +164,13 @@ async function main() {
     assert.equal(db.server.stateRow.revision, 1);
   });
 
-  await check('actual old BVOM manual upload cannot modify separate cloud-state record', async () => {
+  await check('actual shared legacy manual upload cannot modify separate cloud-state record', async () => {
     await h.ctx.bvomCloudSaveNow();
     assert.equal(db.server.stateRow.state.requestId, 'test-request-1');
     assert.deepEqual(db.server.writes.at(-1), { table: 'bvom_data', columns: ['data'] });
   });
 
-  await check('actual old BVOM auto upload cannot remove concurrent cloud-state write', async () => {
+  await check('actual shared legacy auto upload cannot remove concurrent cloud-state write', async () => {
     db.server.row.data = copy(h.ctx.bvomCloudPayload());
     h.ev(`bvomCloud.cloudExists=true; bvomCloud.syncReady=true;
       bvomCloud.conflict=false; bvomCloud.remoteFingerprint=
