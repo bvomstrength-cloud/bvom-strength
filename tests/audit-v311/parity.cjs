@@ -31,6 +31,10 @@ function inspect(build, language, programMode, day, lift, style, choice){
   let called=false;
   app.ctx.bvomChoiceModal=(title,body,left,right,onLeft,onRight)=>{
    called=true;
+   if(build===candidate&&language==='en'&&lift==='Overhead Press'){
+    assert.match(title,/Press/);
+    assert.doesNotMatch(title,/Overhead Press/);
+   }
    if(language==='ja'&&(build===candidate||expected==='3.1.1')){
     assert.match(title,/目標未達/);
     assert.match(body,/×/);

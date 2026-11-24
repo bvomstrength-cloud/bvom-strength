@@ -1352,7 +1352,7 @@ function offerThreeFailureChoice(n){
  if(c.mode==='straight'){
   const nextWeight=roundWork(state.weights[n]+c.increment);
   const preview=fixed?fmt(nextWeight)+' '+unitLabel()+' · '+fixed.sets+' × '+fixed.reps:rptPreview(n,c,nextWeight,0);
-  bvomChoiceModal(bvomT('progress.threeStraight',{lift:hlmTxt(n,liftLabel(n))}),
+  bvomChoiceModal(bvomT('progress.threeStraight',{lift:liftLabel(n)}),
    bvomT('progress.threeStraightBody',{preview}),
    bvomT('progress.repeatStraight'),bvomT('common.moveToRpt'),
    ()=>{if(!bvomWorkoutActionAllowed())return;state.attempts[n]=0;save()},
@@ -1360,7 +1360,7 @@ function offerThreeFailureChoice(n){
     if(fixed&&state.processedSnapshots?.[n])state.processedSnapshots[n].fixedFailureTransition={mode:'rpt',level:0};
     c.mode='rpt';c.rptLevel=0;state.weights[n]=nextWeight;state.attempts[n]=0;
     save();renderAll();
-    bvomBeeModal(bvomT('progress.movedRpt',{lift:hlmTxt(n,liftLabel(n))}),bvomT('progress.nextTarget',{preview}));
+    bvomBeeModal(bvomT('progress.movedRpt',{lift:liftLabel(n)}),bvomT('progress.nextTarget',{preview}));
    }
   );return;
  }
@@ -1369,7 +1369,7 @@ function offerThreeFailureChoice(n){
  if((c.rptLevel||0)<maxLevel&&(!fixed||fixed.reps>1)){
   const nextLevel=(c.rptLevel||0)+1,nextWeight=roundWork(state.weights[n]+c.increment);
   const preview=fixed?fmt(nextWeight)+' '+unitLabel()+' · '+fixed.sets+' × '+(fixed.reps-1):rptPreview(n,c,nextWeight,nextLevel);
-  bvomChoiceModal(bvomT('progress.threeRpt',{lift:hlmTxt(n,liftLabel(n))}),
+  bvomChoiceModal(bvomT('progress.threeRpt',{lift:liftLabel(n)}),
    bvomT('progress.threeRptBody',{preview}),
    bvomT('common.repeat'),bvomT('progress.keepProgressing'),
    ()=>{if(!bvomWorkoutActionAllowed())return;state.attempts[n]=0;save()},
@@ -1383,13 +1383,13 @@ function offerThreeFailureChoice(n){
      state.fixedWorkingSets[state.programMode][n]={sets:fixed.sets,reps:fixed.reps-1};
     }
     c.rptLevel=nextLevel;state.weights[n]=nextWeight;state.attempts[n]=0;
-    save();renderAll();bvomBeeModal(bvomT('progress.movingOn',{lift:hlmTxt(n,liftLabel(n))}),bvomT('progress.nextTarget',{preview}));
+    save();renderAll();bvomBeeModal(bvomT('progress.movingOn',{lift:liftLabel(n)}),bvomT('progress.nextTarget',{preview}));
    }
   );return;
  }
 
  bvomEndRoad(n,()=>{if(!bvomWorkoutActionAllowed())return;
-  bvomWeightModal(`Reset ${n}`,state.weights[n],(v)=>{if(!bvomWorkoutActionAllowed())return;
+  bvomWeightModal(hlmTxt('Reset '+liftLabel(n),liftLabel(n)+'をリセット'),state.weights[n],(v)=>{if(!bvomWorkoutActionAllowed())return;
    c.mode='straight';c.rptLevel=0;state.weights[n]=v;state.attempts[n]=0;
    save();renderAll();
   });
@@ -1757,7 +1757,7 @@ function maybePB(n,ignored){
  const old=state.pbs[n]||{load:0,reps:0};
  if(candidate.load>bvomActualLoad(old)||(candidate.load===bvomActualLoad(old)&&candidate.reps>Number(old.reps))){
   state.pbs[n]={load:candidate.load,reps:candidate.reps,date:new Date().toISOString()};
-  return `${n}: ${fmt(candidate.load)} × ${candidate.reps}`;
+  return `${liftLabel(n)}: ${fmt(candidate.load)} × ${candidate.reps}`;
  }
  return'';
 }
@@ -3205,16 +3205,16 @@ function bvomPresentPendingHlmRepChoice(){
  ensureHLM();const p=state.hlm.pendingRepChoice;if(!p?.lift||window.__bvomHlmRepChoiceOpen)return;const n=p.lift,current=Number(p.current||hlmRep(n)),next=Math.max(2,Number(p.next||current-1));window.__bvomHlmRepChoiceOpen=true;
  const close=()=>{window.__bvomHlmRepChoiceOpen=false};
  if(current<=2){
-  let terminal;terminal=bvomChoiceModal(`${hlmTxt(n,liftLabel(n))}: ${hlmTxt('HLM strength block complete','HLM筋力ブロック完了')}`,hlmTxt(`You’ve had three unsuccessful Heavy attempts at doubles. BVOM recommends rerunning Starting Setup for another strength block, or researching more advanced strength-training methods and programming techniques. Working with an experienced strength coach is another option.`,`Heavyで2回を3回連続で達成できませんでした。BVOMでは、新しい筋力ブロックを始めるために初期設定をやり直すか、より高度な筋力トレーニングの方法やプログラミングを検討することをおすすめします。経験豊富なストレングスコーチに相談するのも一つの方法です。`),hlmTxt('BATTLE ON WITH 2s','2回で続ける'),hlmTxt('RUN STARTING SETUP','STARTING SETUPを実行'),()=>{if(!bvomCommitPendingChoice('hlm',p,()=>bvomClearPendingHlmRepChoice(n)))return false;close();renderAll();return true},()=>{if(!bvomWorkoutActionAllowed())return false;bvomRequestDeferredSetup(p,()=>{terminal?.remove();close()});return false},true);return;
+  let terminal;terminal=bvomChoiceModal(`${liftLabel(n)}: ${hlmTxt('HLM strength block complete','HLM筋力ブロック完了')}`,hlmTxt(`You’ve had three unsuccessful Heavy attempts at doubles. BVOM recommends rerunning Starting Setup for another strength block, or researching more advanced strength-training methods and programming techniques. Working with an experienced strength coach is another option.`,`Heavyで2回を3回連続で達成できませんでした。BVOMでは、新しい筋力ブロックを始めるために初期設定をやり直すか、より高度な筋力トレーニングの方法やプログラミングを検討することをおすすめします。経験豊富なストレングスコーチに相談するのも一つの方法です。`),hlmTxt('BATTLE ON WITH 2s','2回で続ける'),hlmTxt('RUN STARTING SETUP','STARTING SETUPを実行'),()=>{if(!bvomCommitPendingChoice('hlm',p,()=>bvomClearPendingHlmRepChoice(n)))return false;close();renderAll();return true},()=>{if(!bvomWorkoutActionAllowed())return false;bvomRequestDeferredSetup(p,()=>{terminal?.remove();close()});return false},true);return;
  }
- bvomChoiceModal(`${hlmTxt(n,liftLabel(n))}: ${hlmTxt(`3 unsuccessful attempts at ${current} reps`,`${current}回を3回連続で達成できませんでした`)}`,hlmTxt(`We suggest dropping this lift to ${next} reps. The weight stays the same.`,`この種目を${next}回に下げることをおすすめします。重量はそのままです。`) ,hlmTxt(`BATTLE ON WITH ${current}s`,`${current}回で続ける`),hlmTxt(`DROP TO ${next} REPS`,`${next}回に下げる`),()=>{if(!bvomCommitPendingChoice('hlm',p,()=>bvomClearPendingHlmRepChoice(n)))return false;close();return true},()=>{if(!bvomCommitPendingChoice('hlm',p,()=>{bvomClearPendingHlmRepChoice(n);state.hlm.rep[n]=next}))return false;close();renderAll();return true},true);
+ bvomChoiceModal(`${liftLabel(n)}: ${hlmTxt(`3 unsuccessful attempts at ${current} reps`,`${current}回を3回連続で達成できませんでした`)}`,hlmTxt(`We suggest dropping this lift to ${next} reps. The weight stays the same.`,`この種目を${next}回に下げることをおすすめします。重量はそのままです。`) ,hlmTxt(`BATTLE ON WITH ${current}s`,`${current}回で続ける`),hlmTxt(`DROP TO ${next} REPS`,`${next}回に下げる`),()=>{if(!bvomCommitPendingChoice('hlm',p,()=>bvomClearPendingHlmRepChoice(n)))return false;close();return true},()=>{if(!bvomCommitPendingChoice('hlm',p,()=>{bvomClearPendingHlmRepChoice(n);state.hlm.rep[n]=next}))return false;close();renderAll();return true},true);
 }
 function offerHlmRepChoice(n){ensureHLM();const current=hlmRep(n),next=Math.max(2,current-1);if(bvomPersistPendingChoice('hlm',{lift:n,current,next})){bvomPresentPendingHlmRepChoice();return true}return false}
 function bvomClearPendingCloseMissChoice(n){if(state.pendingCloseMissChoice?.lift===n)delete state.pendingCloseMissChoice}
 function bvomPresentPendingCloseMissChoice(){
  const p=state.pendingCloseMissChoice;if(!p?.lift||window.__bvomCloseMissChoiceOpen)return;const n=p.lift,nextWeight=Number(p.nextWeight);window.__bvomCloseMissChoiceOpen=true;
  const close=()=>{window.__bvomCloseMissChoiceOpen=false};
- bvomChoiceModal(`${hlmTxt(n,liftLabel(n))}: ${hlmTxt('close miss','あと少し')}`,hlmTxt('You were close. Repeat this weight, or progress anyway?','あと少しでした。この重量をもう一度行いますか？それとも次へ進みますか？'),hlmTxt('REPEAT','同じ重量で再挑戦'),hlmTxt('PROGRESS ANYWAY','次の重量へ進む'),()=>{if(!bvomCommitPendingChoice('lp',p,()=>{bvomClearPendingCloseMissChoice(n);state.attempts[n]=(state.attempts[n]||0)+1}))return false;close();if(state.attempts[n]>=3)offerThreeFailureChoice(n);return true},()=>{if(!bvomCommitPendingChoice('lp',p,()=>{bvomClearPendingCloseMissChoice(n);if(Number.isFinite(nextWeight))state.weights[n]=nextWeight;state.attempts[n]=0}))return false;close();renderAll();return true},true);
+ bvomChoiceModal(`${liftLabel(n)}: ${hlmTxt('close miss','あと少し')}`,hlmTxt('You were close. Repeat this weight, or progress anyway?','あと少しでした。この重量をもう一度行いますか？それとも次へ進みますか？'),hlmTxt('REPEAT','同じ重量で再挑戦'),hlmTxt('PROGRESS ANYWAY','次の重量へ進む'),()=>{if(!bvomCommitPendingChoice('lp',p,()=>{bvomClearPendingCloseMissChoice(n);state.attempts[n]=(state.attempts[n]||0)+1}))return false;close();if(state.attempts[n]>=3)offerThreeFailureChoice(n);return true},()=>{if(!bvomCommitPendingChoice('lp',p,()=>{bvomClearPendingCloseMissChoice(n);if(Number.isFinite(nextWeight))state.weights[n]=nextWeight;state.attempts[n]=0}))return false;close();renderAll();return true},true);
 }
 function bvomCloseMissChoiceData(n,baseWeight,increment){
  return {lift:n,nextWeight:bvomRoundForSession(n,Number(baseWeight)+Number(increment))};

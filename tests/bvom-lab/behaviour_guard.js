@@ -508,10 +508,10 @@ test('F101-SW-UPDATE-CRITICAL-GUARDS','DEFECT','Finish busy, save failure and wo
  const candidate={state:'installed',scriptURL:'sw.js?v=next',postMessage:()=>posts++};
  h.ctx.bvomShowServiceWorkerUpdate({waiting:candidate});
  const el=h.ctx.document.getElementById('bvomUpdateBanner'),btn=el.querySelector('[data-bvom-update]'),checks=[];
- for(const mode of ['busy','dialog','blocked']){
+ for(const mode of ['busy','dialog','accessory dialog','blocked']){
   h.ctx.__bvomFinishBusy=mode==='busy';
   h.ev("bvomLocalPersistenceFailureActive="+(mode==='blocked'));
-  const o=mode==='dialog'?h.ctx.document.createElement('div'):null;if(o){o.className='bvomModalOverlay';h.ctx.document.body.appendChild(o)}
+  const o=mode.endsWith('dialog')?h.ctx.document.createElement('div'):null;if(o){o.className=mode==='accessory dialog'?'beeCoachOverlay':'bvomModalOverlay';h.ctx.document.body.appendChild(o)}
   h.ctx.bvomSyncWorkoutControls();btn.onclick();
   h.ctx.sessionStorage.setItem('bvom-update-reload-requested','1');h.ctx.bvomSwFinishRequestedReload();
   checks.push(el.style.display==='none'&&posts===0&&reloads===0&&h.ctx.sessionStorage.getItem('bvom-update-reload-requested')===null);

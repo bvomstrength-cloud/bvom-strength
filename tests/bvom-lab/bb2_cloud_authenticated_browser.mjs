@@ -734,8 +734,8 @@ try {
     if(await warning.count())await warning.click();
     await tablet.evaluate(()=>bvomCloudRestore());
     const confirm=tablet.locator('.bvomModalOverlay [data-r]').last();
-    await confirm.click();
-    await tablet.waitForFunction(()=>state.accessoryList[0]?.id==='acc-last'&&state.gppList[0]?.id==='gpp-last');
+    await Promise.all([tablet.waitForEvent('domcontentloaded'),confirm.click()]);
+    await tablet.waitForSelector('#app:not(.hidden)');
     const restored=await tablet.evaluate(()=>JSON.parse(localStorage.getItem('bvom_data')));
     assert.deepEqual(restored.accessoryList,stored.accessoryList);
     assert.deepEqual(restored.gppList,stored.gppList);
