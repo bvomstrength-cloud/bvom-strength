@@ -7207,7 +7207,7 @@ function bvomBb2PendingChoices(projection,onlyKey=null,inline=false){
 function bvomBb2StallActions(projection){
  const offers=Object.entries(projection?.stallSignals||{}).filter(([,s])=>s.kind==='OFFER'&&!s.dismissed);
  if(!offers.length)return '';
- return '<div class="card"><b>'+hlmTxt('OPTIONAL STALL REVIEW','停滞時の任意の見直し')+'</b><p class="small">'+hlmTxt('No change is automatic. You can also swap the exercise above or choose an easy recovery workout.','変更は自動では行われません。上の種目を変更するか、軽めの回復ワークアウトを選ぶこともできます。')+'</p>'+
+ return '<div class="card"><b>'+hlmTxt('OPTIONAL STALL REVIEW','停滞時の任意の見直し')+'</b><p class="small">'+hlmTxt('No change is automatic. You can also swap the exercise under Exercise selection or choose an easy recovery workout.','変更は自動では行われません。「種目の選択」で種目を変更するか、軽めの回復ワークアウトを選ぶこともできます。')+'</p>'+
   offers.map(([key,signal],i)=>{
    const p=projection.progress[key],reduced=bvomBb2RecoveryGrams(p);
    return '<div class="review" data-bb2-stall="'+i+'"><b>'+bvomEsc(bvomBb2PreviewLabel(key))+
@@ -7375,14 +7375,18 @@ function bvomBb2StartForm(){
  }).join('');
  const start='<button type="button" class="primary wide bvomBb2Start" data-bb2-start onclick="bvomBb2Begin()">'+hlmTxt('START WORKOUT','ワークアウトを開始')+'</button>';
 
+ const decisions=projection?bvomBb2PendingChoices(projection):'';
+ const decisionsBeforeStart=!!decisions&&(prepared.blocked||
+  p.slots.some(slot=>bvomBb2PendingKey(projection,bvomBb2Day,slot)));
  return (projection?'<div class="card"><b>'+hlmTxt('BB2 BLOCK','BB2ブロック')+'</b><p class="small">'+
   m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.map(d=>bvomEsc(bvomBb2PreviewLabel(d))+': '+projection.quotas[d]+'/8').join(' · ')+
   '</p>'+(full?'<button type="button" class="primary wide" data-bb2-next-block onclick="bvomBb2NextBlock()">'+hlmTxt('REVIEW NEXT BLOCK SETUP','次のブロック設定を確認')+'</button>':'')+
   (projection.multiStallRecovery?'<p class="small">'+hlmTxt('Optional low-stress recovery is available after several stalls.','複数の停滞が続いた場合は、任意の軽めの回復ワークアウトを選べます。')+'</p>':'')+'</div>':'')+
-  (projection?bvomBb2PendingChoices(projection)+bvomBb2StallActions(projection):'')+
+  (decisionsBeforeStart?decisions:'')+
   '<div class="card" data-bb2-start-form><h2 class="bvomBb2SetupTitle">'+hlmTxt('Workout setup','ワークアウト設定')+'</h2><p class="small">'+hlmTxt('Enter real starting loads. Low-stress sessions are optional, use about half the sets and do not earn progression or credits.','実際に使用する開始重量を入力してください。軽めのワークアウトは任意で、セット数は約半分になり、重量の進行やクレジットは獲得しません。')+'</p>'+
   '<div class="choiceRow">'+days+'</div><div class="choiceRow">'+kindsHtml+'</div>'+
-  (needsInput?rows+start:start+rows)+'</div>';
+  (needsInput?rows+start:start+rows)+'</div>'+
+  (decisionsBeforeStart?'':decisions)+(projection?bvomBb2StallActions(projection):'');
 }
 function bvomBb2ValidationNotice(message,selector){
  const field=typeof selector==='string'?document.querySelector(selector):selector,label=field?.closest?.('label');
