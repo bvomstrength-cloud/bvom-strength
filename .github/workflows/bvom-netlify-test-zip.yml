@@ -32,17 +32,18 @@ jobs:
           test -n "$BUILD" && test "$BUILD" = "$SW_BUILD"
           PR_NUMBER="${{ github.event.pull_request.number }}"
           SOURCE_SHA="${{ github.event.pull_request.head.sha }}"
-          ZIP="BVOM-v${BUILD}-PR${PR_NUMBER}-TEST.zip"
-          export ZIP SOURCE_SHA
+          BVOM_TEST_ZIP="BVOM-v${BUILD}-PR${PR_NUMBER}-TEST.zip"
+          # Info-ZIP treats the environment variable ZIP as command-line input.
+          export BVOM_TEST_ZIP SOURCE_SHA
           if [ "$PR_NUMBER" = '73' ]; then
             node scripts/package-bb2-test.cjs --source-sha "$SOURCE_SHA" \
-              --output .bvom-netlify-test --zip "$ZIP"
+              --output .bvom-netlify-test --zip "$BVOM_TEST_ZIP"
           elif [ "$BUILD" = '3.0.4' ]; then
             # Real-device acceptance needs the same public cloud configuration as
             # the working release. The isolated monkey packager intentionally
             # disables sign-in and must NEVER be used for this artifact.
             node scripts/package-production.cjs --source-sha "$SOURCE_SHA" \
-              --output .bvom-netlify-test --zip "$ZIP"
+              --output .bvom-netlify-test --zip "$BVOM_TEST_ZIP"
             export TEST_CACHE="bvom-${BUILD}-pr${PR_NUMBER}-${SOURCE_SHA:0:12}"
             python3 - <<'PY'
           import os,pathlib,re,zipfile
@@ -58,10 +59,10 @@ jobs:
             'Uses the existing BVOM cloud backend. Use disposable test account/data only.\\n'
             'Source: '+os.environ['SOURCE_SHA']+'\\n'
             'Cache: '+os.environ['TEST_CACHE']+'\\n')
-          with zipfile.ZipFile(os.environ['ZIP'],'w',zipfile.ZIP_DEFLATED) as z:
+          with zipfile.ZipFile(os.environ['BVOM_TEST_ZIP'],'w',zipfile.ZIP_DEFLATED) as z:
             for p in sorted(root.rglob('*')):
               if p.is_file():z.write(p,p.relative_to(root).as_posix())
-          with zipfile.ZipFile(os.environ['ZIP']) as z:
+          with zipfile.ZipFile(os.environ['BVOM_TEST_ZIP']) as z:
             assert z.testzip() is None
             html=z.read('index.html').decode()
             assert 'hkteienxwdsjncchuvnz.supabase.co' in html
@@ -72,7 +73,7 @@ jobs:
           PY
           elif [ "$BUILD" = '3.0.3' ]; then
             node scripts/package-working-weight-test.cjs --source-sha "$SOURCE_SHA" \
-              --output .bvom-netlify-test --zip "$ZIP"
+              --output .bvom-netlify-test --zip "$BVOM_TEST_ZIP"
           else
           mkdir -p .bvom-netlify-test/i18n .bvom-netlify-test/vendor .bvom-netlify-test/bb2
           cp index.html admin.html sw.js manifest.json .bvom-netlify-test/
@@ -114,12 +115,12 @@ jobs:
           test -s .bvom-netlify-test/bb2/browser-core.mjs
           test -s .bvom-netlify-test/bb2/cloud-coordinator.mjs
           if [ "$PR_NUMBER" != '73' ] && [ "$BUILD" != '3.0.3' ] && [ "$BUILD" != '3.0.4' ]; then
-            (cd .bvom-netlify-test && zip -q -r "../${ZIP}" .)
+            (cd .bvom-netlify-test && zip -q -r "../${BVOM_TEST_ZIP}" .)
           fi
-          unzip -t "$ZIP" | tail -2
-          sha256sum "$ZIP" > "$ZIP.sha256"
+          unzip -t "$BVOM_TEST_ZIP" | tail -2
+          sha256sum "$BVOM_TEST_ZIP" > "$BVOM_TEST_ZIP.sha256"
           printf '%s\n' 'NETLIFY ZIP CONTENTS:'
-          unzip -Z1 "$ZIP" | head -35
+          unzip -Z1 "$BVOM_TEST_ZIP" | head -35
 
       - name: Verify exact production packaging without test markers
         run: |
