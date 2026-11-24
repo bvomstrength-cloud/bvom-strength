@@ -7207,7 +7207,7 @@ function bvomBb2StartForm(){
   '<button type="button" class="primary wide" data-bb2-start onclick="bvomBb2Begin()">'+hlmTxt('START WORKOUT','ワークアウトを開始')+'</button></div>';
 }
 function bvomBb2ValidationNotice(message,selector){
- const field=document.querySelector(selector),label=field?.closest?.('label');
+ const field=typeof selector==='string'?document.querySelector(selector):selector,label=field?.closest?.('label');
  if(!label){bvomNotice(message);return false}
  document.querySelector('#bvom-bb2-field-error')?.remove();
  const error=document.createElement('div');error.id='bvom-bb2-field-error';error.className='bvomFormError';
@@ -8225,11 +8225,11 @@ function bvomBb2CorrectSet(historyIndex,setIndex){
    e.setIndex===set.setIndex);
   if(!original)return false;
   const key=historyIndex+'|'+setIndex,editor=bvomHistoryCorrectionRoot(),query=selector=>editor?editor.querySelector(selector):document.querySelector('#history '+selector);
-  const raw=String(query('[data-bb2-correct-reps="'+key+'"]')?.value??'').trim();
+  const repsField=query('[data-bb2-correct-reps="'+key+'"]'),raw=String(repsField?.value??'').trim();
   const harder=!!query('[data-bb2-correct-hard="'+key+'"]')?.checked;
   if(!/^[1-9][0-9]*$/.test(raw)||!Number.isSafeInteger(Number(raw)))
    return bvomBb2ValidationNotice(hlmTxt('Enter a whole rep count of at least 1.','回数は1以上の整数で入力してください。'),
-    '#history [data-bb2-correct-reps="'+key+'"]');
+    repsField);
   let correctedG=null,correctedOrigin=null;
   const massField=query('[data-bb2-correct-actual="'+key+'"]');
   if(Number.isSafeInteger(set.actualG)){

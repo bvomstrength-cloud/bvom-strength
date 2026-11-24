@@ -115,10 +115,18 @@ jobs:
           test -s .bvom-netlify-test/bb2/browser-core.mjs
           test -s .bvom-netlify-test/bb2/cloud-coordinator.mjs
           if [ "$PR_NUMBER" != '73' ] && [ "$BUILD" != '3.0.3' ] && [ "$BUILD" != '3.0.4' ]; then
-            (cd .bvom-netlify-test && zip -q -r "../${BVOM_TEST_ZIP}" .)
+            python3 - <<'PY'
+          import os, pathlib, zipfile
+          root = pathlib.Path('.bvom-netlify-test')
+          with zipfile.ZipFile(os.environ['BVOM_TEST_ZIP'], 'w') as archive:
+              # Fixed metadata and stored bytes make the Android TEST ZIP reproducible.
+              for file in sorted(p for p in root.rglob('*') if p.is_file()):
+                  member = zipfile.ZipInfo(file.relative_to(root).as_posix())
+                  archive.writestr(member, file.read_bytes())
+          PY
           fi
           unzip -t "$BVOM_TEST_ZIP" | tail -2
-          sha256sum "$BVOM_TEST_ZIP" > "$BVOM_TEST_ZIP.sha256"
+          sha256sum "$BVOM_TEST_ZIP" | tee "$BVOM_TEST_ZIP.sha256"
           printf '%s\n' 'NETLIFY ZIP CONTENTS:'
           unzip -Z1 "$BVOM_TEST_ZIP" | head -35
 

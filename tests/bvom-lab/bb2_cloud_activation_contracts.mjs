@@ -1,5 +1,6 @@
 // Final catalogue, normal entry and unchanged historical catalogue contracts.
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import * as core from '../../bb2/browser-core.mjs';
 import {validateBB2PortableCatalogue} from '../../bb2/cloud-coordinator.mjs';
@@ -131,8 +132,11 @@ console.log('PASS unified BVOM Cloud card, errors, conflict actions and existing
 
 // Candidate release markers and shared EN/JA programme information.
 {
- const info=H.boot(H.loadBuild(root));H.configureLP(info);
- assert.equal(info.ev('BVOM_BUILD'),'3.1.1');
+ const build=H.loadBuild(root),info=H.boot(build);H.configureLP(info);
+ const version=info.ev('BVOM_BUILD');
+ assert.match(version,/^\d+\.\d+\.\d+$/);
+ assert.ok(build.html.includes('<title>BVOM Strength v'+version+'</title>'));
+ assert.ok(readFileSync(new URL('../../sw.js',import.meta.url),'utf8').includes("const BUILD = '"+version+"'"));
  for(const lang of ['en','ja']){
   info.ctx.__lang=lang;info.ev('state.language=__lang;renderInfo()');
   const copy=info.ctx.bvomBb2ProgrammeInfo();
@@ -147,4 +151,4 @@ console.log('PASS unified BVOM Cloud card, errors, conflict actions and existing
   if(lang==='en'){assert.match(copy.body,/Monday, Tuesday, Thursday and Friday/);assert.match(copy.body,/Wednesday for recovery/);assert.match(copy.body,/32 qualifying workouts/);}
  }
 }
-console.log('PASS v3.1.1 candidate and consistent EN/JA programme help/setup copy');
+console.log('PASS candidate release markers and consistent EN/JA programme help/setup copy');
