@@ -111,7 +111,10 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
 
   if(stage==='LP/RPT'&&n===6){
    const prior=await stored(p),attempts=prior.attempts.Deadlift||0;assert.ok(attempts>0,'increment edit genuinely follows an unsuccessful Deadlift exposure');
-   await tab(p,'settings');const details=p.locator('details').filter({has:p.locator('#incDeadlift')});if(!await details.evaluate(e=>e.open))await details.locator('summary').click();
+   await tab(p,'settings');
+   const advanced=p.locator('#settings [data-settings-group="training"]:not([open]) > summary');
+   if(await advanced.count())await advanced.click();
+   const details=p.locator('details:not([data-settings-group])').filter({has:p.locator('#incDeadlift')});if(!await details.evaluate(e=>e.open))await details.locator('summary').click();
    await p.locator('#incDeadlift').selectOption('2.5');await p.locator('button[onclick="saveLiftSettings(\'Deadlift\')"]').click();await decisions();
    assert.equal((await stored(p)).attempts.Deadlift,attempts,'increment-only edit preserves earned failure attempts');assert.deepEqual((await stored(p)).history,prior.history);
    pass('mid-journey increment change preserves the existing failed-attempt count');if(!uiOnly)await p.waitForTimeout(1500);await decisions();await tab(p,'workout');
@@ -152,8 +155,12 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
  }
  async function increments(){
   await tab(p,'settings');
+  const equipment=p.locator('#settings [data-settings-group="equipment"]:not([open]) > summary');
+  if(await equipment.count())await equipment.click();
   for(const value of [.25,.5]){const b=p.locator('#settings button[onclick="togglePlate('+value+',\'enabledMicro\')"]');if(!await b.evaluate(e=>e.classList.contains('on')))await b.click();}
-  for(const name of ['Bench Press','Overhead Press']){const id=name.replace(/\W/g,'');const details=p.locator('details').filter({has:p.locator('#inc'+id)});if(!await details.evaluate(e=>e.open))await details.locator('summary').click();await p.locator('#plateMode'+id).selectOption('micro');await p.locator('#mode'+id).selectOption('rpt');await p.locator('#inc'+id).selectOption(String(profile.small));await p.locator('button[onclick="saveLiftSettings(\''+name+'\')"]').click();await decisions();}
+  const advanced=p.locator('#settings [data-settings-group="training"]:not([open]) > summary');
+  if(await advanced.count())await advanced.click();
+  for(const name of ['Bench Press','Overhead Press']){const id=name.replace(/\W/g,'');const details=p.locator('details:not([data-settings-group])').filter({has:p.locator('#inc'+id)});if(!await details.evaluate(e=>e.open))await details.locator('summary').click();await p.locator('#plateMode'+id).selectOption('micro');await p.locator('#mode'+id).selectOption('rpt');await p.locator('#inc'+id).selectOption(String(profile.small));await p.locator('button[onclick="saveLiftSettings(\''+name+'\')"]').click();await decisions();}
   pass('custom fractional increments accepted through Advanced Settings');
  }
  async function addAccessory(){

@@ -26,6 +26,8 @@ async function main() {
 
         if (core) {
           await P.tab(page, 'settings');
+          const advanced = page.locator('#settings [data-settings-group="training"]:not([open]) > summary');
+          if (await advanced.count()) await advanced.click();
           await details.locator('summary').click();
           assert.equal(await details.locator('[data-fixed-sets]').inputValue(), '3');
           assert.equal(await details.locator('[data-fixed-reps]').inputValue(), '5');

@@ -58,7 +58,10 @@ async function coreRun(platform,profile){
      e.action('manual-weight',{lift,weight});
     }
     if(n===15){
-     const lift=names.at(-1),id=lift.replace(/\W/g,''),previous=m.core[lift].increment,increment=previous===2.5?5:2.5;await P.tab(p,'settings');const select=p.locator('#inc'+id);await select.evaluate(el=>el.closest('details').open=true);await select.selectOption(String(increment));await clickFn(p,"saveLiftSettings('"+lift+"')");await P.settle(p);m.core[lift].increment=increment;e.action('increment-edit',{lift,previous,increment});await P.tab(p,'workout');
+     const lift=names.at(-1),id=lift.replace(/\W/g,''),previous=m.core[lift].increment,increment=previous===2.5?5:2.5;await P.tab(p,'settings');
+     const advanced=p.locator('#settings [data-settings-group="training"]:not([open]) > summary');
+     if(await advanced.count())await advanced.click();
+     const select=p.locator('#inc'+id);await select.evaluate(el=>el.closest('details').open=true);await select.selectOption(String(increment));await clickFn(p,"saveLiftSettings('"+lift+"')");await P.settle(p);m.core[lift].increment=increment;e.action('increment-edit',{lift,previous,increment});await P.tab(p,'workout');
     }
     if(n%5===1){const lift=names[0],rx=O.prescription(m,day,lift),load=Math.max(20,rx.loads[rx.top]-5);await addExtra(p,lift,load,6,e,'before');expected[lift]={'EXTRA:0':{load,reps:6,extra:true}};}
     for(const name of names){
