@@ -777,10 +777,16 @@ try {
     await phone.locator('.bvomModalOverlay [data-note]').fill('Isolated RDL round trip');
     await phone.locator('.bvomModalOverlay [data-save]').click();
     await phone.locator('.bvomModalOverlay [data-ok]').click();
-    await phone.waitForFunction(async () => !bvomCloud.busy && (await bvomCloudLatest()).data?.data?.history?.at(-1)?.note === 'Isolated RDL round trip');
-    const serverRow = await admin.from('bvom_data').select('data').eq('user_id', userId).single();
-    if (serverRow.error) throw serverRow.error;
-    assert.equal(serverRow.data.data.history.at(-1)?.note, 'Isolated RDL round trip', 'completed B is durable on the isolated backend');
+    // Poll the awaited database result while BVOM's deferred automatic save runs.
+    let savedNote;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const serverRow = await admin.from('bvom_data').select('data').eq('user_id', userId).single();
+      if (serverRow.error) throw serverRow.error;
+      savedNote = serverRow.data.data.history.at(-1)?.note;
+      if (savedNote === 'Isolated RDL round trip') break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert.equal(savedNote, 'Isolated RDL round trip', 'completed B is durable on the isolated backend');
     const remote = await tablet.evaluate(async () => {
       const result = await bvomCloudLatest();
       return { error: result.error?.message ?? null, note: result.data?.data?.history?.at(-1)?.note ?? null };
