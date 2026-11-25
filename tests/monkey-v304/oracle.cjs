@@ -4,12 +4,14 @@
 const copy = x => JSON.parse(JSON.stringify(x));
 const ladders3=[[5,6,8],[4,5,7],[3,4,6],[2,3,5],[1,2,4]];
 const ladders5=[[5,5,5,6,8],[4,4,4,5,7],[3,3,3,4,6],[2,2,2,3,5],[1,1,1,2,4]];
-const rotations={lprpt:{A:['Squat','Bench Press','Prone Row'],B:['Squat','Overhead Press','Deadlift']},hlm:{H:['Squat','Bench Press','Prone Row'],L:['Squat','Deadlift','Overhead Press'],M:['Squat','Bench Press','Supine Row']},fourday:{1:['Bench Press','Prone Row'],2:['Squat'],3:['Bench Press','Overhead Press'],4:['Squat','Deadlift']}};
+const ladders8=[[8,9,11],[7,8,10],[6,7,9],[5,6,8],[4,5,7]];
+const rotations={lprpt:{A:['Squat','Bench Press','Prone Row'],B:['Romanian Deadlift','Deadlift','Overhead Press']},hlm:{H:['Squat','Bench Press','Prone Row'],L:['Squat','Deadlift','Overhead Press'],M:['Squat','Bench Press','Supine Row']},fourday:{1:['Bench Press','Prone Row'],2:['Squat'],3:['Bench Press','Overhead Press'],4:['Squat','Deadlift']}};
 const grid=(x,q=2.5,min=q)=>Math.max(min,Math.floor(x/q+0.5)*q);
 const isDriver=(mode,day,n)=>['Squat','Bench Press'].includes(n)&&(mode==='hlm'?day==='H':mode==='fourday'?day===(n==='Squat'?'2':'1'):false);
 const isMedium=(mode,day,n)=>mode==='hlm'?day==='M'&&['Squat','Bench Press'].includes(n):mode==='fourday'&&(n==='Squat'&&day==='4'||n==='Bench Press'&&day==='3');
 function prescription(m,day,n){
  const c=m.core[n],w=m.weights[n],d=c.drop/100,der=x=>grid(x,2.5,20),inter=m.mode!=='lprpt';
+ const eightRepLift=n==='Romanian Deadlift'||n==='Supine Row'&&m.mode==='hlm';
  let targets,loads,kind,top=0;
  if(inter&&isDriver(m.mode,day,n)){
   const t=m.next[n]??m.driver[n],r=m.rep[n];targets=ladders5[5-r];loads=[.9,.95,1,1-d,1-2*d].map(f=>der(t*f));kind='heavy';top=2;
@@ -18,13 +20,13 @@ function prescription(m,day,n){
  }else if(inter&&isMedium(m.mode,day,n)){
   targets=[m.rep[n]];loads=[grid(m.driver[n]*(n==='Squat'?1.1:1.05))];kind='medium';
  }else if(c.mode==='straight'){
-  targets=Array(n==='Deadlift'?1:n==='Overhead Press'?5:n==='Supine Row'?3:3).fill(n==='Supine Row'&&m.mode==='hlm'?8:5);loads=targets.map(()=>w);kind='straight';
+  targets=Array(n==='Deadlift'?1:n==='Overhead Press'?5:3).fill(eightRepLift?8:5);loads=targets.map(()=>w);kind='straight';
  }else if(n==='Overhead Press'){
   targets=ladders5[c.rptLevel];loads=[1-2*d,1-d,1,1-d,1-2*d].map(f=>der(w*f));kind='rpt5';top=2;
  }else if(n==='Deadlift'){
   targets=[Math.max(1,4-c.rptLevel),Math.max(2,5-c.rptLevel)];loads=[w,der(w*(1-d))];kind='rptDL';
  }else{
-  targets=n==='Supine Row'&&m.mode==='hlm'?[[8,9,11],[7,8,10],[6,7,9],[5,6,8],[4,5,7]][c.rptLevel]:ladders3[c.rptLevel];loads=[w,der(w*(1-d)),der(w*(1-2*d))];kind='rpt3';
+  targets=(eightRepLift?ladders8:ladders3)[c.rptLevel];loads=[w,der(w*(1-d)),der(w*(1-2*d))];kind='rpt3';
  }
  return {targets:copy(targets),loads,kind,top};
 }

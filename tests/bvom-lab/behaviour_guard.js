@@ -594,10 +594,12 @@ test('F99-SW-UPDATE-NO-ACTIVE-START','DEFECT','An active workout cannot begin th
 test('F92-ORDER-LP-B-ISOLATED','DEFECT','LP B reorder is persisted without changing core prescriptions, saved sets or A',()=>{
  const h=H.boot(build);configureLP(h);h.ctx.switchDay('B');
  const expected=h.ctx.program().map(x=>x[0]),rx=JSON.stringify(expected.map(x=>h.ctx.corePrescription(x))),history=JSON.stringify(h.S().history),sessions=JSON.stringify(h.S().session);
+ const moved=[...expected],index=moved.indexOf('Deadlift');
+ [moved[index-1],moved[index]]=[moved[index],moved[index-1]];
  const changed=h.ctx.bvomOrderChange('Deadlift',-1),result=h.ctx.bvomOrderEffective().join('|');
  h.ctx.switchDay('A');const separate=h.ctx.bvomOrderEffective().join('|')===h.ctx.program().map(x=>x[0]).join('|');
  h.ctx.switchDay('B');const persisted=JSON.parse(h.ls.getItem('bvom_data'));
- return ok(changed&&result==='Squat|Deadlift|Overhead Press'&&separate&&h.ctx.program().map(x=>x[0]).join('|')===expected.join('|')&&
+ return ok(changed&&result===moved.join('|')&&separate&&h.ctx.program().map(x=>x[0]).join('|')===expected.join('|')&&
   rx===JSON.stringify(expected.map(x=>h.ctx.corePrescription(x)))&&history===JSON.stringify(h.S().history)&&sessions===JSON.stringify(h.S().session)&&
   persisted.exerciseDisplayOrder['lprpt:B'].join('|')===result,'display preference only, B isolated');
 });

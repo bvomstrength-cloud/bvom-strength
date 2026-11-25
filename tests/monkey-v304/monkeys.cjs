@@ -2,7 +2,7 @@
 const fs=require('node:fs'),path=require('node:path');
 const O=require('./oracle.cjs'),P=require('./platform.cjs');
 const profiles=[
- {name:'Bruno',mode:'lprpt',seed:3031101,width:320,lang:'en',weights:{Squat:60,'Bench Press':40,'Prone Row':40,'Overhead Press':30,Deadlift:80}},
+ {name:'Bruno',mode:'lprpt',seed:3031101,width:320,lang:'en',weights:{Squat:60,'Bench Press':40,'Prone Row':40,'Overhead Press':30,Deadlift:80,'Romanian Deadlift':60}},
  {name:'Kong',mode:'hlm',seed:3031102,width:360,lang:'ja',rep:3,weights:{Squat:180,'Bench Press':120,'Prone Row':100,'Overhead Press':65,Deadlift:210}},
  {name:'Milo',mode:'fourday',seed:3031103,width:390,lang:'en',weights:{Squat:120,'Bench Press':80,'Prone Row':70,'Overhead Press':50,Deadlift:150}},
  {name:'Rocky',mode:'bodybuilding',seed:3031104,width:430,lang:'ja'},

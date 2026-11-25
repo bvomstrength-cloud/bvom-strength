@@ -55,7 +55,21 @@ function inspect(build, language, programMode, day, lift, style, choice){
  });
  const backup=app.ctx.bvomCloudPayload();
  for(const key of ['history','workoutLastActivityAt','workoutStartedAt','workoutOwnerProtocol'])delete backup[key];
- return JSON.parse(JSON.stringify({prescription,plan,result,volume,metadata,session,progress,history,backup}));
+ const resultForComparison=JSON.parse(JSON.stringify({prescription,plan,result,volume,metadata,session,progress,history,backup}));
+ if(!baseline.html.includes('core.romanian_deadlift')){
+  // These cross-release cases record existing lifts only. Compare all prior
+  // fields after projecting away the new, independently tested lift record.
+  const body=resultForComparison,rdl='Romanian Deadlift';
+  for(const key of ['weights','core'])delete body.progress[key][rdl];
+  for(const key of ['weights','core','barByLift','plateMode'])delete body.backup[key]?.[rdl];
+  const removeUnusedBSlot=session=>{for(const n of ['Squat',rdl])if(session[n]&&Object.keys(session[n]).length===0)delete session[n];};
+  if(programMode==='lprpt'&&day==='B')removeUnusedBSlot(body.session);
+  for(const item of body.history){
+   delete item.weights?.[rdl];
+   if(programMode==='lprpt'&&day==='B')removeUnusedBSlot(item.session);
+  }
+ }
+ return resultForComparison;
 }
 
 const cases=[
