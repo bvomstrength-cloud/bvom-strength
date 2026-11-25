@@ -761,7 +761,10 @@ try {
     data.weights[rdl] = 80;
     const options = { userId, login, accountFlow: true, appData: data };
     const phone = await makeDevice('LP/RPT RDL phone', options);
-    await phone.waitForFunction(() => bvomCloud.syncReady && !bvomCloud.assessing);
+    // Establish both devices on the same cloud snapshot before training.
+    await phone.waitForFunction(() => bvomCloud.syncReady && bvomCloud.cloudExists && !bvomCloud.busy);
+    const tablet = await makeDevice('LP/RPT RDL tablet', options);
+    await tablet.waitForFunction(() => bvomCloud.syncReady && bvomCloud.cloudExists && !bvomCloud.assessing);
     for (const [name, count] of [[rdl, 3], ['Deadlift', 1], ['Overhead Press', 5]]) {
       for (let i = 0; i < count; i++) {
         await phone.locator('.tab[data-tab="workout"]').click();
@@ -774,8 +777,10 @@ try {
     await phone.locator('.bvomModalOverlay [data-note]').fill('Isolated RDL round trip');
     await phone.locator('.bvomModalOverlay [data-save]').click();
     await phone.locator('.bvomModalOverlay [data-ok]').click();
-    await phone.waitForFunction(async () => (await bvomCloudLatest()).data?.data?.history?.at(-1)?.note === 'Isolated RDL round trip');
-    const tablet = await makeDevice('LP/RPT RDL tablet', options);
+    await phone.waitForFunction(async () => !bvomCloud.busy && (await bvomCloudLatest()).data?.data?.history?.at(-1)?.note === 'Isolated RDL round trip');
+    const serverRow = await admin.from('bvom_data').select('data').eq('user_id', userId).single();
+    if (serverRow.error) throw serverRow.error;
+    assert.equal(serverRow.data.data.history.at(-1)?.note, 'Isolated RDL round trip', 'completed B is durable on the isolated backend');
     const remote = await tablet.evaluate(async () => {
       const result = await bvomCloudLatest();
       return { error: result.error?.message ?? null, note: result.data?.data?.history?.at(-1)?.note ?? null };
