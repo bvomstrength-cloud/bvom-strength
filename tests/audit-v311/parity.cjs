@@ -75,6 +75,7 @@ function inspect(build, language, programMode, day, lift, style, choice){
 const cases=[
  ['lprpt','A','Squat','straight','L'],['lprpt','A','Squat','straight','R'],
  ['lprpt','B','Overhead Press','rpt','L'],['lprpt','B','Overhead Press','rpt','R'],
+ ['lprpt','B','Deadlift','straight','L'],['lprpt','B','Deadlift','rpt','R'],
  ['hlm','H','Squat','rpt','L'],['hlm','L','Deadlift','rpt','L'],
  ['fourday','1','Bench Press','rpt','L'],
 ];
@@ -83,4 +84,4 @@ for(const language of ['en','ja']){
   assert.deepEqual(inspect(candidate,language,...args),inspect(baseline,language,...args),[language,...args].join(' '));
  }
 }
-console.log('PASS 14 locked-baseline comparisons for prescriptions, rescue, decisions, session, metadata, volume, progression, History and cloud payload');
+console.log('PASS '+2*cases.length+' locked-baseline comparisons for prescriptions, rescue, decisions, session, metadata, volume, progression, History and cloud payload');
