@@ -55,6 +55,8 @@ async function coreRun(platform,profile){
       // Session-only derived edits are checked separately; this sequence uses a driver/non-driver edit.
       throw Error('unexpected derived manual-edit scenario');
      }else m.weights[lift]=weight;
+     // A deliberate working-weight change starts a fresh failure streak.
+     m.attempts[lift]=0;
      e.action('manual-weight',{lift,weight});
     }
     if(n===15){
