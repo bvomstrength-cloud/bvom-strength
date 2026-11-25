@@ -111,7 +111,10 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
 
   if(stage==='LP/RPT'&&n===6){
    const prior=await stored(p),attempts=prior.attempts.Deadlift||0;assert.ok(attempts>0,'increment edit genuinely follows an unsuccessful Deadlift exposure');
-   await tab(p,'settings');const details=p.locator('details').filter({has:p.locator('#incDeadlift')});if(!await details.evaluate(e=>e.open))await details.locator('summary').click();
+   await tab(p,'settings');
+   const advanced=p.locator('#settings [data-settings-group="training"]:not([open]) > summary');
+   if(await advanced.count())await advanced.click();
+   const details=p.locator('details:not([data-settings-group])').filter({has:p.locator('#incDeadlift')});if(!await details.evaluate(e=>e.open))await details.locator('summary').click();
    await p.locator('#incDeadlift').selectOption('2.5');await p.locator('button[onclick="saveLiftSettings(\'Deadlift\')"]').click();await decisions();
    assert.equal((await stored(p)).attempts.Deadlift,attempts,'increment-only edit preserves earned failure attempts');assert.deepEqual((await stored(p)).history,prior.history);
    pass('mid-journey increment change preserves the existing failed-attempt count');if(!uiOnly)await p.waitForTimeout(1500);await decisions();await tab(p,'workout');
@@ -152,8 +155,12 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
  }
  async function increments(){
   await tab(p,'settings');
+  const equipment=p.locator('#settings [data-settings-group="equipment"]:not([open]) > summary');
+  if(await equipment.count())await equipment.click();
   for(const value of [.25,.5]){const b=p.locator('#settings button[onclick="togglePlate('+value+',\'enabledMicro\')"]');if(!await b.evaluate(e=>e.classList.contains('on')))await b.click();}
-  for(const name of ['Bench Press','Overhead Press']){const id=name.replace(/\W/g,'');const details=p.locator('details').filter({has:p.locator('#inc'+id)});if(!await details.evaluate(e=>e.open))await details.locator('summary').click();await p.locator('#plateMode'+id).selectOption('micro');await p.locator('#mode'+id).selectOption('rpt');await p.locator('#inc'+id).selectOption(String(profile.small));await p.locator('button[onclick="saveLiftSettings(\''+name+'\')"]').click();await decisions();}
+  const advanced=p.locator('#settings [data-settings-group="training"]:not([open]) > summary');
+  if(await advanced.count())await advanced.click();
+  for(const name of ['Bench Press','Overhead Press']){const id=name.replace(/\W/g,'');const details=p.locator('details:not([data-settings-group])').filter({has:p.locator('#inc'+id)});if(!await details.evaluate(e=>e.open))await details.locator('summary').click();await p.locator('#plateMode'+id).selectOption('micro');await p.locator('#mode'+id).selectOption('rpt');await p.locator('#inc'+id).selectOption(String(profile.small));await p.locator('button[onclick="saveLiftSettings(\''+name+'\')"]').click();await decisions();}
   pass('custom fractional increments accepted through Advanced Settings');
  }
  async function addAccessory(){
@@ -225,6 +232,8 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
  async function swapBB2(){
   await tab(p,'workout');await p.locator('#workout [data-bb2-next-workout]').click();
   const before=await p.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events)),old=(await stored(p)).bb2.setup.selections['upper_a|horizontal_row'];
+  const catalogue=p.locator('#setup [data-bb2-catalogue]:not([open]) > summary');
+  if(await catalogue.count())await catalogue.click();
   await p.locator('#setup [data-bb2-role="upper_a|horizontal_row"]').selectOption('dumbbell_row');await p.locator('#setup [data-bb2-save]').click();
   const after=await p.evaluate(()=>bvomBb2PreviewModule.foldBB2Block(state.bb2.opening,state.bb2.events));assert.deepEqual(after.history,before.history);assert.equal(after.progress['upper_a|horizontal_row|'+old].loadG,before.progress['upper_a|horizontal_row|'+old].loadG);
   pass('mid-block exercise substitution preserves prior History and per-exercise working weight');
@@ -249,6 +258,7 @@ async function runJourney({page:p,profile,checkpoint,reconnect,offlineBB2,handle
   const plan=await p.evaluate(()=>bvomBb2PreviewModule.getBB2TemplatePrescription(state.bb2.setup,bvomBb2Day).slots);
   for(const el of await p.locator('#setup [data-bb2-load]:not([disabled])').all())if(!(await el.inputValue()))await el.fill(String(knownLoad(profile,plan[Number(await el.getAttribute('data-bb2-load'))].exerciseId)));
   for(const el of await p.locator('#setup [data-bb2-inc]').all())if(!(await el.inputValue()))await el.fill(String(profile.increment));
+  for(const disclosure of await p.locator('#setup [data-bb2-exercise]:not([open])').filter({has:p.locator('[data-bb2-assist]')}).all())await disclosure.locator('summary').click();
   for(const input of await p.locator('#setup [data-bb2-assist]').all())await input.fill(kind==='RECOVERY'?'strong band recovery':profile.name==='Female'?'green band':'none');
   if(kind==='RECOVERY')for(const input of await p.locator('#setup [data-bb2-bw-variation]').all())await input.fill('easier supported recovery');
   await p.locator('#setup [data-bb2-start]').click();await p.waitForSelector('#workout [data-bb2-set]');assert.equal(await p.locator('[data-bb2-trial-save]').count(),0);

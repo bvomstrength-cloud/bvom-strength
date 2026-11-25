@@ -8,9 +8,9 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="BVOM">
 <meta name="twitter:description" content="Best Version Of Myself — strength training and progression.">
-<title>BVOM Strength v3.1.2</title><link rel="manifest" href="manifest.json">
+<title>BVOM Strength v3.1.3</title><link rel="manifest" href="manifest.json">
 <style>
-:root{--bg:#f4f4f4;--card:#fff;--ink:#111;--muted:#737373;--accent:#d91e18;--line:#ddd}
+:root{--bg:#f4f4f4;--card:#fff;--ink:#111;--muted:#737373;--accent:#d91e18;--line:#ddd;--accent-ink:#fff;--control-scheme:light;--danger:#a51b25}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
 header{background:#111;color:#fff;padding:14px 17px 10px;position:sticky;top:0;z-index:6}.brand{font-weight:900;letter-spacing:.13em}.sub{font-size:10px;color:#bbb}
 .tabs{display:flex;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:56px;z-index:5}.tab{flex:1;text-align:center;padding:11px 3px;font-weight:850;font-size:12px}.tab.on{color:var(--accent);border-bottom:3px solid var(--accent)}
@@ -71,7 +71,7 @@ label{display:block;margin:11px 0}select{width:100%;padding:10px;border:1px soli
 .bvomBbValidationNotice[hidden]{display:none}
 .modalActions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}.modalActions button{min-width:110px}.modalWide{width:100%}
 .dangerInput{width:100%;box-sizing:border-box;padding:12px 14px;font-size:18px;margin-top:12px;border:1px solid #ccc;border-radius:10px}
-.dangerBtn{background:#b00020!important;color:#fff!important}.successTick{font-size:48px;line-height:1;text-align:center;margin-bottom:8px}.savedStats{display:flex;justify-content:center;gap:28px;margin:18px 0;flex-wrap:wrap}.savedStats .num{font-size:28px;font-weight:950}.savedStats .lbl{font-size:12px;color:#666}
+.successTick{font-size:48px;line-height:1;text-align:center;margin-bottom:8px}.savedStats{display:flex;justify-content:center;gap:28px;margin:18px 0;flex-wrap:wrap}.savedStats .num{font-size:28px;font-weight:950}.savedStats .lbl{font-size:12px;color:#666}
 
 /* Display-only exercise ordering; fits narrow workout cards. */
 .bvomOrderControls{display:flex;align-items:center;gap:3px;flex:0 0 auto}
@@ -93,13 +93,13 @@ label{display:block;margin:11px 0}select{width:100%;padding:10px;border:1px soli
 <style id="bvom-themes-v23">
 /* v2.3 themes. No [data-bvom-theme="classic"] rules by design: Classic is the v2.2.1 UI unchanged. */
 html[data-bvom-theme="bee"]{
- --bg:#0d0d0d;--card:#171717;--ink:#f7f7f7;--muted:#b8b8b8;--accent:#ffd400;--line:#353535;
+ --bg:#0d0d0d;--card:#171717;--ink:#f7f7f7;--muted:#b8b8b8;--accent:#ffd400;--line:#353535;--accent-ink:#151515;--control-scheme:dark;--danger:#ffada8;
 }
 html[data-bvom-theme="cherry"]{
- --bg:#fff5f6;--card:#fffafb;--ink:#33282b;--muted:#806c72;--accent:#d95f7b;--line:#efd6dc;
+ --bg:#fff5f6;--card:#fffafb;--ink:#33282b;--muted:#806c72;--accent:#d95f7b;--line:#efd6dc;--accent-ink:#211018;
 }
 html[data-bvom-theme="coastal"]{
- --bg:#eef8fb;--card:#fbfeff;--ink:#173b4c;--muted:#5d7681;--accent:#1687b5;--line:#cfe5ec;
+ --bg:#eef8fb;--card:#fbfeff;--ink:#173b4c;--muted:#5d7681;--accent:#1687b5;--line:#cfe5ec;--accent-ink:#001019;
 }
 html[data-bvom-theme="bee"] body{
  background-color:var(--bg);
@@ -256,37 +256,89 @@ html[data-bvom-theme="bee"] .notice[style*="background:#fde8e8"]{
  top:var(--bvom-visible-top,0px);bottom:auto;height:var(--bvom-visible-height,100dvh);
  padding:12px;background:rgba(0,0,0,.72)
 }
+/* Shared surfaces inherit the active palette from the document, including overlays
+   that are mounted outside the app and can outlive a theme change. */
+:root{
+ --control-edge:color-mix(in srgb,var(--ink) 57%,var(--card));
+ --control-muted:color-mix(in srgb,var(--muted) 78%,var(--ink));
+ --danger-fill:color-mix(in srgb,var(--danger) 19%,var(--card));
+ --focus-ring:color-mix(in srgb,var(--accent) 62%,var(--ink));
+}
 html body :is(.bvomModal,.beeCoach){
- --ink:#f7f7f7;--muted:#c3c3c3;--accent:#ffd400;--line:#585858;
- color-scheme:dark;background:#171717;color:var(--ink);border:1px solid #454545;
+ color-scheme:var(--control-scheme);background:var(--card);color:var(--ink);border:1px solid var(--line);
  width:min(430px,100%);max-height:calc(var(--bvom-visible-height,100dvh) - 24px);
  overflow-y:auto;overscroll-behavior:contain;scroll-padding-block:14px;
  padding:clamp(14px,4vw,22px);border-radius:18px;overflow-wrap:anywhere
 }
-html body :is(.bvomModal,.beeCoach) :is(.small,.sub,.savedStats .lbl){color:var(--muted)}
-html body :is(.bvomModal,.beeCoach) :is(input:not([type=checkbox]):not([type=radio]),select,textarea){
- background:#242424;color:var(--ink);border-color:var(--line);min-height:44px;font-size:16px;max-width:100%
+html body :is(.bvomModal,.beeCoach) :is(.small,.sub,.savedStats .lbl){color:var(--control-muted)}
+html body :is(.bvomModal,.beeCoach,#authgate) :is(input:not([type=checkbox]):not([type=radio]),select,textarea){
+ color-scheme:var(--control-scheme);background:var(--bg);color:var(--ink);border:1px solid var(--control-edge);
+ border-radius:8px;min-height:44px;font-size:16px;max-width:100%
 }
+html body :is(.bvomModal,.beeCoach,#authgate) :is(input,textarea)::placeholder{color:var(--control-muted);opacity:1}
 html body :is(.bvomModal,.beeCoach) :is(button,.choice,.secondary){
- min-height:44px;background:#252525;color:var(--ink);border:1px solid var(--line);border-radius:10px
+ min-height:44px;background:var(--card);color:var(--ink);border:1px solid var(--control-edge);border-radius:10px
 }
-html body :is(.bvomModal,.beeCoach) :is(.primary,.choice.on){
- background:#ffd400;color:#151515;border-color:#ffd400
+html body :is(.bvomModal,.beeCoach,#authgate,#bvomUpdateBanner,.bvomSettings,.bvomBb2Options) :is(.primary,.choice.on){
+ background:var(--accent);color:var(--accent-ink);border:1px solid var(--control-edge)
 }
-html body :is(.bvomModal,.beeCoach) .dangerBtn{
- background:#b00020;color:#fff;border-color:#e05b71
+html body :is(.bvomModal,.beeCoach,.bvomSettings) :is(.dangerBtn,[data-remove],[data-delete]){
+ background:var(--danger-fill);color:var(--danger);border:1px solid var(--danger)
 }
-html body :is(.bvomModal,.beeCoach) :is(button,input,select,textarea,summary):focus-visible,
-.bvomOptionalOrder button:focus-visible{outline:2px solid #ffd400;outline-offset:2px}
-html body :is(.bvomModal,.beeCoach) button:disabled{opacity:.55;cursor:default}
-html body :is(.bvomModal,.beeCoach) input[type=checkbox]{accent-color:#ffd400}
-html body .bvomModal .bvomBbValidationNotice,html body .bvomFormError{
- background:#38201c;border:1px solid #a66e63;color:#ffe2dc;border-radius:8px;padding:10px;
+html body :is(.bvomModal,.beeCoach,#authgate,#bvomUpdateBanner,.bvomSettings) button:disabled{
+ opacity:1;background:var(--bg);color:var(--control-muted);border:1px dashed var(--control-edge);cursor:default
+}
+html body :is(.bvomModal,.beeCoach,#authgate,#bvomUpdateBanner,.bvomSettings,.bvomBb2Options) :is(input,select,textarea):disabled{
+ opacity:1;background:var(--bg);color:var(--control-muted);border-style:dashed
+}
+html body :is(.bvomModal,.beeCoach,#authgate,#bvomUpdateBanner,.bvomSettings,.bvomBb2Options,#info,#setup) :is(button,input,select,textarea,summary,a):focus-visible,
+.bvomOptionalOrder button:focus-visible,.tab:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+html body :is(.bvomModal,.beeCoach) :is(input[type=checkbox],input[type=radio]){accent-color:var(--accent)}
+html body .bvomModal .bvomBbValidationNotice,html body .bvomFormError,html body :is(#authgate,.bvomSettings) .bvomAccountError{
+ background:var(--danger-fill);border:1px solid var(--danger);color:var(--danger);border-radius:8px;padding:10px;
  margin-block:10px;font-size:14px
 }
 .bvomFormPair>.bvomFormError{grid-column:1/-1;margin-block:0 8px}
 .bvomFormError[hidden],.accBuilder [hidden],.bvomGppBuilder [hidden]{display:none!important}
-html body :is(.bvomModal,.beeCoach) [aria-invalid=true]{border-color:#ff9a8a}
+html body :is(.bvomModal,.beeCoach,#setup) [aria-invalid=true]{border-color:var(--danger)}
+.accBuilder>.choiceRow{background:var(--card);border-color:var(--line)}
+#bvomUpdateBanner{position:fixed;left:10px;right:10px;bottom:10px;z-index:260000;background:var(--card);color:var(--ink);
+ border:1px solid var(--control-edge);border-radius:10px;padding:10px 12px;gap:10px;align-items:center;
+ justify-content:space-between;box-shadow:0 4px 20px #0005;overflow-wrap:anywhere}
+#bvomUpdateBanner button,#authgate button{min-height:44px}
+.bvomDisclosure summary,.bvomInfoIndex a{min-height:44px;padding:10px 4px;cursor:pointer;font-weight:750}
+.bvomDisclosure summary{overflow-wrap:anywhere;scroll-margin-top:108px}
+.bvomDisclosure[open]>summary{margin-bottom:6px}
+.bvomDisclosure>.card:first-of-type{margin-top:0}
+.bvomInfoIndex h2,.bvomSettings h2{font-size:1.2rem;margin:0 0 8px}
+.bvomInfoIndex ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:0;margin:0;list-style:none;gap:4px 8px}
+.bvomInfoIndex a{display:flex;align-items:center;color:var(--ink);text-underline-offset:3px;overflow-wrap:anywhere}
+.bvomInfoGroup>.infoCard{margin:6px 0 12px}
+.bvomInfoGroup>.infoCard:last-child{margin-bottom:0}
+.bvomSettings .card.bvomDisclosure,.bvomInfoGroup{padding-block:3px}
+.bvomSettings :is(button,.secondary){min-height:44px;white-space:normal}
+.bvomSettings .settingsRow{margin-top:8px}
+.bvomSettings .settingsRow+.settingsRow{margin-top:12px}
+.bvomSettings .settingsActions{display:flex;flex-wrap:wrap;gap:8px}
+.bvomSettings .settingsActions button{flex:1 1 auto}
+.bvomSettings .settingsDanger{margin-top:22px}
+.bvomSettings .settingsDanger>summary{color:var(--danger)}
+.bvomSettings .themeChoice{min-width:0}
+.bvomBb2Options :is(button,select,input:not([type=checkbox])){min-height:44px}
+.bvomBb2Options .bvomBb2SetupTitle{font-size:1.16rem;margin:0 0 8px}
+.bvomBb2Options .bvomBb2Start{margin:12px 0 4px}
+.bvomBb2Options .choiceRow+.choiceRow{margin-top:8px}
+.bvomBb2Options .bvomBb2Guidance{margin-top:4px}
+.bvomBb2Options :is(input,select){border-color:var(--control-edge);color-scheme:var(--control-scheme)}
+.bvomBb2Options .notice,.bvomSettings .notice:not(.bvomAccountError){background:color-mix(in srgb,var(--accent) 15%,var(--card));color:var(--ink)}
+.bvomBb2Exercise{border-top:1px solid var(--line);padding:0 0 4px;margin-top:4px}
+.bvomBb2Exercise .review{display:block;margin:6px 0 12px}
+.bvomBb2SummaryDetail{display:block;margin-top:3px;color:var(--control-muted);font-size:.83rem;font-weight:500}
+.bvomBb2Attention{font-weight:750;color:var(--danger)}
+#setup .setupProgramPicker{margin-top:0}
+#setup .setupProgramPicker .choice{min-height:44px}
+#setup .setupPosition{scroll-margin-top:12px}
+.tab{border:0;background:transparent;color:var(--ink);min-height:44px;min-width:0;overflow-wrap:anywhere;cursor:pointer}
 .modalActions{flex-wrap:wrap;gap:8px}
 .modalActions button{min-width:min(96px,100%);max-width:100%;white-space:normal}
 .accBuilder{text-align:start}
@@ -308,8 +360,8 @@ html body .bvomGppMetrics .toggle{min-height:44px;margin:0}
 <div id="authgate" class="setup hidden"></div>
 <div id="setup" class="setup hidden"></div>
 <div id="app" class="hidden">
-<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v3.1.2</div></header>
-<div class="tabs"><div class="tab on" data-tab="workout">WORKOUT</div><div class="tab" data-tab="warmup">WARM-UP</div><div class="tab" data-tab="history">HISTORY</div><div class="tab" data-tab="info">INFO</div><div class="tab" data-tab="settings">SETTINGS</div></div>
+<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v3.1.3</div></header>
+<div class="tabs"><button type="button" class="tab on" data-tab="workout">WORKOUT</button><button type="button" class="tab" data-tab="warmup">WARM-UP</button><button type="button" class="tab" data-tab="history">HISTORY</button><button type="button" class="tab" data-tab="info">INFO</button><button type="button" class="tab" data-tab="settings">SETTINGS</button></div>
 <main><section id="workout"></section><section id="warmup" class="hidden"></section><section id="history" class="hidden"></section><section id="info" class="hidden"></section><section id="settings" class="hidden"></section></main>
 <div class="timer idle" id="timerbar"><div class="timerin"><div><div class="clock" id="clock">0:00</div><div class="marks">DINGS 3 · 5 · 10</div></div><button class="cancel" onclick="if(bvomWorkoutActionAllowed())cancelTimer()">CANCEL</button><button class="finish" onclick="finishWorkout()">FINISH</button></div></div>
 </div>
@@ -317,7 +369,7 @@ html body .bvomGppMetrics .toggle{min-height:44px;margin:0}
 <script src="./i18n/ja.js?v=629060285d86"></script>
 <script src="./vendor/supabase-js-2.117.3.js"></script>
 <script>
-const BVOM_BUILD='3.1.2';
+const BVOM_BUILD='3.1.3';
 const programs={A:[["Squat",3,5],["Bench Press",3,5],["Prone Row",3,5]],B:[["Squat",3,5],["Overhead Press",5,5],["Deadlift",1,5]]};
 function liftLabel(n){return n==='Prone Row'?(isHLM()?'Prone Row':'Row'):n==='Overhead Press'?'Press':n;}
 const inc={Squat:2.5,"Bench Press":2.5,"Prone Row":2.5,"Overhead Press":2.5,Deadlift:5};
@@ -1523,7 +1575,7 @@ function rescueTargets(load,target,remaining,dropPct,n=null){
 function bvomChoiceModal(title,body,left,right,onLeft,onRight,commitFirst=false){
  const o=document.createElement("div");o.className="bvomModalOverlay";
  o.innerHTML=`<div class="bvomModal"><h3>${title}</h3><div class="sub">${body}</div>
- <div class="modalActions"><button type="button" data-l ${[bvomT('shell.cancel'),hlmTxt('CANCEL','キャンセル')].includes(left)?'data-escape-close':''}>${left}</button><button type="button" class="${['REMOVE','DELETE','ERASE','削除'].includes(right)?'dangerBtn':'primary'}" data-r>${right}</button></div></div>`;
+ <div class="modalActions"><button type="button" data-l ${[bvomT('shell.cancel'),hlmTxt('CANCEL','キャンセル')].includes(left)?'data-escape-close':''}>${left}</button><button type="button" class="${['REMOVE','DELETE','ERASE','削除','CANCEL WORKOUT','ワークアウトを中止'].includes(right)?'dangerBtn':'primary'}" data-r>${right}</button></div></div>`;
  document.body.appendChild(o);
  o.querySelector("[data-l]").onclick=()=>{if(commitFirst){if(onLeft&&onLeft()===true)o.remove()}else{o.remove();onLeft&&onLeft()}};
  o.querySelector("[data-r]").onclick=()=>{if(commitFirst){if(onRight&&onRight()===true)o.remove()}else{o.remove();onRight&&onRight()}};
@@ -1763,7 +1815,7 @@ function maybePB(n,ignored){
 }
 function bvomSessionNoteModal(initial,onSave){
  const o=document.createElement('div');o.className='bvomModalOverlay';
- o.innerHTML=`<div class="bvomModal"><h3>SESSION NOTES</h3><div class="sub">Optional · saved with this workout</div><textarea data-note maxlength="1000" style="width:100%;min-height:120px;box-sizing:border-box;margin:12px 0;padding:10px;border:1px solid #bbb;border-radius:9px;font:inherit" placeholder="How did the session feel?">${String(initial||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</textarea><div class="modalActions"><button data-skip>NO NOTE</button><button class="primary" data-save>SAVE</button></div></div>`;
+ o.innerHTML=`<div class="bvomModal"><h3>SESSION NOTES</h3><div class="sub">Optional · saved with this workout</div><textarea data-note maxlength="1000" style="width:100%;min-height:120px;box-sizing:border-box;margin:12px 0;padding:10px;border-radius:9px;font:inherit" placeholder="How did the session feel?">${String(initial||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</textarea><div class="modalActions"><button data-skip>NO NOTE</button><button class="primary" data-save>SAVE</button></div></div>`;
  document.body.appendChild(o);let ta=o.querySelector('[data-note]');ta.focus();o.querySelector('[data-skip]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;o.remove();onSave('')};o.querySelector('[data-save]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;let v=ta.value.trim();if(!bvomWorkoutActionAllowed())return;o.remove();onSave(v)};
 }
 function bvomWorkoutVolume(){
@@ -2186,9 +2238,12 @@ function bvomSetTheme(th){if(!bvomWorkoutActionAllowed())return;
  if(!['bee','cherry','coastal','classic'].includes(th))return;
  state.theme=th;save();bvomApplyTheme();renderAll();
 }
+function bvomThemeName(){
+ return {classic:hlmTxt('Classic','クラシック'),bee:hlmTxt('Bee','ビー'),cherry:hlmTxt('Cherry Blossom','桜'),coastal:hlmTxt('Coastal','コースタル')}[bvomTheme()];
+}
 function bvomThemeCard(){
  const th=bvomTheme();
- const item=(id,name,sub)=>`<button type="button" class="themeChoice ${th===id?'on':''}" onclick="bvomSetTheme('${id}')"><div class="themeSwatch ${id}"></div>${name}<span class="themeSub">${sub}</span></button>`;
+ const item=(id,name,sub)=>`<button type="button" class="themeChoice ${th===id?'on':''}" aria-pressed="${th===id}" onclick="bvomSetTheme('${id}')"><div class="themeSwatch ${id}"></div>${name}<span class="themeSub">${sub}</span></button>`;
  return `<div class="card"><b>${hlmTxt('App Theme','アプリテーマ')}</b><p class="small">${hlmTxt('Choose your BVOM style. Training and progression stay exactly the same.','BVOMのスタイルを選択できます。トレーニングと進行ロジックは変わりません。')}</p><div class="themeGrid">${item('bee','🐝 Bee',hlmTxt('Bold BVOM yellow + honeycomb','BVOMイエロー＋ハニカム'))}${item('cherry','🌸 Cherry Blossom',hlmTxt('Soft sakura-inspired','桜をイメージ'))}${item('coastal','🌊 Coastal',hlmTxt('Surf + Sunshine Coast','サーフ＋コースト'))}${item('classic','Classic',hlmTxt('Original BVOM appearance','従来のBVOM'))}</div></div>`;
 }
 function renderSettings(){let std=isLb()?[45,35,25,10,5,2.5]:[25,20,15,10,5,2.5,1.25],mic=isLb()?[1.25,.75,.5,.25]:[1,.75,.5,.25],btn=(a,k)=>a.map(p=>`<button class="platebtn ${state[k].includes(p)?'on':''}" onclick="togglePlate(${p},'${k}')">${fmt(p)}</button>`).join('');document.querySelector('#settings').innerHTML=`<div class="card"><b>Weight units</b><div class="choiceRow" style="margin-top:10px"><button class="choice ${!isLb()?'on':''}" onclick="changeUnits('kg')">KILOGRAMS (kg)</button><button class="choice ${isLb()?'on':''}" onclick="changeUnits('lb')">POUNDS (lb)</button></div></div><div class="card"><b>Guidance</b><div class="toggle"><input type="checkbox" ${state.balance?'checked':''} onchange="state.balance=this.checked;save();renderAll()"><span>Strength Balance Guidance <span class="small">(±20%, advisory only)</span></span></div></div><div class="card"><b>Equipment</b><div class="small">Standard plates per side</div><div class="plategrid">${btn(std,'enabledStandard')}</div><div class="small" style="margin-top:12px">Microplates per side — select what you own. Each lift/accessory chooses Standard or Microplates separately.</div><div class="plategrid">${btn(mic,'enabledMicro')}</div></div><div class="card"><b>Advanced Lift Settings</b><div class="small">Collapsed by default. BVOM guides; you decide.</div></div>${Object.keys(state.weights).map(liftSettingsHTML).join('')}<div class="card"><b>Backup & restore</b><p class="small">Backup includes history, weights, progression and settings.</p><button class="secondary wide" onclick="exportBackup()">EXPORT BACKUP</button><label class="secondary wide" style="display:block;text-align:center;margin-top:8px">RESTORE BACKUP<input type="file" accept="application/json,.json" style="display:none" onchange="importBackupFile(this)"></label></div><div class="card"><button class="secondary wide" onclick="bvomStartingSetupModal()">RUN STARTING SETUP AGAIN</button></div><div class="card"><button class="secondary wide" onclick="eraseAll()">ERASE ALL BVOM DATA</button></div>`}
@@ -2279,6 +2334,7 @@ function bvomInstallAccessibility(){
  viewport?.addEventListener('scroll',syncViewport);
  syncViewport();
  const tracked=new Map();
+ const background=['#app','#setup','#authgate'].map(selector=>document.querySelector(selector)).filter(Boolean);
  let nextTitle=0,focusBeforeOverlay=document.activeElement;
  document.addEventListener('focusin',event=>{
   if(!event.target.closest?.(overlays))focusBeforeOverlay=event.target;
@@ -2298,9 +2354,12 @@ function bvomInstallAccessibility(){
   }
  }
  function syncDialogs(){
+  const top=topDialog();
+  for(const surface of background)surface.inert=!!top;
+  for(const root of document.querySelectorAll(overlays))root.inert=root!==top;
   for(const [root,previous] of tracked)if(!root.isConnected){
    tracked.delete(root);
-   if(previous?.isConnected&&visible(previous))previous.focus();
+   if(previous?.isConnected&&visible(previous))previous.focus({preventScroll:true});
   }
   for(const root of document.querySelectorAll(overlays)){
    if(tracked.has(root))continue;
@@ -2314,9 +2373,9 @@ function bvomInstallAccessibility(){
    roleRoot.setAttribute('aria-modal','true');
    if(!title.id)title.id='bvom-dialog-title-'+(++nextTitle);
    if(!roleRoot.hasAttribute('aria-labelledby'))roleRoot.setAttribute('aria-labelledby',title.id);
-   if(!dialog.contains(document.activeElement)){
+   if(root===top&&!dialog.contains(document.activeElement)){
     title.tabIndex=-1;
-    title.focus();
+    title.focus({preventScroll:true});
    }
   }
  }
@@ -2330,7 +2389,7 @@ function bvomInstallAccessibility(){
   const root=topDialog();
   if(!tracked.has(root)||event.defaultPrevented)return;
   if(event.key==='Escape'){
-   const close=root.querySelector('[data-close],#accCancel,[data-dismiss],button[data-escape-close]');
+   const close=root.querySelector('[data-close],#accCancel,.beeCoachClose,[data-dismiss],button[data-escape-close]');
    if(close?.matches('button:not([disabled])')&&visible(close)){event.preventDefault();close.click();}
    return;
   }
@@ -2395,8 +2454,8 @@ function bvomWeightModal(name,current,onSave,fixed=null,help=''){
   o.remove();onSave(roundWork(weight),prescription,weight);
  };
 }
-function bvomUnitChangeModal(from,to){const fromName=bvomT(from==='lb'?'modals.pounds':'modals.kilograms'),toName=bvomT(to==='lb'?'modals.pounds':'modals.kilograms'),o=document.createElement('div');o.className='bvomModalOverlay';o.innerHTML=`<div class="bvomModal"><h3>${bvomT('modals.unitsTitle')}</h3><div style="font-size:18px;font-weight:900;margin:10px 0 14px">${fromName} → ${toName}</div><div class="sub" style="font-size:14px;line-height:1.45">${bvomT('modals.unitsBody')}</div><div class="small" style="margin-top:10px">${bvomT('modals.plateSet',{unit:to==='lb'?'lb':'kg'})}</div><div class="modalActions"><button type="button" data-c>${bvomT('shell.cancel')}</button><button type="button" class="primary" data-change>${bvomT('modals.change')}</button></div></div>`;document.body.appendChild(o);o.querySelector('[data-c]').onclick=()=>o.remove();o.querySelector('[data-change]').onclick=()=>{o.remove();changeUnits(to,true)}}
-function bvomStartingSetupModal(){if(!bvomWorkoutActionAllowed())return;if(bvomStateWorkoutActive(state)){bvomBeeModal(hlmTxt('FINISH WORKOUT FIRST','先にワークアウトを終了してください'),hlmTxt('Finish or exit the current workout before running Starting Setup again.','Starting Setupを再実行する前に、現在のワークアウトを終了または中止してください。'));return}if(bvomDeferredSetupValid()){bvomOfferDeferredSetup();return}const o=document.createElement('div');o.className='bvomModalOverlay';o.innerHTML=`<div class="bvomModal"><h3>${bvomT('modals.setupTitle')}</h3><div class="sub">${bvomT('modals.setupBody')}</div><div class="modalActions"><button type="button" data-c>${bvomT('shell.cancel')}</button><button type="button" class="primary" data-r>${bvomT('modals.runSetup')}</button></div></div>`;document.body.appendChild(o);o.querySelector('[data-c]').onclick=()=>o.remove();o.querySelector('[data-r]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;if(bvomStateWorkoutActive(state)||bvomStoredWorkoutActive()){bvomWorkoutReadOnlyNotice();return}const before=state.configured;state.configured=false;if(!save({durable:true})){state.configured=before;return}o.remove();bvomBb2ShowProgramChooser()}}
+function bvomUnitChangeModal(from,to){const fromName=bvomT(from==='lb'?'modals.pounds':'modals.kilograms'),toName=bvomT(to==='lb'?'modals.pounds':'modals.kilograms'),o=document.createElement('div');o.className='bvomModalOverlay';o.innerHTML=`<div class="bvomModal"><h3>${bvomT('modals.unitsTitle')}</h3><div style="font-size:18px;font-weight:900;margin:10px 0 14px">${fromName} → ${toName}</div><div class="sub" style="font-size:14px;line-height:1.45">${bvomT('modals.unitsBody')}</div><div class="small" style="margin-top:10px">${bvomT('modals.plateSet',{unit:to==='lb'?'lb':'kg'})}</div><div class="modalActions"><button type="button" data-c data-escape-close>${bvomT('shell.cancel')}</button><button type="button" class="primary" data-change>${bvomT('modals.change')}</button></div></div>`;document.body.appendChild(o);o.querySelector('[data-c]').onclick=()=>o.remove();o.querySelector('[data-change]').onclick=()=>{o.remove();changeUnits(to,true)}}
+function bvomStartingSetupModal(){if(!bvomWorkoutActionAllowed())return;if(bvomStateWorkoutActive(state)){bvomBeeModal(hlmTxt('FINISH WORKOUT FIRST','先にワークアウトを終了してください'),hlmTxt('Finish or exit the current workout before running Starting Setup again.','Starting Setupを再実行する前に、現在のワークアウトを終了または中止してください。'));return}if(bvomDeferredSetupValid()){bvomOfferDeferredSetup();return}const o=document.createElement('div');o.className='bvomModalOverlay';o.innerHTML=`<div class="bvomModal"><h3>${bvomT('modals.setupTitle')}</h3><div class="sub">${bvomT('modals.setupBody')}</div><div class="modalActions"><button type="button" data-c data-escape-close>${bvomT('shell.cancel')}</button><button type="button" class="primary" data-r>${bvomT('modals.runSetup')}</button></div></div>`;document.body.appendChild(o);o.querySelector('[data-c]').onclick=()=>o.remove();o.querySelector('[data-r]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;if(bvomStateWorkoutActive(state)||bvomStoredWorkoutActive()){bvomWorkoutReadOnlyNotice();return}const before=state.configured;state.configured=false;if(!save({durable:true})){state.configured=before;return}o.remove();bvomBb2ShowProgramChooser()}}
 function bvomClearLocalCloudSession(){for(const store of [localStorage,sessionStorage]){try{store.removeItem('sb-hkteienxwdsjncchuvnz-auth-token')}catch(e){}try{if(typeof store.key==='function'){const keys=[];for(let n=0;n<store.length;n++){const k=store.key(n);if(k&&k.startsWith('sb-hkteienxwdsjncchuvnz-auth-token'))keys.push(k)}keys.forEach(k=>store.removeItem(k))}}catch(e){}}}
 const BVOM_ERASE_KEYS=[BVOM_DATA_KEY,BVOM_DATA_OWNER_KEY,BVOM_ACCOUNT_SWITCH_BACKUP_KEY,BVOM_WORKOUT_TAB_OWNER_KEY,'bvom_legacy_workout_before_archive','bvom13','bvom12','bvom_pre_restore','bvom_pre_cloud_restore','bvom_cloud_restore_baseline','bvom_bee_layoff_ack'];
 function bvomEraseLocalKeys(){
@@ -2415,7 +2474,7 @@ function bvomEraseStillCurrent(op){try{return !op.authChanged&&JSON.stringify(bv
 function bvomEraseStopped(op,cancelled){op.overlay.remove();bvomBeeModal(hlmTxt(cancelled?'LOCAL ERASE CANCELLED':'ERASE STOPPED',cancelled?'端末データの削除をキャンセルしました':'削除を停止しました'),hlmTxt('Local training data was preserved. '+(op.signedOut?'Sign-out completed on this device.':op.signoutAttempted?'Sign-out was requested and may have completed; it was not reversed.':'No sign-out was requested.')+' To erase, reload the latest data, check the account and workout, then open Erase Everything again and type RESET for a new confirmation. Existing cloud backup is unchanged.','端末のトレーニングデータは保持されました。'+(op.signedOut?'この端末でのサインアウトは完了しました。':op.signoutAttempted?'サインアウトを要求しました。すでに完了している可能性があり、取り消していません。':'サインアウトは要求していません。')+'削除するには最新データを再読み込みし、アカウントとワークアウトを確認してから「すべて削除」を再度開き、RESETを入力して新しく確認してください。既存のクラウドバックアップは変更されません。'))}
 async function bvomEraseModal(){
  if(bvomEraseOperation)return;
- const o=document.createElement('div');o.className='bvomModalOverlay';o.innerHTML=`<div class="bvomModal"><h3>${bvomT('modals.eraseTitle')}</h3><div class="sub">${bvomT('modals.eraseBody')}</div><div>${bvomT('modals.eraseType')}</div><input class="dangerInput" data-i placeholder="RESET"><div class="small" data-status role="status"></div><div class="modalActions"><button data-c>${bvomT('shell.cancel')}</button><button class="dangerBtn" data-e disabled>${bvomT('modals.eraseEverything')}</button></div></div>`;
+ const o=document.createElement('div');o.className='bvomModalOverlay';o.innerHTML=`<div class="bvomModal"><h3>${bvomT('modals.eraseTitle')}</h3><div class="sub">${bvomT('modals.eraseBody')}</div><label>${bvomT('modals.eraseType')}<input class="dangerInput" data-i placeholder="RESET"></label><div class="small" data-status role="status"></div><div class="modalActions"><button data-c>${bvomT('shell.cancel')}</button><button class="dangerBtn" data-e disabled>${bvomT('modals.eraseEverything')}</button></div></div>`;
  document.body.appendChild(o);const i=o.querySelector('[data-i]'),e=o.querySelector('[data-e]'),cancel=o.querySelector('[data-c]');let op=null,closed=false;
  i.oninput=()=>e.disabled=closed||!!op||i.value.trim()!=='RESET';
  const cancelLocal=()=>{if(closed||op?.phase==='committing')return;closed=true;if(op){op.cancelled=true;cancel.disabled=true;cancel.onclick=null;o.querySelector('[data-status]').textContent=hlmTxt('Local deletion cancelled. Waiting for sign-out status; sign-out cannot be undone.','端末データの削除をキャンセルしました。サインアウトの結果を待っています。サインアウトは取り消せません。')}else o.remove()};
@@ -2450,7 +2509,7 @@ async function bvomEraseModal(){
   closed=true;bvomEraseOperation=null;o.remove();location.reload();
  };
 }
-function bvomSessionNoteModal(initial,onSave){const o=document.createElement('div');o.className='bvomModalOverlay';o.innerHTML=`<div class="bvomModal"><h3>${bvomT('notes.title')}</h3><div class="sub">${bvomT('notes.optional')}</div><textarea data-note maxlength="1000" style="width:100%;min-height:120px;box-sizing:border-box;margin:12px 0;padding:10px;border:1px solid #bbb;border-radius:9px;font:inherit" placeholder="${bvomT('notes.placeholder')}">${String(initial||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</textarea><div class="modalActions"><button data-skip>${bvomT('notes.none')}</button><button class="primary" data-save>${bvomT('notes.save')}</button></div></div>`;document.body.appendChild(o);let ta=o.querySelector('[data-note]');ta.focus();o.querySelector('[data-skip]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;o.remove();onSave('')};o.querySelector('[data-save]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;let v=ta.value.trim();if(!bvomWorkoutActionAllowed())return;o.remove();onSave(v)}}
+function bvomSessionNoteModal(initial,onSave){const o=document.createElement('div');o.className='bvomModalOverlay';o.innerHTML=`<div class="bvomModal"><h3>${bvomT('notes.title')}</h3><div class="sub">${bvomT('notes.optional')}</div><textarea data-note maxlength="1000" style="width:100%;min-height:120px;box-sizing:border-box;margin:12px 0;padding:10px;border-radius:9px;font:inherit" placeholder="${bvomT('notes.placeholder')}">${String(initial||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</textarea><div class="modalActions"><button data-skip>${bvomT('notes.none')}</button><button class="primary" data-save>${bvomT('notes.save')}</button></div></div>`;document.body.appendChild(o);let ta=o.querySelector('[data-note]');ta.focus();o.querySelector('[data-skip]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;o.remove();onSave('')};o.querySelector('[data-save]').onclick=()=>{if(!bvomWorkoutActionAllowed())return;let v=ta.value.trim();if(!bvomWorkoutActionAllowed())return;o.remove();onSave(v)}}
 function bvomPraise(){const list=bvomGet('praise')||[],msg=list[Math.floor(Math.random()*list.length)]||'';bvomBeeModal(bvomT('modals.niceWork'),msg)}
 function bvomRecovery(strong){if(strong)bvomBeeModal(bvomT('modals.niceRecovery'),bvomT('modals.strongFinish'));else bvomBeeModal(bvomT('modals.dontStress'),bvomT('modals.badWorkout'))}
 function bvomIntermediateProgramModal(){bvomChoiceModal(bvomT('modals.intermediateTitle'),bvomT('modals.intermediateBody'),hlmTxt('NOT NOW','あとで'),hlmTxt('OPEN STARTING SETUP','STARTING SETUPを開く'),null,()=>bvomStartingSetupModal())}
@@ -2742,19 +2801,19 @@ function liftLabel(n,mode=state.programMode){
  return bvomGet('lifts')?.[lookup]||({ 'Overhead Press':'Press','Prone Row':'Row','Prone Row HLM':'Prone Row' })[lookup]||n;
 }
 function chooseProgramMode(mode){if(!bvomWorkoutActionAllowed())return;
- if(mode==='lprpt'){if(!bvomBb2OnLegacyProgramChoice())return;state.programMode='lprpt';if(!['A','B'].includes(state.day))state.day='A';save();showSetup();return}
+ if(mode==='lprpt'){if(!bvomBb2OnLegacyProgramChoice())return;state.programMode='lprpt';if(!['A','B'].includes(state.day))state.day='A';save();showSetup();bvomPositionSetup('[data-setup-next]');return}
  const four=mode==='fourday',title=four?'4-DAY SPLIT — INTERMEDIATE':'HLM RPT — INTERMEDIATE';
  const msg=four?'The 4-Day Split is designed for lifters who have already built a strength base. It uses BVOM’s H/M RPT progression across four shorter upper/lower sessions. LP/RPT is the recommended place to begin if you are new to structured strength training.':'HLM RPT is designed for lifters who have already built a strength base. If you are just starting structured strength training, LP/RPT is the recommended place to begin.';
  bvomChoiceModal(title,msg,'USE LP/RPT',four?'CONTINUE 4-DAY SPLIT':'CONTINUE HLM RPT',
-  ()=>{if(!bvomWorkoutActionAllowed()||!bvomBb2OnLegacyProgramChoice())return;state.programMode='lprpt';state.day='A';save();showSetup()},
-  ()=>{if(!bvomWorkoutActionAllowed()||!bvomBb2OnLegacyProgramChoice())return;const firstIntermediate=!state.hlm?.driverInitialized;state.programMode=four?'fourday':'hlm';state.day=four?'1':'H';ensureHLM();if(firstIntermediate){state.hlm.driver.Squat=Number(state.weights.Squat);state.hlm.driver['Bench Press']=Number(state.weights['Bench Press']);state.hlm.nextHeavy.Squat=null;state.hlm.nextHeavy['Bench Press']=null;state.hlm.driverInitialized=true;}save();showSetup()}
+  ()=>{if(!bvomWorkoutActionAllowed()||!bvomBb2OnLegacyProgramChoice())return;state.programMode='lprpt';state.day='A';save();showSetup();bvomPositionSetup('[data-setup-next]')},
+  ()=>{if(!bvomWorkoutActionAllowed()||!bvomBb2OnLegacyProgramChoice())return;const firstIntermediate=!state.hlm?.driverInitialized;state.programMode=four?'fourday':'hlm';state.day=four?'1':'H';ensureHLM();if(firstIntermediate){state.hlm.driver.Squat=Number(state.weights.Squat);state.hlm.driver['Bench Press']=Number(state.weights['Bench Press']);state.hlm.nextHeavy.Squat=null;state.hlm.nextHeavy['Bench Press']=null;state.hlm.driverInitialized=true;}save();showSetup();bvomPositionSetup('[data-setup-next]')}
  );
 }
 function showSetup(){
  ensureHLM();document.querySelector('#app').classList.add('hidden');let el=document.querySelector('#setup');el.classList.remove('hidden');let guided=state.setupMode==='guided';
  el.innerHTML=`<div class="setupBee"><img src="./icon-192.png" alt="Power Bee"><div class="setupBeeTag">BEST VERSION OF MYSELF</div></div>
  <div class="card"><b>${bvomT('language.title')}</b><div class="choiceRow" style="margin-top:10px"><button class="choice ${bvomLocale()==='en'?'on':''}" onclick="changeLanguage('en')">English</button><button class="choice ${bvomLocale()==='ja'?'on':''}" onclick="changeLanguage('ja')">日本語</button></div></div>
- <div class="card"><b>${bvomT('setup.unitsTitle')}</b><div class="choiceRow" style="margin-top:10px"><button class="choice ${!isLb()?'on':''}" onclick="changeUnits('kg',true)">${bvomT('setup.kg')}</button><button class="choice ${isLb()?'on':''}" onclick="changeUnits('lb',true)">${bvomT('setup.lb')}</button></div></div>
+ <div class="card" data-setup-next><b>${bvomT('setup.unitsTitle')}</b><div class="choiceRow" style="margin-top:10px"><button class="choice ${!isLb()?'on':''}" onclick="changeUnits('kg',true)">${bvomT('setup.kg')}</button><button class="choice ${isLb()?'on':''}" onclick="changeUnits('lb',true)">${bvomT('setup.lb')}</button></div></div>
  <div class="card"><b>${hlmTxt('Choose your program','プログラムを選択')}</b><div class="choiceRow" style="margin-top:10px"><button class="choice ${!isIntermediate()?'on':''}" onclick="chooseProgramMode('lprpt')">LP / RPT</button><button class="choice ${isHLM()?'on':''}" onclick="chooseProgramMode('hlm')">HLM RPT</button><button class="choice ${isFourDay()?'on':''}" onclick="chooseProgramMode('fourday')">4-Day Split</button></div><div class="small" style="margin-top:14px;line-height:1.5">${hlmTxt('<b>LP / RPT — Beginner / Novice</b><br>Linear Progression / Reverse Pyramid Training. Start here if you are new to structured strength training. Simple workout-to-workout progression.<br><br><b>HLM RPT — Intermediate</b><br>Heavy / Light / Medium Reverse Pyramid Training. For lifters who can no longer progress reliably from workout to workout.<br><br><b>4-Day Split — Intermediate</b><br>An upper/lower alternative to HLM. Four shorter workouts, usually spread across the week.<br><br><b>Not sure? Choose LP / RPT.</b> BVOM will let you know when it may be time to consider an intermediate program.','<b>LP / RPT — 初心者向け</b><br>Linear Progression（線形進行）/ Reverse Pyramid Training（リバースピラミッドトレーニング）。体系的な筋力トレーニングが初めてなら、ここから始めてください。ワークアウトごとにシンプルに進行します。<br><br><b>HLM RPT — 中級者向け</b><br>Heavy / Light / Medium Reverse Pyramid Training。毎回のワークアウトで安定して進歩することが難しくなったリフター向けです。<br><br><b>4-Day Split — 中級者向け</b><br>HLM の代わりとなる上半身／下半身分割。通常は週に4回、より短いワークアウトを行います。<br><br><b>迷ったら LP / RPT を選んでください。</b> 中級プログラムを検討する時期が来たら BVOM が案内します。')}</div></div>
  <div class="card"><b>${bvomT('setup.startTitle')}</b><div class="choiceRow" style="margin-top:10px"><button class="choice ${guided?'on':''}" onclick="state.setupMode='guided';save();showSetup()">${bvomT('setup.guided')}</button><button class="choice ${!guided?'on':''}" onclick="state.setupMode='manual';save();showSetup()">${bvomT('setup.manual')}</button></div><p class="small">${bvomT(guided?'setup.guidedHelp':'setup.manualHelp')}</p></div>
  ${guided?guidedHTML():manualHTML()}
@@ -3421,7 +3480,7 @@ function bvomRenderAuthGate(){
  document.documentElement.lang=bvomLang().meta.htmlLang;
  const selector='<div class="card" role="group" aria-label="'+bvomT('language.title')+'">'+
   ['en','ja'].map(code=>'<button type="button" lang="'+code+'" class="choice '+(bvomLocale()===code?'on':'')+'" data-auth-language="'+code+'" aria-pressed="'+(bvomLocale()===code)+'" onclick="changeLanguage(&quot;'+code+'&quot;)">'+(code==='ja'?'日本語':'English')+'</button>').join(' ')+'</div>';
- const msg=bvomAuthGate.message?`<div class="notice" role="${bvomAuthGate.error?'alert':'status'}" style="${bvomAuthGate.error?'background:#fde8e8':''}">${bvomCloudEscape(typeof bvomAuthGate.message==='function'?bvomAuthGate.message():bvomAuthGate.message)}</div>`:'';
+ const msg=bvomAuthGate.message?`<div class="notice ${bvomAuthGate.error?'bvomAccountError':''}" role="${bvomAuthGate.error?'alert':'status'}">${bvomCloudEscape(typeof bvomAuthGate.message==='function'?bvomAuthGate.message():bvomAuthGate.message)}</div>`:'';
  const intro=`<div class="authGateIntro"><img src="./icon-192.png" alt="BVOM"><div class="setupBeeTag">BEST VERSION OF MYSELF</div><h2>${hlmTxt('Get stronger.','もっと強く。')}</h2><p>${hlmTxt('BVOM does the thinking. You do the lifting.','BVOMが考えます。あなたは持ち上げるだけ。')}</p></div>`;
  if(!bvomAuthGate.mode){el.innerHTML=selector+intro+`<div class="card"><b>${hlmTxt('Welcome to BVOM Strength','BVOM Strengthへようこそ')}</b><p class="small">${hlmTxt('Choose the option that matches you.','該当する方を選んでください。')}</p><div class="authGateActions"><button class="primary wide" onclick="bvomAuthGateChoose('new')">${hlmTxt('NEW USER — START HERE','初めての方はこちら')}</button><button class="secondary wide" onclick="bvomAuthGateChoose('existing')">${hlmTxt('ALREADY HAVE AN ACCOUNT? SIGN IN','アカウントをお持ちの方はサインイン')}</button></div></div>`;return}
  if(bvomAuthGate.codeSent){el.innerHTML=selector+intro+`<div class="card"><b>${bvomAuthGate.mode==='new'?hlmTxt('Create your BVOM account','BVOMアカウントを作成'):hlmTxt('Sign in to BVOM','BVOMにサインイン')}</b><p class="small">${hlmTxt('We sent a 6-digit code to','6桁のコードを送信しました：')} <b>${bvomCloudEscape(bvomAuthGate.email)}</b></p>${msg}<label>${hlmTxt('6-digit code','6桁のコード')}<input id="bvomAuthGateCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456"></label><button class="primary wide" onclick="bvomAuthGateVerifyCode()" ${bvomAuthGate.busy?'disabled':''}>${bvomAuthGate.busy?hlmTxt('CHECKING…','確認中…'):hlmTxt('VERIFY CODE','コードを確認')}</button><button class="secondary wide" style="margin-top:8px" onclick="bvomAuthGate.codeSent=false;bvomAuthGate.message='';bvomRenderAuthGate()">${hlmTxt('USE DIFFERENT EMAIL','別のメールアドレスを使用')}</button><button class="secondary wide" style="margin-top:8px" onclick="bvomAuthGateChoose(null)">${hlmTxt('BACK','戻る')}</button></div>`;return}
@@ -3775,7 +3834,7 @@ function bvomCloudStatusText(){
 function bvomCloudCard(){
  const u=bvomCloud.user;
  const programmeNeedsAttention=bvomBb2CloudRelevant()&&['conflict','uncertain','unavailable','incompatible'].includes(bvomBb2AccountStatus());
- const msg=bvomCloud.message&&(!programmeNeedsAttention||bvomCloud.error)?`<div class="notice" style="${bvomCloud.error?'background:#fde8e8':''}">${bvomCloudEscape(bvomCloud.message)}</div>`:'';
+ const msg=bvomCloud.message&&(!programmeNeedsAttention||bvomCloud.error)?`<div class="notice ${bvomCloud.error?'bvomAccountError':''}" role="${bvomCloud.error?'alert':'status'}">${bvomCloudEscape(bvomCloud.message)}</div>`:'';
  if(u){
   const conflict=bvomCloud.conflict?`<div class="notice" style="background:#fff0c7"><b>${hlmTxt('SYNC PAUSED','同期を一時停止')}</b><br>${hlmTxt('This device and BVOM Cloud contain different saved data. Nothing will be overwritten automatically. Choose which copy you want to keep.','この端末とBVOM Cloudに異なる保存データがあります。自動的に上書きはしません。使用するデータを選んでください。')}</div>`:'';
   const programmeConflict=bvomBb2CloudRelevant()&&bvomBb2AccountStatus()==='conflict';
@@ -4024,7 +4083,34 @@ ${url}`;
  }catch(e){if(e?.name!=='AbortError')bvomBeeModal(hlmTxt('SHARE UNAVAILABLE','共有できません'),hlmTxt('BVOM could not open sharing. You can share www.bvomstrength.com manually.','共有を開けませんでした。www.bvomstrength.com を手動で共有できます。'))}
 }
 function bvomShareAppCard(){return `<div class="card"><b>${hlmTxt('Share BVOM Strength','BVOM Strengthを共有')}</b><p class="small">${hlmTxt('Know someone who might enjoy BVOM? Send them the app.','BVOMを気に入りそうな人にアプリを共有できます。')}</p><button class="secondary wide" onclick="bvomShareApp()">${hlmTxt('SHARE BVOM','BVOMを共有')}</button></div>`}
-function renderSettings(){let std=isLb()?[45,35,25,10,5,2.5]:[25,20,15,10,5,2.5,1.25],mic=isLb()?[1.25,.75,.5,.25]:[1,.75,.5,.25],btn=(a,k)=>a.map(p=>`<button class="platebtn ${state[k].includes(p)?'on':''}" onclick="togglePlate(${p},'${k}')">${fmt(p)}</button>`).join('');const names=isHLM()?['Squat','Bench Press','Prone Row','Supine Row','Overhead Press','Deadlift']:['Squat','Bench Press','Prone Row','Overhead Press','Deadlift'];let hlmCard=isHLM()?`<div class="card"><b>${hlmTxt('HLM RPT Settings','HLM RPT 設定')}</b><label>${hlmTxt('Light Squat reduction %','Light スクワット減量率 %')}<input id="hlmLight" type="number" min="1" max="25" step=".5" value="${state.hlm.lightPct}"></label><label>${hlmTxt('Medium Squat increase %','Medium スクワット増加率 %')}<input id="hlmSqMed" type="number" min="1" max="25" step=".5" value="${state.hlm.squatMediumPct}"></label><label>${hlmTxt('Medium Bench increase %','Medium ベンチ増加率 %')}<input id="hlmBnMed" type="number" min="1" max="25" step=".5" value="${state.hlm.benchMediumPct}"></label><div class="toggle"><input id="hlmSingles" type="checkbox" ${state.hlm.optionalSingles?'checked':''}><span>${hlmTxt('Optional heavy singles','任意のヘビーシングル')}</span></div><div class="small" style="margin-top:12px">${hlmTxt('Intensity single increase % — defaults are guidance, not law.','高強度シングル増加率 % — 初期値は目安であり、固定ルールではありません。')}</div><label>${hlmTxt('Squat','スクワット')}<input id="hlmSingleSq" type="number" min="0" max="25" step=".1" value="${state.hlm.singlePct.Squat}"></label><label>${hlmTxt('Bench Press','ベンチプレス')}<input id="hlmSingleBn" type="number" min="0" max="25" step=".1" value="${state.hlm.singlePct['Bench Press']}"></label><label>${hlmTxt('Deadlift','デッドリフト')}<input id="hlmSingleDl" type="number" min="0" max="25" step=".1" value="${state.hlm.singlePct.Deadlift}"></label><button class="choice on wide" onclick="saveHlmSettings()">${hlmTxt('SAVE HLM SETTINGS','HLM設定を保存')}</button></div>`:isFourDay()?`<div class="card"><b>${hlmTxt('4-Day Split Settings','4-Day Split 設定')}</b><label>${hlmTxt('Workout 4 Squat increase %','ワークアウト4 スクワット増加率 %')}<input id="hlmSqMed" type="number" min="1" max="25" step=".5" value="${state.hlm.squatMediumPct}"></label><label>${hlmTxt('Workout 3 Bench increase %','ワークアウト3 ベンチ増加率 %')}<input id="hlmBnMed" type="number" min="1" max="25" step=".5" value="${state.hlm.benchMediumPct}"></label><div class="toggle"><input id="hlmSingles" type="checkbox" ${state.hlm.optionalSingles?'checked':''}><span>${hlmTxt('Optional heavy singles','任意のヘビーシングル')}</span></div><div class="small" style="margin-top:12px">${hlmTxt('Intensity single increase % — defaults are guidance, not law.','高強度シングル増加率 % — 初期値は目安であり、固定ルールではありません。')}</div><label>${hlmTxt('Squat','スクワット')}<input id="hlmSingleSq" type="number" min="0" max="25" step=".1" value="${state.hlm.singlePct.Squat}"></label><label>${hlmTxt('Bench Press','ベンチプレス')}<input id="hlmSingleBn" type="number" min="0" max="25" step=".1" value="${state.hlm.singlePct['Bench Press']}"></label><label>${hlmTxt('Deadlift','デッドリフト')}<input id="hlmSingleDl" type="number" min="0" max="25" step=".1" value="${state.hlm.singlePct.Deadlift}"></label><button class="choice on wide" onclick="saveHlmSettings()">${hlmTxt('SAVE 4-DAY SETTINGS','4-Day設定を保存')}</button></div>`:'';document.querySelector('#settings').innerHTML=`<div class="card"><b>${bvomT('language.title')}</b><div class="choiceRow" style="margin-top:10px"><button class="choice ${bvomLocale()==='en'?'on':''}" onclick="changeLanguage('en')">English</button><button class="choice ${bvomLocale()==='ja'?'on':''}" onclick="changeLanguage('ja')">日本語</button></div></div>${bvomThemeCard()}${bvomCloudCard()}${bvomSubscriptionCard()}${bvomShareAppCard()}<div class="card"><b>${bvomT('settings.units')}</b><div class="choiceRow" style="margin-top:10px"><button class="choice ${!isLb()?'on':''}" onclick="changeUnits('kg')">${bvomT('setup.kg')}</button><button class="choice ${isLb()?'on':''}" onclick="changeUnits('lb')">${bvomT('setup.lb')}</button></div></div><div class="card"><b>${bvomT('settings.guidance')}</b><div class="toggle"><input type="checkbox" ${state.balance?'checked':''} onchange="state.balance=this.checked;save();renderAll()"><span>${bvomT('settings.balance')} <span class="small">${bvomT('settings.advisory')}</span></span></div></div>${hlmCard}<div class="card"><b>${bvomT('settings.equipment')}</b><div class="small">${bvomT('settings.standardPlates')}</div><div class="plategrid">${btn(std,'enabledStandard')}</div><div class="small" style="margin-top:12px">${bvomT('settings.microplates')}</div><div class="plategrid">${btn(mic,'enabledMicro')}</div></div><div class="card"><b>${bvomT('settings.advanced')}</b><div class="small">${bvomT('settings.advancedHelp')}</div></div>${names.map(liftSettingsHTML).join('')}<div class="card"><b>${bvomT('settings.backup')}</b><p class="small">${bvomT('settings.backupHelp')}</p><button class="secondary wide" onclick="exportBackup()">${bvomT('settings.exportBackup')}</button><label class="secondary wide" style="display:block;text-align:center;margin-top:8px">${bvomT('settings.restoreBackup')}<input type="file" accept="application/json,.json" style="display:none" onchange="importBackupFile(this)"></label></div><div class="card"><button class="secondary wide" onclick="bvomStartingSetupModal()">${bvomT('settings.rerun')}</button></div><div class="card"><button class="secondary wide" onclick="eraseAll()">${bvomT('settings.erase')}</button></div>`}
+function renderSettings(){let std=isLb()?[45,35,25,10,5,2.5]:[25,20,15,10,5,2.5,1.25],mic=isLb()?[1.25,.75,.5,.25]:[1,.75,.5,.25],btn=(a,k)=>a.map(p=>`<button class="platebtn ${state[k].includes(p)?'on':''}" onclick="togglePlate(${p},'${k}')">${fmt(p)}</button>`).join('');const names=isHLM()?['Squat','Bench Press','Prone Row','Supine Row','Overhead Press','Deadlift']:['Squat','Bench Press','Prone Row','Overhead Press','Deadlift'];let hlmCard=isHLM()?`<div class="card"><b>${hlmTxt('HLM RPT Settings','HLM RPT 設定')}</b><label>${hlmTxt('Light Squat reduction %','Light スクワット減量率 %')}<input id="hlmLight" type="number" min="1" max="25" step=".5" value="${state.hlm.lightPct}"></label><label>${hlmTxt('Medium Squat increase %','Medium スクワット増加率 %')}<input id="hlmSqMed" type="number" min="1" max="25" step=".5" value="${state.hlm.squatMediumPct}"></label><label>${hlmTxt('Medium Bench increase %','Medium ベンチ増加率 %')}<input id="hlmBnMed" type="number" min="1" max="25" step=".5" value="${state.hlm.benchMediumPct}"></label><div class="toggle"><input id="hlmSingles" type="checkbox" ${state.hlm.optionalSingles?'checked':''}><span>${hlmTxt('Optional heavy singles','任意のヘビーシングル')}</span></div><div class="small" style="margin-top:12px">${hlmTxt('Intensity single increase % — defaults are guidance, not law.','高強度シングル増加率 % — 初期値は目安であり、固定ルールではありません。')}</div><label>${hlmTxt('Squat','スクワット')}<input id="hlmSingleSq" type="number" min="0" max="25" step=".1" value="${state.hlm.singlePct.Squat}"></label><label>${hlmTxt('Bench Press','ベンチプレス')}<input id="hlmSingleBn" type="number" min="0" max="25" step=".1" value="${state.hlm.singlePct['Bench Press']}"></label><label>${hlmTxt('Deadlift','デッドリフト')}<input id="hlmSingleDl" type="number" min="0" max="25" step=".1" value="${state.hlm.singlePct.Deadlift}"></label><button class="choice on wide" onclick="saveHlmSettings()">${hlmTxt('SAVE HLM SETTINGS','HLM設定を保存')}</button></div>`:isFourDay()?`<div class="card"><b>${hlmTxt('4-Day Split Settings','4-Day Split 設定')}</b><label>${hlmTxt('Workout 4 Squat increase %','ワークアウト4 スクワット増加率 %')}<input id="hlmSqMed" type="number" min="1" max="25" step=".5" value="${state.hlm.squatMediumPct}"></label><label>${hlmTxt('Workout 3 Bench increase %','ワークアウト3 ベンチ増加率 %')}<input id="hlmBnMed" type="number" min="1" max="25" step=".5" value="${state.hlm.benchMediumPct}"></label><div class="toggle"><input id="hlmSingles" type="checkbox" ${state.hlm.optionalSingles?'checked':''}><span>${hlmTxt('Optional heavy singles','任意のヘビーシングル')}</span></div><div class="small" style="margin-top:12px">${hlmTxt('Intensity single increase % — defaults are guidance, not law.','高強度シングル増加率 % — 初期値は目安であり、固定ルールではありません。')}</div><label>${hlmTxt('Squat','スクワット')}<input id="hlmSingleSq" type="number" min="0" max="25" step=".1" value="${state.hlm.singlePct.Squat}"></label><label>${hlmTxt('Bench Press','ベンチプレス')}<input id="hlmSingleBn" type="number" min="0" max="25" step=".1" value="${state.hlm.singlePct['Bench Press']}"></label><label>${hlmTxt('Deadlift','デッドリフト')}<input id="hlmSingleDl" type="number" min="0" max="25" step=".1" value="${state.hlm.singlePct.Deadlift}"></label><button class="choice on wide" onclick="saveHlmSettings()">${hlmTxt('SAVE 4-DAY SETTINGS','4-Day設定を保存')}</button></div>`:'';
+ const root=document.querySelector('#settings');
+ const open=new Set([...root.querySelectorAll('details[data-settings-group][open]')].map(group=>group.dataset.settingsGroup));
+ const focused=document.activeElement;
+ const focusAction=focused&&root.contains(focused)&&focused.getAttribute('onclick');
+ const group=(id,title,body,extra='')=>`<details class="card bvomDisclosure ${extra}" data-settings-group="${id}" ${open.has(id)?'open':''}><summary>${title}</summary>${body}</details>`;
+ const programme=bvomBb2Selected()?hlmTxt('Bodybuilding 2','ボディビルディング2'):
+  isBodybuilding()?hlmTxt('Bodybuilding','ボディビルディング'):isFreeTraining()?hlmTxt('Custom Training','カスタムトレーニング'):
+  isHLM()?'HLM RPT':isFourDay()?'4-Day Split':'LP / RPT';
+ const training=`<div class="card"><h2>${hlmTxt('Training programme','トレーニングプログラム')}</h2><p class="small">${programme}</p><button class="secondary wide" onclick="bvomStartingSetupModal()">${bvomT('settings.rerun')}</button></div>`;
+ const preferences=`<div class="card"><h2>${hlmTxt('App preferences','アプリ設定')}</h2><div class="settingsRow"><b>${bvomT('language.title')}</b><div class="choiceRow" style="margin-top:10px"><button class="choice ${bvomLocale()==='en'?'on':''}" onclick="changeLanguage('en')">English</button><button class="choice ${bvomLocale()==='ja'?'on':''}" onclick="changeLanguage('ja')">日本語</button></div></div><div class="settingsRow"><b>${bvomT('settings.units')}</b><div class="choiceRow" style="margin-top:10px"><button class="choice ${!isLb()?'on':''}" onclick="changeUnits('kg')">${bvomT('setup.kg')}</button><button class="choice ${isLb()?'on':''}" onclick="changeUnits('lb')">${bvomT('setup.lb')}</button></div></div></div>`;
+ const equipment=`<div><div class="small">${bvomT('settings.standardPlates')}</div><div class="plategrid">${btn(std,'enabledStandard')}</div><div class="small" style="margin-top:12px">${bvomT('settings.microplates')}</div><div class="plategrid">${btn(mic,'enabledMicro')}</div></div>`;
+ const backup=`<div class="card"><b>${bvomT('settings.backup')}</b><p class="small">${bvomT('settings.backupHelp')}</p><div class="settingsActions"><button class="secondary" onclick="exportBackup()">${bvomT('settings.exportBackup')}</button><button type="button" class="secondary" onclick="document.getElementById('bvomBackupFile').click()">${bvomT('settings.restoreBackup')}</button><input id="bvomBackupFile" type="file" accept="application/json,.json" hidden onchange="importBackupFile(this)"></div></div>`;
+ const advanced=`<div class="card"><b>${bvomT('settings.guidance')}</b><div class="toggle"><input type="checkbox" ${state.balance?'checked':''} onchange="state.balance=this.checked;save();renderAll()"><span>${bvomT('settings.balance')} <span class="small">${bvomT('settings.advisory')}</span></span></div></div>${hlmCard}<p class="small">${bvomT('settings.advancedHelp')}</p>${names.map(liftSettingsHTML).join('')}`;
+ root.innerHTML=`<div class="bvomSettings">${training}${preferences}
+ ${group('theme',hlmTxt('App theme','アプリテーマ')+' · '+bvomThemeName(),bvomThemeCard())}
+ ${group('equipment',bvomT('settings.equipment'),equipment)}
+ ${backup}${bvomCloudCard()}
+ ${group('training',hlmTxt('Advanced training settings','トレーニングの詳細設定'),advanced)}
+ ${group('account',hlmTxt('Access and sharing','アクセスと共有'),bvomSubscriptionCard()+bvomShareAppCard())}
+ ${group('erase',hlmTxt('Erase data','データの消去'),`<button class="secondary dangerBtn wide" onclick="eraseAll()">${bvomT('settings.erase')}</button>`,'settingsDanger')}
+ </div>`;
+ if(focusAction){
+  const replacement=[...root.querySelectorAll('button[onclick]')].find(button=>button.getAttribute('onclick')===focusAction);
+  replacement?.focus({preventScroll:true});
+ }
+}
+
 
 
 function bvomHistoryRecord(ref){
@@ -4101,14 +4187,57 @@ function renderHistory(){let names=isHLM()?['Squat','Bench Press','Prone Row','S
 function renderInfo(){
  let base=bvomLang().infoHtml({unit:unitLabel(),smallInc:isLb()?5:2.5,dlInc:isLb()?10:5,exampleWork:isLb()?225:100,exampleDrop:isLb()?205:90});
  if(bvomLocale()==='en')base=base.replace('More advanced programming such as Heavy / Light / Medium can come later if you eventually need it.','When workout-to-workout progression has run its course, HLM RPT is available as an intermediate option.');
- const extra=bvomLocale()==='ja'?`<div class="infoCard"><h3>プログラムの選び方</h3><p><b>LP / RPT</b> は推奨の開始プログラムです。シンプルなワークアウトごとの進行で筋力を伸ばし、個々のリフトがストレートセットを卒業した時だけRPTへ移行できます。すべてのリフトを同時に変更する必要はありません。</p><p><b>HLM RPT</b> は中級者向けの3セッション構成です。<b>Heavy</b> は週の主なボリュームと負荷を作り、スクワットとベンチの進行を決めます。<b>Light</b> はアクティブリカバリーのスクワットにデッドリフトとプレスを組み合わせます。<b>Medium</b> はより重いスクワットとベンチ、その後のスパインロウで強度を表現します。Heavy は必ずしもバー重量が最も重い日という意味ではなく、トレーニングストレスが最も高い日です。H → L → M が通常の順番ですが、曜日には固定されません。</p><p>スクワットやベンチの進行が難しくなると、BVOMはそのリフトを<b>5回 → 4回 → 3回 → 2回</b>へ進めることを提案できます。BVOMは提案し、決めるのはあなたです。任意のヘビーシングルは練習／高重量への慣れのためで、進行判定には使いません。</p><p><b>4-Day Split</b> はLight dayを使わず、同じH/M RPTの考え方を使う中級者向けの別案です。Workout 1 はベンチ＋ロウ、Workout 2 はスクワット、Workout 3 はベンチ＋プレス、Workout 4 はスクワット＋デッドリフト。Workout 1 のベンチとWorkout 2 のスクワットが進行を決め、Workout 3と4で強度を表現します。月 / 火 / 木 / 金を推奨しますが、実際にはトレーニングするたびに1 → 2 → 3 → 4の順に進むだけです。</p><p><b>カスタムトレーニング — 自分で組む</b> は、自分でプログラムを組みたい人向けです。最大7日分のトレーニング日を作り、コンパウンド種目、補助種目、GPPを選べます。BVOMは記録して覚えますが、自動進行は行いません。<b>記録する → 覚えておく → あなたが決める。</b></p><p><b>ボディビルディング — 8週間トレーニングブロック</b> は、筋力重視のトレーニングから一度変化をつけながら、引き続き段階的にトレーニングしたい人向けです。24回の完了ワークアウトで構成され、Workout AとWorkout Bを交互に行い、より幅広い種目とレップ範囲を使います。ほとんどのセットは限界まで行わず、あと2回ほど良いレップができる余力を残し、BVOMが実際のパフォーマンスに基づいて進行を調整します。</p><p>ボディビルディング形式のトレーニングに慣れていない、または開始重量が分からない場合は、任意の<b>オンランプ</b>でWorkout 1の前に適切な開始重量を見つけることができます。オンランプは24回のワークアウトには含まれません。開始重量が分かっている経験者はスキップできます。</p><p data-bb2-programme-info><b>${bvomEsc(bvomBb2ProgrammeInfo().title)}</b><br>${bvomEsc(bvomBb2ProgrammeInfo().body)}</p><p><b>RPE</b> はHLM、4-Day、カスタムトレーニングの各ワークセットごとに記録されます。初期値は8で、6〜10の範囲を0.5刻みで調整できます。RPEは記録のためだけに使われ、BVOMの進行判定には影響しません。</p><p>BVOMでは足りなくなったら、より高度な筋力トレーニング方法やプログラミングを調べるか、経験豊富なストレングスコーチに相談することも検討してください。</p></div><div class="infoCard"><h3>マイクロプレート</h3><p>マイクロプレートは特にプレスで役立ち、体格が小さい人や筋力がまだ低い人が、スクワット、ベンチ、補助種目でもより細かな重量増加を使いたい場合に有効です。Equipmentでジムにあるマイクロプレートを選び、その後リフトや補助種目ごとに<b>Standard</b>または<b>Microplates</b>を選べます。</p><p>ジムにマイクロプレートがない場合は、小さなセットを購入してジムバッグに入れておくことをBVOMはおすすめします。</p></div><div class="infoCard"><h3>しっかり鍛える — 限界まで追い込まない</h3><p>BVOMは、バーが止まるまでレップを無理に続けることを前提にしていません。</p><p>重量が重くなったら、<b>あと何回きれいなレップができるか</b>を判断する感覚を身につけてください。ワークセットは<b>あと1〜2回きれいにできる余力</b>を残して終えることを目指します。</p><p>5回の指示でも、3回目の時点であと1〜2回しか良いレップが残っていないと分かるなら、<b>バーを戻して3回と記録してください</b>。BVOMがその結果を処理します。</p><p><b>できないことを証明するためだけに次の1回へ挑まない。</b></p><p>これはよく<b>RPE / RIR</b>と呼ばれます。あと2回できる余力は、おおよそRPE 8です。最初から完璧に判断する必要はありません。経験とともに上達します。</p></div><div class="infoCard"><h3>GPP（General Physical Preparedness）/ コンディショニング</h3><p><b>GPPはプログラムではなく、記録するための機能です。</b></p><p>筋力トレーニングと一緒に、ワークアウト後に、または別の日にも使えます。セット、回数、重量、距離、時間、ラウンドなど、必要な項目を記録できます。</p><p>BVOMは前回の内容を記憶しますが、GPPを自動的に進行させることはありません。同じ内容を繰り返すか、改善するか、変更するかはあなたが決めます。</p><p><b>記録する → 覚えておく → あなたが決める。</b></p></div>`:`<div class="infoCard"><h3>Choose the right program</h3><p><b>LP / RPT</b> is the recommended starting point. Build strength with simple workout-to-workout progression; when an individual lift outgrows straight sets, BVOM can move that lift into RPT without forcing every lift to change.</p><p><b>HLM RPT</b> is the three-session intermediate option. <b>Heavy</b> builds the week's main volume/stress and drives Squat and Bench progression. <b>Light</b> is active-recovery Squat followed by Deadlift and Press. <b>Medium</b> expresses intensity with heavier Squat and Bench work, then Supine Row. Heavy means the highest training stress — not necessarily the heaviest barbell weight. H → L → M is the normal rotation, but BVOM does not lock you to weekdays.</p><p>As Squat or Bench becomes harder to progress, BVOM can suggest moving that lift from <b>5s → 4s → 3s → 2s</b>. BVOM recommends; you decide. Optional heavy singles are practice/exposure only and never determine progression.</p><p><b>4-Day Split</b> is a parallel intermediate option using the same H/M RPT principles without a Light day. Workout 1 is Bench + Row, Workout 2 is Squat, Workout 3 is Bench + Press, and Workout 4 is Squat + Deadlift. Bench in Workout 1 and Squat in Workout 2 drive progression; Workouts 3 and 4 express intensity. Mon / Tue / Thu / Fri is recommended, but BVOM simply continues 1 → 2 → 3 → 4 whenever you train.</p><p><b>Custom Training — Build Your Own</b> is for lifters who want to program for themselves. Build up to seven training days, choose your compounds, accessories and GPP, and BVOM records and remembers what you do. There is no automatic progression: <b>Record → remember → you decide.</b></p><p><b>Bodybuilding — 8-Week Training Block</b> is for lifters who want a break from strength-focused training while continuing to train progressively. The block runs for 24 completed workouts, alternating Workout A and Workout B across a wider range of exercises and rep ranges. Most work is performed with about two good reps left rather than training to failure, and BVOM adjusts progression from your actual performance.</p><p>If you're unfamiliar with bodybuilding-style training or aren't sure what loads to use, the optional <b>On-Ramp</b> helps establish sensible starting loads before Workout 1. It does not count toward the 24-workout block. Experienced lifters who already know their starting loads can skip it.</p><p data-bb2-programme-info><b>${bvomEsc(bvomBb2ProgrammeInfo().title)}</b><br>${bvomEsc(bvomBb2ProgrammeInfo().body)}</p><p><b>RPE</b> is recorded per working set in HLM, 4-Day and Custom Training. It defaults to 8 and can be adjusted from 6–10 in 0.5 steps. RPE is a training record only — it never changes BVOM's progression decisions.</p><p>When BVOM is no longer enough, consider researching more advanced strength-training methods and programming techniques, or working with an experienced strength coach.</p></div><div class="infoCard"><h3>Microplates</h3><p>Microplates are especially useful for Press and for smaller or weaker lifters who may benefit from finer jumps on Squat, Bench and accessories too. Select the microplates your gym has in Equipment, then choose <b>Standard</b> or <b>Microplates</b> separately for each lift or accessory.</p><p>If your gym doesn't have microplates, BVOM recommends buying a small set and keeping them in your gym bag.</p></div><div class="infoCard"><h3>Train hard — not to failure</h3><p>BVOM is not designed around grinding out reps until the bar stops moving.</p><p>As the weight gets heavy, learn to judge how many <b>good reps you have left in the tank</b>. Aim to finish your work with about <b>1–2 clean reps still available</b>.</p><p>If you’re prescribed 5 reps, but after rep 3 you know you’ve only got another 1–2 good reps in you, <b>rack the bar and record 3</b>. BVOM will handle the result.</p><p><b>Don’t attempt a rep just to prove you can’t do it.</b></p><p>This is often described as <b>RPE/RIR</b>. Two reps left in the tank is roughly RPE 8. You don’t need to judge it perfectly — you’ll get better at it with experience.</p></div><div class="infoCard"><h3>GPP (General Physical Preparedness) / Conditioning</h3><p><b>GPP is a tracker, not a program.</b></p><p>Use it alongside your strength training, after a workout, or on a separate day. Track whatever matters — sets, reps, load, distance, time or rounds.</p><p>BVOM remembers what you did last time but doesn’t automatically progress your GPP. Repeat it, improve it, or change it as you choose.</p><p><b>Record → remember → you decide.</b></p></div>`;
+ const extra=bvomLocale()==='ja'?`<div class="infoCard"><h3>プログラムの選び方</h3><p data-info-program="lp"><b>LP / RPT</b> は推奨の開始プログラムです。シンプルなワークアウトごとの進行で筋力を伸ばし、個々のリフトがストレートセットを卒業した時だけRPTへ移行できます。すべてのリフトを同時に変更する必要はありません。</p><p data-info-program="hlm"><b>HLM RPT</b> は中級者向けの3セッション構成です。<b>Heavy</b> は週の主なボリュームと負荷を作り、スクワットとベンチの進行を決めます。<b>Light</b> はアクティブリカバリーのスクワットにデッドリフトとプレスを組み合わせます。<b>Medium</b> はより重いスクワットとベンチ、その後のスパインロウで強度を表現します。Heavy は必ずしもバー重量が最も重い日という意味ではなく、トレーニングストレスが最も高い日です。H → L → M が通常の順番ですが、曜日には固定されません。</p><p data-info-program="hlm">スクワットやベンチの進行が難しくなると、BVOMはそのリフトを<b>5回 → 4回 → 3回 → 2回</b>へ進めることを提案できます。BVOMは提案し、決めるのはあなたです。任意のヘビーシングルは練習／高重量への慣れのためで、進行判定には使いません。</p><p data-info-program="split"><b>4-Day Split</b> はLight dayを使わず、同じH/M RPTの考え方を使う中級者向けの別案です。Workout 1 はベンチ＋ロウ、Workout 2 はスクワット、Workout 3 はベンチ＋プレス、Workout 4 はスクワット＋デッドリフト。Workout 1 のベンチとWorkout 2 のスクワットが進行を決め、Workout 3と4で強度を表現します。月 / 火 / 木 / 金を推奨しますが、実際にはトレーニングするたびに1 → 2 → 3 → 4の順に進むだけです。</p><p data-info-program="custom"><b>カスタムトレーニング — 自分で組む</b> は、自分でプログラムを組みたい人向けです。最大7日分のトレーニング日を作り、コンパウンド種目、補助種目、GPPを選べます。BVOMは記録して覚えますが、自動進行は行いません。<b>記録する → 覚えておく → あなたが決める。</b></p><p data-info-program="bb1"><b>ボディビルディング — 8週間トレーニングブロック</b> は、筋力重視のトレーニングから一度変化をつけながら、引き続き段階的にトレーニングしたい人向けです。24回の完了ワークアウトで構成され、Workout AとWorkout Bを交互に行い、より幅広い種目とレップ範囲を使います。ほとんどのセットは限界まで行わず、あと2回ほど良いレップができる余力を残し、BVOMが実際のパフォーマンスに基づいて進行を調整します。</p><p data-info-program="bb1">ボディビルディング形式のトレーニングに慣れていない、または開始重量が分からない場合は、任意の<b>オンランプ</b>でWorkout 1の前に適切な開始重量を見つけることができます。オンランプは24回のワークアウトには含まれません。開始重量が分かっている経験者はスキップできます。</p><p data-bb2-programme-info data-info-program="bb2"><b>${bvomEsc(bvomBb2ProgrammeInfo().title)}</b><br>${bvomEsc(bvomBb2ProgrammeInfo().body)}</p><p><b>RPE</b> はHLM、4-Day、カスタムトレーニングの各ワークセットごとに記録されます。初期値は8で、6〜10の範囲を0.5刻みで調整できます。RPEは記録のためだけに使われ、BVOMの進行判定には影響しません。</p><p>BVOMでは足りなくなったら、より高度な筋力トレーニング方法やプログラミングを調べるか、経験豊富なストレングスコーチに相談することも検討してください。</p></div><div class="infoCard"><h3>マイクロプレート</h3><p>マイクロプレートは特にプレスで役立ち、体格が小さい人や筋力がまだ低い人が、スクワット、ベンチ、補助種目でもより細かな重量増加を使いたい場合に有効です。Equipmentでジムにあるマイクロプレートを選び、その後リフトや補助種目ごとに<b>Standard</b>または<b>Microplates</b>を選べます。</p><p>ジムにマイクロプレートがない場合は、小さなセットを購入してジムバッグに入れておくことをBVOMはおすすめします。</p></div><div class="infoCard"><h3>しっかり鍛える — 限界まで追い込まない</h3><p>BVOMは、バーが止まるまでレップを無理に続けることを前提にしていません。</p><p>重量が重くなったら、<b>あと何回きれいなレップができるか</b>を判断する感覚を身につけてください。ワークセットは<b>あと1〜2回きれいにできる余力</b>を残して終えることを目指します。</p><p>5回の指示でも、3回目の時点であと1〜2回しか良いレップが残っていないと分かるなら、<b>バーを戻して3回と記録してください</b>。BVOMがその結果を処理します。</p><p><b>できないことを証明するためだけに次の1回へ挑まない。</b></p><p>これはよく<b>RPE / RIR</b>と呼ばれます。あと2回できる余力は、おおよそRPE 8です。最初から完璧に判断する必要はありません。経験とともに上達します。</p></div><div class="infoCard"><h3>GPP（General Physical Preparedness）/ コンディショニング</h3><p><b>GPPはプログラムではなく、記録するための機能です。</b></p><p>筋力トレーニングと一緒に、ワークアウト後に、または別の日にも使えます。セット、回数、重量、距離、時間、ラウンドなど、必要な項目を記録できます。</p><p>BVOMは前回の内容を記憶しますが、GPPを自動的に進行させることはありません。同じ内容を繰り返すか、改善するか、変更するかはあなたが決めます。</p><p><b>記録する → 覚えておく → あなたが決める。</b></p></div>`:`<div class="infoCard"><h3>Choose the right program</h3><p data-info-program="lp"><b>LP / RPT</b> is the recommended starting point. Build strength with simple workout-to-workout progression; when an individual lift outgrows straight sets, BVOM can move that lift into RPT without forcing every lift to change.</p><p data-info-program="hlm"><b>HLM RPT</b> is the three-session intermediate option. <b>Heavy</b> builds the week's main volume/stress and drives Squat and Bench progression. <b>Light</b> is active-recovery Squat followed by Deadlift and Press. <b>Medium</b> expresses intensity with heavier Squat and Bench work, then Supine Row. Heavy means the highest training stress — not necessarily the heaviest barbell weight. H → L → M is the normal rotation, but BVOM does not lock you to weekdays.</p><p data-info-program="hlm">As Squat or Bench becomes harder to progress, BVOM can suggest moving that lift from <b>5s → 4s → 3s → 2s</b>. BVOM recommends; you decide. Optional heavy singles are practice/exposure only and never determine progression.</p><p data-info-program="split"><b>4-Day Split</b> is a parallel intermediate option using the same H/M RPT principles without a Light day. Workout 1 is Bench + Row, Workout 2 is Squat, Workout 3 is Bench + Press, and Workout 4 is Squat + Deadlift. Bench in Workout 1 and Squat in Workout 2 drive progression; Workouts 3 and 4 express intensity. Mon / Tue / Thu / Fri is recommended, but BVOM simply continues 1 → 2 → 3 → 4 whenever you train.</p><p data-info-program="custom"><b>Custom Training — Build Your Own</b> is for lifters who want to program for themselves. Build up to seven training days, choose your compounds, accessories and GPP, and BVOM records and remembers what you do. There is no automatic progression: <b>Record → remember → you decide.</b></p><p data-info-program="bb1"><b>Bodybuilding — 8-Week Training Block</b> is for lifters who want a break from strength-focused training while continuing to train progressively. The block runs for 24 completed workouts, alternating Workout A and Workout B across a wider range of exercises and rep ranges. Most work is performed with about two good reps left rather than training to failure, and BVOM adjusts progression from your actual performance.</p><p data-info-program="bb1">If you're unfamiliar with bodybuilding-style training or aren't sure what loads to use, the optional <b>On-Ramp</b> helps establish sensible starting loads before Workout 1. It does not count toward the 24-workout block. Experienced lifters who already know their starting loads can skip it.</p><p data-bb2-programme-info data-info-program="bb2"><b>${bvomEsc(bvomBb2ProgrammeInfo().title)}</b><br>${bvomEsc(bvomBb2ProgrammeInfo().body)}</p><p><b>RPE</b> is recorded per working set in HLM, 4-Day and Custom Training. It defaults to 8 and can be adjusted from 6–10 in 0.5 steps. RPE is a training record only — it never changes BVOM's progression decisions.</p><p>When BVOM is no longer enough, consider researching more advanced strength-training methods and programming techniques, or working with an experienced strength coach.</p></div><div class="infoCard"><h3>Microplates</h3><p>Microplates are especially useful for Press and for smaller or weaker lifters who may benefit from finer jumps on Squat, Bench and accessories too. Select the microplates your gym has in Equipment, then choose <b>Standard</b> or <b>Microplates</b> separately for each lift or accessory.</p><p>If your gym doesn't have microplates, BVOM recommends buying a small set and keeping them in your gym bag.</p></div><div class="infoCard"><h3>Train hard — not to failure</h3><p>BVOM is not designed around grinding out reps until the bar stops moving.</p><p>As the weight gets heavy, learn to judge how many <b>good reps you have left in the tank</b>. Aim to finish your work with about <b>1–2 clean reps still available</b>.</p><p>If you’re prescribed 5 reps, but after rep 3 you know you’ve only got another 1–2 good reps in you, <b>rack the bar and record 3</b>. BVOM will handle the result.</p><p><b>Don’t attempt a rep just to prove you can’t do it.</b></p><p>This is often described as <b>RPE/RIR</b>. Two reps left in the tank is roughly RPE 8. You don’t need to judge it perfectly — you’ll get better at it with experience.</p></div><div class="infoCard"><h3>GPP (General Physical Preparedness) / Conditioning</h3><p><b>GPP is a tracker, not a program.</b></p><p>Use it alongside your strength training, after a workout, or on a separate day. Track whatever matters — sets, reps, load, distance, time or rounds.</p><p>BVOM remembers what you did last time but doesn’t automatically progress your GPP. Repeat it, improve it, or change it as you choose.</p><p><b>Record → remember → you decide.</b></p></div>`;
  const el=document.querySelector('#info');
+ const open=new Set([...el.querySelectorAll('details[open]')].map(group=>group.id));
  if(bvomLocale()==='ja'){const feedbackMarker='<div class="infoCard"><h3>BVOMをより良くするために</h3>';const feedbackAt=base.indexOf(feedbackMarker);el.innerHTML=feedbackAt>=0?base.slice(0,feedbackAt)+extra+base.slice(feedbackAt):base+extra;}else{const feedbackMarker='<div class="infoCard"><h3>Help make BVOM better</h3>';const feedbackAt=base.indexOf(feedbackMarker);el.innerHTML=feedbackAt>=0?base.slice(0,feedbackAt)+extra+base.slice(feedbackAt):base+extra;}
  const order=bvomLocale()==='ja'
   ?['BVOMを選ぶ理由','誰のためのプログラム？','プログラムの選び方','BVOMの基本スケジュール','漸進性過負荷','RPT','回数を落とした時','停滞する前に確認','休み明け','しっかり鍛える — 限界まで追い込まない','軽く始める','ウォームアップは準備。疲労させない','補助種目','GPP（General Physical Preparedness）/ コンディショニング','筋力バランスガイド','マイクロプレート','リフトを学ぶ','種目は絶対ではない','BVOMをインストール','バックアップと同期','BVOMが考える。あなたは持ち上げる。','BVOMをより良くするために','__IMPORTANT__']
   :['Why BVOM?','Who is BVOM for?','Choose the right program','How to run BVOM','Progressive overload','Reverse pyramid training','When you miss a rep','Before you deload','Returning after time away','Train hard — not to failure','Leave your ego at the door',"Warm up — don't wear yourself out",'Accessories','GPP (General Physical Preparedness) / Conditioning','Strength Balance Guidance','Microplates','Learn the lifts',"The lifts aren't law",'Install BVOM','Backup & sync','BVOM does the thinking. You do the lifting.','Help make BVOM better','__IMPORTANT__']; const cards=[...el.querySelectorAll(':scope > .infoCard')],rank=new Map(order.map((x,i)=>[x,i]));
  const infoKey=c=>c.querySelector('h3')?.textContent||(c.textContent.trim().startsWith('Important:')||c.textContent.trim().startsWith('重要:')?'__IMPORTANT__':'');
- cards.sort((a,b)=>(rank.get(infoKey(a))??999)-(rank.get(infoKey(b))??999)).forEach(c=>el.appendChild(c));
+ const byRank=new Map(cards.map(card=>[rank.get(infoKey(card)),card]));
+ if(!byRank.has(2))return;
+ const programmes=byRank.get(2),hero=el.querySelector('.infoHero');
+ const groups=[
+  ['lp','LP / RPT',[3,4,5,6,7]],
+  ['hlm','HLM RPT',[]],
+  ['split','4-Day Split',[]],
+  ['custom',hlmTxt('Custom Training','カスタムトレーニング'),[]],
+  ['bb1',hlmTxt('Bodybuilding 1','ボディビルディング1'),[]],
+  ['bb2',hlmTxt('Bodybuilding 2','ボディビルディング2'),[]],
+  ['training',hlmTxt('Training and recovery','トレーニングと回復'),[8,9,10,11,14]],
+  ['optional',hlmTxt('Accessories and GPP','補助種目とGPP'),[12,13]],
+  ['equipment',hlmTxt('Lifts and equipment','リフトと器具'),[15,16,17]],
+  ['app',hlmTxt('Install, backup and sync','インストール・バックアップ・同期'),[18,19]],
+  ['about',hlmTxt('About BVOM','BVOMについて'),[0,1,2,20,21,22]]
+ ];
+ const index=document.createElement('nav');index.className='infoCard bvomInfoIndex';
+ const title=hlmTxt('Training reference','トレーニングガイド');
+ index.setAttribute('aria-label',title);
+ index.innerHTML=`<h2>${title}</h2><ul>${groups.map(([id,label])=>`<li><a href="#info-${id}">${label}</a></li>`).join('')}</ul>`;
+ el.prepend(index);
+ for(const [id,label,topics] of groups){
+  const group=document.createElement('details');group.id='info-'+id;
+  group.className='infoCard bvomDisclosure bvomInfoGroup';group.open=open.has(group.id);
+  const summary=document.createElement('summary');summary.textContent=label;group.appendChild(summary);
+  if(id==='about'&&hero)group.appendChild(hero);
+  const paragraphs=[...programmes.querySelectorAll('[data-info-program="'+id+'"]')];
+  if(paragraphs.length){
+   const description=document.createElement('div');description.className='infoCard';
+   for(const paragraph of paragraphs)description.appendChild(paragraph);
+   group.appendChild(description);
+  }
+  for(const topic of topics)if(byRank.has(topic))group.appendChild(byRank.get(topic));
+  el.appendChild(group);
+ }
+ index.addEventListener('click',event=>{
+  const link=event.target.closest('a');
+  if(!link)return;
+  const group=document.getElementById(link.hash.slice(1));
+  if(!group)return;
+  event.preventDefault();group.open=true;
+  const summary=group.querySelector('summary');summary.focus({preventScroll:true});summary.scrollIntoView({block:'start'});
+ });
 }
 function bvomWorkoutProgramTag(){return isFourDay()?'fourday':isHLM()?'hlm':'lprpt'}
 const BVOM_HISTORY_CORE_META=Object.freeze({
@@ -4277,7 +4406,7 @@ function saveWorkoutRecord(incomplete,note,duration,volume){
 function bvomTextCopyModal(title,text){
  const o=document.createElement('div');o.className='bvomModalOverlay';
  const help=hlmTxt('Tap and hold to copy if your device cannot share directly.','端末から直接共有できない場合は、長押ししてコピーしてください。');
- o.innerHTML=`<div class="bvomModal"><h3>${title}</h3><div class="sub">${help}</div><textarea data-copy readonly style="width:100%;min-height:180px;box-sizing:border-box;margin:8px 0 12px;padding:10px;border:1px solid #bbb;border-radius:9px;font:inherit"></textarea><div class="modalActions"><button type="button" data-close>${hlmTxt('CLOSE','閉じる')}</button><button type="button" class="primary" data-select>${hlmTxt('SELECT ALL','すべて選択')}</button></div></div>`;
+ o.innerHTML=`<div class="bvomModal"><h3>${title}</h3><div class="sub">${help}</div><textarea data-copy readonly style="width:100%;min-height:180px;box-sizing:border-box;margin:8px 0 12px;padding:10px;border-radius:9px;font:inherit"></textarea><div class="modalActions"><button type="button" data-close>${hlmTxt('CLOSE','閉じる')}</button><button type="button" class="primary" data-select>${hlmTxt('SELECT ALL','すべて選択')}</button></div></div>`;
  document.body.appendChild(o);const ta=o.querySelector('[data-copy]');ta.value=String(text||'');
  o.querySelector('[data-close]').onclick=()=>o.remove();o.querySelector('[data-select]').onclick=()=>{ta.focus();ta.select();};
 }
@@ -4669,7 +4798,7 @@ function bvomFtRenderAccessories(){const base=renderAccessories17();return base.
 function bvomFtRenderWarm(){bvomFtEnsure();let h=`<div class="toprow"><div><b>${hlmTxt('Custom Training Warm-up','カスタムトレーニング ウォームアップ')}</b><div class="small">${hlmTxt("Guidance only — generated from each compound's current working/top load.",'目安です。各コンパウンド種目の現在のワーク／トップ重量から作成されます。')}</div></div></div>`;const a=bvomFtCurrentCompounds();if(!a.length)h+=`<div class="card small">${hlmTxt('Add a compound and working weight to see warm-up guidance.','コンパウンド種目とワーク重量を追加すると、ウォームアップの目安が表示されます。')}</div>`;for(const c of a){if(!Number(c.weight)>0)continue;const p=bvomFtPlan(c),top=p.find(x=>x.top),target=Number(top?.load||c.weight),sets=warmups(target,c.lift),wd=(state.warmupDone||{})[state.day+'|'+c.lift]||{};h+=`<div class="exercise"><div class="exhead"><div class="exname">${bvomEsc(liftLabel(c.lift))}</div><div class="weight">${fmt(target)} ${unitLabel()}</div></div>`;if(!sets.length)h+=`<p class="small">${bvomT('warmup.none')}</p>`;sets.forEach(([x,r],i)=>h+=`<div class="warmrow"><button class="set ${wd[i]?'done':''}" onclick="completeWarmup('${c.lift}',${i},${sets.length},this)">✓</button><b>${fmt(x)}×${r}</b><span class="plates">${plateTextFor(c.lift,x)}</span></div>`);h+=`<div class="warmrow"><span></span><b style="color:var(--accent)">${fmt(target)} ${unitLabel()}</b><span class="plates">${hlmTxt('working/first RPT weight','ワーク重量／最初のRPT重量')} · ${plateTextFor(c.lift,target)}</span></div></div>`}document.querySelector('#warmup').innerHTML=h}
 
 const bvomFtBaseChooseProgramMode=chooseProgramMode;
-chooseProgramMode=function(mode){if(!bvomWorkoutActionAllowed())return;if(mode==='free'){if(!bvomBb2OnLegacyProgramChoice())return;state.programMode='free';bvomFtEnsure();state.day=String(state.freeTraining.selectedDay);save();showSetup();return}return bvomFtBaseChooseProgramMode(mode)};
+chooseProgramMode=function(mode){if(!bvomWorkoutActionAllowed())return;if(mode==='free'){if(!bvomBb2OnLegacyProgramChoice())return;state.programMode='free';bvomFtEnsure();state.day=String(state.freeTraining.selectedDay);save();showSetup();bvomPositionSetup('button[onclick="completeSetup()"]');return}return bvomFtBaseChooseProgramMode(mode)};
 const bvomFtBaseShowSetup=showSetup;
 showSetup=function(){if(!isFreeTraining()){bvomFtBaseShowSetup();const row=document.querySelector("#setup button[onclick*=\"chooseProgramMode('fourday')\"]")?.parentElement;if(row&&!row.querySelector('[data-ft-program]')){const b=document.createElement('button');b.className='choice';b.dataset.ftProgram='1';b.textContent=hlmTxt('CUSTOM TRAINING','カスタムトレーニング');b.onclick=()=>chooseProgramMode('free');row.appendChild(b);const info=row.parentElement?.querySelector('.small');if(info)info.innerHTML+=hlmTxt('<br><br><b>Custom Training — Build Your Own</b><br>Build your own training days. BVOM records and remembers; you decide what changes next.','<br><br><b>カスタムトレーニング — 自分で組む</b><br>自分のトレーニング日を作成します。BVOMは記録して覚えますが、次の変更はあなたが決めます。')}return}ensureHLM();bvomFtEnsure();document.querySelector('#app').classList.add('hidden');const el=document.querySelector('#setup');el.classList.remove('hidden');el.innerHTML=`<div class="setupBee"><img src="./icon-192.png" alt="Power Bee"><div class="setupBeeTag">BEST VERSION OF MYSELF</div></div><div class="card"><b>${bvomT('language.title')}</b><div class="choiceRow" style="margin-top:10px"><button class="choice ${bvomLocale()==='en'?'on':''}" onclick="changeLanguage('en')">English</button><button class="choice ${bvomLocale()==='ja'?'on':''}" onclick="changeLanguage('ja')">日本語</button></div></div><div class="card"><b>${bvomT('setup.unitsTitle')}</b><div class="choiceRow" style="margin-top:10px"><button class="choice ${!isLb()?'on':''}" onclick="changeUnits('kg',true)">${bvomT('setup.kg')}</button><button class="choice ${isLb()?'on':''}" onclick="changeUnits('lb',true)">${bvomT('setup.lb')}</button></div></div><div class="card"><b>${hlmTxt('Choose your program','プログラムを選択')}</b><div class="choiceRow" style="margin-top:10px"><button class="choice" onclick="chooseProgramMode('lprpt')">LP / RPT</button><button class="choice" onclick="chooseProgramMode('hlm')">HLM RPT</button><button class="choice" onclick="chooseProgramMode('fourday')">4-Day Split</button><button class="choice on" onclick="chooseProgramMode('free')">${hlmTxt('CUSTOM TRAINING','カスタムトレーニング')}</button></div><div class="small" style="margin-top:14px;line-height:1.5"><b>${hlmTxt('Custom Training — Build Your Own','カスタムトレーニング — 自分で組む')}</b><br>${hlmTxt('Build your own training days. Choose your lifts, sets and reps. BVOM records and remembers what you do without automatic progression.','自分のトレーニング日を作成し、種目・セット・回数を選びます。BVOMは自動進行を行わず、実際に行った内容を記録して覚えます。')}</div></div><button class="primary wide" onclick="completeSetup()">${hlmTxt('START CUSTOM TRAINING','カスタムトレーニングを開始')}</button>`};
 const bvomFtBaseCompleteSetup=completeSetup;
@@ -4928,13 +5057,13 @@ renderSettings=function(){
  const card=document.createElement('div');card.className='card';
  card.innerHTML=`<b>${hlmTxt('Timer sound','タイマー音')}</b><div class="toggle"><input type="checkbox" ${state.timerSound!==false?'checked':''}><span>${hlmTxt('Ding at 3, 5 and 10 minutes','3、5、10分で音を鳴らす')}</span></div><div class="small">${hlmTxt('Turn this off if you prefer silent timer alerts. Vibration is unchanged.','タイマー音を消したい場合はオフにしてください。バイブレーションは変更されません。')}</div>`;
  card.querySelector('input').onchange=e=>{if(!bvomWorkoutActionAllowed()){e.target.checked=state.timerSound!==false;return}const before=state.timerSound;state.timerSound=e.target.checked;if(!save({durable:true})){state.timerSound=before;e.target.checked=before!==false}};
- el.appendChild(card);
+ el.querySelector('[data-settings-group="training"]')?.appendChild(card);
 };
 
 function renderAll(){bvomApplyShell();bvomResumeRequiredCoreChoices();renderWorkout();renderWarm();renderHistory();renderInfo();renderSettings();bvomPresentPendingHlmRepChoice();bvomPresentPendingCloseMissChoice();bvomRenderDeferredSetupStatus();setTimeout(maybeShowLayoffCoach,150)}
 // Apply shell once before the normal boot handlers run.
 bvomApplyShell();
-document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on"));t.classList.add("on");["workout","warmup","history","info","settings"].forEach(x=>document.querySelector("#"+x).classList.toggle("hidden",x!==t.dataset.tab));if(t.dataset.tab==="history")renderHistory();});
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on"));t.classList.add("on");["workout","warmup","history","info","settings"].forEach(x=>document.querySelector("#"+x).classList.toggle("hidden",x!==t.dataset.tab));if(t.dataset.tab==="history")renderHistory();if(['info','settings'].includes(t.dataset.tab))window.scrollTo(0,0);});
 
 (function bvomEnableSwipeTabsV24(){
  const order=['workout','warmup','history','info','settings'];let sx=0,sy=0,st=0,ignore=false;
@@ -4963,7 +5092,7 @@ function bvomBbSetupValue(id,key,val){const d=bvomBbSetupDraft(),p=d.progression
 function bvomBbSetupPrescriptionText(id){const x=BVOM_BB_EXERCISES[id],method=bvomBbLoadingMethod(x);if(method==='stable_primary')return hlmTxt('3 sets · Top set 6–8 reps · 2 back-off sets up to 10','全3セット。トップセット6～8回、バックオフ2セットは各10回まで。');if(method==='demanding_primary')return hlmTxt('3 sets · Top set 6–8 reps · 2 back-off sets up to 8','全3セット。トップセット6～8回、バックオフ2セットは各8回まで。');if(method==='double_progression'||method==='double_progression_3set'){const r=x.repRange||[10,15],sets=method==='double_progression_3set'?3:(Number(x.sets)||2);return hlmTxt(`${sets} × ${r[0]}–${r[1]} reps`,`${sets}セット × ${r[0]}～${r[1]}回`);}if(method==='bodyweight_assistance'){const r=x.repRange||[],sets=Number(x.sets)||2;return hlmTxt(`${sets} × ${r[0]}–${r[1]} reps · progress reps / difficulty`,`${sets}セット × ${r[0]}～${r[1]}回。回数や難易度を調整します。`);}return ''}
 function bvomBbRenderFoundationSetup(){const el=document.querySelector('#setup');document.querySelector('#app').classList.add('hidden');el.classList.remove('hidden');const d=bvomBbSetupDraft();let rows='';for(const slot of Object.keys(BVOM_BB_SLOT_DEFAULTS)){const id=d.selections[slot],x=BVOM_BB_EXERCISES[id],opts=bvomBbExerciseOptions(slot).map(o=>`<option value="${o.id}" ${o.id===id?'selected':''}>${bvomEsc(bvomBbExerciseLabel(o.id))}</option>`).join(''),p=d.progression[id]||{},numeric=bvomBbNumericExercise(id);rows+=`<div class="card"><b>${slot} · ${bvomBbSlotLabel(slot)}</b><select style="width:100%;margin-top:8px" onchange="bvomBbSetupSelect('${slot}',this.value)">${opts}</select><div class="small" style="margin-top:6px"><b>${bvomBbSetupPrescriptionText(id)}</b></div>${numeric?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px"><label>${hlmTxt('Starting load','開始重量')} (${unitLabel()})<input type="number" min="0.25" step=".25" value="${p.load??''}" placeholder="${hlmTxt('Set on first workout','初回に設定')}" oninput="bvomBbSetupValue('${id}','load',this.value)"></label><label>${hlmTxt('Smallest increase','最小の重量増加幅')} (${unitLabel()})<input type="number" min="0.01" step=".01" value="${p.increment??''}" placeholder="${hlmTxt('e.g. 2.5','例 2.5')}" oninput="bvomBbSetupValue('${id}','increment',this.value)"></label></div>`:`<div class="small" style="margin-top:8px">${hlmTxt('Progress by reps and exercise difficulty — BVOM will not invent a kilogram value.','回数と種目の難しさを目安に調整します。')}</div>`}</div>`}
 const active=isBodybuilding()&&state.bodybuilding?.status==='active',n=Math.min(24,Number(state.bodybuilding?.completedSessions||0)+1);el.innerHTML=`<div class="setupBee"><img src="./icon-192.png" alt="Power Bee"><div class="setupBeeTag">BEST VERSION OF MYSELF</div></div><div class="card"><b>${active?hlmTxt(`EDIT BODYBUILDING · WORKOUT ${n} OF 24`,`ボディビルディングの設定 · 全24回中${n}回目`):hlmTxt('BODYBUILDING · 24 WORKOUTS','ボディビルディング · 全24回')}</b><div class="small" style="margin-top:8px;line-height:1.5">${active?hlmTxt('Switching exercises preserves progress for each exercise. Returning to one restores its previous working weight and progression; the workout count stays the same.','種目を変更しても、完了回数と種目ごとの進捗は保持されます。以前の種目に戻すと、その種目の使用重量と進捗を引き継ぎます。'):hlmTxt('Three lifting sessions per week, alternating A / B. Choose one exercise for each job. <b>Choose a starting weight you expect will let you reach the shown rep range with about two good reps left.</b> It doesn’t need to be perfect — BVOM will calibrate it from your first workout. Stop before the rep ceiling if needed. Browsing here does not change your current program.','週3回、AとBを交互に行います。各枠から種目を1つ選んでください。<b>指定された回数で、フォームを保ってあと2回できる余力が残る重量を選びます。</b> 初回の結果を基にBVOMが調整します。必要に応じて回数の上限より手前で切り上げてください。設定を見ている間は、現在のプログラムは変わりません。')}</div></div>${rows}<button class="primary wide" onclick="bvomBbCommitSetup()">${active?hlmTxt('SAVE BODYBUILDING CHANGES','設定を保存'):hlmTxt('START BODYBUILDING','ボディビルディングを開始')}</button><button class="secondary wide" onclick="bvomBbCancelSetup()">${hlmTxt('CANCEL','キャンセル')}</button>`}
-function bvomBbCancelSetup(){window.__bvomBbSetupDraft=null;bvomBbPreviewing=false;bvomBbBaseShowSetup();bvomBbInjectProgramChoice()}
+function bvomBbCancelSetup(){window.__bvomBbSetupDraft=null;bvomBbPreviewing=false;bvomBbBaseShowSetup();bvomBbInjectProgramChoice();bvomSetupArrangePicker();bvomPositionSetup('.setupProgramPicker',true)}
 function bvomBbCommitSetup(){if(!bvomWorkoutActionAllowed())return;if(bvomStateWorkoutActive(state)){bvomNotice(hlmTxt('Finish or clear the active workout before switching programs.','プログラムを切り替える前に、進行中のワークアウトを終了または中止してください。'));return}const d=bvomBbSetupDraft();for(const slot of Object.keys(BVOM_BB_SLOT_DEFAULTS)){const id=d.selections[slot],p=d.progression[id]||{};if(bvomBbNumericExercise(id)&&(!(Number(p.load)>0)||!(Number(p.increment)>0))){bvomNotice(`Enter a starting load and smallest practical increase for ${BVOM_BB_EXERCISES[id].name}.`);return}}state.programMode='bodybuilding';const b=bvomBbEnsure(),restartingCompleted=b.status==='completed';if(restartingCompleted)b.completedSessions=0;for(const [id,next] of Object.entries(d.progression)){const prev=b.progression?.[id],nextLoad=Number(next?.load),prevLoad=Number(prev?.load??prev?.topLoad);if(next&&Number.isFinite(nextLoad)&&Number.isFinite(prevLoad)&&Math.abs(nextLoad-prevLoad)>1e-9)delete next.previousSuccessfulLoad}b.selections={...d.selections};b.progression=d.progression;b.status='active';b.startedAt=b.startedAt||new Date().toISOString();state.configured=true;state.day=bvomBbDay();window.__bvomBbSetupDraft=null;bvomBbPreviewing=false;save();showApp();renderAll()}
 
 // Bodybuilding / On-Ramp presentation-only dialogs. No state mutation until affirmative.
@@ -4990,7 +5119,7 @@ function bvomBbUiModal(title,body,options,acceptAction,actionLabel=hlmTxt('CONTI
  document.body.appendChild(o);(Array.isArray(options)?field:o.querySelector('[data-accept]')).focus();return o;
 }
 function bvomBbOpenFoundationSetup(){if(!bvomWorkoutActionAllowed())return;
- const run=()=>{if(!bvomWorkoutActionAllowed())return;window.__bvomBbSetupDraft=null;bvomBbPreviewing=true;bvomBbRenderFoundationSetup()};
+ const run=()=>{if(!bvomWorkoutActionAllowed())return;window.__bvomBbSetupDraft=null;bvomBbPreviewing=true;bvomBbRenderFoundationSetup();bvomPositionSetup('.card',true)};
  if(isBodybuilding()&&state.bodybuilding?.status==='active'){const n=Math.min(24,Number(state.bodybuilding.completedSessions||0)+1);
   bvomBbUiModal(hlmTxt('EDIT BODYBUILDING','ボディビルディングの設定を編集'),hlmTxt(`You're on Workout ${n} of 24. Switching exercises preserves progress for each exercise; your workout count is kept. Continue to edit Bodybuilding?`,`全24回中${n}回目です。種目を変更しても、種目ごとの進捗とワークアウトの完了回数は保持されます。設定の編集を続けますか？`),null,run,hlmTxt('CONTINUE','続ける'));return}
  run()}
@@ -5639,7 +5768,6 @@ function bvomShowServiceWorkerUpdate(reg){
  let el=document.getElementById('bvomUpdateBanner');
  if(!el){
   el=document.createElement('div');el.id='bvomUpdateBanner';
-  el.style.cssText='position:fixed;left:10px;right:10px;bottom:10px;z-index:260000;background:#171717;color:#fff;border:1px solid #777;border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:center;justify-content:space-between;box-shadow:0 4px 20px rgba(0,0,0,.35)';
   el.innerHTML='<span style="font-size:13px" data-bvom-update-status>'+hlmTxt('BVOM update ready. Reload when you are not in a workout.','BVOMの更新準備ができました。ワークアウト中でないときに再読み込みしてください。')+'</span><button type="button" class="primary" data-bvom-update>'+hlmTxt('UPDATE & RELOAD','更新して再読み込み')+'</button>';
   document.body.appendChild(el);
   // Dialogs are direct body children. Observe only their arrival/dismissal while
@@ -6083,7 +6211,7 @@ function bvomOpenDeferredDraft(){
  if(!bvomDeferredIdleAllowed())return false;
  bvomDeferredOffer?.remove();bvomDeferredOffer=null;
  bvomDeferredDraft={raw:localStorage.getItem(BVOM_DATA_KEY),intent:JSON.stringify(state.setupAfterFinish),mode:state.programMode,weights:{...state.weights},profile:state.profile,balance:state.balance};
- window.__bvomBbSetupDraft=null;bvomRenderDeferredDraft();return true;
+ window.__bvomBbSetupDraft=null;bvomRenderDeferredDraft();bvomPositionSetup('.card',true);return true;
 }
 function bvomDeferredDraftMode(mode){
  if(!bvomDeferredIdleAllowed()||!bvomDeferredDraft||!['lprpt','hlm','fourday','free','bodybuilding'].includes(mode))return;
@@ -6417,6 +6545,23 @@ bvomBbRenderFoundationSetup=function(...args){
  const result=bvomBb2BaseBb1Setup(...args);
  bvomBb2InjectProgramChoice();return result;
 };
+function bvomSetupArrangePicker(){
+ const setup=document.querySelector('#setup');
+ const picker=setup.querySelector("button[onclick*=\"chooseProgramMode('lprpt')\"]")?.closest('.card');
+ if(picker){picker.classList.add('setupProgramPicker');setup.prepend(picker)}
+}
+function bvomPositionSetup(target,top=false){
+ const setup=document.querySelector('#setup');
+ if(setup.classList.contains('hidden'))return;
+ const section=setup.querySelector(target);
+ if(!section)return;
+ const heading=section.matches?.('button,b,summary,h2,h3')?section:section.querySelector('h2,h3,b')||section;
+ heading.tabIndex=-1;
+ const focus=()=>{if(!setup.inert&&heading.isConnected)heading.focus({preventScroll:true})};
+ if(setup.inert)queueMicrotask(focus);else focus();
+ if(top)window.scrollTo(0,0);
+ else {section.classList.add('setupPosition');section.scrollIntoView({block:'start'});}
+}
 const bvomBb2BaseShowSetup=showSetup;
 showSetup=function(...args){
  // A selected BB2 overlay must not open the dormant BB1 exercise editor when
@@ -6424,12 +6569,13 @@ showSetup=function(...args){
  if(bvomBb2PreviewEnabled()&&bvomBb2Selected()&&isBodybuilding()){
   bvomBbBaseShowSetup();bvomBbInjectProgramChoice();
  }else bvomBb2BaseShowSetup(...args);
- bvomBb2InjectProgramChoice();
+ bvomBb2InjectProgramChoice();bvomSetupArrangePicker();
 };
 function bvomBb2ShowProgramChooser(){
  if(isBodybuilding()){
-  bvomBbBaseShowSetup();bvomBbInjectProgramChoice();bvomBb2InjectProgramChoice();
+  bvomBbBaseShowSetup();bvomBbInjectProgramChoice();bvomBb2InjectProgramChoice();bvomSetupArrangePicker();
  }else showSetup();
+ bvomPositionSetup('.setupProgramPicker',true);
 }
 async function bvomBb2OpenPreview(){
  if(!bvomBb2PreviewEnabled()||bvomBb2PreviewLoading||bvomBb2PreviewOpen||
@@ -6450,14 +6596,15 @@ async function bvomBb2OpenPreview(){
   bvomBb2NextBlockReview=false;bvomBb2NextBlockBase=null;bvomBb2NextBlockInputs={};
   bvomBb2PreviewOriginalMode=state.programMode;bvomBb2PreviewSaved=!!stored;
   bvomBb2PreviewFromWorkout=fromWorkout;
-  bvomBb2PreviewOpen=true;bvomBb2RenderPreview();
+  bvomBb2PreviewOpen=true;bvomBb2RenderPreview(true);
+  bvomPositionSetup('.bvomBb2Options',true);
  }catch(e){console.error('BB2 setup preview unavailable',e);
   bvomBeeModal(hlmTxt('BB2 UNAVAILABLE','BB2を表示できません'),
    hlmTxt('The BB2 catalogue could not be loaded. Your BVOM data has not changed.',
     'BB2カタログを読み込めませんでした。BVOMのデータは変更されていません。'));
  }finally{bvomBb2PreviewLoading=false}
 }
-function bvomBb2RenderPreview(){
+function bvomBb2RenderPreview(enter=false){
  if(!bvomBb2PreviewOpen||!bvomBb2PreviewModule||!bvomBb2PreviewDraft)return;
  const m=bvomBb2PreviewModule,setup=bvomBb2PreviewDraft;
  const projection=state.bb2?.opening?m.foldBB2Block(state.bb2.opening,state.bb2.events):null;
@@ -6475,8 +6622,23 @@ function bvomBb2RenderPreview(){
    }).join('');
   return `<div class="card" data-bb2-template="${templateId}"><b>${bvomLocale()==='ja'?bvomBb2PreviewLabel(templateId):headings[templateId]}</b><div class="small">${prescribed.prescribedCount} ${hlmTxt('working sets','ワーキングセット')} · ${hlmTxt('minimum to finish','完了に必要な最低セット数')} ${prescribed.minimumToFinish}</div>${rows}</div>`;
  }).join('');
- const el=document.querySelector('#setup');document.querySelector('#app').classList.add('hidden');el.classList.remove('hidden');
- el.innerHTML=`<div class="setupBee"><img src="./icon-192.png" alt="Power Bee"><div class="setupBeeTag">BEST VERSION OF MYSELF</div></div><div class="card"><b>${bvomBb2NextBlockReview?hlmTxt('BODYBUILDING 2 · NEXT BLOCK SETUP','ボディビルディング2 · 次のブロック設定'):bvomEsc(bvomBb2ProgrammeInfo().title)}</b>${bvomBb2NextBlockReview?'':'<p class="small" data-bb2-programme-info>'+bvomEsc(bvomBb2ProgrammeInfo().body)+'</p>'}<p class="small">${bvomBb2NextBlockReview?hlmTxt('Review your carried exercise choices, working weights and increments. Nothing changes until you confirm Start Next Block.','引き継ぐ種目・重量・増量幅を確認してください。「次のブロックを開始」を確定するまで変更されません。'):hlmTxt('Four shorter upper/lower sessions spread 42 core working sets across the week: Upper A 10, Lower A 10, Upper B 13, Lower B 9. Optional curls add 2 sets independently on each upper day. Train with controlled reps, stopping short of failure. Complete 8 credited sessions of each day (32 credits) before reviewing the next block. Setup, working weights, progression and completed History sync through your BVOM account. Workouts save on this device first and sync when connected; an unfinished workout stays safely on its original device. Export a backup before moving or resolving conflicting data.','週4回の短めの上半身／下半身トレーニングに、基本42セット（上半身A 10・下半身A 10・上半身B 13・下半身B 9）を分配します。各上半身の日に任意のカールを2セットずつ追加できます。限界まで追い込まず、丁寧に反復してください。各日8回、合計32クレジットを獲得したら次のブロックを確認します。設定・重量・進行・完了履歴はBVOMアカウントで同期します。記録はまず端末に保存され、接続後に同期されます。進行中の記録は元の端末で安全に保持します。データの移動や競合の解決前にバックアップを書き出してください。')}</p>${setup.catalogueVersion< m.BB2_BROWSER_MODULES.catalogue.CATALOGUE_VERSION && !state.bb2?.opening && !(state.bb2?.events?.length) && !(state.bb2?.sealedBlocks?.length)?'<button type="button" class="secondary wide" onclick="bvomBb2UseLatestSetup()">'+hlmTxt('USE APPROVED BB2 PROGRAMME (42 CORE SETS)','承認済みBB2プログラムを使用')+'</button>':''}${setup.catalogueVersion>=3?'<label class="toggle"><input type="checkbox" data-bb2-curls-a '+(setup.optionalUpperACurls?'checked':'')+' '+(selectionsLocked?'disabled':'')+' onchange="bvomBb2PreviewCurls(this.checked,\'upper_a\')"><span>'+hlmTxt('Include optional Upper A curls','Upper Aのカール種目を追加')+'</span></label>':''}<label class="toggle"><input type="checkbox" data-bb2-curls ${setup.optionalUpperBCurls?'checked':''} ${selectionsLocked?'disabled':''} onchange="bvomBb2PreviewCurls(this.checked)"><span>${hlmTxt('Include optional Upper B curls','Upper Bのカール種目を追加')}</span></label></div>${templates}${bvomBb2NextBlockReview?'<button type="button" class="primary wide" data-bb2-next-commit onclick="bvomBb2CommitNextBlock()">'+hlmTxt('START NEXT BLOCK · SEAL PREVIOUS','次のブロックを開始 · 前のブロックを確定')+'</button><button type="button" class="secondary wide" data-bb2-next-cancel onclick="bvomBb2CancelNextBlock()">'+hlmTxt('CANCEL NEXT-BLOCK REVIEW','次のブロックの確認をキャンセル')+'</button>':blockComplete?'<p class="small">'+hlmTxt('All 32 credits earned. Use Review Next Block Setup below to change choices without altering completed training.','32回分のクレジットを獲得しました。完了した記録を変更せず、次のブロック設定を確認できます。')+'</p>':'<button type="button" class="primary wide" data-bb2-save onclick="bvomBb2SaveSetup()">'+(bvomBb2PreviewSaved?hlmTxt('SAVED ON THIS DEVICE','この端末に保存済み'):hlmTxt('SAVE BB2 SETUP','BB2設定を保存'))+'</button>'}${bvomBb2NextBlockReview?'':bvomBb2StartForm()}<button type="button" class="secondary wide" data-bb2-back onclick="bvomBb2ClosePreview()">${hlmTxt('BACK TO PROGRAMS','プログラム選択に戻る')}</button>`;
+ const el=document.querySelector('#setup');
+ const focused=document.activeElement;
+ const control=focused&&el.contains(focused)&&['data-bb2-role','data-bb2-day','data-bb2-kind','data-bb2-curls','data-bb2-curls-a','data-bb2-save']
+  .find(attribute=>focused.hasAttribute(attribute));
+ const previousCatalogue=!enter&&el.querySelector('[data-bb2-catalogue]')?.open;
+ const catalogueOpen=bvomBb2NextBlockReview||!bvomBb2PreviewSaved||!state.bb2?.opening||previousCatalogue;
+ const start=bvomBb2NextBlockReview?'':bvomBb2StartForm();
+ const intro=`<div class="card"><h2 class="bvomBb2SetupTitle">${bvomBb2NextBlockReview?hlmTxt('BODYBUILDING 2 · NEXT BLOCK SETUP','ボディビルディング2 · 次のブロック設定'):bvomEsc(bvomBb2ProgrammeInfo().title)}</h2>${bvomBb2NextBlockReview?'':'<details class="bvomDisclosure bvomBb2Guidance" '+(!bvomBb2PreviewSaved?'open':'')+'><summary>'+hlmTxt('Programme guide','プログラムガイド')+'</summary><p class="small" data-bb2-programme-info>'+bvomEsc(bvomBb2ProgrammeInfo().body)+'</p>'}<p class="small">${bvomBb2NextBlockReview?hlmTxt('Review your carried exercise choices, working weights and increments. Nothing changes until you confirm Start Next Block.','引き継ぐ種目・重量・増量幅を確認してください。「次のブロックを開始」を確定するまで変更されません。'):hlmTxt('Four shorter upper/lower sessions spread 42 core working sets across the week: Upper A 10, Lower A 10, Upper B 13, Lower B 9. Optional curls add 2 sets independently on each upper day. Train with controlled reps, stopping short of failure. Complete 8 credited sessions of each day (32 credits) before reviewing the next block. Setup, working weights, progression and completed History sync through your BVOM account. Workouts save on this device first and sync when connected; an unfinished workout stays safely on its original device. Export a backup before moving or resolving conflicting data.','週4回の短めの上半身／下半身トレーニングに、基本42セット（上半身A 10・下半身A 10・上半身B 13・下半身B 9）を分配します。各上半身の日に任意のカールを2セットずつ追加できます。限界まで追い込まず、丁寧に反復してください。各日8回、合計32クレジットを獲得したら次のブロックを確認します。設定・重量・進行・完了履歴はBVOMアカウントで同期します。記録はまず端末に保存され、接続後に同期されます。進行中の記録は元の端末で安全に保持します。データの移動や競合の解決前にバックアップを書き出してください。')}</p>${bvomBb2NextBlockReview?'':'</details>'}</div>`;
+ const catalogue=`${setup.catalogueVersion< m.BB2_BROWSER_MODULES.catalogue.CATALOGUE_VERSION && !state.bb2?.opening && !(state.bb2?.events?.length) && !(state.bb2?.sealedBlocks?.length)?'<button type="button" class="secondary wide" onclick="bvomBb2UseLatestSetup()">'+hlmTxt('USE APPROVED BB2 PROGRAMME (42 CORE SETS)','承認済みBB2プログラムを使用')+'</button>':''}${setup.catalogueVersion>=3?'<label class="toggle"><input type="checkbox" data-bb2-curls-a '+(setup.optionalUpperACurls?'checked':'')+' '+(selectionsLocked?'disabled':'')+' onchange="bvomBb2PreviewCurls(this.checked,\'upper_a\')"><span>'+hlmTxt('Include optional Upper A curls','Upper Aのカール種目を追加')+'</span></label>':''}<label class="toggle"><input type="checkbox" data-bb2-curls ${setup.optionalUpperBCurls?'checked':''} ${selectionsLocked?'disabled':''} onchange="bvomBb2PreviewCurls(this.checked)"><span>${hlmTxt('Include optional Upper B curls','Upper Bのカール種目を追加')}</span></label>${templates}${bvomBb2NextBlockReview?'<button type="button" class="primary wide" data-bb2-next-commit onclick="bvomBb2CommitNextBlock()">'+hlmTxt('START NEXT BLOCK · SEAL PREVIOUS','次のブロックを開始 · 前のブロックを確定')+'</button><button type="button" class="secondary wide" data-bb2-next-cancel onclick="bvomBb2CancelNextBlock()">'+hlmTxt('CANCEL NEXT-BLOCK REVIEW','次のブロックの確認をキャンセル')+'</button>':blockComplete?'<p class="small">'+hlmTxt('All 32 credits earned. Use Review Next Block Setup to change choices without altering completed training.','32回分のクレジットを獲得しました。完了した記録を変更せず、次のブロック設定を確認できます。')+'</p>':'<button type="button" class="primary wide" data-bb2-save onclick="bvomBb2SaveSetup()">'+(bvomBb2PreviewSaved?hlmTxt('SAVED ON THIS DEVICE','この端末に保存済み'):hlmTxt('SAVE BB2 SETUP','BB2設定を保存'))+'</button>'}`;
+ const catalogueTitle=hlmTxt('Exercise selection and optional curls','種目の選択と任意のカール');
+ document.querySelector('#app').classList.add('hidden');el.classList.remove('hidden');
+ el.innerHTML=`<div class="bvomBb2Options">${intro}${start}<details class="card bvomDisclosure" data-bb2-catalogue ${catalogueOpen?'open':''}>
+ <summary>${catalogueTitle}</summary>${catalogue}</details><button type="button" class="secondary wide" data-bb2-back onclick="bvomBb2ClosePreview()">${hlmTxt('BACK TO PROGRAMS','プログラム選択に戻る')}</button></div>`;
+ if(control){
+  const replacement=[...el.querySelectorAll('['+control+']')].find(field=>field.getAttribute(control)===focused.getAttribute(control));
+  replacement?.focus({preventScroll:true});
+ }
 }
 function bvomBb2UseLatestSetup(){
  if(!bvomBb2PreviewEnabled()||!bvomBb2PreviewOpen||!bvomBb2PreviewModule||
@@ -6570,6 +6732,7 @@ function bvomBb2SaveSetup(){
  }
  if(bvomPersistenceBlocked())return false;
  bvomBb2PreviewSaved=true;bvomBb2RenderPreview();
+ bvomPositionSetup('[data-bb2-start-form]');
  bvomBb2AccountSyncSchedule();return true;
 }
 function bvomBb2ClosePreview(){
@@ -6880,8 +7043,8 @@ function bvomBb2CloudNotice(){
  const message=bvomCloud.conflict&&bvomBb2AccountStatus()==='conflict'?hlmTxt(
   'Bodybuilding 2 also has conflicting changes. Both journals are preserved. Resolve the other saved-data conflict first; Bodybuilding 2 will then be checked again.',
   'ボディビルディング2にも変更の競合があります。両方の記録は保持されています。先に他の保存データの競合を解決してください。その後、ボディビルディング2を再確認します。'):{
-  conflict:hlmTxt('Bodybuilding 2 has different changes on this device and in BVOM Cloud. Both copies are preserved. Export a backup using Backup / Restore below. Use Cloud Copy offers a confirmed replacement of Bodybuilding 2 only; Sync Now retries safely without overwriting the other journal.',
-   'この端末とBVOMクラウドに異なるボディビルディング2の変更があります。両方のデータは保持されています。下のバックアップ／復元からバックアップを書き出してください。「クラウドのデータを使用」はボディビルディング2のみの置き換えを確認します。「今すぐ同期」は別の記録を上書きせず安全に再試行します。'),
+  conflict:hlmTxt('Bodybuilding 2 has different changes on this device and in BVOM Cloud. Both copies are preserved. Export a backup using Backup / Restore in Settings. Use Cloud Copy offers a confirmed replacement of Bodybuilding 2 only; Sync Now retries safely without overwriting the other journal.',
+   'この端末とBVOMクラウドに異なるボディビルディング2の変更があります。両方のデータは保持されています。設定のバックアップ／復元からバックアップを書き出してください。「クラウドのデータを使用」はボディビルディング2のみの置き換えを確認します。「今すぐ同期」は別の記録を上書きせず安全に再試行します。'),
   uncertain:hlmTxt('Bodybuilding 2 saving could not be confirmed. Keep this device’s data. BVOM will retry when connected.',
    'ボディビルディング2の保存を確認できませんでした。この端末のデータを保持してください。接続後に再試行します。'),
   unavailable:hlmTxt('Bodybuilding 2 could not sync. Local workouts are preserved and will retry when connected.',
@@ -7044,7 +7207,7 @@ function bvomBb2PendingChoices(projection,onlyKey=null,inline=false){
 function bvomBb2StallActions(projection){
  const offers=Object.entries(projection?.stallSignals||{}).filter(([,s])=>s.kind==='OFFER'&&!s.dismissed);
  if(!offers.length)return '';
- return '<div class="card"><b>'+hlmTxt('OPTIONAL STALL REVIEW','停滞時の任意の見直し')+'</b><p class="small">'+hlmTxt('No change is automatic. You can also swap the exercise above or choose an easy recovery workout.','変更は自動では行われません。上の種目を変更するか、軽めの回復ワークアウトを選ぶこともできます。')+'</p>'+
+ return '<div class="card"><b>'+hlmTxt('OPTIONAL STALL REVIEW','停滞時の任意の見直し')+'</b><p class="small">'+hlmTxt('No change is automatic. You can also swap the exercise under Exercise selection or choose an easy recovery workout.','変更は自動では行われません。「種目の選択」で種目を変更するか、軽めの回復ワークアウトを選ぶこともできます。')+'</p>'+
   offers.map(([key,signal],i)=>{
    const p=projection.progress[key],reduced=bvomBb2RecoveryGrams(p);
    return '<div class="review" data-bb2-stall="'+i+'"><b>'+bvomEsc(bvomBb2PreviewLabel(key))+
@@ -7180,11 +7343,24 @@ function bvomBb2StartForm(){
   (k==='RECOVERY'?hlmTxt('OPTIONAL LOW-STRESS','任意の軽めのワークアウト'):
    k==='EXTRA_NORMAL'?hlmTxt('EXTRA WORKOUT','追加ワークアウト'):
    hlmTxt('COUNTED WORKOUT','ブロック対象ワークアウト'))+'</button>').join('');
+ const sharedSlots=p.slots.map(s=>projection?bvomBb2SharedState(projection,bvomBb2Day,s):null);
+ const needsInput=recovery||sharedSlots.some(slot=>!slot?.progress);
+ const openExercises=new Set([...document.querySelectorAll('#setup [data-bb2-exercise][open]')].map(row=>row.dataset.bb2Exercise));
  const rows=p.slots.map((s,i)=>{
-  const shared=projection?bvomBb2SharedState(projection,bvomBb2Day,s):null,progress=shared?.progress;
+  const shared=sharedSlots[i],progress=shared?.progress;
   const recommended=recovery?bvomBb2RecoveryGrams(progress):null;
-  return '<div class="review"><b>'+bvomEsc(bvomBb2PreviewLabel(s.exerciseId))+
-  '</b>'+bvomBb2PreviousExerciseReference(s,history)+(shared?.key&&shared.key!==bvomBb2Day+'|'+s.roleSlotId+'|'+s.exerciseId?'<div class="small">'+hlmTxt('Shared progression with ','進行を共有：')+bvomEsc(bvomBb2PreviewLabel(shared.key.split('|')[0]))+'</div>':'')+'<div class="small">'+(recovery?Math.ceil(s.sets/2):s.sets)+' × '+s.floor+'–'+s.ceiling+' '+hlmTxt('reps','回')+
+  const name=bvomBb2PreviewLabel(s.exerciseId),identity=bvomBb2Day+'|'+s.roleSlotId+'|'+s.exerciseId;
+  const reps=(recovery?Math.ceil(s.sets/2):s.sets)+' × '+s.floor+'–'+s.ceiling+' '+hlmTxt('reps','回');
+  const load=s.equipment==='loaded'&&progress?
+   bvomBb2DisplayLoad(recommended??progress.loadG)+' '+units+' · +'+bvomBb2DisplayLoad(progress.incrementG)+' '+units:
+   s.equipment==='bodyweight'&&progress?bvomAssistanceLabel(progress.assistance)+(progress.loadG!=null?' · +'+bvomBb2DisplayLoad(progress.loadG)+' '+units:''):'';
+  const attention=recovery?hlmTxt('Review recovery plan','回復プランを確認'):
+   !progress?(s.equipment==='loaded'?hlmTxt('Enter load and increment','重量と増量幅を入力'):hlmTxt('Review starting variation','開始時のバリエーションを確認')):'';
+  const open=!!attention||openExercises.has(identity);
+  return '<details class="bvomDisclosure bvomBb2Exercise" data-bb2-exercise="'+bvomEsc(identity)+'" '+(open?'open':'')+'><summary><b>'+
+  bvomEsc(name)+'</b><span class="bvomBb2SummaryDetail">'+bvomEsc(reps+(load?' · '+load:''))+'</span>'+
+  (attention?'<span class="bvomBb2SummaryDetail bvomBb2Attention">'+attention+'</span>':'')+
+  '</summary><div class="review"><b>'+bvomEsc(name)+'</b>'+bvomBb2PreviousExerciseReference(s,history)+(shared?.key&&shared.key!==bvomBb2Day+'|'+s.roleSlotId+'|'+s.exerciseId?'<div class="small">'+hlmTxt('Shared progression with ','進行を共有：')+bvomEsc(bvomBb2PreviewLabel(shared.key.split('|')[0]))+'</div>':'')+'<div class="small">'+(recovery?Math.ceil(s.sets/2):s.sets)+' × '+s.floor+'–'+s.ceiling+' '+hlmTxt('reps','回')+
   (recovery?' · '+hlmTxt('easy effort, at least 4 reps in reserve','軽めの強度で余力を4回以上残す'):'')+'</div>'+
   (s.equipment==='loaded'
    ? '<label>'+(recovery?hlmTxt('Recovery working','回復時の使用重量'):hlmTxt('Starting','開始重量'))+' '+units+'<input type="number" step="any" data-bb2-load="'+i+'" '+
@@ -7195,20 +7371,28 @@ function bvomBb2StartForm(){
      '<input type="text" data-bb2-assist="'+i+'" value="'+bvomEsc(progress?.assistance??'none')+'"></label>'+
      '<label>'+hlmTxt('Explicit added weight','追加重量')+' '+units+' '+hlmTxt('(optional)','（任意）')+'<input type="number" min="0" step="any" data-bb2-bw-load="'+i+'" placeholder="'+hlmTxt('BW only','自重のみ')+'"'+
      (!recovery&&progress?.loadG!=null?' value="'+bvomEsc(bvomBb2DisplayLoad(progress.loadG))+'"':'')+'></label>')+
-  '</div>';
+  '</div></details>';
  }).join('');
+ const start='<button type="button" class="primary wide bvomBb2Start" data-bb2-start onclick="bvomBb2Begin()">'+hlmTxt('START WORKOUT','ワークアウトを開始')+'</button>';
+
+ const decisions=projection?bvomBb2PendingChoices(projection):'';
+ const decisionsBeforeStart=!!decisions&&(prepared.blocked||
+  p.slots.some(slot=>bvomBb2PendingKey(projection,bvomBb2Day,slot)));
  return (projection?'<div class="card"><b>'+hlmTxt('BB2 BLOCK','BB2ブロック')+'</b><p class="small">'+
   m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.map(d=>bvomEsc(bvomBb2PreviewLabel(d))+': '+projection.quotas[d]+'/8').join(' · ')+
   '</p>'+(full?'<button type="button" class="primary wide" data-bb2-next-block onclick="bvomBb2NextBlock()">'+hlmTxt('REVIEW NEXT BLOCK SETUP','次のブロック設定を確認')+'</button>':'')+
   (projection.multiStallRecovery?'<p class="small">'+hlmTxt('Optional low-stress recovery is available after several stalls.','複数の停滞が続いた場合は、任意の軽めの回復ワークアウトを選べます。')+'</p>':'')+'</div>':'')+
-  (projection?bvomBb2PendingChoices(projection)+bvomBb2StallActions(projection):'')+
-  '<div class="card"><b>'+hlmTxt('START WORKOUT','ワークアウトを開始')+'</b><p class="small">'+hlmTxt('Enter real starting loads. Low-stress sessions are optional, use about half the sets and do not earn progression or credits.','実際に使用する開始重量を入力してください。軽めのワークアウトは任意で、セット数は約半分になり、重量の進行やクレジットは獲得しません。')+'</p>'+
-  '<div class="choiceRow">'+days+'</div><div class="choiceRow">'+kindsHtml+'</div>'+rows+
-  '<button type="button" class="primary wide" data-bb2-start onclick="bvomBb2Begin()">'+hlmTxt('START WORKOUT','ワークアウトを開始')+'</button></div>';
+  (decisionsBeforeStart?decisions:'')+
+  '<div class="card" data-bb2-start-form><h2 class="bvomBb2SetupTitle">'+hlmTxt('Workout setup','ワークアウト設定')+'</h2><p class="small">'+hlmTxt('Enter real starting loads. Low-stress sessions are optional, use about half the sets and do not earn progression or credits.','実際に使用する開始重量を入力してください。軽めのワークアウトは任意で、セット数は約半分になり、重量の進行やクレジットは獲得しません。')+'</p>'+
+  '<div class="choiceRow">'+days+'</div><div class="choiceRow">'+kindsHtml+'</div>'+
+  (needsInput?rows+start:start+rows)+'</div>'+
+  (decisionsBeforeStart?'':decisions)+(projection?bvomBb2StallActions(projection):'');
 }
 function bvomBb2ValidationNotice(message,selector){
  const field=typeof selector==='string'?document.querySelector(selector):selector,label=field?.closest?.('label');
  if(!label){bvomNotice(message);return false}
+ const disclosure=field.closest('details');
+ if(disclosure)disclosure.open=true;
  document.querySelector('#bvom-bb2-field-error')?.remove();
  const error=document.createElement('div');error.id='bvom-bb2-field-error';error.className='bvomFormError';
  error.setAttribute('role','alert');error.textContent=message;
@@ -7316,7 +7500,8 @@ function bvomBb2NextBlock(){
   if(before.sealed||before.requiredConsent.length||
      !m.BB2_BROWSER_MODULES.catalogue.TEMPLATE_ORDER.every(d=>before.quotas[d]===8))return false;
   bvomBb2NextBlockReview=true;bvomBb2NextBlockBase=b;bvomBb2NextBlockInputs={};
-  bvomBb2PreviewDraft=m.createBB2Setup(b.setup);bvomBb2RenderPreview();return true;
+  bvomBb2PreviewDraft=m.createBB2Setup(b.setup);bvomBb2RenderPreview();
+  bvomPositionSetup('.bvomBb2Options',true);return true;
  }catch(error){console.error('BB2 next-block review rejected',error);return false}
 }
 function bvomBb2CancelNextBlock(){
@@ -8735,7 +8920,7 @@ bvomHideMainSurfaces();if("serviceWorker" in navigator){
        // Re-registering with a new ?v= every release installs a second worker.
        // Only first-time installations register a new versioned URL.
        const reg = await navigator.serviceWorker.getRegistration("./") ||
-         await navigator.serviceWorker.register("./sw.js?v=3.1.2",{updateViaCache:"none"});
+         await navigator.serviceWorker.register("./sw.js?v=3.1.3",{updateViaCache:"none"});
       bvomWatchServiceWorkerUpdate(reg);
       navigator.serviceWorker.addEventListener("controllerchange", ()=>{
         bvomSwFinishRequestedReload();

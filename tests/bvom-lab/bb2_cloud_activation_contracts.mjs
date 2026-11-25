@@ -141,7 +141,7 @@ console.log('PASS unified BVOM Cloud card, errors, conflict actions and existing
   info.ctx.__lang=lang;info.ev('state.language=__lang;renderInfo()');
   const copy=info.ctx.bvomBb2ProgrammeInfo();
   const help=info.ctx.document.querySelector('#info').innerHTML;
-  assert.ok(help.includes('<p data-bb2-programme-info><b>'+copy.title+'</b><br>'+copy.body+'</p>'));
+  assert.ok(help.includes('<p data-bb2-programme-info data-info-program="bb2"><b>'+copy.title+'</b><br>'+copy.body+'</p>'));
   assert.equal(help.split(copy.title).length-1,1,'one programme explanation beside its siblings');
   info.ctx.__core=core;
   info.ev('bvomBb2PreviewModule=__core;bvomBb2PreviewOpen=true;bvomBb2PreviewOriginalMode=state.programMode;'+

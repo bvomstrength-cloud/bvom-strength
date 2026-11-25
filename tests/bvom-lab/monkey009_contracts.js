@@ -86,6 +86,7 @@ module.exports=function({test,ok,H,build,configureLP,ownershipPair,readOnlyNotic
   return ok(out.every(x=>x.pass),JSON.stringify(out));
  });
  test('F64-ASSIGNED-TIMER-SOUND-GUARD','DEFECT','Assigned timer-sound handler rejects secondary mutation and restores displayed checkbox',()=>{
-  const {b}=ownershipPair();b.ctx.renderSettings();const card=b.els['#settings'].children.at(-1),input=card.querySelector('input'),before=snap(b);input.checked=false;input.onchange({target:input});return ok(unchanged(b,before)&&input.checked===true&&warning(b),'memory/blob/owner and displayed toggle unchanged');
+  const {b}=ownershipPair();b.ctx.renderSettings();const settings=b.els['#settings'],training=settings.querySelector('[data-settings-group="training"]');
+  const card=training.children.at(-1)||settings.children.at(-1),input=card.querySelector('input'),before=snap(b);input.checked=false;input.onchange({target:input});return ok(unchanged(b,before)&&input.checked===true&&warning(b),'memory/blob/owner and displayed toggle unchanged');
  });
 };
