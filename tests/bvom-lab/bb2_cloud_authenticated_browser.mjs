@@ -776,14 +776,16 @@ try {
     await phone.locator('.bvomModalOverlay [data-ok]').click();
     await phone.waitForFunction(async () => (await bvomCloudLatest()).data?.data?.history?.at(-1)?.note === 'Isolated RDL round trip');
     const tablet = await makeDevice('LP/RPT RDL tablet', options);
-    // A device with no workout history can adopt the cloud snapshot at login.
-    // If the device retains its local snapshot, exercise the standard restore.
-    await tablet.waitForFunction(() => bvomCloud.conflict || state.history.at(-1)?.note === 'Isolated RDL round trip');
-    if (await tablet.evaluate(() => bvomCloud.conflict)) {
-      await tablet.locator('#bvomCloudConflictOverlay [data-settings]').click();
-      await tablet.evaluate(() => bvomCloudRestore());
-      await Promise.all([tablet.waitForEvent('domcontentloaded'), tablet.locator('.bvomModalOverlay [data-r]').last().click()]);
-    }
+    const remote = await tablet.evaluate(async () => {
+      const result = await bvomCloudLatest();
+      return { error: result.error?.message ?? null, note: result.data?.data?.history?.at(-1)?.note ?? null };
+    });
+    assert.deepEqual(remote, { error: null, note: 'Isolated RDL round trip' });
+    const warning = tablet.locator('#bvomCloudConflictOverlay [data-settings]');
+    if (await warning.count()) await warning.click();
+    await tablet.evaluate(() => bvomCloudRestore());
+    const confirm = tablet.getByRole('button', { name: 'RESTORE', exact: true });
+    await Promise.all([tablet.waitForEvent('domcontentloaded'), confirm.click()]);
     await tablet.waitForSelector('#app:not(.hidden)');
     const restored = await tablet.evaluate(() => JSON.parse(localStorage.getItem('bvom_data')));
     assert.equal(restored.weights[rdl], 82.5);
