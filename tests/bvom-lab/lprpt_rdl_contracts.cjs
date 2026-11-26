@@ -131,7 +131,7 @@ console.log('PASS', count, 'recorded ABA and ABA/BAB workouts with independent k
 
 // The real modal answers after tapSet returns, when a staged Settings copy
 // used to replace the configuration captured by the pending answer.
-function failureDecision({name, unit, plateMode, phase, incrementEdit, correction = false}) {
+function failureDecision({name, unit, plateMode, phase, incrementEdit, correction = false, lateEdit = false}) {
   const imperial = unit === 'lb', start = imperial ? 225 : 100;
   const day = ['Squat', 'Bench Press', 'Prone Row'].includes(name) ? 'A' : 'B';
   const terminal = name === 'Deadlift' ? 3 : 4;
@@ -156,13 +156,17 @@ function failureDecision({name, unit, plateMode, phase, incrementEdit, correctio
     h.reps.push(i === original.topIndex ? original.targets[i] - 1 : original.targets[i]);
     h.ctx.tapSet(name, i);
   }
-  if (incrementEdit) {
+  function editIncrement(inc) {
     const suffix = name.replace(/\W/g, '');
-    for (const [key, value] of Object.entries({ plateMode, mode, inc: increment, drop: s.core[name].drop, level, weight: start, bar: s.barByLift[name] })) {
+    const c = s.core[name];
+    for (const [key, value] of Object.entries({ plateMode, mode: c.mode, inc, drop: c.drop, level: c.rptLevel, weight: s.weights[name], bar: s.barByLift[name] })) {
       h.ctx.document.getElementById(key + suffix).value = String(value);
     }
     h.ctx.saveLiftSettings(name);
     assert.deepEqual(copy(h.ctx.corePrescription(name)), original, 'increment edit preserves the active prescription');
+  }
+  if (incrementEdit) {
+    editIncrement(increment);
     assert.equal(s.attempts[name], 2);
   }
   const plan = copy(h.ctx.getSetPlan(name));
@@ -186,11 +190,13 @@ function failureDecision({name, unit, plateMode, phase, incrementEdit, correctio
   assert.deepEqual(result(reload(h).S()), expected, 'the complete result persists across reload');
   assert.doesNotMatch(h.ctx.plateTextFor(name, nextLoad), /not loadable/);
   if (incrementEdit) assert.deepEqual(copy(h.ctx.corePrescription(name)), original, 'accepted choice preserves locked prescription');
+  const correctedIncrement = lateEdit ? (imperial ? 5 : 2.5) : increment;
+  if (lateEdit) editIncrement(correctedIncrement);
   if (correction) {
     // Editing the result later should undo only the earned change and retain the staged increment.
     h.ctx.bvomRepModal = (_title, _load, _target, _initial, _record, _rpe, undo) => { assert.equal(undo(), true); };
     h.ctx.tapSet(name, plan.length - 1);
-    assert.deepEqual(result(h.S()), [mode, level, increment, start, 2]);
+    assert.deepEqual(result(h.S()), [mode, level, correctedIncrement, start, 2]);
     assert.deepEqual(copy(h.ctx.corePrescription(name)), original);
   }
 }
@@ -204,6 +210,10 @@ for (const name of ['Squat', 'Bench Press', 'Prone Row', rdl, 'Deadlift', 'Overh
 }
 for (const plateMode of ['standard', 'micro']) {
   failureDecision({name: rdl, unit: 'kg', plateMode, phase: 'straight', incrementEdit: false});
+  decisions++;
+}
+for (const phase of ['straight', 'level', 'reset']) {
+  failureDecision({name: rdl, unit: 'kg', plateMode: 'standard', phase, correction: true, lateEdit: true});
   decisions++;
 }
 console.log('PASS', decisions, 'delayed failure decisions, plate grids, persist/reload and locked corrections');

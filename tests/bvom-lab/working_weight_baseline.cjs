@@ -24,7 +24,19 @@ let count=0;H.withClock(()=>{
    for(let i=0;i<h.ctx.getSetPlan(n).length;i++){const q=h.ctx.getSetPlan(n)[i];h.reps.push(scenario==='fail'&&i===0?0:scenario==='close'&&i===1?q.target-1:q.target);h.ctx.tapSet(n,i)}
    h.S().session[n]['EXTRA:1']={load:777,reps:7,extra:true};h.ctx.renderWorkout();
   }}
-  a.deepEqual(outcome(pair[1]),outcome(pair[0]),[mode,day,rpt,attempts,scenario,pick].join('/'));
-  for(const h of pair)H.finish(h);a.deepEqual(outcome(pair[1]),outcome(pair[0]));count++;
+  const label=[mode,day,rpt,attempts,scenario,pick].join('/');
+  function expectedOutcome(){
+   const expected=outcome(pair[0]);
+   // v3.0.2's mutable preview leaked Supine Row's suggested mode or
+   // level into its settings even when the lifter chose Repeat.
+   if(mode==='hlm'&&day==='M'&&attempts===2&&scenario!=='success'&&pick==='L'){
+    const row=expected.core['Supine Row'];
+    if(rpt){a.equal(row.rptLevel,1,label);row.rptLevel=0;}
+    else{a.equal(row.mode,'rpt',label);row.mode='straight';}
+   }
+   return expected;
+  }
+  a.deepEqual(outcome(pair[1]),expectedOutcome(),label);
+  for(const h of pair)H.finish(h);a.deepEqual(outcome(pair[1]),expectedOutcome(),label);count++;
  }
-});console.log('PASS '+count+' paired full workouts on shared templates: identical progression, failures, decisions, actuals, extras and History');
+});console.log('PASS '+count+' paired full workouts on shared templates: matched progression, decisions, actuals and History with corrected Supine Row Repeat behavior');

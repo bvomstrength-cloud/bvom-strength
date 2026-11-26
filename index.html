@@ -1433,7 +1433,7 @@ function advanceAfterExercise(n){
 function bvomCommitCoreFailureDecision(n,mode,level,weight,applyFixed){
  if(!bvomWorkoutActionAllowed())return false;
  const before=JSON.parse(JSON.stringify(state)),c=cfg(n),snap=state.processedSnapshots?.[n];
- if(snap)snap.coreFailureTransition={mode,level,previousMode:c.mode,previousLevel:c.rptLevel};
+ if(snap?.livePrescriptionLock)snap.coreFailureTransition={mode,level,previousMode:c.mode,previousLevel:c.rptLevel};
  if(applyFixed)applyFixed(snap);
  c.mode=mode;c.rptLevel=level;state.weights[n]=weight;state.attempts[n]=0;
  if(!save({durable:true})){state=before;return false}
@@ -3552,7 +3552,16 @@ function saveLiftSettings(n){if(!bvomWorkoutActionAllowed())return;
  if(active&&hasRecorded&&beforeSettings!==afterSettings){
   state.processedSnapshots=state.processedSnapshots||{};
   const snap=state.processedSnapshots[n]||(state.processedSnapshots[n]=preEditSnap||bvomMakeProcessedSnapshot(n)),beforeObj=JSON.parse(beforeSettings),afterObj=JSON.parse(afterSettings),weightChanged=Number(beforeObj.weight)!==Number(afterObj.weight);
-  if(snap){snap.livePrescriptionLock=true;if(weightChanged)snap.postEditWeight=Number(afterObj.weight);snap.postEditCfg=JSON.parse(JSON.stringify(c));}
+  if(snap){
+   // A choice accepted before this Settings edit had no locked snapshot to update.
+   if(!snap.livePrescriptionLock&&state.processed?.[n]&&
+      (beforeObj.mode!==snap.cfg.mode||beforeObj.rptLevel!==snap.cfg.rptLevel)){
+    snap.coreFailureTransition={mode:beforeObj.mode,level:beforeObj.rptLevel,previousMode:snap.cfg.mode,previousLevel:snap.cfg.rptLevel};
+   }
+   snap.livePrescriptionLock=true;
+   if(weightChanged)snap.postEditWeight=Number(afterObj.weight);
+   snap.postEditCfg=JSON.parse(JSON.stringify(c));
+  }
  }
  if(!active){state.session={};state.sessionOverrides={};state.processed={};state.processedSnapshots={};state.warmupDone={};state.warmupPlans={};state.hlmActiveWorkoutSettings=null;}
  save();renderAll();bvomBeeModal(hlmTxt('SETTINGS SAVED','設定を保存しました'),bvomT('backup.settingsSaved',{lift:liftLabel(n)}));
