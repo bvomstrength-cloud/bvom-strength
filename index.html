@@ -8,7 +8,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="BVOM">
 <meta name="twitter:description" content="Best Version Of Myself — strength training and progression.">
-<title>BVOM Strength v3.2.0</title><link rel="manifest" href="manifest.json">
+<title>BVOM Strength v3.2.1</title><link rel="manifest" href="manifest.json">
 <style>
 :root{--bg:#f4f4f4;--card:#fff;--ink:#111;--muted:#737373;--accent:#d91e18;--line:#ddd;--accent-ink:#fff;--control-scheme:light;--danger:#a51b25}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
@@ -361,7 +361,7 @@ html body .bvomGppMetrics .toggle{min-height:44px;margin:0}
 <div id="authgate" class="setup hidden"></div>
 <div id="setup" class="setup hidden"></div>
 <div id="app" class="hidden">
-<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v3.2.0</div></header>
+<header><div class="brand">BVOM</div><div class="sub">BEST VERSION OF MYSELF · v3.2.1</div></header>
 <div class="tabs"><button type="button" class="tab on" data-tab="workout">WORKOUT</button><button type="button" class="tab" data-tab="warmup">WARM-UP</button><button type="button" class="tab" data-tab="history">HISTORY</button><button type="button" class="tab" data-tab="info">INFO</button><button type="button" class="tab" data-tab="settings">SETTINGS</button></div>
 <main><section id="workout"></section><section id="warmup" class="hidden"></section><section id="history" class="hidden"></section><section id="info" class="hidden"></section><section id="settings" class="hidden"></section></main>
 <div class="timer idle" id="timerbar"><div class="timerin"><div><div class="clock" id="clock">0:00</div><div class="marks">DINGS 3 · 5 · 10</div></div><button class="cancel" onclick="if(bvomWorkoutActionAllowed())cancelTimer()">CANCEL</button><button class="finish" onclick="finishWorkout()">FINISH</button></div></div>
@@ -370,7 +370,7 @@ html body .bvomGppMetrics .toggle{min-height:44px;margin:0}
 <script src="./i18n/ja.js?v=667a83e9ed8c"></script>
 <script src="./vendor/supabase-js-2.117.3.js"></script>
 <script>
-const BVOM_BUILD='3.2.0';
+const BVOM_BUILD='3.2.1';
 const BVOM_RDL='Romanian Deadlift';
 const programs={A:[["Squat",3,5],["Bench Press",3,5],["Prone Row",3,5]],B:[[BVOM_RDL,3,8],["Deadlift",1,5],["Overhead Press",5,5]]};
 function bvomStrengthLiftNames(mode=state.programMode){
@@ -9033,7 +9033,7 @@ bvomHideMainSurfaces();if("serviceWorker" in navigator){
        // Re-registering with a new ?v= every release installs a second worker.
        // Only first-time installations register a new versioned URL.
        const reg = await navigator.serviceWorker.getRegistration("./") ||
-         await navigator.serviceWorker.register("./sw.js?v=3.2.0",{updateViaCache:"none"});
+         await navigator.serviceWorker.register("./sw.js?v=3.2.1",{updateViaCache:"none"});
       bvomWatchServiceWorkerUpdate(reg);
       navigator.serviceWorker.addEventListener("controllerchange", ()=>{
         bvomSwFinishRequestedReload();
