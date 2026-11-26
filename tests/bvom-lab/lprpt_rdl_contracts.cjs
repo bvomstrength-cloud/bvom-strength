@@ -128,3 +128,82 @@ console.log('PASS', count, 'recorded ABA and ABA/BAB workouts with independent k
   assert.equal(h.S().weights.Squat, 100);
   console.log('PASS partial RDL, rescue, failed-attempt progression, LP-to-RPT and terminal weight reset');
 }
+
+// The real modal answers after tapSet returns, when a staged Settings copy
+// used to replace the configuration captured by the pending answer.
+function failureDecision({name, unit, plateMode, phase, incrementEdit, correction = false}) {
+  const imperial = unit === 'lb', start = imperial ? 225 : 100;
+  const day = ['Squat', 'Bench Press', 'Prone Row'].includes(name) ? 'A' : 'B';
+  const terminal = name === 'Deadlift' ? 3 : 4;
+  const mode = phase === 'straight' ? 'straight' : 'rpt';
+  const level = phase === 'reset' ? terminal : 0;
+  const increment = imperial ? 2.5 : 2;
+  const h = fixture({ unit, history: [squatRecord(start, unit)], loads: { [name]: start } });
+  const s = h.S();
+  s.enabledMicro = [.5];
+  s.plateMode[name] = plateMode;
+  Object.assign(s.core[name], { mode, rptLevel: level, increment: incrementEdit ? (imperial ? 5 : 2.5) : increment });
+  s.attempts[name] = 2;
+  h.ev('save()');
+  h.ctx.switchDay(day);
+  const original = copy(h.ctx.corePrescription(name));
+  let answer, preview, reset;
+  h.ctx.bvomChoiceModal = (_title, body, _left, _right, repeat, accept) => { answer = {repeat, accept}; preview = body; };
+  h.ctx.bvomEndRoad = (_name, onReset) => { answer = {accept: onReset}; };
+  h.ctx.bvomWeightModal = (_title, _current, onSave) => { reset = onSave; };
+  // Press starts with two ramp sets. Record to the top, then miss it.
+  for (let i = 0; i <= original.topIndex; i++) {
+    h.reps.push(i === original.topIndex ? original.targets[i] - 1 : original.targets[i]);
+    h.ctx.tapSet(name, i);
+  }
+  if (incrementEdit) {
+    const suffix = name.replace(/\W/g, '');
+    for (const [key, value] of Object.entries({ plateMode, mode, inc: increment, drop: s.core[name].drop, level, weight: start, bar: s.barByLift[name] })) {
+      h.ctx.document.getElementById(key + suffix).value = String(value);
+    }
+    h.ctx.saveLiftSettings(name);
+    assert.deepEqual(copy(h.ctx.corePrescription(name)), original, 'increment edit preserves the active prescription');
+    assert.equal(s.attempts[name], 2);
+  }
+  const plan = copy(h.ctx.getSetPlan(name));
+  for (let i = original.topIndex + 1; i < plan.length; i++) h.ctx.tapSet(name, i);
+  assert.equal(s.attempts[name], 3);
+  assert.ok(answer, 'third miss offers a decision');
+  const grid = plateMode === 'micro' ? 1 : imperial ? 5 : 2.5;
+  const proposed = phase === 'reset' ? start - 13 : start + increment;
+  const nextLoad = Math.round(proposed / grid) * grid;
+  answer.accept();
+  if (phase === 'reset') {
+    assert.equal(typeof reset, 'function');
+    reset(proposed, null, proposed);
+  } else {
+    assert.ok(preview.includes(String(nextLoad) + '×'), 'dialog previews the next prescription at its load');
+    assert.match(preview, /\+/);
+  }
+  const expected = [phase === 'reset' ? 'straight' : 'rpt', phase === 'level' ? 1 : 0, increment, nextLoad, 0];
+  const result = ({ core, weights, attempts }) => [core[name].mode, core[name].rptLevel, core[name].increment, weights[name], attempts[name]];
+  assert.deepEqual(result(s), expected, 'accepted decision and increment commit together');
+  assert.deepEqual(result(reload(h).S()), expected, 'the complete result persists across reload');
+  assert.doesNotMatch(h.ctx.plateTextFor(name, nextLoad), /not loadable/);
+  if (incrementEdit) assert.deepEqual(copy(h.ctx.corePrescription(name)), original, 'accepted choice preserves locked prescription');
+  if (correction) {
+    // Editing the result later should undo only the earned change and retain the staged increment.
+    h.ctx.bvomRepModal = (_title, _load, _target, _initial, _record, _rpe, undo) => { assert.equal(undo(), true); };
+    h.ctx.tapSet(name, plan.length - 1);
+    assert.deepEqual(result(h.S()), [mode, level, increment, start, 2]);
+    assert.deepEqual(copy(h.ctx.corePrescription(name)), original);
+  }
+}
+
+let decisions = 0;
+for (const name of ['Squat', 'Bench Press', 'Prone Row', rdl, 'Deadlift', 'Overhead Press']) {
+  for (const unit of ['kg', 'lb']) for (const plateMode of ['standard', 'micro']) for (const phase of ['straight', 'level', 'reset']) {
+    failureDecision({ name, unit, plateMode, phase, incrementEdit: true, correction: name === rdl });
+    decisions++;
+  }
+}
+for (const plateMode of ['standard', 'micro']) {
+  failureDecision({name: rdl, unit: 'kg', plateMode, phase: 'straight', incrementEdit: false});
+  decisions++;
+}
+console.log('PASS', decisions, 'delayed failure decisions, plate grids, persist/reload and locked corrections');
