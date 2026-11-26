@@ -1,7 +1,7 @@
 // BVOM Strength v3.2.0 LP/RPT candidate — no production deployment.
 const CACHE = 'bvom-3.2.0';
 const BUILD = '3.2.0';
-const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './og-image.png', './i18n/en.js?v=7c62410a2b6d', './i18n/ja.js?v=de56849d5ba6',
+const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './og-image.png', './i18n/en.js?v=63292ff7a0d6', './i18n/ja.js?v=ffbdd3533ed4',
   './theme-bee-v23c.svg',
   './theme-cherry-v23f.svg',
   './theme-coastal-v23f.svg',
