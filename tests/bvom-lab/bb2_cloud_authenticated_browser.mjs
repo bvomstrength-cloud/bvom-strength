@@ -752,7 +752,62 @@ try {
     await tablet.context().close();
   });
 
-  console.log(`BB2 real app authenticated Chromium: ${passed}/${passed} PASS`);
+  await check('finished LP/RPT B round trips Romanian Deadlift via isolated Auth and legacy cloud', async () => {
+    const login = { email: 'lp-rdl@example.invalid', password: 'Isolated-LP-RDL-2026!' };
+    const made = await admin.auth.admin.createUser({ ...login, email_confirm: true });
+    if (made.error) throw made.error;
+    const userId = made.data.user.id, rdl = 'Romanian Deadlift';
+    const data = { ...structuredClone(fixture), day: 'B' };
+    data.weights[rdl] = 80;
+    const options = { userId, login, accountFlow: true, appData: data };
+    const phone = await makeDevice('LP/RPT RDL phone', options);
+    // Establish both devices on the same cloud snapshot before training.
+    await phone.waitForFunction(() => bvomCloud.syncReady && bvomCloud.cloudExists && !bvomCloud.busy);
+    const tablet = await makeDevice('LP/RPT RDL tablet', options);
+    await tablet.waitForFunction(() => bvomCloud.syncReady && bvomCloud.cloudExists && !bvomCloud.assessing);
+    for (const [name, count] of [[rdl, 3], ['Deadlift', 1], ['Overhead Press', 5]]) {
+      for (let i = 0; i < count; i++) {
+        await phone.locator('.tab[data-tab="workout"]').click();
+        const handler = 'tapSet(' + "'" + name + "'," + i + ')';
+        await phone.locator('[onclick=' + JSON.stringify(handler) + ']').click();
+        await phone.locator('.bvomModalOverlay [data-ok]').click();
+      }
+    }
+    await phone.locator('#timerbar .finish').click();
+    await phone.locator('.bvomModalOverlay [data-note]').fill('Isolated RDL round trip');
+    await phone.locator('.bvomModalOverlay [data-save]').click();
+    await phone.locator('.bvomModalOverlay [data-ok]').click();
+    // Poll the awaited database result while BVOM's deferred automatic save runs.
+    let savedNote;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const serverRow = await admin.from('bvom_data').select('data').eq('user_id', userId).single();
+      if (serverRow.error) throw serverRow.error;
+      savedNote = serverRow.data.data.history.at(-1)?.note;
+      if (savedNote === 'Isolated RDL round trip') break;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert.equal(savedNote, 'Isolated RDL round trip', 'completed B is durable on the isolated backend');
+    const remote = await tablet.evaluate(async () => {
+      const result = await bvomCloudLatest();
+      return { error: result.error?.message ?? null, note: result.data?.data?.history?.at(-1)?.note ?? null };
+    });
+    assert.deepEqual(remote, { error: null, note: 'Isolated RDL round trip' });
+    const warning = tablet.locator('#bvomCloudConflictOverlay [data-settings]');
+    if (await warning.count()) await warning.click();
+    await tablet.evaluate(() => bvomCloudRestore());
+    const confirm = tablet.getByRole('button', { name: 'RESTORE', exact: true });
+    await Promise.all([tablet.waitForEvent('domcontentloaded'), confirm.click()]);
+    await tablet.waitForSelector('#app:not(.hidden)');
+    const restored = await tablet.evaluate(() => JSON.parse(localStorage.getItem('bvom_data')));
+    assert.equal(restored.weights[rdl], 82.5);
+    assert.equal(restored.history.at(-1).session[rdl][2].load, 80);
+    assert.equal(restored.history.at(-1).exerciseMeta[rdl].id, 'core.romanian_deadlift');
+    assert.equal(restored.history.at(-1).incomplete, false);
+    await phone.context().close();
+    await tablet.context().close();
+  });
+
+  console.log(`BVOM real app authenticated Chromium: ${passed}/${passed} PASS`);
 } finally {
   for (const context of contexts) await context.close().catch(() => {});
   if (browser) await browser.close().catch(() => {});

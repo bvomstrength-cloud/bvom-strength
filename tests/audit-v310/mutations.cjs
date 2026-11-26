@@ -15,7 +15,7 @@ const mutants=[
  ['float-tie','load*(100-dropPercent)/100','load*(1-dropPct)','genericSetPlan','oracle'],
  ['stale-entry','current?.target!==q.target||current?.load!==q.load||current?.drop!==q.drop||current?.top!==q.top','false','tapSet','edges'],
  ['orphan-on-undo','if(openedFixed&&!bvomCoreSessionHasActivity(n))delete state.processedSnapshots?.[n];','','tapSet','edges'],
- ['leave-failure-transition',' bvomRollbackFixedFailureTransition(n,snap);','','bvomRollbackLockedEarnedStateForCorrection','edges'],
+ ['leave-failure-transition',' bvomRollbackCoreFailureTransition(n,snap);','','bvomRollbackLockedEarnedStateForCorrection','edges'],
  ['credit-underweight','&&(!p.fixed||bvomFixedActualMeetsLoad(ss[i],q))','','bvomFixedActualMeetsLoad','edges'],
  ['no-rollback-on-resize','bvomRollbackFixedResult(n);','','bvomChangeFixedPrescription','oracle']
 ];
