@@ -26,7 +26,8 @@ const labelFor = lang => lang === 'ja' ? 'ルーマニアンデッドリフト' 
   try {
     const { page } = await server.device(profile, { data: initial });
     assert.equal((await P.stored(page)).weights[rdl], 100);
-    assert.equal(await page.locator('header').textContent().then(text => text.includes('3.2.0')), true);
+    const build = await page.evaluate(() => BVOM_BUILD);
+    assert.ok((await page.locator('header').textContent()).trim().endsWith(' · v' + build));
     await page.locator('#workout [onclick="switchDay(\'B\')"]').click();
     assert.deepEqual(await page.locator('#workout > .exercise').evaluateAll(cards => cards.map(card => card.id)),
       ['work-RomanianDeadlift', 'work-Deadlift', 'work-OverheadPress']);
